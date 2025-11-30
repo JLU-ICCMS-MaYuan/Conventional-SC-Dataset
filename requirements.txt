@@ -17,5 +17,9 @@ pydantic-settings==2.1.0
 # 图片处理
 Pillow==10.2.0
 
+# 认证与安全
+passlib[bcrypt]==1.7.4  # 密码哈希
+python-jose[cryptography]==3.3.0  # JWT token
+
 # 工具库
 python-dotenv==1.0.0  # 环境变量管理

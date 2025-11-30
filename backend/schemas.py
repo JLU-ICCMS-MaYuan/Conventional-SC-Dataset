@@ -111,6 +111,11 @@ class PaperResponse(BaseModel):
     notes: Optional[str] = None
     created_at: datetime
     image_count: int = 0  # 截图数量
+    # 审核相关字段
+    review_status: str = "unreviewed"
+    reviewed_by: Optional[int] = None
+    reviewed_at: Optional[datetime] = None
+    reviewer_name: Optional[str] = None  # 审核人姓名（需要从关联查询获取）
 
     class Config:
         from_attributes = True
@@ -144,6 +149,7 @@ class PaperSearchParams(BaseModel):
     year_max: Optional[int] = Field(None, description="最大年份")
     journal: Optional[str] = Field(None, description="期刊名称")
     crystal_structure: Optional[str] = Field(None, description="晶体结构类型")
+    review_status: Optional[str] = Field(None, description="审核状态：reviewed(已审核), unreviewed(未审核)")
     sort_by: Optional[str] = Field("created_at", description="排序字段：created_at, year")
     sort_order: Optional[str] = Field("desc", description="排序顺序：asc, desc")
     limit: Optional[int] = Field(50, ge=1, le=200, description="返回数量限制")

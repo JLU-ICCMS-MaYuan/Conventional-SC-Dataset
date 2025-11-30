@@ -1,10 +1,11 @@
 """
 数据库模型定义
 """
-from sqlalchemy import Column, Integer, String, Text, BLOB, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Text, BLOB, DateTime, ForeignKey, UniqueConstraint, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from backend.database import Base
+import datetime
 
 
 class Element(Base):
@@ -40,6 +41,37 @@ class Compound(Base):
         return f"<Compound {self.element_symbols}>"
 
 
+class User(Base):
+    """用户/管理员表"""
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(200), unique=True, nullable=False, index=True)  # 邮箱（登录账号）
+    password_hash = Column(String(200), nullable=False)  # 密码哈希
+    real_name = Column(String(100), nullable=False)  # 真实姓名
+
+    # 管理员权限
+    is_admin = Column(Boolean, default=False)  # 是否为管理员
+    is_superadmin = Column(Boolean, default=False)  # 是否为超级管理员
+    is_approved = Column(Boolean, default=False)  # 是否已被超级管理员批准
+
+    # 邮箱验证
+    is_email_verified = Column(Boolean, default=False)  # 邮箱是否已验证
+    verification_code = Column(String(10))  # 验证码
+    verification_expires = Column(DateTime)  # 验证码过期时间
+
+    # 时间戳
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    approved_at = Column(DateTime)  # 批准时间
+    approved_by = Column(Integer, ForeignKey("users.id"))  # 批准人ID
+
+    # 关系
+    reviewed_papers = relationship("Paper", back_populates="reviewer", foreign_keys="Paper.reviewed_by")
+
+    def __repr__(self):
+        return f"<User {self.email} ({self.real_name})>"
+
+
 class Paper(Base):
     """文献表 - 存储超导文献信息"""
     __tablename__ = "papers"
@@ -68,11 +100,17 @@ class Paper(Base):
     contributor_affiliation = Column(String(200), default="未提供单位")  # 贡献者单位
     notes = Column(Text)  # 备注说明
 
+    # 审核相关字段
+    review_status = Column(String(20), default="unreviewed", nullable=False, index=True)  # 审核状态: 'reviewed' 或 'unreviewed'
+    reviewed_by = Column(Integer, ForeignKey("users.id"))  # 审核人ID
+    reviewed_at = Column(DateTime)  # 审核时间
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # 关系
     compound = relationship("Compound", back_populates="papers")
     images = relationship("PaperImage", back_populates="paper", cascade="all, delete-orphan")
+    reviewer = relationship("User", back_populates="reviewed_papers", foreign_keys=[reviewed_by])
 
     # 唯一约束：同一元素组合不能有重复的DOI
     __table_args__ = (

@@ -174,6 +174,7 @@ def get_papers_by_compound(
     year_max: Optional[int] = None,
     journal: Optional[str] = None,
     crystal_structure: Optional[str] = None,
+    review_status: Optional[str] = None,  # 新增：审核状态筛选 (reviewed/unreviewed)
     sort_by: str = "created_at",
     sort_order: str = "desc",
     limit: int = 50,
@@ -189,6 +190,7 @@ def get_papers_by_compound(
         year_min, year_max: 年份范围（可选）
         journal: 期刊名称（可选）
         crystal_structure: 晶体结构类型（可选）
+        review_status: 审核状态筛选 - 'reviewed'(已审核), 'unreviewed'(未审核), None(全部)
         sort_by: 排序字段（created_at或year）
         sort_order: 排序顺序（asc或desc）
         limit: 返回数量限制
@@ -212,6 +214,7 @@ def get_papers_by_compound(
         year_max=year_max,
         journal=journal,
         crystal_structure=crystal_structure,
+        review_status=review_status,
         sort_by=sort_by,
         sort_order=sort_order,
         limit=limit,
@@ -221,10 +224,15 @@ def get_papers_by_compound(
     # 获取文献列表
     papers = crud.get_papers_by_compound(db, compound.id, search_params)
 
-    # 添加图片数量
+    # 添加图片数量和审核人姓名
     papers_with_count = []
     for paper in papers:
         paper_resp = schemas.PaperResponse.from_orm(paper)
+        # 添加审核人姓名
+        if paper.reviewer:
+            paper_resp.reviewer_name = paper.reviewer.real_name
+        else:
+            paper_resp.reviewer_name = None
         paper_resp.image_count = crud.get_paper_image_count(db, paper.id)
         papers_with_count.append(paper_resp)
 

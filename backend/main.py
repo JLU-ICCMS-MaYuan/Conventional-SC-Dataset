@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pathlib import Path
 
-from backend.api import elements, compounds, papers
+from backend.api import elements, compounds, papers, auth, admin
 
 # 创建FastAPI应用
 app = FastAPI(
@@ -30,6 +30,8 @@ app.add_middleware(
 app.include_router(elements.router)
 app.include_router(compounds.router)
 app.include_router(papers.router)
+app.include_router(auth.router)  # 认证API
+app.include_router(admin.router)  # 管理员API
 
 # 挂载静态文件目录
 BASE_DIR = Path(__file__).resolve().parent.parent

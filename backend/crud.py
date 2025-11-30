@@ -182,6 +182,10 @@ def get_papers_by_compound(
                 models.Paper.crystal_structure.like(f"%{search_params.crystal_structure}%")
             )
 
+        # 审核状态筛选
+        if search_params.review_status:
+            query = query.filter(models.Paper.review_status == search_params.review_status)
+
         # 排序
         if search_params.sort_by == "year":
             if search_params.sort_order == "asc":
