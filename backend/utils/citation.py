@@ -23,8 +23,9 @@ class CitationGenerator:
         生成APS（American Physical Society）格式的引用
 
         格式示例：
-        A. B. Smith, C. D. Johnson, and E. F. Brown,
-        Phys. Rev. Lett. 123, 456789 (2020).
+        H. Wang, X. Li, G. Gao, Y. Li, and Y. Ma, Hydrogen-rich
+        superconductors at high pressures, WIREs Comput. Mol. Sci.
+        8, e1330 (2018).
 
         Args:
             authors: 作者列表
@@ -40,12 +41,16 @@ class CitationGenerator:
         """
         citation_parts = []
 
-        # 处理作者
+        # 1. 处理作者
         if authors:
             formatted_authors = CitationGenerator._format_aps_authors(authors)
             citation_parts.append(formatted_authors)
 
-        # 添加期刊、卷号、页码
+        # 2. 添加标题
+        if title:
+            citation_parts.append(title)
+
+        # 3. 添加期刊、卷号、页码、年份
         if journal and volume and pages and year:
             # 简化期刊名称（如果是常见物理期刊）
             journal_abbr = CitationGenerator._abbreviate_journal(journal)
@@ -59,7 +64,7 @@ class CitationGenerator:
         if citation_parts:
             citation = ", ".join(citation_parts) + "."
         else:
-            citation = title
+            citation = title or "Unknown article"
 
         return citation
 
@@ -123,7 +128,7 @@ class CitationGenerator:
     @staticmethod
     def _abbreviate_journal(journal: str) -> str:
         """
-        缩写期刊名称（常见物理期刊）
+        缩写期刊名称（常见物理和材料科学期刊）
 
         Args:
             journal: 完整期刊名称
@@ -132,18 +137,46 @@ class CitationGenerator:
             缩写期刊名称
         """
         abbreviations = {
+            # Physical Review 系列
             "Physical Review Letters": "Phys. Rev. Lett.",
             "Physical Review B": "Phys. Rev. B",
+            "Physical Review A": "Phys. Rev. A",
+            "Physical Review X": "Phys. Rev. X",
             "Physical Review": "Phys. Rev.",
+            "Physical Review Applied": "Phys. Rev. Appl.",
+            "Physical Review Materials": "Phys. Rev. Mater.",
+
+            # Nature 系列
             "Nature": "Nature",
-            "Science": "Science",
             "Nature Physics": "Nat. Phys.",
             "Nature Materials": "Nat. Mater.",
+            "Nature Communications": "Nat. Commun.",
+            "Nature Chemistry": "Nat. Chem.",
+
+            # Science 系列
+            "Science": "Science",
+            "Science Advances": "Sci. Adv.",
+
+            # 其他重要期刊
+            "Advanced Materials": "Adv. Mater.",
+            "Advanced Functional Materials": "Adv. Funct. Mater.",
             "Applied Physics Letters": "Appl. Phys. Lett.",
             "Journal of Applied Physics": "J. Appl. Phys.",
             "Journal of Physics": "J. Phys.",
+            "Materials Today": "Mater. Today",
+            "Matter and Radiation at Extremes": "Matter Radiat. Extremes",
+            "National Science Review": "Natl. Sci. Rev.",
+            "Physics Reports": "Phys. Rep.",
+            "The Innovation": "The Innovation",
+            "WIREs Computational Molecular Science": "WIREs Comput. Mol. Sci.",
         }
 
+        # 尝试精确匹配（不区分大小写）
+        for full, abbr in abbreviations.items():
+            if full.lower() == journal.lower():
+                return abbr
+
+        # 尝试部分匹配
         for full, abbr in abbreviations.items():
             if full.lower() in journal.lower():
                 return abbr

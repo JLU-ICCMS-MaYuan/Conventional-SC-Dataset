@@ -231,6 +231,18 @@ def get_papers_by_compound(
     return papers_with_count
 
 
+@router.get("/crystal-structures")
+def get_crystal_structures(db: Session = Depends(get_db)):
+    """
+    获取所有已存在的晶体结构类型（用于自动补全）
+
+    Returns:
+        晶体结构类型列表（已去重并排序）
+    """
+    structures = crud.get_all_crystal_structures(db)
+    return structures
+
+
 @router.get("/{paper_id}", response_model=schemas.PaperDetail)
 def get_paper_detail(paper_id: int, db: Session = Depends(get_db)):
     """

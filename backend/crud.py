@@ -269,3 +269,17 @@ def get_total_compounds_count(db: Session) -> int:
 def get_compound_papers_count(db: Session, compound_id: int) -> int:
     """获取元素组合的文献数量"""
     return db.query(models.Paper).filter(models.Paper.compound_id == compound_id).count()
+
+
+# ============= 辅助功能 =============
+
+def get_all_crystal_structures(db: Session) -> List[str]:
+    """获取所有已存在的晶体结构类型（去重）"""
+    results = db.query(models.Paper.crystal_structure).filter(
+        models.Paper.crystal_structure.isnot(None),
+        models.Paper.crystal_structure != ''
+    ).distinct().all()
+
+    # 提取字符串并排序
+    structures = [r[0] for r in results if r[0]]
+    return sorted(structures)

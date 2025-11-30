@@ -104,7 +104,11 @@
 
                         <div class="mb-3">
                             <label class="form-label">晶体结构类型</label>
-                            <input type="text" class="form-control" id="structure-input" placeholder="例如: 钙钛矿型">
+                            <input type="text" class="form-control" id="structure-input" list="structure-datalist" placeholder="例如: 钙钛矿型" autocomplete="off">
+                            <datalist id="structure-datalist">
+                                <!-- 动态加载已有的晶体结构类型 -->
+                            </datalist>
+                            <small class="text-muted">💡 输入时会显示已有的晶体结构类型，也可以填写新的类型</small>
                         </div>
 
                         <div class="mb-3">

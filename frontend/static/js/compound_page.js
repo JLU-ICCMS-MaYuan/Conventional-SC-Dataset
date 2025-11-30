@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // 加载页面数据
     loadCompoundInfo();
     loadPapers();
+    loadCrystalStructures();
 
     // 设置图片上传预览
     document.getElementById('images-input').addEventListener('change', handleImageSelection);
@@ -290,6 +291,26 @@ function removeImage(index) {
     input.files = dt.files;
 
     handleImageSelection({ target: input });
+}
+
+// 加载晶体结构类型列表（用于自动补全）
+async function loadCrystalStructures() {
+    try {
+        const response = await fetch('/api/papers/crystal-structures');
+        if (response.ok) {
+            const structures = await response.json();
+            const datalist = document.getElementById('structure-datalist');
+            datalist.innerHTML = '';
+
+            structures.forEach(structure => {
+                const option = document.createElement('option');
+                option.value = structure;
+                datalist.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('加载晶体结构类型失败:', error);
+    }
 }
 
 // 提交文献

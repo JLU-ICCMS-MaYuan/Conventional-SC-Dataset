@@ -203,3 +203,51 @@
 1. 云平台免费托管（Railway、Render、Fly.io）
 2. VPS 服务器部署（阿里云、腾讯云等）
 3. Docker 容器化部署
+
+**解决方案：** 创建了完整的部署指南和配置文件（详见 DEPLOYMENT.md）
+
+---
+
+### 9. 晶体结构类型智能提示（2025-11-30）
+
+**需求：**
+- 填写晶体结构类型时，弹出可选择项（来自历史数据）
+- 如果没有合适的选项，用户可以自己填写
+- 新填写的类型会自动加入到可选项中，供后续用户选择
+
+**实现方案：**
+- 后端：添加 `/api/papers/crystal-structures` 端点，返回所有已存在的晶体结构类型
+- 数据库：从 `papers` 表查询 `crystal_structure` 字段（去重、排序）
+- 前端：使用 HTML5 `<datalist>` 元素实现自动补全
+- 用户体验：输入时显示历史数据，也可以自由输入新类型
+
+### 10. APS引用格式修正（2025-11-30）
+
+**问题：** 当前的APS引用格式缺少文章标题
+
+**错误格式：**
+```
+H. Wang, X. Li, G. Gao, Y. Li, and Y. Ma, WIREs Comput. Mol. Sci. 8, e1330 (2018).
+```
+
+**正确格式：**
+```
+H. Wang, X. Li, G. Gao, Y. Li, and Y. Ma, Hydrogen-rich
+superconductors at high pressures, WIREs Comput. Mol. Sci.
+8, e1330 (2018).
+```
+
+**修复内容：**
+1. 在引用格式中添加文章标题（位于作者和期刊之间）
+2. 更新期刊缩写字典，添加更多常见物理和材料科学期刊：
+   - Matter Radiat. Extremes
+   - Natl. Sci. Rev.
+   - Phys. Rep.
+   - The Innovation
+   - WIREs Comput. Mol. Sci.
+   - Nat. Commun.
+   - Adv. Mater.
+   - Sci. Adv.
+   等共20+种期刊
+
+**格式顺序：** 作者, 标题, 期刊 卷, 页码 (年份).
