@@ -96,9 +96,15 @@ async def startup_event():
 
 if __name__ == "__main__":
     import uvicorn
+    import os
+
+    # Railway 和其他云平台会通过 PORT 环境变量指定端口
+    # 本地开发时默认使用 8000
+    port = int(os.environ.get("PORT", 8000))
+
     uvicorn.run(
         "backend.main:app",
         host="0.0.0.0",
-        port=8000,
-        reload=True  # 开发模式下自动重载
+        port=port,
+        reload=False  # 生产环境禁用自动重载
     )
