@@ -1,5 +1,8 @@
 FROM python:3.11-slim
 
+# 强制重新构建（清除缓存）
+ARG CACHEBUST=1
+
 # 设置工作目录
 WORKDIR /app
 
