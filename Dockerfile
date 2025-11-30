@@ -34,4 +34,5 @@ RUN chmod +x /app/start.sh
 EXPOSE 8000
 
 # 直接启动uvicorn，host必须是0.0.0.0才能被Railway访问
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/app/start.sh"]
