@@ -1,13 +1,11 @@
-#!/bin/sh
+#!/bin/bash
 
 echo "======================================="
-echo "🚀 Railway部署启动脚本"
+echo "🚀 启动脚本"
 echo "======================================="
 echo "当前时间: $(date)"
 echo "工作目录: $(pwd)"
 echo "PORT环境变量: ${PORT}"
-echo "所有环境变量:"
-env | grep -E "PORT|RAILWAY" | sort
 echo "======================================="
 
 # 检查data目录
@@ -21,9 +19,16 @@ else
 fi
 
 echo "======================================="
+echo "初始化数据库..."
+echo "======================================="
+
+# 初始化数据库
+python -m backend.init_db
+
+echo "======================================="
 echo "启动uvicorn服务器..."
 echo "命令: uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}"
 echo "======================================="
 
-# 启动uvicorn
-exec uvicorn backend.main:app --host 0.0.0.0 --port "${PORT:-8000}"
+# 启动uvicorn (注意 host 必须是 0.0.0.0)
+exec uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}
