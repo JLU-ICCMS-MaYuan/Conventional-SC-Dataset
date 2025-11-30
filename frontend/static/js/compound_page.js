@@ -160,14 +160,6 @@ function renderPaperCard(paper) {
                                 </details>
                             ` : ''}
 
-                            <div class="mt-3">
-                                <strong>APS引用格式:</strong>
-                                <div class="citation-box position-relative">
-                                    ${paper.citation_aps}
-                                    <button class="btn btn-sm btn-outline-primary copy-btn" onclick="copyCitation('${paper.id}', 'aps')">复制</button>
-                                </div>
-                            </div>
-
                             <div class="mt-3 text-muted small">
                                 贡献者: ${paper.contributor_name} (${paper.contributor_affiliation}) |
                                 提交时间: ${new Date(paper.created_at).toLocaleDateString('zh-CN')}
@@ -248,29 +240,6 @@ function renderImagePlaceholders(paperId, count) {
 function viewImage(imageUrl) {
     document.getElementById('modal-image').src = imageUrl;
     imageModal.show();
-}
-
-// 复制引用格式
-async function copyCitation(paperId, format) {
-    try {
-        const response = await fetch('/api/papers/export', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                format: format,
-                paper_ids: [parseInt(paperId)]
-            })
-        });
-
-        const text = await response.text();
-        await navigator.clipboard.writeText(text);
-        alert('引用格式已复制到剪贴板！');
-    } catch (error) {
-        console.error('复制失败:', error);
-        alert('复制失败，请手动复制');
-    }
 }
 
 // 搜索文献
