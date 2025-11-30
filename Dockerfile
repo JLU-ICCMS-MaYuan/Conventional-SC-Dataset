@@ -20,11 +20,15 @@ COPY . .
 # 创建数据目录（Volume会挂载到这里）
 RUN mkdir -p /app/data
 
+# 复制并设置启动脚本权限
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
 # 注意：不在构建时初始化数据库，而是在应用启动时初始化（见backend/main.py的startup事件）
 # 这样可以确保数据库创建在Volume挂载后的持久化存储中
 
 # 暴露端口（Railway会通过PORT环境变量动态指定）
 EXPOSE 8000
 
-# 启动命令：使用sh -c确保环境变量被正确展开
-CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# 使用启动脚本确保环境变量正确传递
+CMD ["/app/start.sh"]
