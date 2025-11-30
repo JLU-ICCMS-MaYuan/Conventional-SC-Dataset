@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>超级管理员面板 - 超导文献数据库</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-danger">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">超导文献数据库 - 超级管理员</a>
+            <div class="d-flex align-items-center text-white">
+                <span class="me-3">欢迎，<span id="userName"></span></span>
+                <a href="/admin/dashboard" class="btn btn-outline-light btn-sm me-2">审核文献</a>
+                <button class="btn btn-outline-light btn-sm" onclick="logout()">退出</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <ul class="nav nav-tabs mb-4" role="tablist">
+            <li class="nav-item">
+                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#pending-tab">
+                    待审批管理员 <span class="badge bg-danger" id="pendingCount">0</span>
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#approved-tab">
+                    已批准管理员
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+            <!-- 待审批管理员 -->
+            <div class="tab-pane fade show active" id="pending-tab">
+                <h3>待审批的管理员申请</h3>
+                <div id="pendingAdmins" class="mt-4">
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary"></div>
+                        <p class="mt-3">加载中...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 已批准管理员 -->
+            <div class="tab-pane fade" id="approved-tab">
+                <h3>所有管理员</h3>
+                <div id="approvedAdmins" class="mt-4">
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary"></div>
+                        <p class="mt-3">加载中...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let token = '';
+        let currentUser = null;
+
+        // 检查登录状态
+        function checkAuth() {
+            token = localStorage.getItem('admin_token');
+            const userStr = localStorage.getItem('admin_user');
+
+            if (!token || !userStr) {
+                alert('请先登录');
+                window.location.href = '/admin/login';
+                return false;
+            }
+
+            currentUser = JSON.parse(userStr);
+
+            if (!currentUser.is_superadmin) {
+                alert('您没有超级管理员权限');
+                window.location.href = '/admin/dashboard';
+                return false;
+            }
+
+            document.getElementById('userName').textContent = currentUser.real_name;
+            return true;
+        }
+
+        // 退出登录
+        function logout() {
+            localStorage.removeItem('admin_token');
+            localStorage.removeItem('admin_user');
+            window.location.href = '/admin/login';
+        }
+
+        // 加载待审批管理员
+        async function loadPendingAdmins() {
+            try {
+                const response = await fetch('/api/admin/pending-approvals', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('加载失败');
+                }
+
+                const admins = await response.json();
+                document.getElementById('pendingCount').textContent = admins.length;
+                renderPendingAdmins(admins);
+            } catch (error) {
+                console.error('加载失败:', error);
+                document.getElementById('pendingAdmins').innerHTML = `
+                    <div class="alert alert-danger">加载失败: ${error.message}</div>
+                `;
+            }
+        }
+
+        // 渲染待审批管理员
+        function renderPendingAdmins(admins) {
+            const container = document.getElementById('pendingAdmins');
+
+            if (admins.length === 0) {
+                container.innerHTML = `
+                    <div class="alert alert-info text-center">
+                        <p class="mb-0">目前没有待审批的管理员申请</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            admins.forEach(admin => {
+                html += `
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <h5 class="card-title">${admin.real_name}</h5>
+                            <p class="text-muted mb-3">
+                                <strong>邮箱:</strong> ${admin.email}<br>
+                                <strong>申请时间:</strong> ${new Date(admin.created_at).toLocaleString('zh-CN')}<br>
+                                <strong>邮箱验证:</strong> ${admin.is_email_verified ? '✅ 已验证' : '❌ 未验证'}
+                            </p>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-success" onclick="approveAdmin(${admin.id}, '${admin.real_name}', true)">
+                                    ✓ 批准
+                                </button>
+                                <button class="btn btn-danger" onclick="approveAdmin(${admin.id}, '${admin.real_name}', false)">
+                                    ✗ 拒绝
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // 审批管理员
+        async function approveAdmin(userId, realName, approved) {
+            const action = approved ? '批准' : '拒绝';
+
+            if (!confirm(`确认${action}《${realName}》的管理员申请？`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/admin/approve-user', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        user_id: userId,
+                        approved: approved
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    alert(data.message);
+                    loadPendingAdmins();
+                    loadApprovedAdmins();
+                } else {
+                    alert('操作失败: ' + (data.detail || '未知错误'));
+                }
+            } catch (error) {
+                console.error('操作失败:', error);
+                alert('操作失败，请检查网络连接');
+            }
+        }
+
+        // 加载已批准管理员
+        async function loadApprovedAdmins() {
+            try {
+                const response = await fetch('/api/admin/all-admins', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('加载失败');
+                }
+
+                const admins = await response.json();
+                renderApprovedAdmins(admins);
+            } catch (error) {
+                console.error('加载失败:', error);
+                document.getElementById('approvedAdmins').innerHTML = `
+                    <div class="alert alert-danger">加载失败: ${error.message}</div>
+                `;
+            }
+        }
+
+        // 渲染已批准管理员
+        function renderApprovedAdmins(admins) {
+            const container = document.getElementById('approvedAdmins');
+
+            let html = `<p class="text-muted">共 ${admins.length} 位管理员</p>`;
+
+            admins.forEach(admin => {
+                html += `
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                ${admin.real_name}
+                                ${admin.is_superadmin ? '<span class="badge bg-danger">超级管理员</span>' : '<span class="badge bg-primary">管理员</span>'}
+                            </h5>
+                            <p class="text-muted mb-0">
+                                <strong>邮箱:</strong> ${admin.email}<br>
+                                <strong>批准时间:</strong> ${new Date(admin.approved_at).toLocaleString('zh-CN')}<br>
+                                <strong>审核文献数:</strong> ${admin.reviewed_papers_count} 篇
+                            </p>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // 页面加载时初始化
+        if (checkAuth()) {
+            loadPendingAdmins();
+            loadApprovedAdmins();
+        }
+    </script>
+</body>
+</html>

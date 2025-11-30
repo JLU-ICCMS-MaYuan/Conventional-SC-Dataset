@@ -77,6 +77,57 @@ def compound_page(element_symbols: str):
     return {"error": "页面不存在"}
 
 
+# 管理员登录页面
+@app.get("/admin/login")
+def admin_login_page():
+    """返回管理员登录页面"""
+    login_file = TEMPLATES_DIR / "admin_login.html"
+    if login_file.exists():
+        return FileResponse(login_file)
+    return {"error": "页面不存在"}
+
+
+# 管理员注册页面
+@app.get("/admin/register")
+def admin_register_page():
+    """返回管理员注册页面"""
+    register_file = TEMPLATES_DIR / "admin_register.html"
+    if register_file.exists():
+        return FileResponse(register_file)
+    return {"error": "页面不存在"}
+
+
+# 管理员审核面板
+@app.get("/admin/dashboard")
+def admin_dashboard_page():
+    """返回管理员审核面板"""
+    dashboard_file = TEMPLATES_DIR / "admin_dashboard.html"
+    if dashboard_file.exists():
+        return FileResponse(dashboard_file)
+    return {"error": "页面不存在"}
+
+
+# 超级管理员审批面板
+@app.get("/admin/superadmin")
+def superadmin_dashboard_page():
+    """返回超级管理员审批面板"""
+    superadmin_file = TEMPLATES_DIR / "superadmin_dashboard.html"
+    if superadmin_file.exists():
+        return FileResponse(superadmin_file)
+    return {"error": "页面不存在"}
+
+
+# 我审核的文献页面（可选）
+@app.get("/admin/my-reviews")
+def admin_my_reviews_page():
+    """返回我审核的文献页面"""
+    # 暂时重定向到审核面板
+    dashboard_file = TEMPLATES_DIR / "admin_dashboard.html"
+    if dashboard_file.exists():
+        return FileResponse(dashboard_file)
+    return {"error": "页面不存在"}
+
+
 # 健康检查端点
 @app.get("/health")
 def health_check():

@@ -108,8 +108,10 @@ function renderPaperCard(paper) {
     };
     const scTypeBadge = scTypeBadges[paper.superconductor_type] || '';
 
-    // 审核状态徽章（暂时显示为未审核，后续需要从数据库获取）
-    const reviewBadge = '<span class="badge bg-warning">⏳ 未审核</span>';
+    // 审核状态徽章（从后端数据获取）
+    const reviewBadge = paper.review_status === 'reviewed' ?
+        `<span class="badge bg-success">✓ 已审核${paper.reviewer_name ? ` (${paper.reviewer_name})` : ''}</span>` :
+        '<span class="badge bg-warning">⏳ 未审核</span>';
 
     return `
         <div class="card paper-card mb-3">
