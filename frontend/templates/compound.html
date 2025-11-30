@@ -19,6 +19,22 @@
     </div>
 
     <div class="container mt-4">
+        <!-- 审核状态筛选 -->
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="btn-group" role="group">
+                    <input type="radio" class="btn-check" name="review-status" id="status-all" value="all" checked>
+                    <label class="btn btn-outline-primary" for="status-all" onclick="filterByReviewStatus('all')">全部文献</label>
+
+                    <input type="radio" class="btn-check" name="review-status" id="status-reviewed" value="reviewed">
+                    <label class="btn btn-outline-success" for="status-reviewed" onclick="filterByReviewStatus('reviewed')">已审核</label>
+
+                    <input type="radio" class="btn-check" name="review-status" id="status-unreviewed" value="unreviewed">
+                    <label class="btn btn-outline-warning" for="status-unreviewed" onclick="filterByReviewStatus('unreviewed')">未审核</label>
+                </div>
+            </div>
+        </div>
+
         <!-- 搜索和筛选 -->
         <div class="card mb-4">
             <div class="card-body">

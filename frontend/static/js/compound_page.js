@@ -2,6 +2,7 @@
 let elementSymbols = '';
 let uploadModal, imageModal;
 let selectedFiles = [];
+let currentReviewStatus = 'all'; // 当前选择的审核状态筛选
 
 // 初始化
 document.addEventListener('DOMContentLoaded', function() {
@@ -49,6 +50,7 @@ async function loadPapers(searchParams = {}) {
         if (searchParams.keyword) params.append('keyword', searchParams.keyword);
         if (searchParams.year_min) params.append('year_min', searchParams.year_min);
         if (searchParams.year_max) params.append('year_max', searchParams.year_max);
+        if (currentReviewStatus !== 'all') params.append('review_status', currentReviewStatus);
 
         const response = await fetch(`/api/papers/compound/${elementSymbols}?${params}`);
 
@@ -59,13 +61,14 @@ async function loadPapers(searchParams = {}) {
         const papers = await response.json();
 
         if (papers.length === 0) {
+            const statusText = currentReviewStatus === 'reviewed' ? '已审核' :
+                              currentReviewStatus === 'unreviewed' ? '未审核' : '';
             container.innerHTML = `
                 <div class="text-center py-5">
                     <div class="alert alert-warning" role="alert">
-                        <h4 class="alert-heading">🎉 暂无文献</h4>
-                        <p class="mb-0">这个元素组合还没有文献记录，<strong>成为第一个贡献者吧！</strong></p>
-                        <hr>
-                        <p class="mb-0">点击上方的 <strong>"上传文献"</strong> 按钮即可添加第一篇文献</p>
+                        <h4 class="alert-heading">🎉 暂无${statusText}文献</h4>
+                        <p class="mb-0">这个元素组合还没有${statusText}文献记录${currentReviewStatus === 'all' ? '，<strong>成为第一个贡献者吧！</strong>' : ''}</p>
+                        ${currentReviewStatus === 'all' ? '<hr><p class="mb-0">点击上方的 <strong>"上传文献"</strong> 按钮即可添加第一篇文献</p>' : ''}
                     </div>
                 </div>
             `;
@@ -81,9 +84,17 @@ async function loadPapers(searchParams = {}) {
     }
 }
 
-// 渲染文献卡片
+// 审核状态筛选
+function filterByReviewStatus(status) {
+    currentReviewStatus = status;
+    loadPapers();
+}
+
+// 渲染文献卡片（简化版，点击展开）
 function renderPaperCard(paper) {
-    const authors = paper.authors ? JSON.parse(paper.authors).join(', ') : '未知作者';
+    const authors = paper.authors ? JSON.parse(paper.authors) : [];
+    const firstAuthor = authors.length > 0 ? authors[0] : '未知作者';
+    const correspondingAuthor = authors.length > 0 ? authors[authors.length - 1] : '未知作者';
 
     // 标签映射
     const articleTypeBadge = paper.article_type === 'theoretical' ?
@@ -97,76 +108,109 @@ function renderPaperCard(paper) {
     };
     const scTypeBadge = scTypeBadges[paper.superconductor_type] || '';
 
-    return `
-        <div class="card paper-card">
-            <div class="card-body">
-                <div class="row">
-                    <!-- 左侧：文献信息 -->
-                    <div class="col-md-${paper.image_count > 0 ? '8' : '12'}">
-                        <h5 class="card-title">
-                            <a href="https://doi.org/${paper.doi}" target="_blank">${paper.title}</a>
-                        </h5>
+    // 审核状态徽章（暂时显示为未审核，后续需要从数据库获取）
+    const reviewBadge = '<span class="badge bg-warning">⏳ 未审核</span>';
 
-                        <!-- 标签 -->
-                        <div class="mb-2">
+    return `
+        <div class="card paper-card mb-3">
+            <div class="card-body">
+                <!-- 简化的一行信息 -->
+                <div class="paper-summary" style="cursor: pointer;" onclick="togglePaperDetails(${paper.id})">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="flex-grow-1">
+                            <strong>${paper.year || '未知年份'}</strong> |
+                            ${firstAuthor} |
+                            通讯: ${correspondingAuthor} |
+                            ${paper.title} |
+                            ${paper.chemical_formula || '未知体系'} |
                             ${articleTypeBadge}
                             ${scTypeBadge}
+                            ${reviewBadge}
                         </div>
+                        <div>
+                            <i class="bi bi-chevron-down" id="chevron-${paper.id}">▼</i>
+                        </div>
+                    </div>
+                </div>
 
-                        <p class="text-muted mb-2">
-                            <strong>作者:</strong> ${authors}<br>
-                            <strong>期刊:</strong> ${paper.journal || '未知'} ${paper.volume ? `Vol. ${paper.volume}` : ''}
-                            ${paper.pages ? `p. ${paper.pages}` : ''} (${paper.year || '未知年份'})<br>
-                            ${paper.chemical_formula ? `<strong>化学式:</strong> ${paper.chemical_formula}<br>` : ''}
-                            ${paper.crystal_structure ? `<strong>晶体结构:</strong> ${paper.crystal_structure}<br>` : ''}
-                            <strong>DOI:</strong> <code>${paper.doi}</code>
-                        </p>
+                <!-- 详细信息（默认隐藏） -->
+                <div id="details-${paper.id}" class="paper-details mt-3" style="display: none;">
+                    <div class="row">
+                        <!-- 左侧：详细文献信息 -->
+                        <div class="col-md-${paper.image_count > 0 ? '8' : '12'}">
+                            <h5 class="card-title">
+                                <a href="https://doi.org/${paper.doi}" target="_blank">${paper.title}</a>
+                            </h5>
 
-                        ${paper.abstract ? `
-                            <details>
-                                <summary class="text-primary" style="cursor: pointer;">查看摘要</summary>
-                                <p class="mt-2">${paper.abstract}</p>
-                            </details>
-                        ` : ''}
+                            <p class="text-muted mb-2">
+                                <strong>作者:</strong> ${authors.join(', ')}<br>
+                                <strong>期刊:</strong> ${paper.journal || '未知'} ${paper.volume ? `Vol. ${paper.volume}` : ''}
+                                ${paper.pages ? `p. ${paper.pages}` : ''} (${paper.year || '未知年份'})<br>
+                                ${paper.chemical_formula ? `<strong>化学式:</strong> ${paper.chemical_formula}<br>` : ''}
+                                ${paper.crystal_structure ? `<strong>晶体结构:</strong> ${paper.crystal_structure}<br>` : ''}
+                                <strong>DOI:</strong> <code>${paper.doi}</code>
+                            </p>
 
-                        <div class="mt-3">
-                            <strong>APS引用格式:</strong>
-                            <div class="citation-box position-relative">
-                                ${paper.citation_aps}
-                                <button class="btn btn-sm btn-outline-primary copy-btn" onclick="copyCitation('${paper.id}', 'aps')">复制</button>
+                            ${paper.abstract ? `
+                                <details>
+                                    <summary class="text-primary" style="cursor: pointer;">查看摘要</summary>
+                                    <p class="mt-2">${paper.abstract}</p>
+                                </details>
+                            ` : ''}
+
+                            <div class="mt-3">
+                                <strong>APS引用格式:</strong>
+                                <div class="citation-box position-relative">
+                                    ${paper.citation_aps}
+                                    <button class="btn btn-sm btn-outline-primary copy-btn" onclick="copyCitation('${paper.id}', 'aps')">复制</button>
+                                </div>
+                            </div>
+
+                            <div class="mt-3 text-muted small">
+                                贡献者: ${paper.contributor_name} (${paper.contributor_affiliation}) |
+                                提交时间: ${new Date(paper.created_at).toLocaleDateString('zh-CN')}
                             </div>
                         </div>
 
-                        <div class="mt-3 text-muted small">
-                            贡献者: ${paper.contributor_name} (${paper.contributor_affiliation}) |
-                            提交时间: ${new Date(paper.created_at).toLocaleDateString('zh-CN')}
+                        <!-- 右侧：第一张大图 -->
+                        ${paper.image_count > 0 ? `
+                        <div class="col-md-4">
+                            <img src="/api/papers/${paper.id}/images/1"
+                                 class="img-fluid paper-main-image"
+                                 onclick="viewImage('/api/papers/${paper.id}/images/1')"
+                                 alt="主图"
+                                 style="cursor: pointer; border-radius: 8px; max-height: 400px; width: 100%; object-fit: contain; border: 2px solid #dee2e6;">
                         </div>
+                        ` : ''}
                     </div>
 
-                    <!-- 右侧：第一张大图 -->
-                    ${paper.image_count > 0 ? `
-                    <div class="col-md-4">
-                        <img src="/api/papers/${paper.id}/images/1"
-                             class="img-fluid paper-main-image"
-                             onclick="viewImage('/api/papers/${paper.id}/images/1')"
-                             alt="主图"
-                             style="cursor: pointer; border-radius: 8px; max-height: 400px; width: 100%; object-fit: contain; border: 2px solid #dee2e6;">
+                    <!-- 其他截图（缩略图） -->
+                    ${paper.image_count > 1 ? `
+                    <div class="mt-3">
+                        <strong>其他截图:</strong>
+                        <div class="paper-images">
+                            ${renderOtherImages(paper.id, paper.image_count)}
+                        </div>
                     </div>
                     ` : ''}
                 </div>
-
-                <!-- 其他截图（缩略图） -->
-                ${paper.image_count > 1 ? `
-                <div class="mt-3">
-                    <strong>其他截图:</strong>
-                    <div class="paper-images">
-                        ${renderOtherImages(paper.id, paper.image_count)}
-                    </div>
-                </div>
-                ` : ''}
             </div>
         </div>
     `;
+}
+
+// 切换文献详情显示
+function togglePaperDetails(paperId) {
+    const details = document.getElementById(`details-${paperId}`);
+    const chevron = document.getElementById(`chevron-${paperId}`);
+
+    if (details.style.display === 'none') {
+        details.style.display = 'block';
+        chevron.textContent = '▲';
+    } else {
+        details.style.display = 'none';
+        chevron.textContent = '▼';
+    }
 }
 
 // 渲染其他截图（从第2张开始）
