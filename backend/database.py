@@ -6,9 +6,9 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
 
-# 数据库文件路径
+# 数据库文件路径，支持通过环境变量自定义持久化卷位置
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATABASE_PATH = os.path.join(BASE_DIR, "data", "superconductor.db")
+DATABASE_PATH = os.environ.get("DATABASE_PATH") or os.path.join(BASE_DIR, "data", "superconductor.db")
 
 # 确保data目录存在
 os.makedirs(os.path.dirname(DATABASE_PATH), exist_ok=True)
