@@ -24,12 +24,12 @@ async def create_paper(
     article_type: str = Form(...),  # 文章类型: theoretical 或 experimental
     superconductor_type: str = Form(...),  # 超导体类型: conventional, unconventional, unknown
     tc: float = Form(...),
+    pressure: float = Form(...),
     chemical_formula: Optional[str] = Form(None),
     crystal_structure: Optional[str] = Form(None),
     contributor_name: Optional[str] = Form("匿名贡献者"),
     contributor_affiliation: Optional[str] = Form("未提供单位"),
     notes: Optional[str] = Form(None),
-    pressure: Optional[float] = Form(None),
     lambda_val: Optional[float] = Form(None),
     omega_log: Optional[float] = Form(None),
     n_ef: Optional[float] = Form(None),

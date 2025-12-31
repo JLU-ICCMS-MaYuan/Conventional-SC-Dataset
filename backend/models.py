@@ -89,21 +89,20 @@ class Paper(Base):
     citation_aps = Column(Text)  # APS引用格式
     citation_bibtex = Column(Text)  # BibTeX引用格式
 
+
     # 用户必填的分类字段
     article_type = Column(String(20), nullable=False)  # 文章类型: 'theoretical' 或 'experimental'
     superconductor_type = Column(String(20), nullable=False)  # 超导体类型: 'conventional', 'unconventional', 'unknown'
-
+    pressure = Column(Float)  # 压强 (GPa)
+    tc = Column(Float)        # 超导温度 Tc (K)
+    lambda_val = Column(Float) # λ (lambda)
+    
     # 用户可选填写的字段
     chemical_formula = Column(String(200))  # 化学式，如 "YBa₂Cu₃O₇"
     crystal_structure = Column(String(200))  # 晶体结构类型，如 "钙钛矿型"
     contributor_name = Column(String(100), default="匿名贡献者")  # 贡献者姓名
     contributor_affiliation = Column(String(200), default="未提供单位")  # 贡献者单位
     notes = Column(Text)  # 备注说明
-
-    # 数据字段
-    pressure = Column(Float)  # 压强 (GPa)
-    tc = Column(Float)        # 超导温度 Tc (K)
-    lambda_val = Column(Float) # λ (lambda)
     omega_log = Column(Float)  # ω_log
     n_ef = Column(Float)       # N(E_F)
 

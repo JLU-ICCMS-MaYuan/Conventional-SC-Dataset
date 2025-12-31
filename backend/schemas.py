@@ -66,7 +66,7 @@ class PaperCreate(BaseModel):
     notes: Optional[str] = Field(None, description="备注说明")
 
     # 数据字段
-    pressure: Optional[float] = Field(None, description="压强 (GPa)")
+    pressure: float = Field(..., description="压强 (GPa)")
     tc: float = Field(..., description="超导温度 Tc (K)")
     lambda_val: Optional[float] = Field(None, description="λ (lambda)")
     omega_log: Optional[float] = Field(None, description="ω_log")

@@ -366,6 +366,12 @@ async function submitPaper() {
         return;
     }
 
+    const pressure = document.getElementById('pressure-input').value;
+    if (!pressure) {
+        alert('请输入压强 GPa');
+        return;
+    }
+
     if (selectedFiles.length > 5) {
         alert('最多允许上传5张文献截图');
         return;
@@ -378,9 +384,7 @@ async function submitPaper() {
     formData.append('article_type', articleType.value);
     formData.append('superconductor_type', superconductorType);
     formData.append('tc', tc);
-
-    const pressure = document.getElementById('pressure-input').value;
-    if (pressure) formData.append('pressure', pressure);
+    formData.append('pressure', pressure);
 
     const lambda_val = document.getElementById('lambda-input').value;
     if (lambda_val) formData.append('lambda_val', lambda_val);
