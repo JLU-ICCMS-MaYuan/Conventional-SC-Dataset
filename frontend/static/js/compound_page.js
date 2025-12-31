@@ -125,6 +125,7 @@ function renderPaperCard(paper) {
                             通讯: ${correspondingAuthor} |
                             ${paper.title} |
                             ${paper.chemical_formula || '未知体系'} |
+                            Tc: ${paper.tc ? paper.tc + ' K' : '未知'} |
                             ${articleTypeBadge}
                             ${scTypeBadge}
                             ${reviewBadge}
@@ -150,6 +151,13 @@ function renderPaperCard(paper) {
                                 ${paper.pages ? `p. ${paper.pages}` : ''} (${paper.year || '未知年份'})<br>
                                 ${paper.chemical_formula ? `<strong>化学式:</strong> ${paper.chemical_formula}<br>` : ''}
                                 ${paper.crystal_structure ? `<strong>晶体结构:</strong> ${paper.crystal_structure}<br>` : ''}
+                                <strong>物理参数:</strong> 
+                                <span class="badge bg-primary">Tc: ${paper.tc} K</span>
+                                ${paper.pressure ? `<span class="badge bg-secondary">P: ${paper.pressure} GPa</span>` : ''}
+                                ${paper.lambda_val ? `<span class="badge bg-info">λ: ${paper.lambda_val}</span>` : ''}
+                                ${paper.omega_log ? `<span class="badge bg-info">ω_log: ${paper.omega_log}</span>` : ''}
+                                ${paper.n_ef ? `<span class="badge bg-info">N(E_F): ${paper.n_ef}</span>` : ''}
+                                <br>
                                 <strong>DOI:</strong> <code>${paper.doi}</code>
                             </p>
 
@@ -268,8 +276,8 @@ function resetSearch() {
 function handleImageSelection(event) {
     const files = Array.from(event.target.files);
 
-    if (files.length < 1 || files.length > 5) {
-        alert('请选择1-5张图片');
+    if (files.length > 5) {
+        alert('最多只能选择5张图片');
         event.target.value = '';
         return;
     }
@@ -352,8 +360,14 @@ async function submitPaper() {
         return;
     }
 
-    if (selectedFiles.length < 1 || selectedFiles.length > 5) {
-        alert('请上传1-5张文献截图');
+    const tc = document.getElementById('tc-input').value;
+    if (!tc) {
+        alert('请输入超导温度 Tc');
+        return;
+    }
+
+    if (selectedFiles.length > 5) {
+        alert('最多允许上传5张文献截图');
         return;
     }
 
@@ -363,6 +377,19 @@ async function submitPaper() {
     formData.append('element_symbols', JSON.stringify(elementSymbols.split('-')));
     formData.append('article_type', articleType.value);
     formData.append('superconductor_type', superconductorType);
+    formData.append('tc', tc);
+
+    const pressure = document.getElementById('pressure-input').value;
+    if (pressure) formData.append('pressure', pressure);
+
+    const lambda_val = document.getElementById('lambda-input').value;
+    if (lambda_val) formData.append('lambda_val', lambda_val);
+
+    const omega_log = document.getElementById('omega-log-input').value;
+    if (omega_log) formData.append('omega_log', omega_log);
+
+    const n_ef = document.getElementById('n-ef-input').value;
+    if (n_ef) formData.append('n_ef', n_ef);
 
     const formula = document.getElementById('formula-input').value.trim();
     if (formula) formData.append('chemical_formula', formula);

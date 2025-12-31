@@ -319,6 +319,11 @@ class UpdatePaperRequest(BaseModel):
     contributor_name: Optional[str] = None
     contributor_affiliation: Optional[str] = None
     notes: Optional[str] = None
+    pressure: Optional[float] = None
+    tc: Optional[float] = None
+    lambda_val: Optional[float] = None
+    omega_log: Optional[float] = None
+    n_ef: Optional[float] = None
 
 
 # ========== 全局文献管理功能 ==========
@@ -395,6 +400,8 @@ async def get_all_papers(
                 "article_type": paper.article_type,
                 "superconductor_type": paper.superconductor_type,
                 "chemical_formula": paper.chemical_formula,
+                "tc": paper.tc,
+                "pressure": paper.pressure,
                 "compound_symbols": paper.compound.element_symbols,
                 "review_status": paper.review_status,
                 "reviewer_name": paper.reviewer.real_name if paper.reviewer else None,
@@ -443,6 +450,11 @@ async def get_paper_detail(
         "contributor_name": paper.contributor_name,
         "contributor_affiliation": paper.contributor_affiliation,
         "notes": paper.notes,
+        "pressure": paper.pressure,
+        "tc": paper.tc,
+        "lambda_val": paper.lambda_val,
+        "omega_log": paper.omega_log,
+        "n_ef": paper.n_ef,
         "review_status": paper.review_status,
         "created_at": paper.created_at.isoformat(),
         "compound_symbols": paper.compound.element_symbols

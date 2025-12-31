@@ -110,6 +110,7 @@ function renderPapers(papers) {
                         <th>标题</th>
                         <th>元素组合</th>
                         <th>年份</th>
+                        <th>Tc / P</th>
                         <th>类型</th>
                         <th>审核状态</th>
                         <th>图片</th>
@@ -160,6 +161,12 @@ function renderPapers(papers) {
                 </td>
                 <td><span class="badge bg-info">${paper.compound_symbols}</span></td>
                 <td>${paper.year || '-'}</td>
+                <td>
+                    <small>
+                        ${paper.tc ? paper.tc + ' K' : '-'} / 
+                        ${paper.pressure ? paper.pressure + ' GPa' : '-'}
+                    </small>
+                </td>
                 <td>
                     <small>${articleTypeLabel} / ${scTypeLabel}</small>
                 </td>
@@ -403,6 +410,11 @@ async function openEditModal(paperId) {
         document.getElementById('editSuperconductorType').value = paper.superconductor_type || 'unknown';
         document.getElementById('editChemicalFormula').value = paper.chemical_formula || '';
         document.getElementById('editCrystalStructure').value = paper.crystal_structure || '';
+        document.getElementById('editTc').value = paper.tc || '';
+        document.getElementById('editPressure').value = paper.pressure || '';
+        document.getElementById('editLambda').value = paper.lambda_val || '';
+        document.getElementById('editOmegaLog').value = paper.omega_log || '';
+        document.getElementById('editNEf').value = paper.n_ef || '';
         document.getElementById('editContributorName').value = paper.contributor_name || '';
         document.getElementById('editContributorAffiliation').value = paper.contributor_affiliation || '';
         document.getElementById('editNotes').value = paper.notes || '';
@@ -435,6 +447,11 @@ async function savePaperEdits() {
         superconductor_type: document.getElementById('editSuperconductorType').value,
         chemical_formula: document.getElementById('editChemicalFormula').value,
         crystal_structure: document.getElementById('editCrystalStructure').value,
+        tc: document.getElementById('editTc').value ? parseFloat(document.getElementById('editTc').value) : null,
+        pressure: document.getElementById('editPressure').value ? parseFloat(document.getElementById('editPressure').value) : null,
+        lambda_val: document.getElementById('editLambda').value ? parseFloat(document.getElementById('editLambda').value) : null,
+        omega_log: document.getElementById('editOmegaLog').value ? parseFloat(document.getElementById('editOmegaLog').value) : null,
+        n_ef: document.getElementById('editNEf').value ? parseFloat(document.getElementById('editNEf').value) : null,
         contributor_name: document.getElementById('editContributorName').value,
         contributor_affiliation: document.getElementById('editContributorAffiliation').value,
         notes: document.getElementById('editNotes').value
@@ -504,7 +521,7 @@ function renderImagesList(paperId, images) {
         html += `
             <div class="col-md-4 mb-3">
                 <div class="card">
-                    <img src="/api/papers/images/${img.id}/thumbnail" class="card-img-top" alt="截图${img.order}">
+                    <img src="/api/papers/images/${img.id}?thumbnail=true" class="card-img-top" alt="截图${img.order}">
                     <div class="card-body">
                         <h6 class="card-title">图片 ${img.order}</h6>
                         <p class="card-text">

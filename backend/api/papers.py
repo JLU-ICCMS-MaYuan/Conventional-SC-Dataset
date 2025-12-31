@@ -4,7 +4,7 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Annotated
 import json
 from io import BytesIO
 
@@ -23,12 +23,17 @@ async def create_paper(
     element_symbols: str = Form(...),  # JSON字符串
     article_type: str = Form(...),  # 文章类型: theoretical 或 experimental
     superconductor_type: str = Form(...),  # 超导体类型: conventional, unconventional, unknown
+    tc: float = Form(...),
     chemical_formula: Optional[str] = Form(None),
     crystal_structure: Optional[str] = Form(None),
     contributor_name: Optional[str] = Form("匿名贡献者"),
     contributor_affiliation: Optional[str] = Form("未提供单位"),
     notes: Optional[str] = Form(None),
-    images: List[UploadFile] = File(...),
+    pressure: Optional[float] = Form(None),
+    lambda_val: Optional[float] = Form(None),
+    omega_log: Optional[float] = Form(None),
+    n_ef: Optional[float] = Form(None),
+    images: Optional[List[UploadFile]] = File(None),
     db: Session = Depends(get_db)
 ):
     """
@@ -39,9 +44,14 @@ async def create_paper(
     - element_symbols: 元素符号列表（JSON字符串）
     - article_type: 文章类型 (theoretical 或 experimental)
     - superconductor_type: 超导体类型 (conventional, unconventional, unknown)
-    - images: 文献截图（1-5张）
+    - tc: 超导温度 Tc (K)
 
     可选字段:
+    - pressure: 压强 (GPa)
+    - lambda_val: λ (lambda)
+    - omega_log: ω_log
+    - n_ef: N(E_F)
+    - images: 文献截图（0-5张）
     - chemical_formula: 化学式
     - crystal_structure: 晶体结构类型
     - contributor_name: 贡献者姓名
@@ -57,10 +67,11 @@ async def create_paper(
         raise HTTPException(status_code=400, detail=f"元素符号格式错误: {str(e)}")
 
     # 2. 验证截图数量
-    if len(images) < 1 or len(images) > 5:
+    images_to_process = images or []
+    if len(images_to_process) > 5:
         raise HTTPException(
             status_code=400,
-            detail="请上传1-5张文献截图，优先上传化合物结构图"
+            detail="最多允许上传5张文献截图"
         )
 
     # 3. 验证DOI并获取元数据
@@ -125,11 +136,16 @@ async def create_paper(
         crystal_structure=crystal_structure,
         contributor_name=contributor_name or "匿名贡献者",
         contributor_affiliation=contributor_affiliation or "未提供单位",
-        notes=notes
+        notes=notes,
+        pressure=pressure,
+        tc=tc,
+        lambda_val=lambda_val,
+        omega_log=omega_log,
+        n_ef=n_ef
     )
 
     # 8. 处理并保存截图
-    for idx, image_file in enumerate(images, start=1):
+    for idx, image_file in enumerate(images_to_process, start=1):
         # 读取图片数据
         image_data = await image_file.read()
 
@@ -161,7 +177,7 @@ async def create_paper(
 
     # 9. 返回响应
     paper_response = schemas.PaperResponse.from_orm(paper)
-    paper_response.image_count = len(images)
+    paper_response.image_count = len(images_to_process)
 
     return paper_response
 
@@ -270,23 +286,50 @@ def get_paper_detail(paper_id: int, db: Session = Depends(get_db)):
     return paper_detail
 
 
-@router.get("/{paper_id}/images/{image_id}")
+@router.get("/{paper_id}/images/{image_order}")
 def get_paper_image(
     paper_id: int,
+    image_order: int,
+    thumbnail: bool = False,
+    db: Session = Depends(get_db)
+):
+    """
+    根据文献ID和图片顺序获取截图
+
+    Args:
+        paper_id: 文献ID
+        image_order: 图片顺序 (1-5)
+        thumbnail: 是否返回缩略图（默认False返回原图）
+    """
+    image = crud.get_image_by_order(db, paper_id, image_order)
+    if not image:
+        raise HTTPException(status_code=404, detail="图片不存在")
+
+    # 选择原图或缩略图
+    image_data = image.thumbnail_data if thumbnail else image.image_data
+
+    # 返回图片
+    return StreamingResponse(
+        BytesIO(image_data),
+        media_type="image/jpeg"
+    )
+
+
+@router.get("/images/{image_id}")
+def get_image_by_id(
     image_id: int,
     thumbnail: bool = False,
     db: Session = Depends(get_db)
 ):
     """
-    获取文献截图
+    根据图片ID获取截图
 
     Args:
-        paper_id: 文献ID
         image_id: 图片ID
-        thumbnail: 是否返回缩略图（默认False返回原图）
+        thumbnail: 是否返回缩略图
     """
     image = crud.get_image_by_id(db, image_id)
-    if not image or image.paper_id != paper_id:
+    if not image:
         raise HTTPException(status_code=404, detail="图片不存在")
 
     # 选择原图或缩略图

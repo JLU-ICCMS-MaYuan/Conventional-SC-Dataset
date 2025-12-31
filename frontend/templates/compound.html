@@ -127,6 +127,32 @@
                             <small class="text-muted">💡 输入时会显示已有的晶体结构类型，也可以填写新的类型</small>
                         </div>
 
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">超导温度 Tc (K) <span class="text-danger">*</span></label>
+                                <input type="number" step="any" class="form-control" id="tc-input" required placeholder="例如: 92.5">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">压强 (GPa)</label>
+                                <input type="number" step="any" class="form-control" id="pressure-input" placeholder="例如: 10.0">
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label">λ (lambda)</label>
+                                <input type="number" step="any" class="form-control" id="lambda-input" placeholder="例如: 1.2">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">ω_log</label>
+                                <input type="number" step="any" class="form-control" id="omega-log-input" placeholder="例如: 300">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">N(E_F)</label>
+                                <input type="number" step="any" class="form-control" id="n-ef-input" placeholder="例如: 1.5">
+                            </div>
+                        </div>
+
                         <div class="mb-3">
                             <label class="form-label">贡献者姓名</label>
                             <input type="text" class="form-control" id="contributor-name-input" placeholder="默认: 匿名贡献者">
@@ -138,8 +164,8 @@
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label">文献截图 (1-5张) <span class="text-danger">*</span></label>
-                            <input type="file" class="form-control" id="images-input" multiple accept="image/*" required>
+                            <label class="form-label">文献截图 (0-5张)</label>
+                            <input type="file" class="form-control" id="images-input" multiple accept="image/*">
                             <small class="text-muted">请上传文献截图，优先上传化合物结构图</small>
                             <div id="image-preview" class="image-preview-container mt-2"></div>
                         </div>

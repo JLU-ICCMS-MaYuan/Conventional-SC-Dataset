@@ -105,7 +105,12 @@ def create_paper(
     crystal_structure: Optional[str] = None,
     contributor_name: str = "匿名贡献者",
     contributor_affiliation: str = "未提供单位",
-    notes: Optional[str] = None
+    notes: Optional[str] = None,
+    pressure: Optional[float] = None,
+    tc: Optional[float] = None,
+    lambda_val: Optional[float] = None,
+    omega_log: Optional[float] = None,
+    n_ef: Optional[float] = None
 ) -> models.Paper:
     """创建文献记录"""
     paper = models.Paper(
@@ -126,7 +131,12 @@ def create_paper(
         crystal_structure=crystal_structure,
         contributor_name=contributor_name,
         contributor_affiliation=contributor_affiliation,
-        notes=notes
+        notes=notes,
+        pressure=pressure,
+        tc=tc,
+        lambda_val=lambda_val,
+        omega_log=omega_log,
+        n_ef=n_ef
     )
     db.add(paper)
     db.commit()
@@ -251,6 +261,16 @@ def get_paper_images(db: Session, paper_id: int) -> List[models.PaperImage]:
 def get_image_by_id(db: Session, image_id: int) -> Optional[models.PaperImage]:
     """根据ID获取截图"""
     return db.query(models.PaperImage).filter(models.PaperImage.id == image_id).first()
+
+
+def get_image_by_order(db: Session, paper_id: int, image_order: int) -> Optional[models.PaperImage]:
+    """根据文献ID和图片顺序获取截图"""
+    return db.query(models.PaperImage).filter(
+        and_(
+            models.PaperImage.paper_id == paper_id,
+            models.PaperImage.image_order == image_order
+        )
+    ).first()
 
 
 def get_paper_image_count(db: Session, paper_id: int) -> int:
