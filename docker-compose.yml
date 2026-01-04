@@ -4,9 +4,12 @@ services:
   web:
     build: .
     container_name: superconductor-database
+    user: "${CURRENT_UID}:${CURRENT_GID}"
     ports:
       - "8000:8000"
     volumes:
+      # 挂载整个项目目录以支持热更新
+      - .:/app
       # 持久化数据库文件
       - ./data:/app/data
     environment:

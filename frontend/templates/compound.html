@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>元素组合 - 超导文献数据库</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
@@ -127,34 +127,42 @@
                             <small class="text-muted">💡 输入时会显示已有的晶体结构类型，也可以填写新的类型</small>
                         </div>
 
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label class="form-label">超导温度 Tc (K) <span class="text-danger">*</span></label>
-                                <input type="number" step="any" class="form-control" id="tc-input" required placeholder="例如: 92.5">
+                        <div class="mb-3">
+                            <label class="form-label">物理数据 (压强/Tc/λ等) <span class="text-danger">*</span></label>
+                            <div id="data-points-container">
+                                <!-- 动态数据行 -->
+                                <div class="data-row card p-3 mb-2 bg-light">
+                                    <div class="row g-2">
+                                        <div class="col-md-3">
+                                            <label class="small">压强 (GPa) *</label>
+                                            <input type="number" step="any" class="form-control form-control-sm pressure-val" required placeholder="0.0">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="small">Tc (K) *</label>
+                                            <input type="number" step="any" class="form-control form-control-sm tc-val" required placeholder="0.0">
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label class="small">λ</label>
+                                            <input type="number" step="any" class="form-control form-control-sm lambda-val" placeholder="λ">
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label class="small">ω_log</label>
+                                            <input type="number" step="any" class="form-control form-control-sm omega-val" placeholder="ω">
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label class="small">N(Ef)</label>
+                                            <input type="number" step="any" class="form-control form-control-sm nef-val" placeholder="N">
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="col-md-6">
-                                <label class="form-label">压强 (GPa)<span class="text-danger">*</span></label>
-                                <input type="number" step="any" class="form-control" id="pressure-input" placeholder="例如: 10.0">
-                            </div>
-                        </div>
-
-                        <div class="row mb-3">
-                            <div class="col-md-4">
-                                <label class="form-label">λ (lambda)</label>
-                                <input type="number" step="any" class="form-control" id="lambda-input" placeholder="例如: 1.2">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label">ω_log</label>
-                                <input type="number" step="any" class="form-control" id="omega-log-input" placeholder="例如: 300">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label">N(E_F)</label>
-                                <input type="number" step="any" class="form-control" id="n-ef-input" placeholder="例如: 1.5">
-                            </div>
+                            <button type="button" class="btn btn-outline-primary btn-sm mt-1" onclick="addDataRow()">+ 添加一组数据</button>
                         </div>
 
                         <div class="mb-3">
                             <label class="form-label">贡献者姓名</label>
+
+
                             <input type="text" class="form-control" id="contributor-name-input" placeholder="默认: 匿名贡献者">
                         </div>
 

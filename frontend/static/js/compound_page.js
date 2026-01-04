@@ -96,6 +96,22 @@ function renderPaperCard(paper) {
     const firstAuthor = authors.length > 0 ? authors[0] : '未知作者';
     const correspondingAuthor = authors.length > 0 ? authors[authors.length - 1] : '未知作者';
 
+    // 物理数据处理
+    const mainData = paper.data && paper.data.length > 0 ? paper.data[0] : null;
+    const tcSummary = mainData ? `${mainData.tc} K` : '未知';
+    
+    // 渲染所有物理数据点
+    const physicalDataHtml = paper.data && paper.data.length > 0 ? 
+        paper.data.map(d => `
+            <div class="mb-1">
+                <span class="badge bg-primary">Tc: ${d.tc} K</span>
+                ${d.pressure !== null && d.pressure !== undefined ? `<span class="badge bg-secondary">P: ${d.pressure} GPa</span>` : ''}
+                ${d.lambda_val !== null && d.lambda_val !== undefined ? `<span class="badge bg-info">λ: ${d.lambda_val}</span>` : ''}
+                ${d.omega_log !== null && d.omega_log !== undefined ? `<span class="badge bg-info">ω_log: ${d.omega_log}</span>` : ''}
+                ${d.n_ef !== null && d.n_ef !== undefined ? `<span class="badge bg-info">N(E_F): ${d.n_ef}</span>` : ''}
+            </div>
+        `).join('') : '<span class="text-muted">无物理参数数据</span>';
+
     // 标签映射
     const articleTypeBadge = paper.article_type === 'theoretical' ?
         '<span class="badge bg-info">⚛️ 理论</span>' :
@@ -125,7 +141,7 @@ function renderPaperCard(paper) {
                             通讯: ${correspondingAuthor} |
                             ${paper.title} |
                             ${paper.chemical_formula || '未知体系'} |
-                            Tc: ${paper.tc ? paper.tc + ' K' : '未知'} |
+                            Tc: ${tcSummary} |
                             ${articleTypeBadge}
                             ${scTypeBadge}
                             ${reviewBadge}
@@ -152,12 +168,9 @@ function renderPaperCard(paper) {
                                 ${paper.chemical_formula ? `<strong>化学式:</strong> ${paper.chemical_formula}<br>` : ''}
                                 ${paper.crystal_structure ? `<strong>晶体结构:</strong> ${paper.crystal_structure}<br>` : ''}
                                 <strong>物理参数:</strong> 
-                                <span class="badge bg-primary">Tc: ${paper.tc} K</span>
-                                ${paper.pressure ? `<span class="badge bg-secondary">P: ${paper.pressure} GPa</span>` : ''}
-                                ${paper.lambda_val ? `<span class="badge bg-info">λ: ${paper.lambda_val}</span>` : ''}
-                                ${paper.omega_log ? `<span class="badge bg-info">ω_log: ${paper.omega_log}</span>` : ''}
-                                ${paper.n_ef ? `<span class="badge bg-info">N(E_F): ${paper.n_ef}</span>` : ''}
-                                <br>
+                                <div class="mt-1 mb-2">
+                                    ${physicalDataHtml}
+                                </div>
                                 <strong>DOI:</strong> <code>${paper.doi}</code>
                             </p>
 
@@ -316,6 +329,58 @@ function removeImage(index) {
     handleImageSelection({ target: input });
 }
 
+// 添加物理数据行
+function addDataRow() {
+    const container = document.getElementById('data-points-container');
+    const rowCount = container.querySelectorAll('.data-row').length;
+    
+    if (rowCount >= 20) {
+        alert('最多允许添加20组数据');
+        return;
+    }
+
+    const newRow = document.createElement('div');
+    newRow.className = 'data-row card p-3 mb-2 bg-light';
+    newRow.innerHTML = `
+        <div class="row g-2">
+            <div class="col-md-3">
+                <label class="small">压强 (GPa) *</label>
+                <input type="number" step="any" class="form-control form-control-sm pressure-val" required placeholder="0.0">
+            </div>
+            <div class="col-md-3">
+                <label class="small">Tc (K) *</label>
+                <input type="number" step="any" class="form-control form-control-sm tc-val" required placeholder="0.0">
+            </div>
+            <div class="col-md-2">
+                <label class="small">λ</label>
+                <input type="number" step="any" class="form-control form-control-sm lambda-val" placeholder="λ">
+            </div>
+            <div class="col-md-2">
+                <label class="small">ω_log</label>
+                <input type="number" step="any" class="form-control form-control-sm omega-val" placeholder="ω">
+            </div>
+            <div class="col-md-1">
+                <label class="small">N(Ef)</label>
+                <input type="number" step="any" class="form-control form-control-sm nef-val" placeholder="N">
+            </div>
+            <div class="col-md-1 d-flex align-items-end">
+                <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="removeDataRow(this)">×</button>
+            </div>
+        </div>
+    `;
+    container.appendChild(newRow);
+}
+
+// 移除物理数据行
+function removeDataRow(button) {
+    const container = document.getElementById('data-points-container');
+    if (container.querySelectorAll('.data-row').length > 1) {
+        button.closest('.data-row').remove();
+    } else {
+        alert('至少需要保留一组数据');
+    }
+}
+
 // 加载晶体结构类型列表（用于自动补全）
 async function loadCrystalStructures() {
     try {
@@ -360,15 +425,37 @@ async function submitPaper() {
         return;
     }
 
-    const tc = document.getElementById('tc-input').value;
-    if (!tc) {
-        alert('请输入超导温度 Tc');
-        return;
-    }
+    // 收集并验证物理数据
+    const dataRows = document.querySelectorAll('.data-row');
+    const physicalData = [];
+    let isValidData = true;
 
-    const pressure = document.getElementById('pressure-input').value;
-    if (!pressure) {
-        alert('请输入压强 GPa');
+    dataRows.forEach((row, index) => {
+        const pressureInput = row.querySelector('.pressure-val');
+        const tcInput = row.querySelector('.tc-val');
+        
+        const pressure = pressureInput.value;
+        const tc = tcInput.value;
+        const lambda_val = row.querySelector('.lambda-val').value;
+        const omega_log = row.querySelector('.omega-val').value;
+        const n_ef = row.querySelector('.nef-val').value;
+
+        if (!pressure || !tc) {
+            isValidData = false;
+            return;
+        }
+
+        physicalData.push({
+            pressure: parseFloat(pressure),
+            tc: parseFloat(tc),
+            lambda_val: lambda_val ? parseFloat(lambda_val) : null,
+            omega_log: omega_log ? parseFloat(omega_log) : null,
+            n_ef: n_ef ? parseFloat(n_ef) : null
+        });
+    });
+
+    if (!isValidData || physicalData.length === 0) {
+        alert('请完整填写所有数据的压强和Tc');
         return;
     }
 
@@ -383,17 +470,7 @@ async function submitPaper() {
     formData.append('element_symbols', JSON.stringify(elementSymbols.split('-')));
     formData.append('article_type', articleType.value);
     formData.append('superconductor_type', superconductorType);
-    formData.append('tc', tc);
-    formData.append('pressure', pressure);
-
-    const lambda_val = document.getElementById('lambda-input').value;
-    if (lambda_val) formData.append('lambda_val', lambda_val);
-
-    const omega_log = document.getElementById('omega-log-input').value;
-    if (omega_log) formData.append('omega_log', omega_log);
-
-    const n_ef = document.getElementById('n-ef-input').value;
-    if (n_ef) formData.append('n_ef', n_ef);
+    formData.append('physical_data', JSON.stringify(physicalData));
 
     const formula = document.getElementById('formula-input').value.trim();
     if (formula) formData.append('chemical_formula', formula);
@@ -415,10 +492,12 @@ async function submitPaper() {
         formData.append('images', file);
     });
 
-    // 显示loading
-    const submitBtn = event.target;
-    submitBtn.disabled = true;
-    submitBtn.textContent = '提交中...';
+    // 获取提交按钮
+    const submitBtn = document.querySelector('#uploadModal .btn-primary[onclick="submitPaper()"]');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = '提交中...';
+    }
 
     try {
         const response = await fetch('/api/papers/', {
@@ -434,6 +513,33 @@ async function submitPaper() {
             // 重置表单
             document.getElementById('uploadForm').reset();
             document.getElementById('image-preview').innerHTML = '';
+            // 重置物理数据行
+            document.getElementById('data-points-container').innerHTML = `
+                <div class="data-row card p-3 mb-2 bg-light">
+                    <div class="row g-2">
+                        <div class="col-md-3">
+                            <label class="small">压强 (GPa) *</label>
+                            <input type="number" step="any" class="form-control form-control-sm pressure-val" required placeholder="0.0">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="small">Tc (K) *</label>
+                            <input type="number" step="any" class="form-control form-control-sm tc-val" required placeholder="0.0">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="small">λ</label>
+                            <input type="number" step="any" class="form-control form-control-sm lambda-val" placeholder="λ">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="small">ω_log</label>
+                            <input type="number" step="any" class="form-control form-control-sm omega-val" placeholder="ω">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="small">N(Ef)</label>
+                            <input type="number" step="any" class="form-control form-control-sm nef-val" placeholder="N">
+                        </div>
+                    </div>
+                </div>
+            `;
             selectedFiles = [];
             // 重新加载文献列表
             loadCompoundInfo();
@@ -445,7 +551,9 @@ async function submitPaper() {
         console.error('上传失败:', error);
         alert('上传失败，请检查网络连接');
     } finally {
-        submitBtn.disabled = false;
-        submitBtn.textContent = '提交';
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = '提交';
+        }
     }
 }

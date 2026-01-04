@@ -65,13 +65,6 @@ class PaperCreate(BaseModel):
     contributor_affiliation: Optional[str] = Field("未提供单位", description="贡献者单位")
     notes: Optional[str] = Field(None, description="备注说明")
 
-    # 数据字段
-    pressure: float = Field(..., description="压强 (GPa)")
-    tc: float = Field(..., description="超导温度 Tc (K)")
-    lambda_val: Optional[float] = Field(None, description="λ (lambda)")
-    omega_log: Optional[float] = Field(None, description="ω_log")
-    n_ef: Optional[float] = Field(None, description="N(E_F)")
-
     @validator('doi')
     def validate_doi(cls, v):
         # DOI格式验证：10.xxxx/xxxxx
@@ -94,9 +87,19 @@ class PaperCreate(BaseModel):
             raise ValueError(f"超导体类型必须是: {', '.join(allowed_types)}")
         return v
 
+class PaperData(BaseModel):
+    # 数据字段
+    pressure: float = Field(..., description="压强 (GPa)")
+    tc: float = Field(..., description="超导温度 Tc (K)")
+    lambda_val: Optional[float] = Field(None, description="λ (lambda)")
+    omega_log: Optional[float] = Field(None, description="ω_log")
+    n_ef: Optional[float] = Field(None, description="N(E_F)")
+    class Config:
+        from_attributes = True # 这让 Pydantic 能处理 SQLAlchemy 对象
 
 class PaperResponse(BaseModel):
     """文献响应模型"""
+    data: List[PaperData] = []
     id: int
     compound_id: int
     doi: str
@@ -116,13 +119,6 @@ class PaperResponse(BaseModel):
     contributor_name: str
     contributor_affiliation: str
     notes: Optional[str] = None
-    
-    # 数据字段
-    pressure: Optional[float] = None
-    tc: Optional[float] = None
-    lambda_val: Optional[float] = None
-    omega_log: Optional[float] = None
-    n_ef: Optional[float] = None
 
     created_at: datetime
     image_count: int = 0  # 截图数量

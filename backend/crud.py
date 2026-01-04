@@ -105,12 +105,7 @@ def create_paper(
     crystal_structure: Optional[str] = None,
     contributor_name: str = "匿名贡献者",
     contributor_affiliation: str = "未提供单位",
-    notes: Optional[str] = None,
-    pressure: Optional[float] = None,
-    tc: Optional[float] = None,
-    lambda_val: Optional[float] = None,
-    omega_log: Optional[float] = None,
-    n_ef: Optional[float] = None
+    notes: Optional[str] = None
 ) -> models.Paper:
     """创建文献记录"""
     paper = models.Paper(
@@ -131,17 +126,35 @@ def create_paper(
         crystal_structure=crystal_structure,
         contributor_name=contributor_name,
         contributor_affiliation=contributor_affiliation,
-        notes=notes,
-        pressure=pressure,
-        tc=tc,
-        lambda_val=lambda_val,
-        omega_log=omega_log,
-        n_ef=n_ef
+        notes=notes
     )
     db.add(paper)
     db.commit()
     db.refresh(paper)
     return paper
+
+
+def create_paper_data(
+    db: Session,
+    paper_id: int,
+    data_list: List[dict]
+) -> List[models.PaperData]:
+    """为指定文献创建多组物理数据记录"""
+    db_data_list = []
+    for item in data_list:
+        db_data = models.PaperData(
+            paper_id=paper_id,
+            pressure=item.get("pressure"),
+            tc=item.get("tc"),
+            lambda_val=item.get("lambda_val"),
+            omega_log=item.get("omega_log"),
+            n_ef=item.get("n_ef")
+        )
+        db.add(db_data)
+        db_data_list.append(db_data)
+
+    db.commit()
+    return db_data_list
 
 
 def check_paper_exists(db: Session, compound_id: int, doi: str) -> bool:

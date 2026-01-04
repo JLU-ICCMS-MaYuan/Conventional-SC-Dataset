@@ -20,12 +20,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 复制项目文件
 COPY . .
 
-# 创建数据目录（Volume会挂载到这里）
-RUN mkdir -p /app/data
+# 创建数据目录并设置权限
+RUN mkdir -p /app/data && chmod 777 /app/data
 
 # 复制并设置启动脚本权限
 COPY start.sh /app/start.sh
 RUN chmod +x /app/start.sh
+
+# 给予 /app 目录足够的权限，以便非 root 用户可以运行
+RUN chmod -R 777 /app
 
 # 注意：不在构建时初始化数据库，而是在应用启动时初始化（见backend/main.py的startup事件）
 # 这样可以确保数据库创建在Volume挂载后的持久化存储中

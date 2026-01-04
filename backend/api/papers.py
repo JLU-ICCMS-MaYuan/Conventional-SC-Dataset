@@ -23,51 +23,34 @@ async def create_paper(
     element_symbols: str = Form(...),  # JSON字符串
     article_type: str = Form(...),  # 文章类型: theoretical 或 experimental
     superconductor_type: str = Form(...),  # 超导体类型: conventional, unconventional, unknown
-    tc: float = Form(...),
-    pressure: float = Form(...),
+    physical_data: str = Form(...),  # JSON字符串，包含多组物理参数
     chemical_formula: Optional[str] = Form(None),
     crystal_structure: Optional[str] = Form(None),
     contributor_name: Optional[str] = Form("匿名贡献者"),
     contributor_affiliation: Optional[str] = Form("未提供单位"),
     notes: Optional[str] = Form(None),
-    lambda_val: Optional[float] = Form(None),
-    omega_log: Optional[float] = Form(None),
-    n_ef: Optional[float] = Form(None),
-    images: Optional[List[UploadFile]] = File(None),
+    images: List[UploadFile] = File(default=[]),
     db: Session = Depends(get_db)
 ):
     """
     上传新文献
-
-    必填字段:
-    - doi: DOI标识符
-    - element_symbols: 元素符号列表（JSON字符串）
-    - article_type: 文章类型 (theoretical 或 experimental)
-    - superconductor_type: 超导体类型 (conventional, unconventional, unknown)
-    - tc: 超导温度 Tc (K)
-
-    可选字段:
-    - pressure: 压强 (GPa)
-    - lambda_val: λ (lambda)
-    - omega_log: ω_log
-    - n_ef: N(E_F)
-    - images: 文献截图（0-5张）
-    - chemical_formula: 化学式
-    - crystal_structure: 晶体结构类型
-    - contributor_name: 贡献者姓名
-    - contributor_affiliation: 贡献者单位
-    - notes: 备注说明
     """
-    # 1. 解析元素符号列表
+    # 1. 解析参数
     try:
         symbols_list = json.loads(element_symbols)
         if not isinstance(symbols_list, list) or len(symbols_list) == 0:
             raise ValueError("元素符号列表不能为空")
+        
+        data_list = json.loads(physical_data)
+        if not isinstance(data_list, list) or len(data_list) == 0:
+            raise ValueError("物理数据不能为空")
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"元素符号格式错误: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"参数格式错误: {str(e)}")
 
     # 2. 验证截图数量
-    images_to_process = images or []
+    # 如果没有文件上传，FastAPI 会返回一个空列表
+    images_to_process = [img for img in images if img.filename]
+    
     if len(images_to_process) > 5:
         raise HTTPException(
             status_code=400,
@@ -136,15 +119,13 @@ async def create_paper(
         crystal_structure=crystal_structure,
         contributor_name=contributor_name or "匿名贡献者",
         contributor_affiliation=contributor_affiliation or "未提供单位",
-        notes=notes,
-        pressure=pressure,
-        tc=tc,
-        lambda_val=lambda_val,
-        omega_log=omega_log,
-        n_ef=n_ef
+        notes=notes
     )
 
-    # 8. 处理并保存截图
+    # 8. 保存物理数据点
+    crud.create_paper_data(db=db, paper_id=paper.id, data_list=data_list)
+
+    # 9. 处理并保存截图
     for idx, image_file in enumerate(images_to_process, start=1):
         # 读取图片数据
         image_data = await image_file.read()
