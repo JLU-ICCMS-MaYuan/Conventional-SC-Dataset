@@ -101,15 +101,16 @@ class Paper(Base):
     notes = Column(Text)  # 备注说明
 
     # 审核相关字段
-    review_status = Column(String(20), default="unreviewed", nullable=False, index=True)  # 审核状态: 'reviewed' 或 'unreviewed'
+    review_status = Column(String(20), default="unreviewed", nullable=False, index=True)  # 审核状态: unreviewed, approved, rejected, modifying
     reviewed_by = Column(Integer, ForeignKey("users.id"))  # 审核人ID
     reviewed_at = Column(DateTime)  # 审核时间
+    review_comment = Column(Text)  # 审核意见/拒绝理由
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # 关系
     compound = relationship("Compound", back_populates="papers")
-    data = relationship("PaperData", back_populates="paper", cascade="all, delete-orphan")
+    physical_parameters = relationship("PaperData", back_populates="paper", cascade="all, delete-orphan")
     images = relationship("PaperImage", back_populates="paper", cascade="all, delete-orphan")
     reviewer = relationship("User", back_populates="reviewed_papers", foreign_keys=[reviewed_by])
 
@@ -131,7 +132,7 @@ class PaperData(Base):
     omega_log = Column(Float)  # ω_log
     n_ef = Column(Float)       # N(E_F)
     # 关系
-    paper = relationship("Paper", back_populates="data")
+    paper = relationship("Paper", back_populates="physical_parameters")
     def __repr__(self):
         return f"<PaperData paper_id={self.paper_id} P={self.pressure} Tc={self.tc}>"
 

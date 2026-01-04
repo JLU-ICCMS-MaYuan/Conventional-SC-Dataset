@@ -99,7 +99,7 @@ class PaperData(BaseModel):
 
 class PaperResponse(BaseModel):
     """文献响应模型"""
-    data: List[PaperData] = []
+    data: List[PaperData] = Field([], validation_alias="physical_parameters")
     id: int
     compound_id: int
     doi: str
@@ -124,12 +124,14 @@ class PaperResponse(BaseModel):
     image_count: int = 0  # 截图数量
     # 审核相关字段
     review_status: str = "unreviewed"
+    review_comment: Optional[str] = None
     reviewed_by: Optional[int] = None
     reviewed_at: Optional[datetime] = None
     reviewer_name: Optional[str] = None  # 审核人姓名（需要从关联查询获取）
 
     class Config:
         from_attributes = True
+        populate_by_name = True
 
 
 class PaperDetail(PaperResponse):
@@ -160,7 +162,7 @@ class PaperSearchParams(BaseModel):
     year_max: Optional[int] = Field(None, description="最大年份")
     journal: Optional[str] = Field(None, description="期刊名称")
     crystal_structure: Optional[str] = Field(None, description="晶体结构类型")
-    review_status: Optional[str] = Field(None, description="审核状态：reviewed(已审核), unreviewed(未审核)")
+    review_status: Optional[str] = Field(None, description="审核状态：unreviewed, approved, rejected, modifying")
     sort_by: Optional[str] = Field("created_at", description="排序字段：created_at, year")
     sort_order: Optional[str] = Field("desc", description="排序顺序：asc, desc")
     limit: Optional[int] = Field(50, ge=1, le=200, description="返回数量限制")

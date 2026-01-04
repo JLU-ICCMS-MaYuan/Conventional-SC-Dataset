@@ -74,8 +74,10 @@
                     <label class="form-label">审核状态</label>
                     <select class="form-select" id="filterReviewStatus">
                         <option value="">全部</option>
-                        <option value="reviewed">已审核</option>
-                        <option value="unreviewed">未审核</option>
+                        <option value="unreviewed">⏳ 未审核</option>
+                        <option value="approved">✅ 已通过</option>
+                        <option value="rejected">❌ 已拒绝</option>
+                        <option value="modifying">🛠️ 待修改</option>
                     </select>
                 </div>
                 <div class="col-md-3">
@@ -121,9 +123,15 @@
                     <label for="selectAll">已选中 <strong id="selectedCount">0</strong> 篇文献</label>
                 </div>
                 <div class="btn-group">
-                    <button class="btn btn-success" onclick="batchReview()">批量审核</button>
-                    <button class="btn btn-danger" onclick="batchDelete()" id="batchDeleteBtn" style="display:none;">批量删除</button>
-                    <button class="btn btn-secondary" onclick="clearSelection()">取消选择</button>
+                    <select class="form-select form-select-sm me-2" id="batchStatusSelect" style="width: auto;">
+                        <option value="approved">✅ 批量通过</option>
+                        <option value="rejected">❌ 批量拒绝</option>
+                        <option value="modifying">🛠️ 批量待修改</option>
+                        <option value="unreviewed">⏳ 撤回审核</option>
+                    </select>
+                    <button class="btn btn-success btn-sm" onclick="batchReview()">应用操作</button>
+                    <button class="btn btn-danger btn-sm" onclick="batchDelete()" id="batchDeleteBtn" style="display:none;">批量删除</button>
+                    <button class="btn btn-secondary btn-sm" onclick="clearSelection()">取消选择</button>
                 </div>
             </div>
         </div>
@@ -161,6 +169,9 @@
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" data-bs-toggle="tab" href="#imageManagement">图片管理</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" data-bs-toggle="tab" href="#reviewSection">文献审核</a>
                         </li>
                     </ul>
 
@@ -229,30 +240,12 @@
                                     </div>
                                 </div>
 
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">超导温度 Tc (K)</label>
-                                        <input type="number" step="any" class="form-control" id="editTc">
+                                <div class="mb-3">
+                                    <label class="form-label">物理数据 (压强/Tc/λ等) <span class="text-danger">*</span></label>
+                                    <div id="editDataPointsContainer">
+                                        <!-- 动态数据行 -->
                                     </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">压强 (GPa)</label>
-                                        <input type="number" step="any" class="form-control" id="editPressure">
-                                    </div>
-                                </div>
-
-                                <div class="row">
-                                    <div class="col-md-4 mb-3">
-                                        <label class="form-label">λ (lambda)</label>
-                                        <input type="number" step="any" class="form-control" id="editLambda">
-                                    </div>
-                                    <div class="col-md-4 mb-3">
-                                        <label class="form-label">ω_log</label>
-                                        <input type="number" step="any" class="form-control" id="editOmegaLog">
-                                    </div>
-                                    <div class="col-md-4 mb-3">
-                                        <label class="form-label">N(E_F)</label>
-                                        <input type="number" step="any" class="form-control" id="editNEf">
-                                    </div>
+                                    <button type="button" class="btn btn-outline-primary btn-sm mt-1" onclick="addEditDataRow()">+ 添加一组数据</button>
                                 </div>
 
                                 <div class="row">
@@ -280,6 +273,33 @@
                             </div>
                             <div id="imagesList" class="row">
                                 <!-- 动态加载图片列表 -->
+                            </div>
+                        </div>
+
+                        <!-- 文献审核标签页 -->
+                        <div class="tab-pane fade" id="reviewSection">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h5 class="card-title">审核决策</h5>
+                                    <div class="mb-3">
+                                        <label class="form-label">当前状态</label>
+                                        <div id="currentReviewStatusDisplay"></div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">变更状态为</label>
+                                        <select class="form-select" id="editReviewStatus">
+                                            <option value="unreviewed">⏳ 未审核</option>
+                                            <option value="approved">✅ 已通过</option>
+                                            <option value="rejected">❌ 已拒绝</option>
+                                            <option value="modifying">🛠️ 待修改</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">审核意见 / 理由</label>
+                                        <textarea class="form-control" id="editReviewComment" rows="3" placeholder="例如：数据有误，请修改；或 DOI 填写不规范等"></textarea>
+                                    </div>
+                                    <button type="button" class="btn btn-primary" onclick="submitReviewAction()">提交审核结果</button>
+                                </div>
                             </div>
                         </div>
                     </div>

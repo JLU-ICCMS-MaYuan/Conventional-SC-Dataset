@@ -171,7 +171,7 @@ def get_papers_by_compound(
     year_max: Optional[int] = None,
     journal: Optional[str] = None,
     crystal_structure: Optional[str] = None,
-    review_status: Optional[str] = None,  # 新增：审核状态筛选 (reviewed/unreviewed)
+    review_status: Optional[str] = None,  # 审核状态筛选 (approved/unreviewed/rejected/modifying)
     sort_by: str = "created_at",
     sort_order: str = "desc",
     limit: int = 50,
@@ -187,7 +187,7 @@ def get_papers_by_compound(
         year_min, year_max: 年份范围（可选）
         journal: 期刊名称（可选）
         crystal_structure: 晶体结构类型（可选）
-        review_status: 审核状态筛选 - 'reviewed'(已审核), 'unreviewed'(未审核), None(全部)
+        review_status: 审核状态筛选 - 'approved', 'unreviewed', 'rejected', 'modifying'
         sort_by: 排序字段（created_at或year）
         sort_order: 排序顺序（asc或desc）
         limit: 返回数量限制

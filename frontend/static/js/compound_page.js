@@ -61,8 +61,12 @@ async function loadPapers(searchParams = {}) {
         const papers = await response.json();
 
         if (papers.length === 0) {
-            const statusText = currentReviewStatus === 'reviewed' ? '已审核' :
-                              currentReviewStatus === 'unreviewed' ? '未审核' : '';
+            const statusMap = {
+                'approved': '已通过',
+                'unreviewed': '未审核',
+                'rejected': '已拒绝'
+            };
+            const statusText = statusMap[currentReviewStatus] || '';
             container.innerHTML = `
                 <div class="text-center py-5">
                     <div class="alert alert-warning" role="alert">
@@ -125,9 +129,19 @@ function renderPaperCard(paper) {
     const scTypeBadge = scTypeBadges[paper.superconductor_type] || '';
 
     // 审核状态徽章（从后端数据获取）
-    const reviewBadge = paper.review_status === 'reviewed' ?
-        `<span class="badge bg-success">✓ 已审核${paper.reviewer_name ? ` (${paper.reviewer_name})` : ''}</span>` :
-        '<span class="badge bg-warning">⏳ 未审核</span>';
+    const statusMap = {
+        'unreviewed': { text: '⏳ 未审核', class: 'bg-warning' },
+        'approved': { text: '✅ 已审核', class: 'bg-success' },
+        'reviewed': { text: '✅ 已审核', class: 'bg-success' }, // 兼容旧数据
+        'rejected': { text: '❌ 已拒绝', class: 'bg-danger' },
+        'modifying': { text: '🛠️ 待修改', class: 'bg-info' }
+    };
+    const statusInfo = statusMap[paper.review_status] || statusMap['unreviewed'];
+    let reviewBadge = `<span class="badge ${statusInfo.class}">${statusInfo.text}${paper.reviewer_name && paper.review_status !== 'unreviewed' ? ` (${paper.reviewer_name})` : ''}</span>`;
+    
+    if (paper.review_comment && paper.review_status !== 'unreviewed') {
+        reviewBadge += `<br><small class="text-muted" title="${paper.review_comment}">备注: ${paper.review_comment}</small>`;
+    }
 
     return `
         <div class="card paper-card mb-3">

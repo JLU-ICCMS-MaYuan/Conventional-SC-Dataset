@@ -29,7 +29,8 @@ class ApproveRequest(BaseModel):
 
 
 class ReviewPaperRequest(BaseModel):
-    paper_id: int
+    status: str  # approved, rejected, modifying, unreviewed
+    comment: Optional[str] = None
 
 
 class PaperReviewInfo(BaseModel):
@@ -159,16 +160,21 @@ async def get_all_admins(
 
 # ========== 文献审核功能（所有管理员） ==========
 
-@router.post("/papers/{paper_id}/review", summary="标记文献为已审核")
+@router.post("/papers/{paper_id}/review", summary="更新文献审核状态")
 async def review_paper(
     paper_id: int,
+    request: ReviewPaperRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_admin)
 ):
     """
-    将文献标记为已审核
+    更新文献的审核状态
 
-    所有已批准的管理员都可以操作
+    支持的状态:
+    - approved: 已通过
+    - rejected: 已拒绝
+    - modifying: 待修改
+    - unreviewed: 未审核
     """
     paper = db.query(Paper).filter(Paper.id == paper_id).first()
 
@@ -178,64 +184,33 @@ async def review_paper(
             detail="文献不存在"
         )
 
-    if paper.review_status == "reviewed":
+    valid_statuses = ["approved", "rejected", "modifying", "unreviewed"]
+    if request.status not in valid_statuses:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"该文献已被审核（审核人：{paper.reviewer.real_name}）"
+            detail=f"无效的状态。必须是以下之一: {', '.join(valid_statuses)}"
         )
 
-    # 标记为已审核
-    paper.review_status = "reviewed"
-    paper.reviewed_by = current_user.id
-    paper.reviewed_at = datetime.utcnow()
+    # 更新审核信息
+    paper.review_status = request.status
+    paper.review_comment = request.comment
+    
+    if request.status == "unreviewed":
+        paper.reviewed_by = None
+        paper.reviewed_at = None
+    else:
+        paper.reviewed_by = current_user.id
+        paper.reviewed_at = datetime.utcnow()
+        
     db.commit()
 
     return {
-        "message": "文献已标记为已审核",
+        "message": f"文献审核状态已更新为: {request.status}",
         "paper_id": paper.id,
         "doi": paper.doi,
-        "title": paper.title,
-        "reviewer": current_user.real_name,
-        "reviewed_at": paper.reviewed_at.isoformat()
-    }
-
-
-@router.post("/papers/{paper_id}/unreview", summary="取消文献审核状态")
-async def unreview_paper(
-    paper_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_admin)
-):
-    """
-    取消文献的审核状态（标记为未审核）
-
-    所有已批准的管理员都可以操作
-    """
-    paper = db.query(Paper).filter(Paper.id == paper_id).first()
-
-    if not paper:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="文献不存在"
-        )
-
-    if paper.review_status == "unreviewed":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="该文献尚未被审核"
-        )
-
-    # 取消审核状态
-    paper.review_status = "unreviewed"
-    paper.reviewed_by = None
-    paper.reviewed_at = None
-    db.commit()
-
-    return {
-        "message": "已取消文献审核状态",
-        "paper_id": paper.id,
-        "doi": paper.doi,
-        "title": paper.title
+        "status": paper.review_status,
+        "reviewer": current_user.real_name if paper.reviewed_by else None,
+        "reviewed_at": paper.reviewed_at.isoformat() if paper.reviewed_at else None
     }
 
 
@@ -268,6 +243,8 @@ async def get_unreviewed_papers(
                 "title": paper.title,
                 "year": paper.year,
                 "journal": paper.journal,
+                "tc": paper.physical_parameters[0].tc if paper.physical_parameters else None,
+                "pressure": paper.physical_parameters[0].pressure if paper.physical_parameters else None,
                 "created_at": paper.created_at.isoformat(),
                 "contributor_name": paper.contributor_name
             }
@@ -319,18 +296,14 @@ class UpdatePaperRequest(BaseModel):
     contributor_name: Optional[str] = None
     contributor_affiliation: Optional[str] = None
     notes: Optional[str] = None
-    pressure: Optional[float] = None
-    tc: Optional[float] = None
-    lambda_val: Optional[float] = None
-    omega_log: Optional[float] = None
-    n_ef: Optional[float] = None
+    physical_data: Optional[List[dict]] = None  # 物理数据数组
 
 
 # ========== 全局文献管理功能 ==========
 
 @router.get("/papers/all", summary="获取所有文献（支持多维度筛选）")
 async def get_all_papers(
-    review_status: Optional[str] = None,  # reviewed, unreviewed
+    review_status: Optional[str] = None,  # unreviewed, approved, rejected, modifying
     article_type: Optional[str] = None,  # theoretical, experimental
     superconductor_type: Optional[str] = None,  # conventional, unconventional, unknown
     year_min: Optional[int] = None,
@@ -400,10 +373,11 @@ async def get_all_papers(
                 "article_type": paper.article_type,
                 "superconductor_type": paper.superconductor_type,
                 "chemical_formula": paper.chemical_formula,
-                "tc": paper.tc,
-                "pressure": paper.pressure,
+                "tc": paper.physical_parameters[0].tc if paper.physical_parameters else None,
+                "pressure": paper.physical_parameters[0].pressure if paper.physical_parameters else None,
                 "compound_symbols": paper.compound.element_symbols,
                 "review_status": paper.review_status,
+                "review_comment": paper.review_comment,
                 "reviewer_name": paper.reviewer.real_name if paper.reviewer else None,
                 "contributor_name": paper.contributor_name,
                 "created_at": paper.created_at.isoformat(),
@@ -450,12 +424,17 @@ async def get_paper_detail(
         "contributor_name": paper.contributor_name,
         "contributor_affiliation": paper.contributor_affiliation,
         "notes": paper.notes,
-        "pressure": paper.pressure,
-        "tc": paper.tc,
-        "lambda_val": paper.lambda_val,
-        "omega_log": paper.omega_log,
-        "n_ef": paper.n_ef,
+        "data": [
+            {
+                "pressure": d.pressure,
+                "tc": d.tc,
+                "lambda_val": d.lambda_val,
+                "omega_log": d.omega_log,
+                "n_ef": d.n_ef
+            } for d in paper.physical_parameters
+        ],
         "review_status": paper.review_status,
+        "review_comment": paper.review_comment,
         "created_at": paper.created_at.isoformat(),
         "compound_symbols": paper.compound.element_symbols
     }
@@ -505,6 +484,27 @@ async def update_paper(
 
     # 更新字段（只更新非None的字段）
     update_data = request.dict(exclude_unset=True)
+    
+    # 特殊处理物理数据
+    if "physical_data" in update_data:
+        new_data = update_data.pop("physical_data")
+        if new_data is not None:
+            # 删除旧数据
+            from backend.models import PaperData
+            db.query(PaperData).filter(PaperData.paper_id == paper_id).delete()
+            db.flush() # 确保删除执行
+            # 插入新数据
+            for item in new_data:
+                db_data = PaperData(
+                    paper_id=paper_id,
+                    pressure=item.get("pressure"),
+                    tc=item.get("tc"),
+                    lambda_val=item.get("lambda_val"),
+                    omega_log=item.get("omega_log"),
+                    n_ef=item.get("n_ef")
+                )
+                db.add(db_data)
+
     for field, value in update_data.items():
         if value is not None:
             setattr(paper, field, value)
@@ -567,6 +567,7 @@ async def delete_paper(
 class BatchReviewRequest(BaseModel):
     """批量审核请求模型"""
     paper_ids: List[int]
+    status: str = "approved"  # 默认批量设为已通过
 
 
 @router.post("/papers/batch-review", summary="批量审核文献")
@@ -595,24 +596,23 @@ async def batch_review_papers(
             detail="未找到指定的文献"
         )
 
-    # 批量标记为已审核
+    # 批量标记
     reviewed_count = 0
-    skipped_count = 0
     for paper in papers:
-        if paper.review_status == "unreviewed":
-            paper.review_status = "reviewed"
+        paper.review_status = request.status
+        if request.status == "unreviewed":
+            paper.reviewed_by = None
+            paper.reviewed_at = None
+        else:
             paper.reviewed_by = current_user.id
             paper.reviewed_at = datetime.utcnow()
-            reviewed_count += 1
-        else:
-            skipped_count += 1
+        reviewed_count += 1
 
     db.commit()
 
     return {
-        "message": f"批量审核完成",
+        "message": f"批量更新完成，已将 {reviewed_count} 篇文献设为 {request.status}",
         "reviewed_count": reviewed_count,
-        "skipped_count": skipped_count,
         "total_requested": len(request.paper_ids)
     }
 

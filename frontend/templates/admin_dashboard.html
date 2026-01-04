@@ -120,6 +120,14 @@
                             </div>
                         </div>
 
+                        <div class="mb-3">
+                            <label class="form-label">物理数据 (压强/Tc/λ等) <span class="text-danger">*</span></label>
+                            <div id="editDataPointsContainer">
+                                <!-- 动态数据行 -->
+                            </div>
+                            <button type="button" class="btn btn-outline-primary btn-sm mt-1" onclick="addEditDataRow()">+ 添加一组数据</button>
+                        </div>
+
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">贡献者</label>
@@ -228,8 +236,9 @@
                 // 构建按钮组（根据用户角色显示不同按钮）
                 let buttons = `
                     <a href="https://doi.org/${paper.doi}" target="_blank" class="btn btn-sm btn-outline-primary">查看原文</a>
-                    <button class="btn btn-sm btn-warning btn-edit" data-paper-id="${paper.id}">编辑</button>
-                    <button class="btn btn-sm btn-success btn-review" data-paper-id="${paper.id}" data-paper-title="${safeTitle}">标记为已审核</button>
+                    <button class="btn btn-sm btn-warning btn-edit" data-paper-id="${paper.id}">详情/编辑</button>
+                    <button class="btn btn-sm btn-success btn-approve" data-paper-id="${paper.id}" data-paper-title="${safeTitle}">通过</button>
+                    <button class="btn btn-sm btn-danger btn-reject" data-paper-id="${paper.id}" data-paper-title="${safeTitle}">拒绝</button>
                 `;
 
                 // 如果是超级管理员，显示删除按钮
@@ -244,6 +253,7 @@
                             <p class="text-muted mb-2">
                                 <strong>DOI:</strong> ${paper.doi}<br>
                                 <strong>期刊:</strong> ${safeJournal} (${paper.year || '未知年份'})<br>
+                                <strong>Tc / P:</strong> ${paper.tc ? paper.tc + ' K' : '-'} / ${paper.pressure ? paper.pressure + ' GPa' : '-'}<br>
                                 <strong>贡献者:</strong> ${safeContributor}<br>
                                 <strong>提交时间:</strong> ${new Date(paper.created_at).toLocaleString('zh-CN')}
                             </p>
@@ -258,11 +268,19 @@
             container.innerHTML = html;
 
             // 绑定事件
-            container.querySelectorAll('.btn-review').forEach(btn => {
+            container.querySelectorAll('.btn-approve').forEach(btn => {
                 btn.addEventListener('click', function() {
                     const paperId = this.getAttribute('data-paper-id');
                     const paperTitle = this.getAttribute('data-paper-title');
-                    reviewPaper(paperId, paperTitle);
+                    reviewPaper(paperId, paperTitle, 'approved');
+                });
+            });
+
+            container.querySelectorAll('.btn-reject').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const paperId = this.getAttribute('data-paper-id');
+                    const paperTitle = this.getAttribute('data-paper-title');
+                    reviewPaper(paperId, paperTitle, 'rejected');
                 });
             });
 
@@ -284,8 +302,9 @@
         }
 
         // 审核文献
-        async function reviewPaper(paperId, title) {
-            if (!confirm(`确认标记《${title}》为已审核？`)) {
+        async function reviewPaper(paperId, title, status = 'approved') {
+            const statusText = status === 'approved' ? '通过' : '拒绝';
+            if (!confirm(`确认标记《${title}》为${statusText}？`)) {
                 return;
             }
 
@@ -293,14 +312,19 @@
                 const response = await fetch(`/api/admin/papers/${paperId}/review`, {
                     method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        status: status,
+                        comment: ''
+                    })
                 });
 
                 const data = await response.json();
 
                 if (response.ok) {
-                    alert('已标记为已审核！');
+                    alert(`已标记为${statusText}！`);
                     loadUnreviewedPapers(); // 重新加载列表
                 } else {
                     alert('操作失败: ' + (data.detail || '未知错误'));
@@ -308,6 +332,45 @@
             } catch (error) {
                 console.error('审核失败:', error);
                 alert('操作失败，请检查网络连接');
+            }
+        }
+
+        // 编辑文献助手函数
+        function addEditDataRow(data = null) {
+            const container = document.getElementById('editDataPointsContainer');
+            const row = document.createElement('div');
+            row.className = 'edit-data-row card p-2 mb-2 bg-light';
+            row.innerHTML = `
+                <div class="row g-2">
+                    <div class="col-md-3">
+                        <input type="number" step="any" class="form-control form-control-sm edit-pressure" placeholder="P (GPa)" value="${data ? data.pressure || '' : ''}">
+                    </div>
+                    <div class="col-md-3">
+                        <input type="number" step="any" class="form-control form-control-sm edit-tc" placeholder="Tc (K)" value="${data ? data.tc || '' : ''}">
+                    </div>
+                    <div class="col-md-2">
+                        <input type="number" step="any" class="form-control form-control-sm edit-lambda" placeholder="λ" value="${data ? data.lambda_val || '' : ''}">
+                    </div>
+                    <div class="col-md-2">
+                        <input type="number" step="any" class="form-control form-control-sm edit-omega" placeholder="ω" value="${data ? data.omega_log || '' : ''}">
+                    </div>
+                    <div class="col-md-1">
+                        <input type="number" step="any" class="form-control form-control-sm edit-nef" placeholder="N" value="${data ? data.n_ef || '' : ''}">
+                    </div>
+                    <div class="col-md-1">
+                        <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="removeEditDataRow(this)">×</button>
+                    </div>
+                </div>
+            `;
+            container.appendChild(row);
+        }
+
+        function removeEditDataRow(button) {
+            const container = document.getElementById('editDataPointsContainer');
+            if (container.querySelectorAll('.edit-data-row').length > 1) {
+                button.closest('.edit-data-row').remove();
+            } else {
+                alert('至少需要保留一组数据');
             }
         }
 
@@ -338,6 +401,16 @@
                 document.getElementById('editSuperconductorType').value = paper.superconductor_type || 'unknown';
                 document.getElementById('editChemicalFormula').value = paper.chemical_formula || '';
                 document.getElementById('editCrystalStructure').value = paper.crystal_structure || '';
+                
+                // 填充物理数据
+                const dataContainer = document.getElementById('editDataPointsContainer');
+                dataContainer.innerHTML = '';
+                if (paper.data && paper.data.length > 0) {
+                    paper.data.forEach(d => addEditDataRow(d));
+                } else {
+                    addEditDataRow();
+                }
+
                 document.getElementById('editContributorName').value = paper.contributor_name || '';
                 document.getElementById('editContributorAffiliation').value = paper.contributor_affiliation || '';
                 document.getElementById('editNotes').value = paper.notes || '';
@@ -358,6 +431,22 @@
         async function savePaperEdits() {
             const paperId = document.getElementById('editPaperId').value;
 
+            // 收集物理数据
+            const physicalData = [];
+            document.querySelectorAll('.edit-data-row').forEach(row => {
+                const pressure = row.querySelector('.edit-pressure').value;
+                const tc = row.querySelector('.edit-tc').value;
+                if (pressure && tc) {
+                    physicalData.push({
+                        pressure: parseFloat(pressure),
+                        tc: parseFloat(tc),
+                        lambda_val: row.querySelector('.edit-lambda').value ? parseFloat(row.querySelector('.edit-lambda').value) : null,
+                        omega_log: row.querySelector('.edit-omega').value ? parseFloat(row.querySelector('.edit-omega').value) : null,
+                        n_ef: row.querySelector('.edit-nef').value ? parseFloat(row.querySelector('.edit-nef').value) : null
+                    });
+                }
+            });
+
             const updateData = {
                 title: document.getElementById('editTitle').value,
                 journal: document.getElementById('editJournal').value,
@@ -368,6 +457,7 @@
                 superconductor_type: document.getElementById('editSuperconductorType').value,
                 chemical_formula: document.getElementById('editChemicalFormula').value,
                 crystal_structure: document.getElementById('editCrystalStructure').value,
+                physical_data: physicalData,
                 contributor_name: document.getElementById('editContributorName').value,
                 contributor_affiliation: document.getElementById('editContributorAffiliation').value,
                 notes: document.getElementById('editNotes').value

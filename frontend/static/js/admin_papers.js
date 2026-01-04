@@ -132,13 +132,23 @@ function renderPapers(papers) {
 
         // 审核状态徽章
         let reviewBadge = '';
-        if (paper.review_status === 'reviewed') {
-            reviewBadge = `<span class="badge bg-success">✓ 已审核</span>`;
-            if (paper.reviewer_name) {
-                reviewBadge += `<br><small class="text-muted">${escapeHtml(paper.reviewer_name)}</small>`;
-            }
-        } else {
-            reviewBadge = `<span class="badge bg-warning">⏳ 未审核</span>`;
+        const statusMap = {
+            'unreviewed': { text: '⏳ 未审核', class: 'bg-warning' },
+            'approved': { text: '✅ 已通过', class: 'bg-success' },
+            'reviewed': { text: '✅ 已通过', class: 'bg-success' }, // 兼容旧数据
+            'rejected': { text: '❌ 已拒绝', class: 'bg-danger' },
+            'modifying': { text: '🛠️ 待修改', class: 'bg-info' }
+        };
+        
+        const statusInfo = statusMap[paper.review_status] || statusMap['unreviewed'];
+        reviewBadge = `<span class="badge ${statusInfo.class}">${statusInfo.text}</span>`;
+        
+        if (paper.reviewer_name && paper.review_status !== 'unreviewed') {
+            reviewBadge += `<br><small class="text-muted">${escapeHtml(paper.reviewer_name)}</small>`;
+        }
+        
+        if (paper.review_comment) {
+            reviewBadge += `<br><small class="text-muted text-truncate d-inline-block" style="max-width: 150px;" title="${escapeHtml(paper.review_comment)}">${escapeHtml(paper.review_comment)}</small>`;
         }
 
         // 文章类型标签
@@ -299,11 +309,14 @@ function updateSelectAllCheckbox() {
 
 async function batchReview() {
     if (selectedPapers.size === 0) {
-        alert('请先选择要审核的文献');
+        alert('请先选择要操作的文献');
         return;
     }
 
-    if (!confirm(`确定要批量审核 ${selectedPapers.size} 篇文献吗？`)) {
+    const status = document.getElementById('batchStatusSelect').value;
+    const statusText = document.getElementById('batchStatusSelect').options[document.getElementById('batchStatusSelect').selectedIndex].text;
+
+    if (!confirm(`确定要将选中的 ${selectedPapers.size} 篇文献设置为 ${statusText} 吗？`)) {
         return;
     }
 
@@ -315,22 +328,23 @@ async function batchReview() {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                paper_ids: Array.from(selectedPapers)
+                paper_ids: Array.from(selectedPapers),
+                status: status
             })
         });
 
         const data = await response.json();
 
         if (response.ok) {
-            alert(`批量审核完成！\n已审核：${data.reviewed_count}篇\n已跳过：${data.skipped_count}篇`);
+            alert(data.message || '操作成功！');
             clearSelection();
             loadPapers(currentPage);
         } else {
-            alert('批量审核失败: ' + (data.detail || '未知错误'));
+            alert('批量操作失败: ' + (data.detail || '未知错误'));
         }
     } catch (error) {
-        console.error('批量审核失败:', error);
-        alert('批量审核失败，请检查网络连接');
+        console.error('批量操作失败:', error);
+        alert('操作失败，请检查网络连接');
     }
 }
 
@@ -384,6 +398,46 @@ async function batchDelete() {
 
 // ========== 编辑文献 ==========
 
+// ========== 编辑文献助手函数 ==========
+
+function addEditDataRow(data = null) {
+    const container = document.getElementById('editDataPointsContainer');
+    const row = document.createElement('div');
+    row.className = 'edit-data-row card p-2 mb-2 bg-light';
+    row.innerHTML = `
+        <div class="row g-2">
+            <div class="col-md-3">
+                <input type="number" step="any" class="form-control form-control-sm edit-pressure" placeholder="P (GPa)" value="${data ? data.pressure || '' : ''}">
+            </div>
+            <div class="col-md-3">
+                <input type="number" step="any" class="form-control form-control-sm edit-tc" placeholder="Tc (K)" value="${data ? data.tc || '' : ''}">
+            </div>
+            <div class="col-md-2">
+                <input type="number" step="any" class="form-control form-control-sm edit-lambda" placeholder="λ" value="${data ? data.lambda_val || '' : ''}">
+            </div>
+            <div class="col-md-2">
+                <input type="number" step="any" class="form-control form-control-sm edit-omega" placeholder="ω" value="${data ? data.omega_log || '' : ''}">
+            </div>
+            <div class="col-md-1">
+                <input type="number" step="any" class="form-control form-control-sm edit-nef" placeholder="N" value="${data ? data.n_ef || '' : ''}">
+            </div>
+            <div class="col-md-1">
+                <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="removeEditDataRow(this)">×</button>
+            </div>
+        </div>
+    `;
+    container.appendChild(row);
+}
+
+function removeEditDataRow(button) {
+    const container = document.getElementById('editDataPointsContainer');
+    if (container.querySelectorAll('.edit-data-row').length > 1) {
+        button.closest('.edit-data-row').remove();
+    } else {
+        alert('至少需要保留一组数据');
+    }
+}
+
 async function openEditModal(paperId) {
     try {
         const response = await fetch(`/api/admin/papers/${paperId}`, {
@@ -399,25 +453,60 @@ async function openEditModal(paperId) {
         const paper = await response.json();
 
         // 填充表单
-        document.getElementById('editPaperId').value = paper.id;
-        document.getElementById('editDoi').value = paper.doi;
-        document.getElementById('editTitle').value = paper.title || '';
-        document.getElementById('editJournal').value = paper.journal || '';
-        document.getElementById('editYear').value = paper.year || '';
-        document.getElementById('editVolume').value = paper.volume || '';
-        document.getElementById('editAuthors').value = paper.authors || '';
-        document.getElementById('editArticleType').value = paper.article_type || 'experimental';
-        document.getElementById('editSuperconductorType').value = paper.superconductor_type || 'unknown';
-        document.getElementById('editChemicalFormula').value = paper.chemical_formula || '';
-        document.getElementById('editCrystalStructure').value = paper.crystal_structure || '';
-        document.getElementById('editTc').value = paper.tc || '';
-        document.getElementById('editPressure').value = paper.pressure || '';
-        document.getElementById('editLambda').value = paper.lambda_val || '';
-        document.getElementById('editOmegaLog').value = paper.omega_log || '';
-        document.getElementById('editNEf').value = paper.n_ef || '';
-        document.getElementById('editContributorName').value = paper.contributor_name || '';
-        document.getElementById('editContributorAffiliation').value = paper.contributor_affiliation || '';
-        document.getElementById('editNotes').value = paper.notes || '';
+        const setVal = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.value = val;
+            else console.warn(`Element with id "${id}" not found`);
+        };
+
+        setVal('editPaperId', paper.id);
+        setVal('editDoi', paper.doi);
+        setVal('editTitle', paper.title || '');
+        setVal('editJournal', paper.journal || '');
+        setVal('editYear', paper.year || '');
+        setVal('editVolume', paper.volume || '');
+        
+        // 作者处理：如果是数组则合并为字符串
+        let authorsStr = paper.authors || '';
+        if (Array.isArray(authorsStr)) {
+            authorsStr = authorsStr.join(', ');
+        }
+        setVal('editAuthors', authorsStr);
+        
+        setVal('editArticleType', paper.article_type || 'experimental');
+        setVal('editSuperconductorType', paper.superconductor_type || 'unknown');
+        setVal('editChemicalFormula', paper.chemical_formula || '');
+        setVal('editCrystalStructure', paper.crystal_structure || '');
+        
+        // 填充物理数据
+        const dataContainer = document.getElementById('editDataPointsContainer');
+        if (dataContainer) {
+            dataContainer.innerHTML = '';
+            if (paper.data && paper.data.length > 0) {
+                paper.data.forEach(d => addEditDataRow(d));
+            } else {
+                addEditDataRow();
+            }
+        }
+
+        setVal('editContributorName', paper.contributor_name || '');
+        setVal('editContributorAffiliation', paper.contributor_affiliation || '');
+        setVal('editNotes', paper.notes || '');
+
+        // 填充审核信息
+        setVal('editReviewStatus', paper.review_status || 'unreviewed');
+        setVal('editReviewComment', paper.review_comment || '');
+        
+        const statusMap = {
+            'unreviewed': '<span class="badge bg-warning">⏳ 未审111核</span>',
+            'approved': '<span class="badge bg-success">✅ 已通过</span>',
+            'rejected': '<span class="badge bg-danger">❌ 已拒绝</span>',
+            'modifying': '<span class="badge bg-info">🛠️ 待修改</span>'
+        };
+        const statusDisplay = document.getElementById('currentReviewStatusDisplay');
+        if (statusDisplay) {
+            statusDisplay.innerHTML = statusMap[paper.review_status] || statusMap['unreviewed'];
+        }
 
         // 加载图片列表
         loadPaperImages(paperId);
@@ -434,27 +523,101 @@ async function openEditModal(paperId) {
     }
 }
 
+async function submitReviewAction() {
+    const paperIdEl = document.getElementById('editPaperId');
+    const statusEl = document.getElementById('editReviewStatus');
+    const commentEl = document.getElementById('editReviewComment');
+
+    if (!paperIdEl || !statusEl || !commentEl) {
+        alert('无法提交：表单元素缺失');
+        return;
+    }
+
+    const paperId = paperIdEl.value;
+    const status = statusEl.value;
+    const comment = commentEl.value;
+
+    try {
+        const response = await fetch(`/api/admin/papers/${paperId}/review`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                status: status,
+                comment: comment
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            alert('审核状态已更新！');
+            // 更新当前显示的 Badge
+            const statusMap = {
+                'unreviewed': '<span class="badge bg-warning">⏳ 未审核</span>',
+                'approved': '<span class="badge bg-success">✅ 已通过</span>',
+                'rejected': '<span class="badge bg-danger">❌ 已拒绝</span>',
+                'modifying': '<span class="badge bg-info">🛠️ 待修改</span>'
+            };
+            const statusDisplay = document.getElementById('currentReviewStatusDisplay');
+            if (statusDisplay) {
+                statusDisplay.innerHTML = statusMap[status];
+            }
+            loadPapers(currentPage);
+        } else {
+            alert('更新审核状态失败: ' + (data.detail || '未知错误'));
+        }
+    } catch (error) {
+        console.error('提交审核失败:', error);
+        alert('提交失败，请检查网络连接');
+    }
+}
+
 async function savePaperEdits() {
-    const paperId = document.getElementById('editPaperId').value;
+    const paperIdEl = document.getElementById('editPaperId');
+    if (!paperIdEl) {
+        alert('无法保存：ID 元素缺失');
+        return;
+    }
+    const paperId = paperIdEl.value;
+
+    // 收集物理数据
+    const physicalData = [];
+    document.querySelectorAll('.edit-data-row').forEach(row => {
+        const pressure = row.querySelector('.edit-pressure').value;
+        const tc = row.querySelector('.edit-tc').value;
+        if (pressure && tc) {
+            physicalData.push({
+                pressure: parseFloat(pressure),
+                tc: parseFloat(tc),
+                lambda_val: row.querySelector('.edit-lambda').value ? parseFloat(row.querySelector('.edit-lambda').value) : null,
+                omega_log: row.querySelector('.edit-omega').value ? parseFloat(row.querySelector('.edit-omega').value) : null,
+                n_ef: row.querySelector('.edit-nef').value ? parseFloat(row.querySelector('.edit-nef').value) : null
+            });
+        }
+    });
+
+    const getVal = (id) => {
+        const el = document.getElementById(id);
+        return el ? el.value : '';
+    };
 
     const updateData = {
-        title: document.getElementById('editTitle').value,
-        journal: document.getElementById('editJournal').value,
-        year: document.getElementById('editYear').value ? parseInt(document.getElementById('editYear').value) : null,
-        volume: document.getElementById('editVolume').value,
-        authors: document.getElementById('editAuthors').value,
-        article_type: document.getElementById('editArticleType').value,
-        superconductor_type: document.getElementById('editSuperconductorType').value,
-        chemical_formula: document.getElementById('editChemicalFormula').value,
-        crystal_structure: document.getElementById('editCrystalStructure').value,
-        tc: document.getElementById('editTc').value ? parseFloat(document.getElementById('editTc').value) : null,
-        pressure: document.getElementById('editPressure').value ? parseFloat(document.getElementById('editPressure').value) : null,
-        lambda_val: document.getElementById('editLambda').value ? parseFloat(document.getElementById('editLambda').value) : null,
-        omega_log: document.getElementById('editOmegaLog').value ? parseFloat(document.getElementById('editOmegaLog').value) : null,
-        n_ef: document.getElementById('editNEf').value ? parseFloat(document.getElementById('editNEf').value) : null,
-        contributor_name: document.getElementById('editContributorName').value,
-        contributor_affiliation: document.getElementById('editContributorAffiliation').value,
-        notes: document.getElementById('editNotes').value
+        title: getVal('editTitle'),
+        journal: getVal('editJournal'),
+        year: getVal('editYear') ? parseInt(getVal('editYear')) : null,
+        volume: getVal('editVolume'),
+        authors: getVal('editAuthors'),
+        article_type: getVal('editArticleType'),
+        superconductor_type: getVal('editSuperconductorType'),
+        chemical_formula: getVal('editChemicalFormula'),
+        crystal_structure: getVal('editCrystalStructure'),
+        physical_data: physicalData,
+        contributor_name: getVal('editContributorName'),
+        contributor_affiliation: getVal('editContributorAffiliation'),
+        notes: getVal('editNotes')
     };
 
     try {
