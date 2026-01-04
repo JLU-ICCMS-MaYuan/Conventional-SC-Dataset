@@ -1,0 +1,35 @@
+# 项目开发进度表 (Todo List)
+
+## 1. 管理员系统 (Admin System)
+- [x] 数据库模型设计 (User, is_admin, is_superadmin, is_approved)
+- [x] 超级管理员手动创建脚本 (`backend/create_superadmin.py`)
+- [x] 管理员注册逻辑
+- [x] 邮箱验证码生成与发送 (SMTP 基础框架)
+- [x] 超级管理员审批 API
+- [ ] 邮箱配置优化 (从默认 QQ 切换为 163 邮箱，支持 SSL/TLS)
+- [ ] 管理员个人资料编辑功能
+
+## 2. 文献审核系统 (Review System)
+- [x] 文献模型增加审核字段 (`review_status`, `reviewed_by`, `reviewed_at`)
+- [x] 基础审核操作 API (通过/撤回)
+- [ ] **[高优先级]** 扩展审核状态: `unreviewed` (未审核), `approved` (已通过), `rejected` (已拒绝), `modifying` (待修改)
+- [ ] 管理员后台：待审核文献列表与批量操作
+- [ ] 文献详情页显示审核人信息与审核时间
+
+## 3. 前端 UI 与 交互 (Frontend UI)
+- [x] 管理员登录与注册页面
+- [x] 首页/列表页的基础布局
+- [x] 列表页审核状态筛选 (全部/已审核/未审核)
+- [ ] **[高优先级]** 扩展前端状态筛选（支持 4 种状态的 Badge 显示）
+- [ ] 详情页样式优化（显示贡献者与审核者信息）
+- [ ] 文献上传页面：可选填写上传者邮箱 (便于管理员联系)
+
+## 4. 数据管理 (Data Management)
+- [x] 元素周期表交互逻辑
+- [x] DOI 自动解析文献信息 (CrossRef/DOI.org API)
+- [x] 文献物理数据 (Pressure, Tc, λ 等) 存储与展示
+- [ ] 数据导出功能 (JSON/Excel)
+- [ ] 数据库迁移方案 (考虑引入 Alembic)
+
+---
+*最后更新时间: 2026-01-04*
