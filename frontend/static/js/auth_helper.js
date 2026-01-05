@@ -35,9 +35,7 @@ function renderLoggedInNav(container, user, type) {
                 👤 ${user.real_name}
             </button>
             <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="userDropdown">
-                <li><h6 class="dropdown-header">账户设置</h6></li>
                 ${adminLink}
-                <li><hr class="dropdown-divider"></li>
                 <li><a class="dropdown-item text-danger" href="#" onclick="handleLogout()">退出登录</a></li>
             </ul>
         </div>
