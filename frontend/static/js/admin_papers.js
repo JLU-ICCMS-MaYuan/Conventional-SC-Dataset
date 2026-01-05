@@ -439,6 +439,7 @@ function removeEditDataRow(button) {
 }
 
 async function openEditModal(paperId) {
+    console.log('Opening edit modal for paper:', paperId);
     try {
         const response = await fetch(`/api/admin/papers/${paperId}`, {
             headers: {
@@ -451,26 +452,29 @@ async function openEditModal(paperId) {
         }
 
         const paper = await response.json();
+        console.log('Paper data received:', paper);
 
-        // 填充表单
+        // 安全填充工具函数
         const setVal = (id, val) => {
             const el = document.getElementById(id);
-            if (el) el.value = val;
-            else console.warn(`Element with id "${id}" not found`);
+            if (el) {
+                el.value = val !== null && val !== undefined ? val : '';
+            } else {
+                console.warn(`[DOM Missing] Element #${id} not found in current page.`);
+            }
         };
 
+        // 1. 基础信息
         setVal('editPaperId', paper.id);
         setVal('editDoi', paper.doi);
-        setVal('editTitle', paper.title || '');
-        setVal('editJournal', paper.journal || '');
-        setVal('editYear', paper.year || '');
-        setVal('editVolume', paper.volume || '');
+        setVal('editTitle', paper.title);
+        setVal('editJournal', paper.journal);
+        setVal('editYear', paper.year);
+        setVal('editVolume', paper.volume);
         
-        // 作者处理：如果是数组则合并为字符串
+        // 作者处理
         let authorsStr = paper.authors || '';
-        if (Array.isArray(authorsStr)) {
-            authorsStr = authorsStr.join(', ');
-        }
+        if (Array.isArray(authorsStr)) authorsStr = authorsStr.join(', ');
         setVal('editAuthors', authorsStr);
         
         setVal('editArticleType', paper.article_type || 'experimental');
@@ -478,27 +482,38 @@ async function openEditModal(paperId) {
         setVal('editChemicalFormula', paper.chemical_formula || '');
         setVal('editCrystalStructure', paper.crystal_structure || '');
         
-        // 填充物理数据
+        // 2. 物理数据 (动态行处理)
         const dataContainer = document.getElementById('editDataPointsContainer');
         if (dataContainer) {
             dataContainer.innerHTML = '';
             if (paper.data && paper.data.length > 0) {
                 paper.data.forEach(d => addEditDataRow(d));
             } else {
-                addEditDataRow();
+                // 如果没有数据，且 paper 本身有 tc/pressure (兼容旧数据结构)
+                if (paper.tc || paper.pressure) {
+                    addEditDataRow({
+                        tc: paper.tc,
+                        pressure: paper.pressure,
+                        lambda_val: paper.lambda_val,
+                        omega_log: paper.omega_log,
+                        n_ef: paper.n_ef
+                    });
+                } else {
+                    addEditDataRow();
+                }
             }
         }
 
-        setVal('editContributorName', paper.contributor_name || '');
-        setVal('editContributorAffiliation', paper.contributor_affiliation || '');
-        setVal('editNotes', paper.notes || '');
+        setVal('editContributorName', paper.contributor_name);
+        setVal('editContributorAffiliation', paper.contributor_affiliation);
+        setVal('editNotes', paper.notes);
 
-        // 填充审核信息
+        // 3. 审核信息
         setVal('editReviewStatus', paper.review_status || 'unreviewed');
         setVal('editReviewComment', paper.review_comment || '');
         
         const statusMap = {
-            'unreviewed': '<span class="badge bg-warning">⏳ 未审111核</span>',
+            'unreviewed': '<span class="badge bg-warning">⏳ 未审核</span>',
             'approved': '<span class="badge bg-success">✅ 已通过</span>',
             'rejected': '<span class="badge bg-danger">❌ 已拒绝</span>',
             'modifying': '<span class="badge bg-info">🛠️ 待修改</span>'
@@ -508,18 +523,20 @@ async function openEditModal(paperId) {
             statusDisplay.innerHTML = statusMap[paper.review_status] || statusMap['unreviewed'];
         }
 
-        // 加载图片列表
-        loadPaperImages(paperId);
+        // 4. 加载图片
+        if (typeof loadPaperImages === 'function') {
+            loadPaperImages(paperId);
+        }
 
-        // 显示模态框
+        // 5. 显示模态框
         if (!editModal) {
             editModal = new bootstrap.Modal(document.getElementById('editPaperModal'));
         }
         editModal.show();
 
     } catch (error) {
-        console.error('打开编辑框失败:', error);
-        alert('无法打开编辑框: ' + error.message);
+        console.error('打开编辑框具体错误:', error);
+        alert('无法打开编辑框，请检查控制台输出');
     }
 }
 
