@@ -26,6 +26,7 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
     real_name: str
+    is_admin: bool = False  # 是否申请成为管理员
 
 
 class VerifyEmailRequest(BaseModel):
@@ -44,10 +45,10 @@ class TokenResponse(BaseModel):
     user: dict
 
 
-@router.post("/register", summary="管理员注册（第一步：发送验证码）")
+@router.post("/register", summary="用户/管理员注册（第一步：发送验证码）")
 async def register_step1(request: RegisterRequest, db: Session = Depends(get_db)):
     """
-    管理员注册流程第一步：验证邮箱并发送验证码
+    注册流程第一步：验证邮箱并发送验证码
 
     流程：
     1. 检查邮箱是否已注册
@@ -80,10 +81,11 @@ async def register_step1(request: RegisterRequest, db: Session = Depends(get_db)
             detail="发送验证码失败，请稍后重试"
         )
 
-    # 如果用户已存在但未验证，更新验证码
+    # 如果用户已存在但未验证，更新信息
     if existing_user:
         existing_user.password_hash = hash_password(request.password)
         existing_user.real_name = request.real_name
+        existing_user.is_admin = request.is_admin
         existing_user.verification_code = code
         existing_user.verification_expires = expires
     else:
@@ -92,9 +94,9 @@ async def register_step1(request: RegisterRequest, db: Session = Depends(get_db)
             email=request.email,
             password_hash=hash_password(request.password),
             real_name=request.real_name,
-            is_admin=True,  # 申请的就是管理员
+            is_admin=request.is_admin,
             is_email_verified=False,
-            is_approved=False,  # 需要超级管理员批准
+            is_approved=not request.is_admin,  # 普通用户直接标记为已批准，只有管理员需要审核
             verification_code=code,
             verification_expires=expires
         )
@@ -108,12 +110,14 @@ async def register_step1(request: RegisterRequest, db: Session = Depends(get_db)
     }
 
 
-@router.post("/verify-email", summary="管理员注册（第二步：验证邮箱）")
+@router.post("/verify-email", summary="注册验证（第二步：验证邮箱）")
 async def register_step2(request: VerifyEmailRequest, db: Session = Depends(get_db)):
     """
-    管理员注册流程第二步：验证邮箱验证码
+    注册流程第二步：验证邮箱验证码
 
-    验证成功后，用户进入待审批状态，需要超级管理员批准
+    验证成功后：
+    - 管理员：进入待审批状态
+    - 普通用户：直接可以登录
     """
     user = db.query(User).filter(User.email == request.email).first()
 
@@ -149,20 +153,25 @@ async def register_step2(request: VerifyEmailRequest, db: Session = Depends(get_
     user.verification_expires = None
     db.commit()
 
+    if user.is_admin:
+        message = "邮箱验证成功！您的管理员申请已提交，请等待超级管理员审批"
+        status_val = "pending_approval"
+    else:
+        message = "注册成功！您现在可以登录并上传文献了"
+        status_val = "active"
+
     return {
-        "message": "邮箱验证成功！您的管理员申请已提交，请等待超级管理员审批",
+        "message": message,
         "email": user.email,
         "real_name": user.real_name,
-        "status": "pending_approval"
+        "status": status_val
     }
 
 
-@router.post("/login", response_model=TokenResponse, summary="管理员登录")
+@router.post("/login", response_model=TokenResponse, summary="用户/管理员登录")
 async def login(request: LoginRequest, db: Session = Depends(get_db)):
     """
-    管理员登录
-
-    返回JWT token，用于后续API认证
+    用户/管理员登录
     """
     user = db.query(User).filter(User.email == request.email).first()
 
@@ -184,7 +193,8 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
             detail="邮箱未验证，请先完成邮箱验证"
         )
 
-    if not user.is_approved:
+    # 如果是管理员，必须审批通过
+    if user.is_admin and not user.is_approved:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="您的管理员申请尚未通过审批，请耐心等待"

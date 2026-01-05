@@ -8,13 +8,37 @@
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">超导文献数据库</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">首页</a>
+                    </li>
+                </ul>
+                <div class="d-flex align-items-center" id="user-nav">
+                    <div class="spinner-border spinner-border-sm text-light" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
     <!-- 头部 -->
-    <div class="compound-header text-center">
+    <div class="compound-header text-center py-5 bg-light border-bottom mb-4">
         <div class="container">
-            <h1 id="compound-title">加载中...</h1>
-            <p class="lead" id="compound-subtitle">超导体文献数据库</p>
-            <button onclick="window.location.href='/'" class="btn btn-light">返回元素周期表</button>
-            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#uploadModal">上传文献</button>
+            <h1 id="compound-title" class="display-4 fw-bold">加载中...</h1>
+            <p class="lead text-muted" id="compound-subtitle">超导体文献数据库</p>
+            <div class="d-flex justify-content-center gap-2 mt-3">
+                <button onclick="window.location.href='/'" class="btn btn-outline-primary">返回元素周期表</button>
+                <button class="btn btn-success" id="open-upload-btn">上传文献</button>
+            </div>
         </div>
     </div>
 
@@ -211,6 +235,7 @@
     </div>
 
     <script src="/static/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/auth_helper.js"></script>
     <script src="/static/js/compound_page.js"></script>
 </body>
 </html>

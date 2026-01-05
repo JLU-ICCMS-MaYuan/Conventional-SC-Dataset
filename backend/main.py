@@ -97,6 +97,26 @@ def admin_register_page():
     return {"error": "页面不存在"}
 
 
+# 用户登录页面
+@app.get("/login")
+def user_login_page():
+    """返回用户登录页面"""
+    login_file = TEMPLATES_DIR / "user_login.html"
+    if login_file.exists():
+        return FileResponse(login_file)
+    return {"error": "页面不存在"}
+
+
+# 用户注册页面
+@app.get("/register")
+def user_register_page():
+    """返回用户注册页面"""
+    register_file = TEMPLATES_DIR / "user_register.html"
+    if register_file.exists():
+        return FileResponse(register_file)
+    return {"error": "页面不存在"}
+
+
 # 管理员审核面板
 @app.get("/admin/dashboard")
 def admin_dashboard_page():

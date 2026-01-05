@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户注册 - 超导文献数据库</title>
+    <link href="/static/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="row justify-content-center mt-5">
+            <div class="col-md-6">
+                <div class="card shadow">
+                    <div class="card-body p-5">
+                        <h2 class="text-center mb-4">📝 用户注册</h2>
+
+                        <!-- 第一步：填写信息 -->
+                        <div id="step1">
+                            <form id="registerForm">
+                                <div class="mb-3">
+                                    <label for="realName" class="form-label">真实姓名 / 昵称</label>
+                                    <input type="text" class="form-control" id="realName" required placeholder="用于文献贡献者展示">
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="email" class="form-label">邮箱</label>
+                                    <input type="email" class="form-control" id="email" required placeholder="用于登录和找回密码">
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="password" class="form-label">设置密码</label>
+                                    <input type="password" class="form-control" id="password" required minlength="6">
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="confirmPassword" class="form-label">确认密码</label>
+                                    <input type="password" class="form-control" id="confirmPassword" required>
+                                </div>
+
+                                <div class="d-grid gap-2 mb-3">
+                                    <button type="submit" class="btn btn-primary btn-lg">发送验证码</button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- 第二步：验证邮箱 -->
+                        <div id="step2" style="display: none;">
+                            <div class="alert alert-info">
+                                验证码已发送到 <strong id="displayEmail"></strong>，请查收。
+                            </div>
+                            <form id="verifyForm">
+                                <div class="mb-3">
+                                    <label for="code" class="form-label">6位验证码</label>
+                                    <input type="text" class="form-control text-center fs-2" id="code" maxlength="6" pattern="\d{6}" required>
+                                </div>
+                                <div class="d-grid gap-2 mb-3">
+                                    <button type="submit" class="btn btn-success btn-lg">完成注册</button>
+                                </div>
+                                <div class="text-center">
+                                    <button type="button" class="btn btn-link" onclick="location.reload()">重新填写信息</button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <div class="text-center">
+                            <a href="/login" class="text-decoration-none">已有账号？立即登录</a>
+                        </div>
+
+                        <hr>
+
+                        <div class="text-center">
+                            <a href="/" class="btn btn-link">返回首页</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let userEmail = '';
+
+        // 步骤1：提交注册信息
+        document.getElementById('registerForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const real_name = document.getElementById('realName').value;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+
+            if (password !== confirmPassword) {
+                alert('两次输入的密码不一致');
+                return;
+            }
+
+            userEmail = email;
+
+            try {
+                const response = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email,
+                        password,
+                        real_name,
+                        is_admin: false // 普通用户
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    document.getElementById('step1').style.display = 'none';
+                    document.getElementById('step2').style.display = 'block';
+                    document.getElementById('displayEmail').textContent = email;
+                } else {
+                    alert('注册错误: ' + (data.detail || '未知错误'));
+                }
+            } catch (error) {
+                console.error('注册错误:', error);
+                alert('注册失败，请检查网络连接');
+            }
+        });
+
+        // 步骤2：验证验证码
+        document.getElementById('verifyForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const code = document.getElementById('code').value;
+
+            try {
+                const response = await fetch('/api/auth/verify-email', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: userEmail,
+                        code: code
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    alert('注册成功！');
+                    window.location.href = '/login';
+                } else {
+                    alert('验证失败: ' + (data.detail || '未知错误'));
+                }
+            } catch (error) {
+                console.error('验证错误:', error);
+                alert('验证失败，请检查网络连接');
+            }
+        });
+    </script>
+</body>
+</html>

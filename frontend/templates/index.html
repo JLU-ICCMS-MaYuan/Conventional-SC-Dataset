@@ -8,11 +8,34 @@
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">超导文献数据库</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/">首页</a>
+                    </li>
+                </ul>
+                <div class="d-flex align-items-center" id="user-nav">
+                    <!-- 登录/注册按钮将由 JS 动态生成 -->
+                    <div class="spinner-border spinner-border-sm text-light" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
     <div class="container-fluid">
         <!-- 头部 -->
         <header class="py-4 text-center">
-            <h1 class="display-4">超导文献数据库</h1>
-            <p class="lead">基于元素周期表的超导材料文献检索系统</p>
+            <h1 class="display-4 fw-bold">超导文献数据库</h1>
+            <p class="lead text-muted">基于元素周期表的超导材料文献检索系统</p>
         </header>
 
         <!-- 选择提示区域 -->
@@ -81,6 +104,7 @@
     </div>
 
     <script src="/static/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/auth_helper.js"></script>
     <script src="/static/js/periodic_table.js"></script>
 </body>
 </html>

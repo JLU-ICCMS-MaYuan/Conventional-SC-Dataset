@@ -196,3 +196,18 @@ class ErrorResponse(BaseModel):
     """错误响应"""
     error: str
     detail: Optional[str] = None
+
+# ============= 用户相关 =============
+
+class User(BaseModel):
+    id: int
+    email: str
+    real_name: str
+    is_admin: bool
+    is_superadmin: bool
+    is_approved: bool
+    created_at: datetime
+    approved_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True

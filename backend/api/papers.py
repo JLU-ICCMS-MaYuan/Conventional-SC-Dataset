@@ -14,6 +14,11 @@ from backend.utils.doi_resolver import get_doi_metadata, validate_doi
 from backend.utils.citation import generate_aps_citation, generate_bibtex_citation
 from backend.utils.image_processor import process_image, validate_image as validate_image_util
 
+from backend.auth import (
+    get_current_user,
+    get_current_admin
+)
+
 router = APIRouter(prefix="/api/papers", tags=["papers"])
 
 
@@ -26,15 +31,20 @@ async def create_paper(
     physical_data: str = Form(...),  # JSON字符串，包含多组物理参数
     chemical_formula: Optional[str] = Form(None),
     crystal_structure: Optional[str] = Form(None),
-    contributor_name: Optional[str] = Form("匿名贡献者"),
-    contributor_affiliation: Optional[str] = Form("未提供单位"),
+    contributor_name: Optional[str] = Form(None),
+    contributor_affiliation: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
     images: List[UploadFile] = File(default=[]),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Annotated[schemas.User, Depends(get_current_user)] = None
 ):
     """
     上传新文献
     """
+    # 强制登录
+    if not current_user:
+        raise HTTPException(status_code=401, detail="请先登录后再上传文献")
+
     # 1. 解析参数
     try:
         symbols_list = json.loads(element_symbols)
@@ -100,6 +110,9 @@ async def create_paper(
     )
 
     # 7. 创建文献记录
+    # 优先使用登录用户的真实姓名作为贡献者
+    final_contributor_name = current_user.real_name if current_user else (contributor_name or "匿名贡献者")
+
     paper = crud.create_paper(
         db=db,
         compound_id=compound.id,
@@ -117,7 +130,7 @@ async def create_paper(
         citation_bibtex=citation_bibtex,
         chemical_formula=chemical_formula,
         crystal_structure=crystal_structure,
-        contributor_name=contributor_name or "匿名贡献者",
+        contributor_name=final_contributor_name,
         contributor_affiliation=contributor_affiliation or "未提供单位",
         notes=notes
     )

@@ -21,6 +21,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 设置图片上传预览
     document.getElementById('images-input').addEventListener('change', handleImageSelection);
+
+    // 上传按钮点击事件（检查登录）
+    const uploadBtn = document.getElementById('open-upload-btn');
+    if (uploadBtn) {
+        uploadBtn.addEventListener('click', function() {
+            const token = localStorage.getItem('user_token') || localStorage.getItem('admin_token');
+            if (!token) {
+                if (confirm('只有注册用户可以上传文献。是否立即前往登录/注册？')) {
+                    window.location.href = '/login';
+                }
+            } else {
+                uploadModal.show();
+            }
+        });
+    }
 });
 
 // 加载元素组合信息
@@ -514,8 +529,12 @@ async function submitPaper() {
     }
 
     try {
+        const token = localStorage.getItem('user_token') || localStorage.getItem('admin_token');
         const response = await fetch('/api/papers/', {
             method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
             body: formData
         });
 
