@@ -36,8 +36,9 @@ body {
 }
 
 .element:hover {
-    transform: scale(1.1);
+    /* 悬停时去掉遮罩并保持原有的发光感 */
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    transform: scale(1.05);
     z-index: 10;
 }
 
@@ -61,63 +62,89 @@ body {
     color: #666;
 }
 
-/* 选中状态 */
-.element.selected {
-    background-color: #0d6efd;
-    color: white;
-    border-color: #0d6efd;
-    transform: scale(1.05);
+/* 元素标记 */
+.element-markers {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    display: flex;
+    gap: 2px;
+    align-items: center;
 }
 
-.element.selected .atomic-number,
-.element.selected .name {
-    color: #e0e0e0;
+.synthetic-dot {
+    width: 4px;
+    height: 4px;
+    background-color: #555;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.radioactive-icon {
+    font-size: 8px;
+    color: #333;
+}
+
+/* 放射性元素禁用状态：白色遮罩 + 不可点击 */
+.element.radioactive {
+    box-shadow: inset 0 0 0 100px rgba(255, 255, 255, 0.8) !important;
+    pointer-events: none; /* 禁止所有鼠标事件（点击、悬停） */
+    cursor: not-allowed;
+    opacity: 0.6;
+    border-color: #e9e9e9;
+}
+
+/* 选中状态 */
+.element.selected {
+    border: 2px solid #7b7b7b;
+    box-shadow: inset 0 0 0 100px rgba(255, 255, 255, 0.3) !important; /* 加深图层 */
+    z-index: 5;
+}
+
+/* 移除选中时的文字颜色变化，保持可读性 */
+.element.selected .symbol {
+    color: #000;
 }
 
 /* 元素类别颜色 */
 .element.alkali-metal {
-    background-color: #ffb3ba;
+    background-color: #f4bcc2;
 }
 
 .element.alkaline-earth {
-    background-color: #ffd4a3;
+    background-color: #e3bd91;
 }
 
 .element.transition-metal {
-    background-color: #ffdfba;
+    background-color: #edcda9;
 }
 
 .element.post-transition {
-    background-color: #ffffba;
+    background-color: #ededab;
 }
 
 .element.metalloid {
-    background-color: #baffc9;
+    background-color: #9cd5a8;
 }
 
 .element.nonmetal {
-    background-color: #bae1ff;
+    background-color: #a3d7dc;
 }
 
 .element.halogen {
-    background-color: #d4baff;
+    background-color: #b7a0db;
 }
 
 .element.noble-gas {
-    background-color: #f0baff;
+    background-color: #cfb5d6;
 }
 
 .element.lanthanide {
-    background-color: #ffc9ff;
+    background-color: #cea1ce;
 }
 
 .element.actinide {
-    background-color: #ffb3e0;
-}
-
-/* 选中时保持高亮色 */
-.element.selected {
-    background-color: #0d6efd !important;
+    background-color: #c782ab;
 }
 
 /* 空白格子 */
@@ -130,10 +157,11 @@ body {
 
 /* 元素组合页面样式 */
 .compound-header {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
+    background-color: #f8f9fa;
+    color: #000;
     padding: 40px 0;
     margin-bottom: 30px;
+    border-bottom: 1px solid #dee2e6;
 }
 
 .paper-card {
@@ -228,6 +256,31 @@ body {
 
 .image-preview .remove-image-btn:hover {
     background-color: #bb2d3b;
+}
+
+/* 导航栏自定义样式 */
+.navbar-custom {
+    background-color: rgba(255, 255, 255, 0.7) !important; /* 透明浅色背景 */
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+.navbar-custom .navbar-brand,
+.navbar-custom .nav-link,
+.navbar-custom .navbar-toggler-icon,
+.navbar-custom .dropdown-toggle {
+    color: #000 !important;
+}
+
+/* 针对按钮的黑色边框处理 */
+.navbar-custom .btn-outline-light {
+    color: #000 !important;
+    border-color: #000 !important;
+}
+
+.navbar-custom .btn-outline-light:hover {
+    background-color: #000 !important;
+    color: #fff !important;
 }
 
 /* 响应式调整 */
