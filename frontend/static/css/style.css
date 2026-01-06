@@ -283,7 +283,50 @@ body {
     color: #fff !important;
 }
 
+/* 首页诺贝尔奖得主图片展示网格 */
+.image-grid-nobel {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr); /* 默认/大屏: 6x2 */
+    gap: 10px;
+    margin-bottom: 30px;
+}
+
+.image-grid-nobel .grid-item {
+    aspect-ratio: 4 / 5; /* 肖像比例 */
+    overflow: hidden;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+    background-color: #fff;
+    transition: all 0.3s ease;
+}
+
+.image-grid-nobel .grid-item:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+    border-color: #6c757d;
+}
+
+.image-grid-nobel .grid-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
 /* 响应式调整 */
+@media (max-width: 1200px) {
+    .image-grid-nobel {
+        grid-template-columns: repeat(4, 1fr); /* 中屏: 4x3 */
+    }
+}
+
+@media (max-width: 768px) {
+    .image-grid-nobel {
+        grid-template-columns: repeat(2, 1fr); /* 小屏: 2x6 */
+    }
+}
+
+
 @media (max-width: 1200px) {
     #periodic-table {
         grid-template-columns: repeat(18, 50px);
