@@ -77,6 +77,36 @@
             </div>
         </div>
 
+        <!-- 数据统计展示区域 -->
+        <div class="row mt-4 mb-4">
+            <!-- 左侧：历史趋势图 (基于 Book1.xls) -->
+            <div class="col-md-6">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-header bg-light py-2">
+                        <h6 class="card-title mb-0 fw-bold">超导临界温度 (Tc) 历史演变</h6>
+                    </div>
+                    <div class="card-body p-2">
+                        <div style="position: relative; height: 400px; width: 100%;">
+                            <canvas id="staticChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- 右侧：JS动态更新图 -->
+            <div class="col-md-6">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-header bg-light py-2">
+                        <h6 class="card-title mb-0 fw-bold">实时数据分布 (动态)</h6>
+                    </div>
+                    <div class="card-body p-2">
+                        <div style="position: relative; height: 400px; width: 100%;">
+                            <canvas id="dynamicChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- 使用说明 -->
         <div class="row mt-4">
             <div class="col-md-12">
@@ -119,8 +149,209 @@
         </div>
     </div>
 
+    <!-- 图片查看模态框 -->
+    <div class="modal fade" id="imageViewModal" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header border-0">
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-center p-0">
+                    <img id="fullSizeImage" src="" class="img-fluid" alt="全屏图">
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="/static/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/chart.js" defer></script>
     <script src="/static/js/auth_helper.js"></script>
     <script src="/static/js/periodic_table.js"></script>
+    <script>
+        // 性能优先：确保周期表先渲染，延迟初始化图表和交互
+        window.addEventListener('load', function() {
+            // 辅助函数：将数字、x、括号转换为下标（仅用于物质名称）
+            const formatSubscript = (str) => {
+                if (!str) return '';
+                const map = {
+                    '0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉',
+                    'x':'ₓ','(':'₍',')':'₎','[':'₍',']':'₎','-':'₋','+':'₊'
+                };
+                return str.split('').map(c => map[c] || c).join('');
+            };
+
+            setTimeout(function() {
+                if (typeof Chart === 'undefined') return;
+                
+                // 1. 左侧图表：超导历史 Tc 演变 (基于 Book1.xls 数据)
+                const ctxStatic = document.getElementById('staticChart').getContext('2d');
+                new Chart(ctxStatic, {
+                    type: 'scatter',
+                    data: {
+                        datasets: [
+                            {
+                                label: 'BCS/常规',
+                                data: [
+                                    {x: 1911, y: 4.2, n: 'Hg'}, {x: 1913, y: 7.19, n: 'Pb'}, {x: 1930, y: 9.26, n: 'Nb'}, 
+                                    {x: 1955, y: 18, n: 'Nb3Sn'}, {x: 1973, y: 23.2, n: 'Nb3Ge'}, {x: 2001, y: 39, n: 'MgB2'},
+                                    {x: 2015, y: 203, n: 'H3S', p: 150}, {x: 2019, y: 260, n: 'LaH10', p: '170-190'}
+                                ],
+                                backgroundColor: 'rgba(54, 162, 235, 0.8)'
+                            },
+                            {
+                                label: '铜基',
+                                data: [
+                                    {x: 1985, y: 35, n: 'LaBaCuO'}, {x: 1986, y: 40, n: 'LaSrCuO'}, {x: 1987, y: 93, n: 'YBa2Cu3O7'}, 
+                                    {x: 1987, y: 110, n: 'Bi2Sr2Ca2Cu3O10'}, {x: 1987, y: 125, n: 'Tl2Ba2Ca2Cu3O10'}, {x: 1994, y: 134, n: 'HgBa2Ca2Cu3Ox'}, 
+                                    {x: 1994, y: 164, n: 'HgBa2Ca2Cu2Ox', p: 30}
+                                ],
+                                backgroundColor: 'rgba(255, 99, 132, 0.8)'
+                            },
+                            {
+                                label: '铁基',
+                                data: [
+                                    {x: 2006, y: 6.6, n: 'LaOFeP'}, {x: 2008, y: 26, n: 'La[O1-xFx]FeAs'}, {x: 2008, y: 55, n: 'SmFeAs[O0.9F0.1]'}, 
+                                    {x: 2012, y: 77, n: 'FeSe films on SrTiO3'}
+                                ],
+                                backgroundColor: 'rgba(75, 192, 192, 0.8)'
+                            },
+                            {
+                                label: '富勒烯',
+                                data: [
+                                    {x: 1991, y: 19.8, n: 'K3C60'}, {x: 1991, y: 33, n: 'RbCs2C60'}, {x: 2007, y: 38, n: 'Cs3C60', p: 0.14}
+                                ],
+                                backgroundColor: 'rgba(255, 206, 86, 0.8)'
+                            },
+                            {
+                                label: '高压金属氢化物',
+                                data: [
+                                    {x: 2019, y: 243, n: 'YH9', p: 201}, {x: 2019, y: 224, n: 'YH6', p: 166}, 
+                                    {x: 2020, y: 146, n: 'ThH9', p: 175}, {x: 2020, y: 161, n: 'ThH10', p: 174}, 
+                                    {x: 2021, y: 115, n: 'CeH10', p: 95}, {x: 2021, y: 57, n: 'CeH9', p: 88}, 
+                                    {x: 2021, y: 215, n: 'CaH6', p: 172}, {x: 2020, y: 237, n: '(La,Y)H6', p: 183}, 
+                                    {x: 2020, y: 253, n: '(La,Y)H10', p: 183}
+                                ],
+                                backgroundColor: 'rgba(153, 102, 255, 0.8)'
+                            },
+                            {
+                                label: '参考线',
+                                data: [], // 隐藏在图例中
+                                showLine: false
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                position: 'bottom',
+                                title: { display: true, text: '年份' },
+                                min: 1900,
+                                max: 2040
+                            },
+                            y: {
+                                title: { display: true, text: '临界温度 Tc (K)' },
+                                beginAtZero: true,
+                                max: 350
+                            }
+                        },
+                        plugins: {
+                            legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const p = context.raw;
+                                        let name = formatSubscript(p.n);
+                                        let label = `${name}: ${p.y} K (${p.x})`;
+                                        if (p.p) label += ` [P: ${p.p} GPa]`;
+                                        return label;
+                                    }
+                                }
+                            },
+                            // 使用 annotation 插件绘制参考线（如果未加载插件，则手动模拟）
+                            autocolors: false,
+                        }
+                    },
+                    plugins: [{
+                        id: 'chartCustomizations',
+                        // 1. 绘制 77K 和 300K 参考线
+                        beforeDraw: (chart) => {
+                            const {ctx, chartArea: {right, left}, scales: {y}} = chart;
+                            ctx.save();
+                            
+                            const drawLine = (val, color, text) => {
+                                const yPos = y.getPixelForValue(val);
+                                if (yPos < chart.chartArea.top || yPos > chart.chartArea.bottom) return;
+                                ctx.strokeStyle = color;
+                                ctx.setLineDash([5, 5]);
+                                ctx.beginPath();
+                                ctx.moveTo(left, yPos);
+                                ctx.lineTo(right, yPos);
+                                ctx.stroke();
+                                ctx.fillStyle = color;
+                                ctx.font = '10px Arial';
+                                ctx.fillText(text, left + 5, yPos - 5);
+                            };
+
+                            drawLine(77, 'rgba(255, 0, 0, 0.5)', '77 K (Liquid N2)');
+                            drawLine(300, 'rgba(0, 0, 0, 0.3)', '300 K (Room Temp)');
+                            ctx.restore();
+                        },
+                        // 2. 大屏显示数据点名称和压强
+                        afterDatasetsDraw: (chart) => {
+                            if (window.innerWidth < 1200) return;
+                            const {ctx} = chart;
+                            ctx.save();
+                            ctx.font = '9px Arial';
+                            ctx.fillStyle = '#666';
+                            
+                            chart.data.datasets.forEach((dataset, i) => {
+                                if (dataset.label === '参考线') return;
+                                const meta = chart.getDatasetMeta(i);
+                                meta.data.forEach((element, index) => {
+                                    const dataPoint = dataset.data[index];
+                                    let name = formatSubscript(dataPoint.n);
+                                    let text = name;
+                                    if (dataPoint.p) text += ` (${dataPoint.p}Gpa)`;
+                                    
+                                    // 仅在点在绘图区域内时绘制
+                                    if (element.x > chart.chartArea.left && element.x < chart.chartArea.right) {
+                                        ctx.fillText(text, element.x + 6, element.y - 4);
+                                    }
+                                });
+                            });
+                            ctx.restore();
+                        }
+                    }]
+                });
+
+                // 2. 右侧图表：实时数据分布 (动态)
+                const ctxDynamic = document.getElementById('dynamicChart').getContext('2d');
+                new Chart(ctxDynamic, {
+                    type: 'line',
+                    data: {
+                        labels: ['2020', '2021', '2022', '2023', '2024', '2025'],
+                        datasets: [{
+                            label: '超导文献月收录量',
+                            data: [65, 59, 80, 81, 56, 95],
+                            fill: true,
+                            backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                            borderColor: 'rgb(54, 162, 235)',
+                            tension: 0.3
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } }
+                        }
+                    }
+                });
+            }, 300);
+        });
+    </script>
 </body>
 </html>
