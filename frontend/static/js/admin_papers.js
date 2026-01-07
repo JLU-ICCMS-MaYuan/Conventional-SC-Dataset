@@ -8,6 +8,15 @@ let currentPage = 0;
 let totalPapers = 0;
 const pageSize = 20;
 
+function calculateSFactor(tcValue, pressureValue) {
+    const tc = parseFloat(tcValue);
+    const pressure = parseFloat(pressureValue);
+    if (!Number.isFinite(tc) || !Number.isFinite(pressure)) {
+        return null;
+    }
+    return tc / Math.sqrt(1521 + Math.pow(pressure, 2));
+}
+
 // ========== 初始化 ==========
 
 // 检查登录状态
@@ -413,18 +422,15 @@ function addEditDataRow(data = null) {
                 <input type="number" step="any" class="form-control form-control-sm edit-tc" placeholder="Tc (K)" value="${data ? data.tc || '' : ''}">
             </div>
             <div class="col-md-4 col-lg-2">
-                <input type="number" step="any" class="form-control form-control-sm edit-sfactor" placeholder="s_factor" value="${data ? data.s_factor || '' : ''}">
-            </div>
-            <div class="col-md-4 col-lg-2">
                 <input type="number" step="any" class="form-control form-control-sm edit-lambda" placeholder="λ" value="${data ? data.lambda_val || '' : ''}">
             </div>
             <div class="col-md-4 col-lg-2">
                 <input type="number" step="any" class="form-control form-control-sm edit-omega" placeholder="ω" value="${data ? data.omega_log || '' : ''}">
             </div>
-            <div class="col-md-4 col-lg-1">
+            <div class="col-md-4 col-lg-2">
                 <input type="number" step="any" class="form-control form-control-sm edit-nef" placeholder="N" value="${data ? data.n_ef || '' : ''}">
             </div>
-            <div class="col-12 col-lg-1">
+            <div class="col-12 col-lg-2">
                 <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="removeEditDataRow(this)">×</button>
             </div>
         </div>
@@ -499,8 +505,7 @@ async function openEditModal(paperId) {
                         pressure: paper.pressure,
                         lambda_val: paper.lambda_val,
                         omega_log: paper.omega_log,
-                        n_ef: paper.n_ef,
-                        s_factor: paper.s_factor
+                        n_ef: paper.n_ef
                     });
                 } else {
                     addEditDataRow();
@@ -610,10 +615,12 @@ async function savePaperEdits() {
         const pressure = row.querySelector('.edit-pressure').value;
         const tc = row.querySelector('.edit-tc').value;
         if (pressure && tc) {
+            const parsedPressure = parseFloat(pressure);
+            const parsedTc = parseFloat(tc);
             physicalData.push({
-                pressure: parseFloat(pressure),
-                tc: parseFloat(tc),
-                s_factor: row.querySelector('.edit-sfactor').value ? parseFloat(row.querySelector('.edit-sfactor').value) : null,
+                pressure: parsedPressure,
+                tc: parsedTc,
+                s_factor: calculateSFactor(parsedTc, parsedPressure),
                 lambda_val: row.querySelector('.edit-lambda').value ? parseFloat(row.querySelector('.edit-lambda').value) : null,
                 omega_log: row.querySelector('.edit-omega').value ? parseFloat(row.querySelector('.edit-omega').value) : null,
                 n_ef: row.querySelector('.edit-nef').value ? parseFloat(row.querySelector('.edit-nef').value) : null

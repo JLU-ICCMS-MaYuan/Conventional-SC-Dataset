@@ -503,7 +503,9 @@ async def update_paper(
                     lambda_val=item.get("lambda_val"),
                     omega_log=item.get("omega_log"),
                     n_ef=item.get("n_ef"),
-                    s_factor=item.get("s_factor")
+                    s_factor=item.get("s_factor") if item.get("s_factor") is not None else crud.compute_s_factor(
+                        item.get("pressure"), item.get("tc")
+                    )
                 )
                 db.add(db_data)
 

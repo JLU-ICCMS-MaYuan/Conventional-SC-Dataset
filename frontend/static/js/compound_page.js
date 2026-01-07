@@ -4,6 +4,15 @@ let uploadModal, imageModal;
 let selectedFiles = [];
 let currentReviewStatus = 'all'; // 当前选择的审核状态筛选
 
+function calculateSFactor(tcValue, pressureValue) {
+    const tc = parseFloat(tcValue);
+    const pressure = parseFloat(pressureValue);
+    if (!Number.isFinite(tc) || !Number.isFinite(pressure)) {
+        return null;
+    }
+    return tc / Math.sqrt(1521 + Math.pow(pressure, 2));
+}
+
 // 初始化
 document.addEventListener('DOMContentLoaded', function() {
     // 从URL获取元素组合
@@ -125,7 +134,6 @@ function renderPaperCard(paper) {
             <div class="mb-1">
                 <span class="badge bg-primary">Tc: ${d.tc} K</span>
                 ${d.pressure !== null && d.pressure !== undefined ? `<span class="badge bg-secondary">P: ${d.pressure} GPa</span>` : ''}
-                ${d.s_factor !== null && d.s_factor !== undefined ? `<span class="badge bg-info">s_factor: ${d.s_factor}</span>` : ''}
                 ${d.lambda_val !== null && d.lambda_val !== undefined ? `<span class="badge bg-info">λ: ${d.lambda_val}</span>` : ''}
                 ${d.omega_log !== null && d.omega_log !== undefined ? `<span class="badge bg-info">ω_log: ${d.omega_log}</span>` : ''}
                 ${d.n_ef !== null && d.n_ef !== undefined ? `<span class="badge bg-info">N(E_F): ${d.n_ef}</span>` : ''}
@@ -373,31 +381,27 @@ function addDataRow() {
     newRow.className = 'data-row card p-3 mb-2 bg-light';
     newRow.innerHTML = `
         <div class="row g-2">
-            <div class="col-md-4 col-lg-2">
+            <div class="col-md-3">
                 <label class="small">压强 (GPa) *</label>
                 <input type="number" step="any" class="form-control form-control-sm pressure-val" required placeholder="0.0">
             </div>
-            <div class="col-md-4 col-lg-2">
+            <div class="col-md-3">
                 <label class="small">Tc (K) *</label>
                 <input type="number" step="any" class="form-control form-control-sm tc-val" required placeholder="0.0">
             </div>
-            <div class="col-md-4 col-lg-2">
-                <label class="small">s_factor</label>
-                <input type="number" step="any" class="form-control form-control-sm s-factor-val" placeholder="s">
-            </div>
-            <div class="col-md-4 col-lg-2">
+            <div class="col-md-2">
                 <label class="small">λ</label>
                 <input type="number" step="any" class="form-control form-control-sm lambda-val" placeholder="λ">
             </div>
-            <div class="col-md-4 col-lg-2">
+            <div class="col-md-2">
                 <label class="small">ω_log</label>
                 <input type="number" step="any" class="form-control form-control-sm omega-val" placeholder="ω">
             </div>
-            <div class="col-md-4 col-lg-1">
+            <div class="col-md-1">
                 <label class="small">N(Ef)</label>
                 <input type="number" step="any" class="form-control form-control-sm nef-val" placeholder="N">
             </div>
-            <div class="col-12 col-lg-1 d-flex align-items-end">
+            <div class="col-md-1 d-flex align-items-end">
                 <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="removeDataRow(this)">×</button>
             </div>
         </div>
@@ -470,7 +474,6 @@ async function submitPaper() {
         
         const pressure = pressureInput.value;
         const tc = tcInput.value;
-        const sFactor = row.querySelector('.s-factor-val') ? row.querySelector('.s-factor-val').value : '';
         const lambda_val = row.querySelector('.lambda-val').value;
         const omega_log = row.querySelector('.omega-val').value;
         const n_ef = row.querySelector('.nef-val').value;
@@ -483,7 +486,7 @@ async function submitPaper() {
         physicalData.push({
             pressure: parseFloat(pressure),
             tc: parseFloat(tc),
-            s_factor: sFactor ? parseFloat(sFactor) : null,
+            s_factor: calculateSFactor(tc, pressure),
             lambda_val: lambda_val ? parseFloat(lambda_val) : null,
             omega_log: omega_log ? parseFloat(omega_log) : null,
             n_ef: n_ef ? parseFloat(n_ef) : null
@@ -557,32 +560,25 @@ async function submitPaper() {
             document.getElementById('data-points-container').innerHTML = `
                 <div class="data-row card p-3 mb-2 bg-light">
                     <div class="row g-2">
-                        <div class="col-md-4 col-lg-2">
+                        <div class="col-md-3">
                             <label class="small">压强 (GPa) *</label>
                             <input type="number" step="any" class="form-control form-control-sm pressure-val" required placeholder="0.0">
                         </div>
-                        <div class="col-md-4 col-lg-2">
+                        <div class="col-md-3">
                             <label class="small">Tc (K) *</label>
                             <input type="number" step="any" class="form-control form-control-sm tc-val" required placeholder="0.0">
                         </div>
-                        <div class="col-md-4 col-lg-2">
-                            <label class="small">s_factor</label>
-                            <input type="number" step="any" class="form-control form-control-sm s-factor-val" placeholder="s">
-                        </div>
-                        <div class="col-md-4 col-lg-2">
+                        <div class="col-md-2">
                             <label class="small">λ</label>
                             <input type="number" step="any" class="form-control form-control-sm lambda-val" placeholder="λ">
                         </div>
-                        <div class="col-md-4 col-lg-2">
+                        <div class="col-md-2">
                             <label class="small">ω_log</label>
                             <input type="number" step="any" class="form-control form-control-sm omega-val" placeholder="ω">
                         </div>
-                        <div class="col-md-4 col-lg-1">
+                        <div class="col-md-2">
                             <label class="small">N(Ef)</label>
                             <input type="number" step="any" class="form-control form-control-sm nef-val" placeholder="N">
-                        </div>
-                        <div class="col-12 col-lg-1 d-flex align-items-end">
-                            <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="removeDataRow(this)">×</button>
                         </div>
                     </div>
                 </div>

@@ -4,7 +4,27 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_, func
 from typing import List, Optional
+import math
 from backend import models, schemas
+
+
+def compute_s_factor(pressure: Optional[float], tc: Optional[float]) -> Optional[float]:
+    """
+    根据压强与 Tc 计算 s_factor
+    公式: s = tc / sqrt(1521 + pressure^2)
+    """
+    if pressure is None or tc is None:
+        return None
+    try:
+        pressure_val = float(pressure)
+        tc_val = float(tc)
+    except (TypeError, ValueError):
+        return None
+
+    denominator = math.sqrt(1521 + pressure_val ** 2)
+    if denominator == 0:
+        return None
+    return tc_val / denominator
 
 
 # ============= 元素相关操作 =============
@@ -142,14 +162,20 @@ def create_paper_data(
     """为指定文献创建多组物理数据记录"""
     db_data_list = []
     for item in data_list:
+        pressure_val = item.get("pressure")
+        tc_val = item.get("tc")
+        s_factor_val = item.get("s_factor")
+        if s_factor_val is None:
+            s_factor_val = compute_s_factor(pressure_val, tc_val)
+
         db_data = models.PaperData(
             paper_id=paper_id,
-            pressure=item.get("pressure"),
-            tc=item.get("tc"),
+            pressure=pressure_val,
+            tc=tc_val,
             lambda_val=item.get("lambda_val"),
             omega_log=item.get("omega_log"),
             n_ef=item.get("n_ef"),
-            s_factor=item.get("s_factor")
+            s_factor=s_factor_val
         )
         db.add(db_data)
         db_data_list.append(db_data)
