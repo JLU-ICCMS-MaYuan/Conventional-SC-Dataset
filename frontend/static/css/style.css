@@ -315,19 +315,6 @@ body {
 
 /* 响应式调整 */
 @media (max-width: 1200px) {
-    .image-grid-nobel {
-        grid-template-columns: repeat(4, 1fr); /* 中屏: 4x3 */
-    }
-}
-
-@media (max-width: 768px) {
-    .image-grid-nobel {
-        grid-template-columns: repeat(2, 1fr); /* 小屏: 2x6 */
-    }
-}
-
-
-@media (max-width: 1200px) {
     #periodic-table {
         grid-template-columns: repeat(18, 50px);
     }
@@ -339,11 +326,26 @@ body {
 
     .element .symbol {
         font-size: 16px;
-    }
+}
 
     .element .name {
         font-size: 8px;
     }
+}
+
+/* 图表主题配置 (CSS变量) */
+:root {
+    --sc-color-cuprate: rgba(255, 99, 132, 0.8);
+    --sc-color-iron: rgba(75, 192, 192, 0.8);
+    --sc-color-nickel: rgba(75, 239, 58, 0.8);
+    --sc-color-hydride: rgba(153, 102, 255, 0.8);
+    --sc-color-organic: rgba(255, 206, 86, 0.8);
+    --sc-color-conventional: rgba(54, 162, 235, 0.8);
+    --sc-color-unconventional: rgba(204, 70, 70, 0.8);
+    --sc-color-unknown: rgba(201, 203, 207, 0.8);
+
+    --sc-shape-experimental: rectRot;
+    --sc-shape-theoretical: triangle;
 }
 
 @media (max-width: 768px) {
