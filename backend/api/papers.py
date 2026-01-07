@@ -193,18 +193,6 @@ def get_papers_by_compound(
 ):
     """
     获取元素组合的文献列表
-
-    Args:
-        element_symbols: 元素符号组合，如 "Ba-Cu-O-Y"
-        keyword: 搜索关键词（可选）
-        year_min, year_max: 年份范围（可选）
-        journal: 期刊名称（可选）
-        crystal_structure: 晶体结构类型（可选）
-        review_status: 审核状态筛选 - 'approved', 'unreviewed', 'rejected', 'modifying'
-        sort_by: 排序字段（created_at或year）
-        sort_order: 排序顺序（asc或desc）
-        limit: 返回数量限制
-        offset: 偏移量
     """
     # 解析元素符号
     symbols = element_symbols.split("-")
@@ -373,3 +361,25 @@ def export_papers(
             "Content-Disposition": f"attachment; filename=citations.{export_data.format}"
         }
     )
+
+
+@router.get("/stats/chart-data")
+def get_chart_data(db: Session = Depends(get_db)):
+    """获取用于图表展示的 P-Tc 数据点"""
+    from backend.models import Paper
+    
+    # 查询所有标记为在图表中显示的文献
+    papers = db.query(Paper).filter(Paper.show_in_chart == True).all()
+    
+    result = []
+    for paper in papers:
+        for data in paper.physical_parameters:
+            if data.pressure is not None and data.tc is not None:
+                result.append({
+                    "x": data.pressure,
+                    "y": data.tc,
+                    "label": paper.chemical_formula or paper.title[:20],
+                    "doi": paper.doi,
+                    "type": paper.article_type
+                })
+    return result

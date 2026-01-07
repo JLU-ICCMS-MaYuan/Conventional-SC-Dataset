@@ -79,9 +79,9 @@
 
         <!-- 数据统计展示区域 -->
         <div class="row mt-4 mb-4">
-            <!-- 左侧：历史趋势图 (基于 Book1.xls) -->
-            <div class="col-md-6">
-                <div class="card h-100 shadow-sm">
+            <!-- 历史趋势图 (基于 Book1.xls) -->
+            <div class="col-12 mb-4">
+                <div class="card shadow-sm">
                     <div class="card-header bg-light py-2">
                         <h6 class="card-title mb-0 fw-bold">超导临界温度 (Tc) 历史演变</h6>
                     </div>
@@ -92,11 +92,11 @@
                     </div>
                 </div>
             </div>
-            <!-- 右侧：JS动态更新图 -->
-            <div class="col-md-6">
-                <div class="card h-100 shadow-sm">
+            <!-- 数据库实时 P-Tc 分布 -->
+            <div class="col-12">
+                <div class="card shadow-sm">
                     <div class="card-header bg-light py-2">
-                        <h6 class="card-title mb-0 fw-bold">实时数据分布 (动态)</h6>
+                        <h6 class="card-title mb-0 fw-bold">数据库实时 P-Tc 分布</h6>
                     </div>
                     <div class="card-body p-2">
                         <div style="position: relative; height: 400px; width: 100%;">
@@ -327,29 +327,141 @@
                     }]
                 });
 
-                // 2. 右侧图表：实时数据分布 (动态)
+                // 2. 右侧图表：数据库实时 P-Tc 分布 (散点图)
                 const ctxDynamic = document.getElementById('dynamicChart').getContext('2d');
-                new Chart(ctxDynamic, {
-                    type: 'line',
+                
+                // 辅助函数：生成 s 因子曲线数据
+                const generateSLine = (s) => {
+                    const points = [];
+                    for (let p = 0; p <= 300; p += 10) {
+                        const tc = s * Math.sqrt(1521 + Math.pow(p, 2));
+                        points.push({ x: p, y: tc });
+                    }
+                    return points;
+                };
+
+                const dynamicChart = new Chart(ctxDynamic, {
+                    type: 'scatter',
                     data: {
-                        labels: ['2020', '2021', '2022', '2023', '2024', '2025'],
-                        datasets: [{
-                            label: '超导文献月收录量',
-                            data: [65, 59, 80, 81, 56, 95],
-                            fill: true,
-                            backgroundColor: 'rgba(54, 162, 235, 0.1)',
-                            borderColor: 'rgb(54, 162, 235)',
-                            tension: 0.3
-                        }]
+                        datasets: [
+                            // s 因子参考线与背景填充 (从大到小排列以实现层叠填充)
+                            { label: 's=1', data: generateSLine(1), borderColor: 'rgba(0,0,0,0.1)', borderWidth: 1, borderDash: [5, 5], showLine: true, pointRadius: 0, fill: 'origin', backgroundColor: '#f7f0f7', order: 1 },
+                            { label: 's=2', data: generateSLine(2), borderColor: 'rgba(0,0,0,0.1)', borderWidth: 1, borderDash: [5, 5], showLine: true, pointRadius: 0, fill: 'origin', backgroundColor: '#e3e0ee', order: 2 },
+                            { label: 's=3', data: generateSLine(3), borderColor: 'rgba(0,0,0,0.1)', borderWidth: 1, borderDash: [5, 5], showLine: true, pointRadius: 0, fill: 'origin', backgroundColor: '#c6cce3', order: 3 },
+                            { label: 's=4', data: generateSLine(4), borderColor: 'rgba(0,0,0,0.1)', borderWidth: 1, borderDash: [5, 5], showLine: true, pointRadius: 0, fill: 'origin', backgroundColor: '#a1bbda', order: 4 },
+                            { label: 's=5', data: generateSLine(5), borderColor: 'rgba(0,0,0,0.1)', borderWidth: 0, borderDash: [5, 5], showLine: true, pointRadius: 0, fill: 'origin', backgroundColor: '#73a9cf', order: 5 },
+                            { label: 's=6', data: generateSLine(6), borderColor: 'rgba(0,0,0,0.1)', borderWidth: 0, borderDash: [5, 5], showLine: true, pointRadius: 0, fill: 'origin', backgroundColor: '#3d93c2', order: 6 },
+                            { label: 's=7', data: generateSLine(7), borderColor: 'rgba(0,0,0,0.1)', borderWidth: 0, borderDash: [5, 5], showLine: true, pointRadius: 0, fill: 'origin', backgroundColor: '#1077b4', order: 7 },
+                            { label: 's=8', data: generateSLine(8), borderColor: 'rgba(0,0,0,0.1)', borderWidth: 0, borderDash: [5, 5], showLine: true, pointRadius: 0, fill: 'origin', backgroundColor: '#046198', order: 8 },
+                            { label: 's=9', data: generateSLine(9), borderColor: 'rgba(0,0,0,0.1)', borderWidth: 0, borderDash: [5, 5], showLine: true, pointRadius: 0, fill: 'origin', backgroundColor: '#03476f', order: 9 },
+                            { label: 's=10', data: generateSLine(10), borderColor: 'rgba(0,0,0,0.1)', borderWidth: 0, borderDash: [5, 5], showLine: true, pointRadius: 0, fill: 'origin', backgroundColor: '#02304d', order: 10 },
+
+                            {
+                                label: '实验数据',
+                                data: [],
+                                backgroundColor: 'rgba(255, 99, 132, 1)',
+                                borderColor: '#fff',
+                                borderWidth: 1,
+                                pointRadius: 5,
+                                z: 10,
+                                order: 0
+                            },
+                            {
+                                label: '理论预测',
+                                data: [],
+                                backgroundColor: 'rgba(54, 162, 235, 1)',
+                                borderColor: '#fff',
+                                borderWidth: 1,
+                                pointRadius: 5,
+                                pointStyle: 'triangle',
+                                z: 10,
+                                order: 0
+                            }
+                        ]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                position: 'bottom',
+                                title: { display: true, text: '压强 (GPa)' },
+                                min: 0,
+                                max: 300
+                            },
+                            y: {
+                                title: { display: true, text: '临界温度 Tc (K)' },
+                                min: 0,
+                                max: 350
+                            }
+                        },
                         plugins: {
-                            legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } }
+                            legend: { 
+                                position: 'bottom', 
+                                labels: { 
+                                    boxWidth: 10, 
+                                    font: { size: 10 },
+                                    // 过滤掉 s 曲线，只显示实验/理论图例
+                                    filter: (item) => !item.text.startsWith('s=')
+                                } 
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const p = context.raw;
+                                        if (!p.label) return null;
+                                        return `${p.label}: ${p.y} K @ ${p.x} GPa`;
+                                    }
+                                }
+                            }
                         }
-                    }
+                    },
+                    plugins: [{
+                        id: 'sLabelPlugin',
+                        afterDatasetsDraw: (chart) => {
+                            const {ctx, scales: {x, y}} = chart;
+                            ctx.save();
+                            ctx.font = 'bold 10px Arial';
+                            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                            
+                            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].forEach(s => {
+                                let p = 280;
+                                let tc = s * Math.sqrt(1521 + Math.pow(p, 2));
+                                
+                                if (tc > 330) {
+                                    const val = Math.pow(330/s, 2) - 1521;
+                                    p = val > 0 ? Math.sqrt(val) : 10;
+                                    tc = 335;
+                                }
+                                
+                                const xPos = x.getPixelForValue(p);
+                                const yPos = y.getPixelForValue(tc);
+                                
+                                if (xPos > chart.chartArea.left && xPos < chart.chartArea.right &&
+                                    yPos > chart.chartArea.top && yPos < chart.chartArea.bottom) {
+                                    if (s <= 5) ctx.fillText(`s=${s}`, xPos, yPos - 10);
+                                }
+                            });
+                            ctx.restore();
+                        }
+                    }]
                 });
+
+                // 加载数据库实时数据
+                fetch('/api/papers/stats/chart-data')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (!Array.isArray(data)) return;
+                        const expData = data.filter(d => d.type === 'experimental');
+                        const theoData = data.filter(d => d.type === 'theoretical');
+                        
+                        // 注意：索引 0-9 为 s=1 到 s=10 的参考线，10 为实验数据，11 为理论预测
+                        dynamicChart.data.datasets[10].data = expData;
+                        dynamicChart.data.datasets[11].data = theoData;
+                        dynamicChart.update();
+                    })
+                    .catch(err => console.error('加载图表数据失败:', err));
             }, 300);
         });
     </script>
