@@ -120,6 +120,7 @@ class PaperResponse(BaseModel):
     contributor_name: str
     contributor_affiliation: str
     notes: Optional[str] = None
+    show_in_chart: bool = True
 
     created_at: datetime
     image_count: int = 0  # 截图数量

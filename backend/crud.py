@@ -125,7 +125,8 @@ def create_paper(
     crystal_structure: Optional[str] = None,
     contributor_name: str = "匿名贡献者",
     contributor_affiliation: str = "未提供单位",
-    notes: Optional[str] = None
+    notes: Optional[str] = None,
+    show_in_chart: bool = True
 ) -> models.Paper:
     """创建文献记录"""
     paper = models.Paper(
@@ -146,7 +147,8 @@ def create_paper(
         crystal_structure=crystal_structure,
         contributor_name=contributor_name,
         contributor_affiliation=contributor_affiliation,
-        notes=notes
+        notes=notes,
+        show_in_chart=show_in_chart
     )
     db.add(paper)
     db.commit()

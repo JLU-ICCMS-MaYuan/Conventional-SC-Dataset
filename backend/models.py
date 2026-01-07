@@ -105,6 +105,7 @@ class Paper(Base):
     reviewed_by = Column(Integer, ForeignKey("users.id"))  # 审核人ID
     reviewed_at = Column(DateTime)  # 审核时间
     review_comment = Column(Text)  # 审核意见/拒绝理由
+    show_in_chart = Column(Boolean, default=True, nullable=False)  # 是否用于前端图表
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

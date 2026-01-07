@@ -33,15 +33,14 @@ function checkAuth() {
     currentUser = JSON.parse(userStr);
     document.getElementById('userName').textContent = currentUser.real_name;
 
-    const deleteOption = document.querySelector('#batchStatusSelect option[value="delete"]');
-    if (deleteOption) {
-        if (currentUser.is_admin) {
-            deleteOption.hidden = false;
-            deleteOption.disabled = false;
+    document.querySelectorAll('#batchStatusSelect option[data-superadmin-only="true"]').forEach(option => {
+        if (currentUser.is_superadmin) {
+            option.hidden = false;
+            option.disabled = false;
         } else {
-            deleteOption.remove();
+            option.remove();
         }
-    }
+    });
 
     return true;
 }
@@ -126,6 +125,7 @@ function renderPapers(papers) {
                         <th>年份</th>
                         <th>Tc / P</th>
                         <th>类型</th>
+                        <th>图表</th>
                         <th>审核状态</th>
                         <th>图片</th>
                         <th width="280">操作</th>
@@ -193,6 +193,11 @@ function renderPapers(papers) {
                 </td>
                 <td>
                     <small>${articleTypeLabel} / ${scTypeLabel}</small>
+                </td>
+                <td>
+                    ${paper.show_in_chart ?
+                        '<span class="badge bg-success">显示</span>' :
+                        '<span class="badge bg-secondary">隐藏</span>'}
                 </td>
                 <td>${reviewBadge}</td>
                 <td><span class="badge bg-secondary">${paper.images_count}张</span></td>
@@ -334,6 +339,11 @@ async function batchReview() {
         return;
     }
 
+    if (status === 'chart_show' || status === 'chart_hide') {
+        await batchChartVisibility(status === 'chart_show');
+        return;
+    }
+
     const statusText = document.getElementById('batchStatusSelect').options[document.getElementById('batchStatusSelect').selectedIndex].text;
 
     if (!confirm(`确定要将选中的 ${selectedPapers.size} 篇文献设置为 ${statusText} 吗？`)) {
@@ -364,6 +374,45 @@ async function batchReview() {
         }
     } catch (error) {
         console.error('批量操作失败:', error);
+        alert('操作失败，请检查网络连接');
+    }
+}
+
+async function batchChartVisibility(show) {
+    if (selectedPapers.size === 0) {
+        alert('请先选择要操作的文献');
+        return;
+    }
+
+    const actionText = show ? '显示在图表中' : '从图表隐藏';
+    if (!confirm(`确定要将选中的 ${selectedPapers.size} 篇文献设为“${actionText}”吗？`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/admin/papers/batch-chart-visibility', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                paper_ids: Array.from(selectedPapers),
+                show
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            alert(data.message || '操作成功！');
+            clearSelection();
+            loadPapers(currentPage);
+        } else {
+            alert('操作失败: ' + (data.detail || '未知错误'));
+        }
+    } catch (error) {
+        console.error('批量设置图表显示失败:', error);
         alert('操作失败，请检查网络连接');
     }
 }

@@ -28,6 +28,11 @@ class ApproveRequest(BaseModel):
     approved: bool  # True=通过，False=拒绝
 
 
+class ChartVisibilityRequest(BaseModel):
+    paper_ids: List[int]
+    show: bool
+
+
 class ReviewPaperRequest(BaseModel):
     status: str  # approved, rejected, modifying, unreviewed
     comment: Optional[str] = None
@@ -297,6 +302,7 @@ class UpdatePaperRequest(BaseModel):
     contributor_affiliation: Optional[str] = None
     notes: Optional[str] = None
     physical_data: Optional[List[dict]] = None  # 物理数据数组
+    show_in_chart: Optional[bool] = None
 
 
 # ========== 全局文献管理功能 ==========
@@ -381,7 +387,8 @@ async def get_all_papers(
                 "reviewer_name": paper.reviewer.real_name if paper.reviewer else None,
                 "contributor_name": paper.contributor_name,
                 "created_at": paper.created_at.isoformat(),
-                "images_count": len(paper.images)
+                "images_count": len(paper.images),
+                "show_in_chart": paper.show_in_chart
             }
             for paper in papers
         ]
@@ -437,7 +444,8 @@ async def get_paper_detail(
         "review_status": paper.review_status,
         "review_comment": paper.review_comment,
         "created_at": paper.created_at.isoformat(),
-        "compound_symbols": paper.compound.element_symbols
+        "compound_symbols": paper.compound.element_symbols,
+        "show_in_chart": paper.show_in_chart
     }
 
 
@@ -618,6 +626,41 @@ async def batch_review_papers(
         "message": f"批量更新完成，已将 {reviewed_count} 篇文献设为 {request.status}",
         "reviewed_count": reviewed_count,
         "total_requested": len(request.paper_ids)
+    }
+
+
+@router.post("/papers/batch-chart-visibility", summary="批量设置图表显示（仅超级管理员）")
+async def batch_chart_visibility(
+    request: ChartVisibilityRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_superadmin)
+):
+    """
+    批量更新文献是否显示在图表中
+    """
+    if not request.paper_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="未提供文献ID列表"
+        )
+
+    papers = db.query(Paper).filter(Paper.id.in_(request.paper_ids)).all()
+
+    if not papers:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="未找到指定的文献"
+        )
+
+    for paper in papers:
+        paper.show_in_chart = request.show
+
+    db.commit()
+
+    return {
+        "message": f\"已将 {len(papers)} 篇文献设置为 {'显示' if request.show else '隐藏'}\",
+        "updated_count": len(papers),
+        "show": request.show
     }
 
 
