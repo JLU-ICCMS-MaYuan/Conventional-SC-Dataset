@@ -62,6 +62,7 @@ async function loadPapers(page = 0) {
         review_status: document.getElementById('filterReviewStatus').value,
         article_type: document.getElementById('filterArticleType').value,
         superconductor_type: document.getElementById('filterSuperconductorType').value,
+        show_in_chart: document.getElementById('filterShowInChart').value,
         year_min: document.getElementById('filterYearMin').value,
         year_max: document.getElementById('filterYearMax').value,
         keyword: document.getElementById('filterKeyword').value,

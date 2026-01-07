@@ -312,6 +312,7 @@ async def get_all_papers(
     review_status: Optional[str] = None,  # unreviewed, approved, rejected, modifying
     article_type: Optional[str] = None,  # theoretical, experimental
     superconductor_type: Optional[str] = None,  # conventional, unconventional, unknown
+    show_in_chart: Optional[bool] = None,
     year_min: Optional[int] = None,
     year_max: Optional[int] = None,
     keyword: Optional[str] = None,  # 搜索标题、DOI、化学式
@@ -349,6 +350,10 @@ async def get_all_papers(
         query = query.filter(Paper.year >= year_min)
     if year_max:
         query = query.filter(Paper.year <= year_max)
+
+    # 图表显示筛选
+    if show_in_chart is not None:
+        query = query.filter(Paper.show_in_chart == show_in_chart)
 
     # 关键词搜索
     if keyword:
@@ -657,8 +662,9 @@ async def batch_chart_visibility(
 
     db.commit()
 
+    visibility_text = "显示" if request.show else "隐藏"
     return {
-        "message": f\"已将 {len(papers)} 篇文献设置为 {'显示' if request.show else '隐藏'}\",
+        "message": f"已将 {len(papers)} 篇文献设置为 {visibility_text}",
         "updated_count": len(papers),
         "show": request.show
     }
