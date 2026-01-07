@@ -250,6 +250,7 @@ async def get_unreviewed_papers(
                 "journal": paper.journal,
                 "tc": paper.physical_parameters[0].tc if paper.physical_parameters else None,
                 "pressure": paper.physical_parameters[0].pressure if paper.physical_parameters else None,
+                "s_factor": paper.physical_parameters[0].s_factor if paper.physical_parameters else None,
                 "created_at": paper.created_at.isoformat(),
                 "contributor_name": paper.contributor_name
             }
@@ -386,6 +387,7 @@ async def get_all_papers(
                 "chemical_formula": paper.chemical_formula,
                 "tc": paper.physical_parameters[0].tc if paper.physical_parameters else None,
                 "pressure": paper.physical_parameters[0].pressure if paper.physical_parameters else None,
+                "s_factor": paper.physical_parameters[0].s_factor if paper.physical_parameters else None,
                 "compound_symbols": paper.compound.element_symbols,
                 "review_status": paper.review_status,
                 "review_comment": paper.review_comment,

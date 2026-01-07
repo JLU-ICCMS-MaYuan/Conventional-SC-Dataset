@@ -125,6 +125,7 @@ function renderPapers(papers) {
                         <th>元素组合</th>
                         <th>年份</th>
                         <th>Tc / P</th>
+                        <th>s_factor</th>
                         <th>类型</th>
                         <th>图表</th>
                         <th>审核状态</th>
@@ -190,6 +191,12 @@ function renderPapers(papers) {
                     <small>
                         ${paper.tc ? paper.tc + ' K' : '-'} / 
                         ${paper.pressure ? paper.pressure + ' GPa' : '-'}
+                    </small>
+                </td>
+                <td>
+                    <small>
+                        ${(paper.s_factor !== undefined && paper.s_factor !== null) ?
+                        Number(paper.s_factor).toFixed(2) : '-'}
                     </small>
                 </td>
                 <td>
