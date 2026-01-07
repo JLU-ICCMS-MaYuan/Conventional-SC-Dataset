@@ -94,6 +94,7 @@ class PaperData(BaseModel):
     lambda_val: Optional[float] = Field(None, description="λ (lambda)")
     omega_log: Optional[float] = Field(None, description="ω_log")
     n_ef: Optional[float] = Field(None, description="N(E_F)")
+    s_factor: Optional[float] = Field(None, description="s 因子")
     class Config:
         from_attributes = True # 这让 Pydantic 能处理 SQLAlchemy 对象
 

@@ -131,6 +131,7 @@ class PaperData(Base):
     lambda_val = Column(Float) # λ (lambda)
     omega_log = Column(Float)  # ω_log
     n_ef = Column(Float)       # N(E_F)
+    s_factor = Column(Float)   # s因子 (用户自定义参数)
     # 关系
     paper = relationship("Paper", back_populates="physical_parameters")
     def __repr__(self):

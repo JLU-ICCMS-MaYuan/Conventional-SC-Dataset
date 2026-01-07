@@ -430,7 +430,8 @@ async def get_paper_detail(
                 "tc": d.tc,
                 "lambda_val": d.lambda_val,
                 "omega_log": d.omega_log,
-                "n_ef": d.n_ef
+                "n_ef": d.n_ef,
+                "s_factor": d.s_factor
             } for d in paper.physical_parameters
         ],
         "review_status": paper.review_status,
@@ -501,7 +502,8 @@ async def update_paper(
                     tc=item.get("tc"),
                     lambda_val=item.get("lambda_val"),
                     omega_log=item.get("omega_log"),
-                    n_ef=item.get("n_ef")
+                    n_ef=item.get("n_ef"),
+                    s_factor=item.get("s_factor")
                 )
                 db.add(db_data)
 
