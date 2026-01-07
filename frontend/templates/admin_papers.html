@@ -22,9 +22,6 @@
             border-radius: 8px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             margin-bottom: 20px;
-            display: none;
-        }
-        .batch-actions.active {
             display: block;
         }
         .paper-checkbox {
@@ -128,9 +125,9 @@
                         <option value="rejected">❌ 批量拒绝</option>
                         <option value="modifying">🛠️ 批量待修改</option>
                         <option value="unreviewed">⏳ 撤回审核</option>
+                        <option value="delete" data-superadmin-only="true">🗑️ 批量删除</option>
                     </select>
                     <button class="btn btn-success btn-sm" onclick="batchReview()">应用操作</button>
-                    <button class="btn btn-danger btn-sm" onclick="batchDelete()" id="batchDeleteBtn" style="display:none;">批量删除</button>
                     <button class="btn btn-secondary btn-sm" onclick="clearSelection()">取消选择</button>
                 </div>
             </div>

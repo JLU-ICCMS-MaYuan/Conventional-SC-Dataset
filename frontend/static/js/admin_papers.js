@@ -33,9 +33,14 @@ function checkAuth() {
     currentUser = JSON.parse(userStr);
     document.getElementById('userName').textContent = currentUser.real_name;
 
-    // 如果是超级管理员，显示批量删除按钮
-    if (currentUser.is_superadmin) {
-        document.getElementById('batchDeleteBtn').style.display = 'inline-block';
+    const deleteOption = document.querySelector('#batchStatusSelect option[value="delete"]');
+    if (deleteOption) {
+        if (currentUser.is_admin) {
+            deleteOption.hidden = false;
+            deleteOption.disabled = false;
+        } else {
+            deleteOption.remove();
+        }
     }
 
     return true;
@@ -323,6 +328,12 @@ async function batchReview() {
     }
 
     const status = document.getElementById('batchStatusSelect').value;
+
+    if (status === 'delete') {
+        await batchDelete();
+        return;
+    }
+
     const statusText = document.getElementById('batchStatusSelect').options[document.getElementById('batchStatusSelect').selectedIndex].text;
 
     if (!confirm(`确定要将选中的 ${selectedPapers.size} 篇文献设置为 ${statusText} 吗？`)) {
