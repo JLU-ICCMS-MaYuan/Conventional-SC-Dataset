@@ -170,9 +170,16 @@ function renderPapers(papers) {
         // 文章类型标签
         const articleTypeLabel = paper.article_type === 'theoretical' ? '理论' : '实验';
         const scTypeLabel = {
-            'conventional': '常规',
-            'unconventional': '非常规',
-            'unknown': '未知'
+            'cuprate': '铜基',
+            'iron_based': '铁基',
+            'nickel_based': '镍基',
+            'hydride': '高压氢化物',
+            'carbon_organic': '碳基与有机',
+            'other_conventional': '其他常规',
+            'other_unconventional': '其他非常规',
+            'unknown': '未知',
+            'conventional': '常规 (旧)',
+            'unconventional': '非常规 (旧)'
         }[paper.superconductor_type] || '未知';
 
         html += `

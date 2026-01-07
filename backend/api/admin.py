@@ -485,10 +485,15 @@ async def update_paper(
         )
 
     # 验证超导体类型
-    if request.superconductor_type and request.superconductor_type not in ["conventional", "unconventional", "unknown"]:
+    if request.superconductor_type and request.superconductor_type not in [
+        "conventional", "unconventional", "unknown", 
+        "cuprate", "iron_based", "nickel_based", 
+        "hydride", "carbon_organic", 
+        "other_conventional", "other_unconventional"
+    ]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="超导体类型必须是 conventional, unconventional 或 unknown"
+            detail="无效的超导体类型"
         )
 
     # 验证年份范围

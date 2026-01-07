@@ -82,7 +82,12 @@ class PaperCreate(BaseModel):
 
     @validator('superconductor_type')
     def validate_superconductor_type(cls, v):
-        allowed_types = ['conventional', 'unconventional', 'unknown']
+        allowed_types = [
+            'conventional', 'unconventional', 'unknown', 
+            'cuprate', 'iron_based', 'nickel_based', 
+            'hydride', 'carbon_organic', 
+            'other_conventional', 'other_unconventional'
+        ]
         if v not in allowed_types:
             raise ValueError(f"超导体类型必须是: {', '.join(allowed_types)}")
         return v

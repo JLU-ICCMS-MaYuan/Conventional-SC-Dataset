@@ -27,7 +27,7 @@ async def create_paper(
     doi: str = Form(...),
     element_symbols: str = Form(...),  # JSON字符串
     article_type: str = Form(...),  # 文章类型: theoretical 或 experimental
-    superconductor_type: str = Form(...),  # 超导体类型: conventional, unconventional, unknown
+    superconductor_type: str = Form(...),  # 超导体类型: cuprate, iron_based, nickel_based, hydride, carbon_organic, other_conventional, other_unconventional, unknown
     physical_data: str = Form(...),  # JSON字符串，包含多组物理参数
     chemical_formula: Optional[str] = Form(None),
     crystal_structure: Optional[str] = Form(None),
@@ -380,6 +380,7 @@ def get_chart_data(db: Session = Depends(get_db)):
                     "y": data.tc,
                     "label": paper.chemical_formula or paper.title[:20],
                     "doi": paper.doi,
-                    "type": paper.article_type
+                    "type": paper.article_type,
+                    "sc_type": paper.superconductor_type
                 })
     return result
