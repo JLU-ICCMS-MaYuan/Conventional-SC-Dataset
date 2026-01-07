@@ -116,6 +116,18 @@
                             </div>
                         </div>
 
+                        <!-- 审核状态编辑 (由于是审核页面，可能需要在这里也能改状态) -->
+                        <div class="mb-3">
+                            <label class="form-label">审核状态</label>
+                            <select class="form-select" id="editReviewStatus">
+                                <option value="unreviewed">⏳ 未审核</option>
+                                <option value="approved">✅ 已通过</option>
+                                <option value="rejected">❌ 已拒绝</option>
+                                <option value="modifying">🛠️ 待修改</option>
+                                <option value="admin_only">🔒 仅管理员可见</option>
+                            </select>
+                        </div>
+
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">化学式</label>
@@ -406,6 +418,7 @@
                 document.getElementById('editAuthors').value = paper.authors || '';
                 document.getElementById('editArticleType').value = paper.article_type || 'experimental';
                 document.getElementById('editSuperconductorType').value = paper.superconductor_type || 'unknown';
+                document.getElementById('editReviewStatus').value = paper.review_status || 'unreviewed';
                 document.getElementById('editChemicalFormula').value = paper.chemical_formula || '';
                 document.getElementById('editCrystalStructure').value = paper.crystal_structure || '';
                 
@@ -469,6 +482,7 @@
                 authors: document.getElementById('editAuthors').value,
                 article_type: document.getElementById('editArticleType').value,
                 superconductor_type: document.getElementById('editSuperconductorType').value,
+                review_status: document.getElementById('editReviewStatus').value,
                 chemical_formula: document.getElementById('editChemicalFormula').value,
                 crystal_structure: document.getElementById('editCrystalStructure').value,
                 physical_data: physicalData,

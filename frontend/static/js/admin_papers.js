@@ -153,7 +153,8 @@ function renderPapers(papers) {
             'approved': { text: '✅ 已通过', class: 'bg-success' },
             'reviewed': { text: '✅ 已通过', class: 'bg-success' }, // 兼容旧数据
             'rejected': { text: '❌ 已拒绝', class: 'bg-danger' },
-            'modifying': { text: '🛠️ 待修改', class: 'bg-info' }
+            'modifying': { text: '🛠️ 待修改', class: 'bg-info' },
+            'admin_only': { text: '🔒 仅管理员可见', class: 'bg-dark' }
         };
         
         const statusInfo = statusMap[paper.review_status] || statusMap['unreviewed'];
@@ -600,7 +601,8 @@ async function openEditModal(paperId) {
             'unreviewed': '<span class="badge bg-warning">⏳ 未审核</span>',
             'approved': '<span class="badge bg-success">✅ 已通过</span>',
             'rejected': '<span class="badge bg-danger">❌ 已拒绝</span>',
-            'modifying': '<span class="badge bg-info">🛠️ 待修改</span>'
+            'modifying': '<span class="badge bg-info">🛠️ 待修改</span>',
+            'admin_only': '<span class="badge bg-dark">🔒 仅管理员可见</span>'
         };
         const statusDisplay = document.getElementById('currentReviewStatusDisplay');
         if (statusDisplay) {
@@ -660,7 +662,8 @@ async function submitReviewAction() {
                 'unreviewed': '<span class="badge bg-warning">⏳ 未审核</span>',
                 'approved': '<span class="badge bg-success">✅ 已通过</span>',
                 'rejected': '<span class="badge bg-danger">❌ 已拒绝</span>',
-                'modifying': '<span class="badge bg-info">🛠️ 待修改</span>'
+                'modifying': '<span class="badge bg-info">🛠️ 待修改</span>',
+                'admin_only': '<span class="badge bg-dark">🔒 仅管理员可见</span>'
             };
             const statusDisplay = document.getElementById('currentReviewStatusDisplay');
             if (statusDisplay) {

@@ -180,6 +180,7 @@ async def review_paper(
     - rejected: 已拒绝
     - modifying: 待修改
     - unreviewed: 未审核
+    - admin_only: 仅管理员可见
     """
     paper = db.query(Paper).filter(Paper.id == paper_id).first()
 
@@ -189,7 +190,7 @@ async def review_paper(
             detail="文献不存在"
         )
 
-    valid_statuses = ["approved", "rejected", "modifying", "unreviewed"]
+    valid_statuses = ["approved", "rejected", "modifying", "unreviewed", "admin_only"]
     if request.status not in valid_statuses:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -304,6 +305,7 @@ class UpdatePaperRequest(BaseModel):
     notes: Optional[str] = None
     physical_data: Optional[List[dict]] = None  # 物理数据数组
     show_in_chart: Optional[bool] = None
+    review_status: Optional[str] = None
 
 
 # ========== 全局文献管理功能 ==========
@@ -494,6 +496,15 @@ async def update_paper(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="无效的超导体类型"
+        )
+
+    # 验证审核状态
+    if request.review_status and request.review_status not in [
+        "approved", "rejected", "modifying", "unreviewed", "admin_only"
+    ]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="无效的审核状态"
         )
 
     # 验证年份范围

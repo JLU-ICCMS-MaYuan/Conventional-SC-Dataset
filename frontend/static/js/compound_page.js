@@ -33,6 +33,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 上传按钮点击事件（检查登录）
     const uploadBtn = document.getElementById('open-upload-btn');
+    const adminToken = localStorage.getItem('admin_token');
+    
+    // 如果是管理员，显示"仅管理员可见"筛选按钮
+    if (adminToken) {
+        const adminOnlyLabel = document.getElementById('label-status-admin-only');
+        if (adminOnlyLabel) adminOnlyLabel.style.display = 'inline-block';
+    }
+
     if (uploadBtn) {
         uploadBtn.addEventListener('click', function() {
             const token = localStorage.getItem('user_token') || localStorage.getItem('admin_token');
@@ -165,7 +173,8 @@ function renderPaperCard(paper) {
         'approved': { text: '✅ 已审核', class: 'bg-success' },
         'reviewed': { text: '✅ 已审核', class: 'bg-success' }, // 兼容旧数据
         'rejected': { text: '❌ 已拒绝', class: 'bg-danger' },
-        'modifying': { text: '🛠️ 待修改', class: 'bg-info' }
+        'modifying': { text: '🛠️ 待修改', class: 'bg-info' },
+        'admin_only': { text: '🔒 仅管理员可见', class: 'bg-dark' }
     };
     const statusInfo = statusMap[paper.review_status] || statusMap['unreviewed'];
     let reviewBadge = `<span class="badge ${statusInfo.class}">${statusInfo.text}${paper.reviewer_name && paper.review_status !== 'unreviewed' ? ` (${paper.reviewer_name})` : ''}</span>`;

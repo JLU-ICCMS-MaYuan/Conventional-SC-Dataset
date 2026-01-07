@@ -200,10 +200,15 @@ def check_paper_exists(db: Session, compound_id: int, doi: str) -> bool:
 def get_papers_by_compound(
     db: Session,
     compound_id: int,
-    search_params: Optional[schemas.PaperSearchParams] = None
+    search_params: Optional[schemas.PaperSearchParams] = None,
+    is_admin: bool = False
 ) -> List[models.Paper]:
     """获取元素组合的文献列表（支持搜索和筛选）"""
     query = db.query(models.Paper).filter(models.Paper.compound_id == compound_id)
+
+    # 权限过滤：普通用户不能看到仅管理员可见的文献
+    if not is_admin:
+        query = query.filter(models.Paper.review_status != "admin_only")
 
     if search_params:
         # 关键词搜索

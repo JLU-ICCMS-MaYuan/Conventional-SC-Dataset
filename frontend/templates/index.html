@@ -202,66 +202,38 @@
                     theoretical: getCSSVar('--sc-shape-theoretical')
                 };
 
-                // 1. 左侧图表：超导历史 Tc 演变 (基于 Book1.xls 数据)
+                // 1. 左侧图表：超导历史 Tc 演变 (基于数据库数据)
                 const ctxStatic = document.getElementById('staticChart').getContext('2d');
-                new Chart(ctxStatic, {
+                const staticChart = new Chart(ctxStatic, {
                     type: 'scatter',
                     data: {
                         datasets: [
                             {
-                                label: 'BCS/常规',
-                                data: [
-                                    {x: 1911, y: 4.2, n: 'Hg'}, {x: 1913, y: 7.19, n: 'Pb'}, {x: 1930, y: 9.26, n: 'Nb'}, 
-                                    {x: 1955, y: 18, n: 'Nb3Sn'}, {x: 1973, y: 23.2, n: 'Nb3Ge'}, {x: 2001, y: 39, n: 'MgB2'},
-                                    {x: 2015, y: 203, n: 'H3S', p: 150}, {x: 2019, y: 260, n: 'LaH10', p: '170-190'}
-                                ],
-                                backgroundColor: colors.conventional,
-                                pointBackgroundColor: colors.conventional
+                                label: '实验数据',
+                                data: [],
+                                borderColor: '#fff',
+                                borderWidth: 1,
+                                pointRadius: 4,
+                                pointStyle: shapes.experimental,
+                                order: 0
                             },
                             {
-                                label: '铜基',
-                                data: [
-                                    {x: 1985, y: 35, n: 'LaBaCuO'}, {x: 1986, y: 40, n: 'LaSrCuO'}, {x: 1987, y: 93, n: 'YBa2Cu3O7'}, 
-                                    {x: 1987, y: 110, n: 'Bi2Sr2Ca2Cu3O10'}, {x: 1987, y: 125, n: 'Tl2Ba2Ca2Cu3O10'}, {x: 1994, y: 134, n: 'HgBa2Ca2Cu3Ox'}, 
-                                    {x: 1994, y: 164, n: 'HgBa2Ca2Cu2Ox', p: 30}
-                                ],
-                                backgroundColor: colors.cuprate,
-                                pointBackgroundColor: colors.cuprate
+                                label: '理论预测',
+                                data: [],
+                                borderColor: '#fff',
+                                borderWidth: 1,
+                                pointRadius: 5,
+                                pointStyle: shapes.theoretical,
+                                order: 0
                             },
-                            {
-                                label: '铁基',
-                                data: [
-                                    {x: 2006, y: 6.6, n: 'LaOFeP'}, {x: 2008, y: 26, n: 'La[O1-xFx]FeAs'}, {x: 2008, y: 55, n: 'SmFeAs[O0.9F0.1]'}, 
-                                    {x: 2012, y: 77, n: 'FeSe films on SrTiO3'}
-                                ],
-                                backgroundColor: colors.iron,
-                                pointBackgroundColor: colors.iron
-                            },
-                            {
-                                label: '富勒烯',
-                                data: [
-                                    {x: 1991, y: 19.8, n: 'K3C60'}, {x: 1991, y: 33, n: 'RbCs2C60'}, {x: 2007, y: 38, n: 'Cs3C60', p: 0.14}
-                                ],
-                                backgroundColor: colors.organic,
-                                pointBackgroundColor: colors.organic
-                            },
-                            {
-                                label: '高压金属氢化物',
-                                data: [
-                                    {x: 2019, y: 243, n: 'YH9', p: 201}, {x: 2019, y: 224, n: 'YH6', p: 166}, 
-                                    {x: 2020, y: 146, n: 'ThH9', p: 175}, {x: 2020, y: 161, n: 'ThH10', p: 174}, 
-                                    {x: 2021, y: 115, n: 'CeH10', p: 95}, {x: 2021, y: 57, n: 'CeH9', p: 88}, 
-                                    {x: 2021, y: 215, n: 'CaH6', p: 172}, {x: 2020, y: 237, n: '(La,Y)H6', p: 183}, 
-                                    {x: 2020, y: 253, n: '(La,Y)H10', p: 183}
-                                ],
-                                backgroundColor: colors.hydride,
-                                pointBackgroundColor: colors.hydride
-                            },
-                            {
-                                label: '参考线',
-                                data: [], // 隐藏在图例中
-                                showLine: false
-                            }
+                            // 虚拟数据集用于显示图例
+                            { label: 'Legend: 铜基', backgroundColor: colors.cuprate, data: [], pointStyle: 'rect' },
+                            { label: 'Legend: 铁基', backgroundColor: colors.iron, data: [], pointStyle: 'rect' },
+                            { label: 'Legend: 镍基', backgroundColor: colors.nickel, data: [], pointStyle: 'rect' },
+                            { label: 'Legend: 高压氢化物', backgroundColor: colors.hydride, data: [], pointStyle: 'rect' },
+                            { label: 'Legend: 碳基与有机', backgroundColor: colors.organic, data: [], pointStyle: 'rect' },
+                            { label: 'Legend: 常规超导', backgroundColor: colors.conventional, data: [], pointStyle: 'rect' },
+                            { label: 'Legend: 非常规超导', backgroundColor: colors.unconventional, data: [], pointStyle: 'rect' }
                         ]
                     },
                     options: {
@@ -278,33 +250,42 @@
                             y: {
                                 title: { display: true, text: '临界温度 Tc (K)' },
                                 beginAtZero: true,
-                                max: 350
+                                max: 400
                             }
                         },
                         plugins: {
-                            legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } },
+                            legend: { 
+                                position: 'bottom', 
+                                labels: { 
+                                    usePointStyle: true,
+                                    boxWidth: 10, 
+                                    font: { size: 10 },
+                                    generateLabels: (chart) => {
+                                        const originalLabels = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+                                        return originalLabels.map(item => {
+                                            if (item.text.startsWith('Legend: ')) {
+                                                item.text = item.text.replace('Legend: ', '');
+                                            }
+                                            return item;
+                                        });
+                                    }
+                                }
+                            },
                             tooltip: {
                                 callbacks: {
                                     label: function(context) {
                                         const p = context.raw;
-                                        let name = formatSubscript(p.n);
-                                        let label = `${name}: ${p.y} K (${p.x})`;
-                                        if (p.p) label += ` [P: ${p.p} GPa]`;
-                                        return label;
+                                        return `${p.label}: ${p.y} K (${p.year})`;
                                     }
                                 }
-                            },
-                            // 使用 annotation 插件绘制参考线（如果未加载插件，则手动模拟）
-                            autocolors: false,
+                            }
                         }
                     },
                     plugins: [{
                         id: 'chartCustomizations',
-                        // 1. 绘制 77K 和 300K 参考线
                         beforeDraw: (chart) => {
                             const {ctx, chartArea: {right, left}, scales: {y}} = chart;
                             ctx.save();
-                            
                             const drawLine = (val, color, text) => {
                                 const yPos = y.getPixelForValue(val);
                                 if (yPos < chart.chartArea.top || yPos > chart.chartArea.bottom) return;
@@ -318,29 +299,23 @@
                                 ctx.font = '10px Arial';
                                 ctx.fillText(text, left + 5, yPos - 5);
                             };
-
                             drawLine(77, 'rgba(255, 0, 0, 0.5)', '77 K (Liquid N2)');
                             drawLine(300, 'rgba(0, 0, 0, 0.3)', '300 K (Room Temp)');
                             ctx.restore();
                         },
-                        // 2. 大屏显示数据点名称和压强
                         afterDatasetsDraw: (chart) => {
-                            if (window.innerWidth < 1200) return;
+                            if (window.innerWidth < 800) return;
                             const {ctx} = chart;
                             ctx.save();
                             ctx.font = '9px Arial';
                             ctx.fillStyle = '#666';
-                            
                             chart.data.datasets.forEach((dataset, i) => {
-                                if (dataset.label === '参考线') return;
+                                if (i > 1) return; // 只处理实验数据和理论预测
                                 const meta = chart.getDatasetMeta(i);
                                 meta.data.forEach((element, index) => {
-                                    const dataPoint = dataset.data[index];
-                                    let name = formatSubscript(dataPoint.n);
-                                    let text = name;
-                                    if (dataPoint.p) text += ` (${dataPoint.p}Gpa)`;
-                                    
-                                    // 仅在点在绘图区域内时绘制
+                                    const p = dataset.data[index];
+                                    if (!p) return;
+                                    const text = `${formatSubscript(p.label)} (${p.pressure} GPa)`;
                                     if (element.x > chart.chartArea.left && element.x < chart.chartArea.right) {
                                         ctx.fillText(text, element.x + 6, element.y - 4);
                                     }
@@ -460,27 +435,43 @@
                         afterDatasetsDraw: (chart) => {
                             const {ctx, scales: {x, y}} = chart;
                             ctx.save();
+                            
+                            // 1. 绘制 s 因子标签
                             ctx.font = 'bold 10px Arial';
                             ctx.fillStyle = 'rgba(0,0,0,0.3)';
-                            
                             [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].forEach(s => {
                                 let p = 280;
                                 let tc = s * Math.sqrt(1521 + Math.pow(p, 2));
-                                
                                 if (tc > 330) {
                                     const val = Math.pow(330/s, 2) - 1521;
                                     p = val > 0 ? Math.sqrt(val) : 10;
                                     tc = 335;
                                 }
-                                
                                 const xPos = x.getPixelForValue(p);
                                 const yPos = y.getPixelForValue(tc);
-                                
                                 if (xPos > chart.chartArea.left && xPos < chart.chartArea.right &&
                                     yPos > chart.chartArea.top && yPos < chart.chartArea.bottom) {
                                     if (s <= 5) ctx.fillText(`s=${s}`, xPos, yPos - 10);
                                 }
                             });
+
+                            // 2. 大屏显示数据点名称和年份
+                            if (window.innerWidth >= 800) {
+                                ctx.font = '9px Arial';
+                                ctx.fillStyle = '#666';
+                                chart.data.datasets.forEach((dataset, i) => {
+                                    if (i !== 10 && i !== 11) return; // 只处理实验数据和理论预测
+                                    const meta = chart.getDatasetMeta(i);
+                                    meta.data.forEach((element, index) => {
+                                        const p = dataset.data[index];
+                                        if (!p) return;
+                                        const text = `${formatSubscript(p.label)} (${p.year})`;
+                                        if (element.x > chart.chartArea.left && element.x < chart.chartArea.right) {
+                                            ctx.fillText(text, element.x + 6, element.y - 4);
+                                        }
+                                    });
+                                });
+                            }
                             ctx.restore();
                         }
                     }]
@@ -507,13 +498,27 @@
                         const expData = data.filter(d => d.type === 'experimental');
                         const theoData = data.filter(d => d.type === 'theoretical');
                         
-                        // 注意：索引 0-9 为 s=1 到 s=10 的参考线，10 为实验数据，11 为理论预测
+                        // 1. 更新左侧图表 (Tc vs Year)
+                        const expDataYear = expData.map(d => ({ x: d.year, y: d.y, label: d.label, year: d.year, pressure: d.x }));
+                        const theoDataYear = theoData.map(d => ({ x: d.year, y: d.y, label: d.label, year: d.year, pressure: d.x }));
+                        
                         const expColors = expData.map(d => scColorMap[d.sc_type] || colors.unknown);
+                        const theoColors = theoData.map(d => scColorMap[d.sc_type] || colors.unknown);
+
+                        staticChart.data.datasets[0].data = expDataYear;
+                        staticChart.data.datasets[0].backgroundColor = expColors;
+                        staticChart.data.datasets[0].pointBackgroundColor = expColors;
+                        
+                        staticChart.data.datasets[1].data = theoDataYear;
+                        staticChart.data.datasets[1].backgroundColor = theoColors;
+                        staticChart.data.datasets[1].pointBackgroundColor = theoColors;
+                        staticChart.update();
+
+                        // 2. 更新右侧图表 (Tc vs Pressure)
                         dynamicChart.data.datasets[10].data = expData;
                         dynamicChart.data.datasets[10].backgroundColor = expColors;
                         dynamicChart.data.datasets[10].pointBackgroundColor = expColors;
                         
-                        const theoColors = theoData.map(d => scColorMap[d.sc_type] || colors.unknown);
                         dynamicChart.data.datasets[11].data = theoData;
                         dynamicChart.data.datasets[11].backgroundColor = theoColors;
                         dynamicChart.data.datasets[11].pointBackgroundColor = theoColors;

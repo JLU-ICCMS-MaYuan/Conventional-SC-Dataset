@@ -67,22 +67,39 @@ async def create_paper(
             detail="最多允许上传5张文献截图"
         )
 
-    # 3. 验证DOI并获取元数据
-    print(f"正在验证DOI: {doi}")
-    is_valid = await validate_doi(doi)
-    if not is_valid:
-        raise HTTPException(
-            status_code=400,
-            detail=f"DOI {doi} 无效或不存在，请检查格式"
-        )
+    # 3. 验证DOI并获取元数据 (管理员可跳过验证)
+    is_admin = current_user.is_admin if current_user else False
+    metadata = None
 
-    print(f"正在获取DOI元数据...")
-    metadata = await get_doi_metadata(doi)
-    if not metadata:
-        raise HTTPException(
-            status_code=500,
-            detail="无法获取文献元数据，请稍后重试"
-        )
+    if not is_admin:
+        print(f"正在验证DOI: {doi}")
+        is_valid = await validate_doi(doi)
+        if not is_valid:
+            raise HTTPException(
+                status_code=400,
+                detail=f"DOI {doi} 无效或不存在，请检查格式"
+            )
+
+        print(f"正在获取DOI元数据...")
+        metadata = await get_doi_metadata(doi)
+        if not metadata:
+            raise HTTPException(
+                status_code=500,
+                detail="无法获取文献元数据，请稍后重试"
+            )
+    else:
+        # 管理员尝试获取元数据，但如果失败则使用占位符
+        print(f"管理员上传，跳过强制DOI验证...")
+        metadata = await get_doi_metadata(doi)
+        if not metadata:
+            print("无法获取元数据，使用占位符...")
+            metadata = {
+                "title": f"Manual Entry: {doi}",
+                "authors": ["Administrator"],
+                "journal": "Unknown Journal",
+                "year": 2026,
+                "abstract": "Metadata manually skipped by administrator."
+            }
 
     # 4. 获取或创建元素组合
     compound = crud.get_or_create_compound(db, symbols_list)
@@ -378,6 +395,7 @@ def get_chart_data(db: Session = Depends(get_db)):
                 result.append({
                     "x": data.pressure,
                     "y": data.tc,
+                    "year": paper.year,
                     "label": paper.chemical_formula or paper.title[:20],
                     "doi": paper.doi,
                     "type": paper.article_type,
