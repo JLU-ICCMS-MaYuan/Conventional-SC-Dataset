@@ -60,37 +60,42 @@
     </div>
 
     <script src="/static/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/auth_state.js"></script>
     <script>
         let token = '';
         let currentUser = null;
 
         // 检查登录状态
         function checkAuth() {
-            token = localStorage.getItem('admin_token');
-            const userStr = localStorage.getItem('admin_user');
+            if (!window.authState) {
+                alert('登录状态异常，请刷新重试');
+                return false;
+            }
 
-            if (!token || !userStr) {
+            const state = window.authState.get();
+            if (!state || !state.token || !state.user) {
                 alert('请先登录');
                 window.location.href = '/admin/login';
                 return false;
             }
 
-            currentUser = JSON.parse(userStr);
-
-            if (!currentUser.is_superadmin) {
+            if (!state.user.is_superadmin) {
                 alert('您没有超级管理员权限');
                 window.location.href = '/admin/dashboard';
                 return false;
             }
 
+            token = state.token;
+            currentUser = state.user;
             document.getElementById('userName').textContent = currentUser.real_name;
             return true;
         }
 
         // 退出登录
         function logout() {
-            localStorage.removeItem('admin_token');
-            localStorage.removeItem('admin_user');
+            if (window.authState) {
+                window.authState.clear();
+            }
             window.location.href = '/admin/login';
         }
 

@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import List, Optional
 from backend.database import get_db
 from backend.models import User, Paper
-from backend.auth import get_current_superadmin, get_current_admin
+from backend.security import get_current_superadmin, get_current_admin
 from backend.email_service import email_service
 
 router = APIRouter(prefix="/api/admin", tags=["管理员"])

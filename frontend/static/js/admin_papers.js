@@ -21,16 +21,26 @@ function calculateSFactor(tcValue, pressureValue) {
 
 // 检查登录状态
 function checkAuth() {
-    token = localStorage.getItem('admin_token');
-    const userStr = localStorage.getItem('admin_user');
+    if (!window.authState) {
+        alert('无法获取登录状态，请刷新后重试');
+        return false;
+    }
 
-    if (!token || !userStr) {
+    const state = window.authState.get();
+    if (!state || !state.token || !state.user) {
         alert('请先登录');
         window.location.href = '/admin/login';
         return false;
     }
 
-    currentUser = JSON.parse(userStr);
+    if (!state.user.is_admin) {
+        alert('当前账号没有管理员权限');
+        window.location.href = '/';
+        return false;
+    }
+
+    token = state.token;
+    currentUser = state.user;
     document.getElementById('userName').textContent = currentUser.real_name;
 
     document.querySelectorAll('#batchStatusSelect option[data-superadmin-only="true"]').forEach(option => {
@@ -47,8 +57,9 @@ function checkAuth() {
 
 // 退出登录
 function logout() {
-    localStorage.removeItem('admin_token');
-    localStorage.removeItem('admin_user');
+    if (window.authState) {
+        window.authState.clear();
+    }
     window.location.href = '/admin/login';
 }
 

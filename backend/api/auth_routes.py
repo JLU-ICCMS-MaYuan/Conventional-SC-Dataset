@@ -7,7 +7,7 @@ from pydantic import BaseModel, EmailStr
 from datetime import datetime, timedelta
 from backend.database import get_db
 from backend.models import User
-from backend.auth import (
+from backend.security import (
     hash_password,
     verify_password,
     create_access_token,

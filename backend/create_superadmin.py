@@ -11,7 +11,7 @@ SUPERADMIN_NAME=管理员姓名
 """
 from backend.database import SessionLocal
 from backend.models import User
-from backend.auth import hash_password
+from backend.security import hash_password
 from datetime import datetime
 import os
 import getpass

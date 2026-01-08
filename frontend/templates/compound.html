@@ -44,7 +44,7 @@
         <!-- 审核状态筛选 -->
         <div class="card mb-3">
             <div class="card-body">
-                <h6 class="card-subtitle mb-2 text-muted small">审核状态筛选（仅管理员可见）</h6>
+                <h6 class="card-subtitle mb-2 text-muted small">审核状态筛选</h6>
                 <div class="btn-group" role="group">
                     <input type="radio" class="btn-check" name="review-status" id="status-all" value="all" checked>
                     <label class="btn btn-outline-primary" for="status-all" onclick="filterByReviewStatus('all')">全部</label>
@@ -57,9 +57,6 @@
 
                     <input type="radio" class="btn-check" name="review-status" id="status-rejected" value="rejected">
                     <label class="btn btn-outline-danger" for="status-rejected" onclick="filterByReviewStatus('rejected')">❌ 已拒绝</label>
-
-                    <input type="radio" class="btn-check" name="review-status" id="status-admin-only" value="admin_only">
-                    <label class="btn btn-outline-dark" for="status-admin-only" id="label-status-admin-only" style="display: none;" onclick="filterByReviewStatus('admin_only')">🔒 仅管理员可见</label>
                 </div>
             </div>
         </div>
@@ -242,6 +239,7 @@
     </div>
 
     <script src="/static/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/auth_state.js"></script>
     <script src="/static/js/auth_helper.js"></script>
     <script src="/static/js/compound_page.js"></script>
 </body>

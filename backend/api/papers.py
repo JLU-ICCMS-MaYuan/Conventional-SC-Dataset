@@ -14,7 +14,7 @@ from backend.utils.doi_resolver import get_doi_metadata, validate_doi
 from backend.utils.citation import generate_aps_citation, generate_bibtex_citation
 from backend.utils.image_processor import process_image, validate_image as validate_image_util
 
-from backend.auth import (
+from backend.security import (
     get_current_user,
     get_current_admin
 )

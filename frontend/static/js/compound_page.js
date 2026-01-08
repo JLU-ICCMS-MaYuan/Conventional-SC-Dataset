@@ -4,6 +4,10 @@ let uploadModal, imageModal;
 let selectedFiles = [];
 let currentReviewStatus = 'all'; // 当前选择的审核状态筛选
 
+function getAuthState() {
+    return window.authState ? window.authState.get() : null;
+}
+
 function calculateSFactor(tcValue, pressureValue) {
     const tc = parseFloat(tcValue);
     const pressure = parseFloat(pressureValue);
@@ -31,19 +35,18 @@ document.addEventListener('DOMContentLoaded', function() {
     // 设置图片上传预览
     document.getElementById('images-input').addEventListener('change', handleImageSelection);
 
-    // 上传按钮点击事件（检查登录）
     const uploadBtn = document.getElementById('open-upload-btn');
-    const adminToken = localStorage.getItem('admin_token');
-    
-    // 如果是管理员，显示"仅管理员可见"筛选按钮
-    if (adminToken) {
+    const state = getAuthState();
+
+    if (state && state.user && state.user.is_admin) {
         const adminOnlyLabel = document.getElementById('label-status-admin-only');
         if (adminOnlyLabel) adminOnlyLabel.style.display = 'inline-block';
     }
 
     if (uploadBtn) {
         uploadBtn.addEventListener('click', function() {
-            const token = localStorage.getItem('user_token') || localStorage.getItem('admin_token');
+            const auth = getAuthState();
+            const token = auth && auth.token;
             if (!token) {
                 if (confirm('只有注册用户可以上传文献。是否立即前往登录/注册？')) {
                     window.location.href = '/login';
@@ -555,7 +558,13 @@ async function submitPaper() {
     }
 
     try {
-        const token = localStorage.getItem('user_token') || localStorage.getItem('admin_token');
+        const auth = getAuthState();
+        if (!auth || !auth.token) {
+            alert('登录状态已失效，请重新登录');
+            window.location.href = '/login';
+            return;
+        }
+        const token = auth.token;
         const response = await fetch('/api/papers/', {
             method: 'POST',
             headers: {

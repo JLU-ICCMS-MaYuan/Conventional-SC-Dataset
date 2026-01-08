@@ -1,33 +1,27 @@
-// 认证助手 - 处理用户登录状态和导航栏显示
+// 导航栏登录状态展示 & 通用登出
+
+function getAuthStateSafely() {
+    if (typeof window === 'undefined' || !window.authState) {
+        return null;
+    }
+    return window.authState.get();
+}
 
 function initUserNavbar() {
     const userNav = document.getElementById('user-nav');
     if (!userNav) return;
 
-    // 检查普通用户登录状态
-    const userToken = localStorage.getItem('user_token');
-    const userInfoStr = localStorage.getItem('user_info');
-    
-    // 同时也检查管理员登录状态（管理员也可以作为普通用户使用）
-    const adminToken = localStorage.getItem('admin_token');
-    const adminUserStr = localStorage.getItem('admin_user');
-
-    if (userToken && userInfoStr) {
-        const userInfo = JSON.parse(userInfoStr);
-        renderLoggedInNav(userNav, userInfo, 'user');
-    } else if (adminToken && adminUserStr) {
-        const adminInfo = JSON.parse(adminUserStr);
-        renderLoggedInNav(userNav, adminInfo, 'admin');
+    const state = getAuthStateSafely();
+    if (state && state.user) {
+        renderLoggedInNav(userNav, state.user);
     } else {
         renderLoggedOutNav(userNav);
     }
 }
 
-function renderLoggedInNav(container, user, type) {
-    let adminLink = '';
-    if (user.is_admin || type === 'admin') {
-        adminLink = `<li><a class="dropdown-item" href="/admin/dashboard">管理面板</a></li>`;
-    }
+function renderLoggedInNav(container, user) {
+    const isAdmin = Boolean(user.is_admin);
+    const dashboardLink = isAdmin ? `<li><a class="dropdown-item" href="/admin/dashboard">管理面板</a></li>` : '';
 
     container.innerHTML = `
         <div class="dropdown">
@@ -35,7 +29,7 @@ function renderLoggedInNav(container, user, type) {
                 👤 ${user.real_name}
             </button>
             <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="userDropdown">
-                ${adminLink}
+                ${dashboardLink}
                 <li><a class="dropdown-item text-danger" href="#" onclick="handleLogout()">退出登录</a></li>
             </ul>
         </div>
@@ -52,10 +46,11 @@ function renderLoggedOutNav(container) {
 }
 
 function handleLogout() {
-    localStorage.removeItem('user_token');
-    localStorage.removeItem('user_info');
-    localStorage.removeItem('admin_token');
-    localStorage.removeItem('admin_user');
+    if (window.authState) {
+        window.authState.clear();
+    } else {
+        localStorage.clear();
+    }
     alert('已退出登录');
     window.location.reload();
 }
