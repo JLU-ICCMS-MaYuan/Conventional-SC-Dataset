@@ -31,6 +31,7 @@ class Compound(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     element_symbols = Column(String(200), unique=True, nullable=False, index=True)  # 如 "Ba-Cu-O-Y"（按字母排序）
+    element_list = Column(Text, nullable=False, default="[]")  # JSON数组，保存元素列表
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # 关系

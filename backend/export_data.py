@@ -49,6 +49,7 @@ def export_all_data(output_file: str = "data_export.json"):
             data["compounds"].append({
                 "id": comp.id,
                 "element_symbols": comp.element_symbols,
+                "element_list": json.loads(comp.element_list) if comp.element_list else comp.element_symbols.split("-"),
                 "created_at": comp.created_at.isoformat()
             })
 

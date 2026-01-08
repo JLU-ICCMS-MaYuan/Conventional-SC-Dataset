@@ -41,7 +41,36 @@ class CompoundCreate(BaseModel):
 class CompoundResponse(BaseModel):
     id: int
     element_symbols: str
+    element_list: List[str]
     created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CompoundSearchRequest(BaseModel):
+    elements: List[str] = Field(..., description="选择的元素符号列表")
+    mode: str = Field("combination", description="筛选模式: only, combination, contains")
+
+    @validator('elements')
+    def validate_elements(cls, v):
+        if not v:
+            raise ValueError("至少需要选择一个元素")
+        return sorted(set(v))
+
+    @validator('mode')
+    def validate_mode(cls, v):
+        allowed = {'only', 'combination', 'contains'}
+        if v not in allowed:
+            raise ValueError(f"筛选模式必须是: {', '.join(allowed)}")
+        return v
+
+
+class CompoundSearchResult(BaseModel):
+    id: int
+    element_symbols: str
+    element_list: List[str]
+    paper_count: int
 
     class Config:
         from_attributes = True

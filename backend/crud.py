@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_, func
 from typing import List, Optional
 import math
+import json
 from backend import models, schemas
 
 
@@ -61,10 +62,17 @@ def get_or_create_compound(db: Session, element_symbols: List[str]) -> models.Co
     ).first()
 
     if compound:
+        if not getattr(compound, "element_list", None):
+            compound.element_list = json.dumps(sorted_symbols)
+            db.commit()
+            db.refresh(compound)
         return compound
 
     # 创建新的元素组合
-    compound = models.Compound(element_symbols=compound_key)
+    compound = models.Compound(
+        element_symbols=compound_key,
+        element_list=json.dumps(sorted_symbols)
+    )
     db.add(compound)
     db.flush()  # 获取ID但不提交
 
@@ -88,9 +96,64 @@ def get_compound_by_symbols(db: Session, element_symbols: List[str]) -> Optional
     """根据元素符号获取元素组合"""
     sorted_symbols = sorted(set(element_symbols))
     compound_key = "-".join(sorted_symbols)
-    return db.query(models.Compound).filter(
+    compound = db.query(models.Compound).filter(
         models.Compound.element_symbols == compound_key
     ).first()
+    if compound and not getattr(compound, "element_list", None):
+        compound.element_list = json.dumps(sorted_symbols)
+        db.commit()
+        db.refresh(compound)
+    return compound
+
+
+def search_compounds_by_elements(db: Session, element_symbols: List[str], mode: str) -> List[dict]:
+    """按照选择模式筛选元素组合"""
+    allowed_modes = {'only', 'combination', 'contains'}
+    mode = mode if mode in allowed_modes else 'combination'
+    selection = sorted(set(element_symbols))
+    if not selection:
+        return []
+
+    selection_set = set(selection)
+    compounds = db.query(models.Compound).all()
+    matched: List[dict] = []
+
+    def parse_elements(raw: Optional[str]) -> List[str]:
+        if not raw:
+            return []
+        try:
+            if raw.strip().startswith('['):
+                return json.loads(raw)
+        except Exception:
+            pass
+        return [part for part in raw.split("-") if part]
+
+    for compound in compounds:
+        elements = parse_elements(compound.element_list) or parse_elements(compound.element_symbols)
+        elements_sorted = sorted(set(elements))
+        element_set = set(elements_sorted)
+        if not element_set:
+            continue
+
+        match = False
+        if mode == 'only':
+            match = element_set == selection_set
+        elif mode == 'combination':
+            match = element_set.issubset(selection_set)
+        else:  # contains
+            match = selection_set.issubset(element_set)
+
+        if match:
+            paper_count = get_compound_papers_count(db, compound.id)
+            matched.append({
+                "id": compound.id,
+                "element_symbols": compound.element_symbols,
+                "element_list": elements_sorted,
+                "paper_count": paper_count
+            })
+
+    matched.sort(key=lambda item: (len(item["element_list"]), item["element_symbols"]))
+    return matched
 
 
 def check_compound_has_papers(db: Session, element_symbols: List[str]) -> bool:

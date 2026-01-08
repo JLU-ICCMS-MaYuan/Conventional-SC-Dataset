@@ -4,6 +4,11 @@ let uploadModal, imageModal;
 let selectedFiles = [];
 let currentReviewStatus = 'all'; // 当前选择的审核状态筛选
 const paperCache = new Map();
+const urlParams = new URLSearchParams(window.location.search);
+let viewMode = urlParams.get('mode') || 'only';
+if (!['only', 'combination', 'contains'].includes(viewMode)) {
+    viewMode = 'only';
+}
 
 function getAuthState() {
     return window.authState ? window.authState.get() : null;
@@ -12,6 +17,26 @@ function getAuthState() {
 function sanitizeFilename(name) {
     if (!name) return 'paper';
     return name.replace(/[\\/:*?"<>|]+/g, '_');
+}
+
+function getSelectedElementsFromPath() {
+    return elementSymbols ? elementSymbols.split('-').filter(Boolean) : [];
+}
+
+function getModeDescription(mode = viewMode) {
+    const map = {
+        only: '模式：仅显示当前组合',
+        combination: '模式：显示所有子组合（已存在组合）',
+        contains: '模式：显示包含所选元素的组合'
+    };
+    return map[mode] || map.only;
+}
+
+function updateModeSubtitle(extraText) {
+    const subtitleEl = document.getElementById('compound-subtitle');
+    if (!subtitleEl) return;
+    const desc = getModeDescription();
+    subtitleEl.innerHTML = extraText ? `${desc} · ${extraText}` : desc;
 }
 
 function calculateSFactor(tcValue, pressureValue) {
@@ -71,7 +96,11 @@ async function loadCompoundInfo() {
         if (response.ok) {
             const data = await response.json();
             document.getElementById('compound-title').textContent = `${data.element_symbols} 系统超导体`;
-            document.getElementById('compound-subtitle').textContent = `共收录 ${data.paper_count} 篇文献`;
+            if (viewMode === 'only') {
+                updateModeSubtitle(`当前组合共收录 ${data.paper_count} 篇文献`);
+            } else {
+                updateModeSubtitle('正在汇总相关组合文献…');
+            }
         } else {
             document.getElementById('compound-title').textContent = '元素组合不存在';
         }
@@ -86,46 +115,17 @@ async function loadPapers(searchParams = {}) {
     container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-3">加载中...</p></div>';
 
     try {
-        // 构建查询参数
-        const params = new URLSearchParams();
-        if (searchParams.keyword) params.append('keyword', searchParams.keyword);
-        if (searchParams.year_min) params.append('year_min', searchParams.year_min);
-        if (searchParams.year_max) params.append('year_max', searchParams.year_max);
-        if (currentReviewStatus !== 'all') params.append('review_status', currentReviewStatus);
-
-        const response = await fetch(`/api/papers/compound/${elementSymbols}?${params}`);
-
-        if (!response.ok) {
-            throw new Error('加载失败');
+        const queryString = buildQueryString(searchParams);
+        if (viewMode === 'only') {
+            const papers = await fetchPapersForCombination(elementSymbols, queryString);
+            renderSingleCombination(container, papers);
+            updateModeSubtitle(`共 ${papers.length} 篇文献`);
+        } else {
+            await renderMultipleCombinations(container, queryString);
         }
-
-        const papers = await response.json();
-
-        if (papers.length === 0) {
-            const statusMap = {
-                'approved': '已通过',
-                'unreviewed': '未审核',
-                'rejected': '已拒绝'
-            };
-            const statusText = statusMap[currentReviewStatus] || '';
-            container.innerHTML = `
-                <div class="text-center py-5">
-                    <div class="alert alert-warning" role="alert">
-                        <h4 class="alert-heading">🎉 暂无${statusText}文献</h4>
-                        <p class="mb-0">这个元素组合还没有${statusText}文献记录${currentReviewStatus === 'all' ? '，<strong>成为第一个贡献者吧！</strong>' : ''}</p>
-                        ${currentReviewStatus === 'all' ? '<hr><p class="mb-0">点击上方的 <strong>"上传文献"</strong> 按钮即可添加第一篇文献</p>' : ''}
-                    </div>
-                </div>
-            `;
-            return;
-        }
-
-        // 渲染文献列表
-        container.innerHTML = papers.map(paper => renderPaperCard(paper)).join('');
-
     } catch (error) {
         console.error('加载文献失败:', error);
-        container.innerHTML = '<div class="alert alert-danger">加载失败，请稍后重试</div>';
+        container.innerHTML = `<div class="alert alert-danger">加载失败：${error.message}</div>`;
     }
 }
 
@@ -133,6 +133,124 @@ async function loadPapers(searchParams = {}) {
 function filterByReviewStatus(status) {
     currentReviewStatus = status;
     loadPapers();
+}
+
+function buildQueryString(searchParams = {}) {
+    const params = new URLSearchParams();
+    if (searchParams.keyword) params.append('keyword', searchParams.keyword);
+    if (searchParams.year_min) params.append('year_min', searchParams.year_min);
+    if (searchParams.year_max) params.append('year_max', searchParams.year_max);
+    if (currentReviewStatus !== 'all') params.append('review_status', currentReviewStatus);
+    return params.toString();
+}
+
+async function fetchPapersForCombination(symbols, queryString) {
+    const url = queryString ? `/api/papers/compound/${symbols}?${queryString}` : `/api/papers/compound/${symbols}`;
+    const response = await fetch(url);
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.detail || '加载失败');
+    }
+    return data;
+}
+
+function renderSingleCombination(container, papers) {
+    if (!papers || papers.length === 0) {
+        container.innerHTML = renderEmptyState();
+        return;
+    }
+    container.innerHTML = papers.map(paper => renderPaperCard(paper)).join('');
+}
+
+async function renderMultipleCombinations(container, queryString) {
+    const combos = await fetchCombinationList(viewMode);
+    if (!combos || combos.length === 0) {
+        container.innerHTML = `
+            <div class="alert alert-info text-center">
+                <p class="mb-0">未找到符合条件的元素组合，请尝试切换筛选模式或重新选择元素。</p>
+            </div>
+        `;
+        updateModeSubtitle('暂无匹配的元素组合');
+        return;
+    }
+
+    const sections = await Promise.all(combos.map(async combo => {
+        try {
+            const papers = await fetchPapersForCombination(combo.element_symbols, queryString);
+            return { combo, papers };
+        } catch (error) {
+            return { combo, papers: [], error: error.message };
+        }
+    }));
+
+    const totalCount = sections.reduce((sum, section) => sum + section.papers.length, 0);
+    updateModeSubtitle(`共 ${totalCount} 篇文献，涉及 ${sections.length} 个组合`);
+    container.innerHTML = sections.map(section => renderCombinationSection(section)).join('');
+}
+
+async function fetchCombinationList(mode) {
+    const elements = getSelectedElementsFromPath();
+    const response = await fetch('/api/compounds/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            elements,
+            mode
+        })
+    });
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.detail || '组合检索失败');
+    }
+    return data;
+}
+
+function renderCombinationSection(section) {
+    const combo = section.combo;
+    const papers = section.papers || [];
+    const title = combo.element_symbols;
+    const elementsText = combo.element_list.join(' · ');
+    const countBadge = `<span class="badge bg-secondary ms-2">${papers.length} 篇</span>`;
+
+    let content = '';
+    if (section.error) {
+        content = `<div class="alert alert-danger">加载失败：${section.error}</div>`;
+    } else if (papers.length === 0) {
+        content = renderEmptyState(`组合 ${title} 暂无符合条件的文献`);
+    } else {
+        content = papers.map(paper => renderPaperCard(paper)).join('');
+    }
+
+    return `
+        <section class="mb-5">
+            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                <div>
+                    <h4 class="mb-0">${title}${countBadge}</h4>
+                    <small class="text-muted">元素：${elementsText}</small>
+                </div>
+            </div>
+            ${content}
+        </section>
+    `;
+}
+
+function renderEmptyState(customText) {
+    const statusMap = {
+        'approved': '已通过',
+        'unreviewed': '未审核',
+        'rejected': '已拒绝'
+    };
+    const statusText = statusMap[currentReviewStatus] || '';
+    const message = customText || `这个元素组合还没有${statusText}文献记录${currentReviewStatus === 'all' ? '，<strong>成为第一个贡献者吧！</strong>' : ''}`;
+    return `
+        <div class="text-center py-5">
+            <div class="alert alert-warning" role="alert">
+                <h4 class="alert-heading">🎉 暂无${statusText}文献</h4>
+                <p class="mb-0">${message}</p>
+                ${currentReviewStatus === 'all' && !customText ? '<hr><p class="mb-0">点击上方的 <strong>"上传文献"</strong> 按钮即可添加第一篇文献</p>' : ''}
+            </div>
+        </div>
+    `;
 }
 
 // 渲染文献卡片（简化版，点击展开）

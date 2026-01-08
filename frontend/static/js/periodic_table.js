@@ -141,13 +141,14 @@ const ELEMENTS_DATA = [
 
 // 全局变量
 let selectedElements = new Set();
-let loadingModal;
+const MODE_STORAGE_KEY = 'element_selection_mode';
+let selectionMode = localStorage.getItem(MODE_STORAGE_KEY) || 'combination';
 
 // 初始化
 document.addEventListener('DOMContentLoaded', function() {
-    loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
     renderPeriodicTable();
     setupEventListeners();
+    initSelectionModeControls();
 });
 
 // 渲染元素周期表
@@ -254,13 +255,42 @@ function setupEventListeners() {
     });
 }
 
-// 进入化合物页面
-async function enterCompoundPage() {
-    const elementSymbols = Array.from(selectedElements).sort().join('-');
+function initSelectionModeControls() {
+    const modeRadios = document.querySelectorAll('input[name="selection-mode"]');
+    let hasMatch = false;
+    modeRadios.forEach(radio => {
+        if (radio.value === selectionMode) {
+            radio.checked = true;
+            hasMatch = true;
+        }
+        radio.addEventListener('change', () => {
+            if (radio.checked) {
+                selectionMode = radio.value;
+                localStorage.setItem(MODE_STORAGE_KEY, selectionMode);
+            }
+        });
+    });
 
-    // 无论是否有文献，都直接跳转到化合物页面
-    // 让用户可以成为第一个贡献者！
-    window.location.href = `/compound/${elementSymbols}`;
+    if (!hasMatch) {
+        selectionMode = 'combination';
+        localStorage.setItem(MODE_STORAGE_KEY, selectionMode);
+        const defaultRadio = document.getElementById('mode-combination');
+        if (defaultRadio) defaultRadio.checked = true;
+    }
+}
+
+// 进入化合物页面
+function enterCompoundPage() {
+    const elements = Array.from(selectedElements).sort();
+    if (elements.length === 0) return;
+
+    const params = new URLSearchParams();
+    if (selectionMode) {
+        params.set('mode', selectionMode);
+    }
+    const query = params.toString();
+    const target = query ? `/compound/${elements.join('-')}?${query}` : `/compound/${elements.join('-')}`;
+    window.location.href = target;
 }
 
 // 清除选择

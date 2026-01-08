@@ -3,6 +3,8 @@
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from typing import List
+import json
 
 from backend.database import get_db
 from backend import crud, schemas
@@ -102,6 +104,16 @@ def get_compound_info(
     return {
         "id": compound.id,
         "element_symbols": compound.element_symbols,
+        "element_list": json.loads(compound.element_list) if compound.element_list else symbols,
         "created_at": compound.created_at,
         "paper_count": paper_count
     }
+
+
+@router.post("/search", response_model=List[schemas.CompoundSearchResult])
+def search_compounds(
+    request: schemas.CompoundSearchRequest,
+    db: Session = Depends(get_db)
+):
+    """根据筛选模式搜索元素组合列表"""
+    return crud.search_compounds_by_elements(db, request.elements, request.mode)
