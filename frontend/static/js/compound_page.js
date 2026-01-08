@@ -183,9 +183,20 @@ async function renderMultipleCombinations(container, queryString) {
         }
     }));
 
-    const totalCount = sections.reduce((sum, section) => sum + section.papers.length, 0);
-    updateModeSubtitle(`共 ${totalCount} 篇文献，涉及 ${sections.length} 个组合`);
-    container.innerHTML = sections.map(section => renderCombinationSection(section)).join('');
+    const validSections = sections.filter(section => (section.papers && section.papers.length > 0));
+    if (validSections.length === 0) {
+        container.innerHTML = `
+            <div class="alert alert-warning text-center">
+                <p class="mb-0">当前筛选条件下没有可展示的文献，请尝试切换筛选模式或放宽筛选条件。</p>
+            </div>
+        `;
+        updateModeSubtitle('暂无符合条件的文献');
+        return;
+    }
+
+    const totalCount = validSections.reduce((sum, section) => sum + section.papers.length, 0);
+    updateModeSubtitle(`共 ${totalCount} 篇文献，涉及 ${validSections.length} 个组合`);
+    container.innerHTML = validSections.map(section => renderCombinationSection(section)).join('');
 }
 
 async function fetchCombinationList(mode) {
