@@ -3,9 +3,15 @@ let elementSymbols = '';
 let uploadModal, imageModal;
 let selectedFiles = [];
 let currentReviewStatus = 'all'; // 当前选择的审核状态筛选
+const paperCache = new Map();
 
 function getAuthState() {
     return window.authState ? window.authState.get() : null;
+}
+
+function sanitizeFilename(name) {
+    if (!name) return 'paper';
+    return name.replace(/[\\/:*?"<>|]+/g, '_');
 }
 
 function calculateSFactor(tcValue, pressureValue) {
@@ -131,6 +137,7 @@ function filterByReviewStatus(status) {
 
 // 渲染文献卡片（简化版，点击展开）
 function renderPaperCard(paper) {
+    paperCache.set(paper.id, paper);
     const authors = paper.authors ? JSON.parse(paper.authors) : [];
     const firstAuthor = authors.length > 0 ? authors[0] : '未知作者';
     const correspondingAuthor = authors.length > 0 ? authors[authors.length - 1] : '未知作者';
@@ -229,6 +236,11 @@ function renderPaperCard(paper) {
                                     ${physicalDataHtml}
                                 </div>
                                 <strong>DOI:</strong> <code>${paper.doi}</code>
+                                <div class="mt-2">
+                                    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="downloadPaperRIS(${paper.id})">
+                                        RIS导出
+                                    </button>
+                                </div>
                             </p>
 
                             ${paper.abstract ? `
@@ -318,6 +330,62 @@ function renderImagePlaceholders(paperId, count) {
 function viewImage(imageUrl) {
     document.getElementById('modal-image').src = imageUrl;
     imageModal.show();
+}
+
+function buildRISContent(paper) {
+    const lines = ['TY  - JOUR'];
+    const authors = paper.authors ? JSON.parse(paper.authors) : [];
+    authors.forEach(author => {
+        if (author) {
+            lines.push(`AU  - ${author}`);
+        }
+    });
+    if (paper.title) {
+        lines.push(`TI  - ${paper.title}`);
+    }
+    if (paper.journal) {
+        lines.push(`JO  - ${paper.journal}`);
+    }
+    if (paper.year) {
+        lines.push(`PY  - ${paper.year}`);
+    }
+    if (paper.volume) {
+        lines.push(`VL  - ${paper.volume}`);
+    }
+    if (paper.issue) {
+        lines.push(`IS  - ${paper.issue}`);
+    }
+    if (paper.pages) {
+        lines.push(`SP  - ${paper.pages}`);
+    }
+    if (paper.doi) {
+        lines.push(`DO  - ${paper.doi}`);
+    }
+    if (paper.chemical_formula) {
+        lines.push(`N1  - 化学式 ${paper.chemical_formula}`);
+    }
+    lines.push('ER  - ');
+    return lines.join('\n');
+}
+
+function downloadPaperRIS(paperId) {
+    const paper = paperCache.get(paperId);
+    if (!paper) {
+        alert('未找到对应的文献信息');
+        return;
+    }
+
+    const risContent = buildRISContent(paper);
+    const blob = new Blob([risContent], { type: 'application/x-research-info-systems' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const fileBase = sanitizeFilename(paper.title || paper.doi || `paper-${paperId}`);
+    link.href = url;
+    link.download = `${fileBase}.ris`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 }
 
 // 搜索文献
