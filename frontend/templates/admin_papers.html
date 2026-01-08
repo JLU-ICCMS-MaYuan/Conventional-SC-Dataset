@@ -61,7 +61,7 @@
 
     <div class="container-fluid mt-4">
         <h2>全局文献管理</h2>
-        <p class="text-muted">查看和管理所有文献，支持多维度筛选和批量操作</p>
+        <p class="text-muted">查看和管理所有文献，支持多维度筛选和操作</p>
 
         <!-- 筛选区域 -->
         <div class="filter-section">
@@ -126,7 +126,7 @@
             </div>
         </div>
 
-        <!-- 批量操作栏 -->
+        <!-- 操作栏 -->
         <div class="batch-actions" id="batchActions">
             <div class="d-flex align-items-center justify-content-between">
                 <div>
@@ -135,14 +135,14 @@
                 </div>
                 <div class="btn-group">
                     <select class="form-select form-select-sm me-2" id="batchStatusSelect" style="width: auto;">
-                        <option value="approved">✅ 批量通过</option>
-                        <option value="rejected">❌ 批量拒绝</option>
-                        <option value="modifying">🛠️ 批量待修改</option>
-                        <option value="admin_only">🔒 批量仅管理员可见</option>
+                        <option value="approved">✅ 通过</option>
+                        <option value="rejected">❌ 拒绝</option>
+                        <option value="modifying">🛠️ 待修改</option>
+                        <option value="admin_only">🔒 仅管理员可见</option>
                         <option value="unreviewed">⏳ 撤回审核</option>
                         <option value="chart_show" data-superadmin-only="true">📈 显示在图表</option>
                         <option value="chart_hide" data-superadmin-only="true">📉 从图表隐藏</option>
-                        <option value="delete" data-superadmin-only="true">🗑️ 批量删除</option>
+                        <option value="delete" data-superadmin-only="true">🗑️ 删除</option>
                     </select>
                     <button class="btn btn-success btn-sm" onclick="batchReview()">应用操作</button>
                     <button class="btn btn-secondary btn-sm" onclick="clearSelection()">取消选择</button>

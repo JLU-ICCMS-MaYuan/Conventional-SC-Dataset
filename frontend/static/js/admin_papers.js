@@ -130,7 +130,6 @@ function renderPapers(papers) {
                 <thead>
                     <tr>
                         <th width="40">
-                            <input type="checkbox" id="selectAllTable" class="paper-checkbox" onchange="toggleSelectAll()">
                         </th>
                         <th>标题</th>
                         <th>元素组合</th>
@@ -292,7 +291,7 @@ function renderPagination() {
     document.getElementById('pagination').style.display = 'block';
 }
 
-// ========== 批量操作 ==========
+// ========== 操作 ==========
 
 function togglePaperSelection(paperId) {
     if (selectedPapers.has(paperId)) {
@@ -397,10 +396,10 @@ async function batchReview() {
             clearSelection();
             loadPapers(currentPage);
         } else {
-            alert('批量操作失败: ' + (data.detail || '未知错误'));
+            alert('操作失败: ' + (data.detail || '未知错误'));
         }
     } catch (error) {
-        console.error('批量操作失败:', error);
+        console.error('操作失败:', error);
         alert('操作失败，请检查网络连接');
     }
 }
@@ -439,7 +438,7 @@ async function batchChartVisibility(show) {
             alert('操作失败: ' + (data.detail || '未知错误'));
         }
     } catch (error) {
-        console.error('批量设置图表显示失败:', error);
+        console.error('设置图表显示失败:', error);
         alert('操作失败，请检查网络连接');
     }
 }
@@ -451,7 +450,7 @@ async function batchDelete() {
     }
 
     // 三重确认
-    if (!confirm(`⚠️ 警告：确定要批量删除 ${selectedPapers.size} 篇文献吗？\n\n此操作将删除所有选中文献及其截图，且不可撤销！`)) {
+    if (!confirm(`⚠️ 警告：确定要删除 ${selectedPapers.size} 篇文献吗？\n\n此操作将删除所有选中文献及其截图，且不可撤销！`)) {
         return;
     }
 
@@ -480,15 +479,15 @@ async function batchDelete() {
         const data = await response.json();
 
         if (response.ok) {
-            alert(`批量删除完成！\n已删除：${data.deleted_count}篇文献`);
+            alert(`删除完成！\n已删除：${data.deleted_count}篇文献`);
             clearSelection();
             loadPapers(currentPage);
         } else {
-            alert('批量删除失败: ' + (data.detail || '未知错误'));
+            alert('删除失败: ' + (data.detail || '未知错误'));
         }
     } catch (error) {
-        console.error('批量删除失败:', error);
-        alert('批量删除失败，请检查网络连接');
+        console.error('删除失败:', error);
+        alert('删除失败，请检查网络连接');
     }
 }
 
