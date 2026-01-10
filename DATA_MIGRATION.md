@@ -162,6 +162,38 @@ railway run python -m backend.import_data
 
 ---
 
+## 🧩 Schema 升级：element_list 与超导类型标准化
+
+前端的元素组合筛选与图表依赖以下数据库结构，请在部署或恢复备份后执行一次升级脚本：
+- `compounds.element_list`：保存元素 JSON 列表，支持“仅包含/组合/包含所选元素”筛选
+- `papers.superconductor_type`：仅允许「铜基、铁基、镍基、高压氢化物、碳基、有机、其他超导」七大类
+
+### 运行升级脚本
+
+```bash
+# 如部署在 Railway/Render，请先设置数据库路径
+export DATABASE_PATH=/app/data/superconductor.db
+
+# 执行 schema 升级（幂等，可重复运行）
+python -m backend.migrations.schema_202502
+```
+
+脚本会自动：
+1. 检查并新增 `element_list` 列
+2. 依据 `element_symbols` 补写 JSON 列表
+3. 将 `conventional、carbon_organic` 等旧类型映射到七大类
+
+### 升级后快速自检
+
+```bash
+sqlite3 $DATABASE_PATH "SELECT element_symbols, element_list FROM compounds LIMIT 5;"
+sqlite3 $DATABASE_PATH "SELECT DISTINCT superconductor_type FROM papers;"
+```
+
+如仍出现空 `[]` 或旧类型值，可再次运行脚本或检查 `DATABASE_PATH` 是否指向持久化卷。
+
+---
+
 ## 🔄 定期备份建议
 
 ### 自动备份脚本

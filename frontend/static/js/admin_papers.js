@@ -7,6 +7,21 @@ let selectedPapers = new Set();
 let currentPage = 0;
 let totalPapers = 0;
 const pageSize = 20;
+const SUPER_TYPES = ['cuprate', 'iron_based', 'nickel_based', 'hydride', 'carbon', 'organic', 'others'];
+const LEGACY_SUPER_TYPES = {
+    'carbon_organic': 'carbon',
+    'conventional': 'others',
+    'other_conventional': 'others',
+    'unconventional': 'others',
+    'other_unconventional': 'others',
+    'unknown': 'others'
+};
+
+function normalizeSuperconductorType(value) {
+    if (!value) return 'others';
+    const normalized = LEGACY_SUPER_TYPES[value] || value;
+    return SUPER_TYPES.includes(normalized) ? normalized : 'others';
+}
 
 function calculateSFactor(tcValue, pressureValue) {
     const tc = parseFloat(tcValue);
@@ -180,18 +195,17 @@ function renderPapers(papers) {
 
         // 文章类型标签
         const articleTypeLabel = paper.article_type === 'theoretical' ? '理论' : '实验';
-        const scTypeLabel = {
+        const scTypeLabelMap = {
             'cuprate': '铜基',
             'iron_based': '铁基',
             'nickel_based': '镍基',
             'hydride': '高压氢化物',
-            'carbon_organic': '碳基与有机',
-            'other_conventional': '其他常规',
-            'other_unconventional': '其他非常规',
-            'unknown': '未知',
-            'conventional': '常规 (旧)',
-            'unconventional': '非常规 (旧)'
-        }[paper.superconductor_type] || '未知';
+            'carbon': '碳基',
+            'organic': '有机',
+            'others': '其他超导'
+        };
+        const normalizedType = normalizeSuperconductorType(paper.superconductor_type);
+        const scTypeLabel = scTypeLabelMap[normalizedType] || '其他超导';
 
         html += `
             <tr ${isSelected ? 'class="table-active"' : ''}>
@@ -573,7 +587,7 @@ async function openEditModal(paperId) {
         setVal('editAuthors', authorsStr);
         
         setVal('editArticleType', paper.article_type || 'experimental');
-        setVal('editSuperconductorType', paper.superconductor_type || 'unknown');
+        setVal('editSuperconductorType', normalizeSuperconductorType(paper.superconductor_type));
         setVal('editChemicalFormula', paper.chemical_formula || '');
         setVal('editCrystalStructure', paper.crystal_structure || '');
         

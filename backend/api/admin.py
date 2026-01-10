@@ -13,6 +13,28 @@ from backend.email_service import email_service
 
 router = APIRouter(prefix="/api/admin", tags=["管理员"])
 
+SUPERCONDUCTOR_TYPES = {"cuprate", "iron_based", "nickel_based", "hydride", "carbon", "organic", "others"}
+LEGACY_SUPERCONDUCTOR_MAP = {
+    "carbon_organic": "carbon",
+    "conventional": "others",
+    "other_conventional": "others",
+    "unconventional": "others",
+    "other_unconventional": "others",
+    "unknown": "others"
+}
+
+
+def normalize_superconductor_type_value(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    normalized = (LEGACY_SUPERCONDUCTOR_MAP.get(value, value) or "").strip()
+    if normalized not in SUPERCONDUCTOR_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="无效的超导体类型"
+        )
+    return normalized
+
 
 # Pydantic 模型
 class PendingAdminResponse(BaseModel):
@@ -297,7 +319,7 @@ class UpdatePaperRequest(BaseModel):
     year: Optional[int] = None
     abstract: Optional[str] = None
     article_type: Optional[str] = None  # theoretical 或 experimental
-    superconductor_type: Optional[str] = None  # conventional, unconventional, unknown
+    superconductor_type: Optional[str] = None  # cuprate, iron_based, nickel_based, hydride, carbon, organic, others
     chemical_formula: Optional[str] = None
     crystal_structure: Optional[str] = None
     contributor_name: Optional[str] = None
@@ -314,7 +336,7 @@ class UpdatePaperRequest(BaseModel):
 async def get_all_papers(
     review_status: Optional[str] = None,  # unreviewed, approved, rejected, modifying
     article_type: Optional[str] = None,  # theoretical, experimental
-    superconductor_type: Optional[str] = None,  # conventional, unconventional, unknown
+    superconductor_type: Optional[str] = None,  # cuprate, iron_based, nickel_based, hydride, carbon, organic, others
     show_in_chart: Optional[bool] = None,
     year_min: Optional[int] = None,
     year_max: Optional[int] = None,
@@ -345,8 +367,10 @@ async def get_all_papers(
         query = query.filter(Paper.article_type == article_type)
 
     # 超导体类型筛选
-    if superconductor_type:
-        query = query.filter(Paper.superconductor_type == superconductor_type)
+    normalized_super_type = normalize_superconductor_type_value(superconductor_type) if superconductor_type else None
+
+    if normalized_super_type:
+        query = query.filter(Paper.superconductor_type == normalized_super_type)
 
     # 年份范围筛选
     if year_min:
@@ -486,17 +510,9 @@ async def update_paper(
             detail="文章类型必须是 theoretical 或 experimental"
         )
 
-    # 验证超导体类型
-    if request.superconductor_type and request.superconductor_type not in [
-        "conventional", "unconventional", "unknown", 
-        "cuprate", "iron_based", "nickel_based", 
-        "hydride", "carbon_organic", 
-        "other_conventional", "other_unconventional"
-    ]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="无效的超导体类型"
-        )
+    normalized_super_type = None
+    if request.superconductor_type:
+        normalized_super_type = normalize_superconductor_type_value(request.superconductor_type)
 
     # 验证审核状态
     if request.review_status and request.review_status not in [
@@ -516,6 +532,8 @@ async def update_paper(
 
     # 更新字段（只更新非None的字段）
     update_data = request.dict(exclude_unset=True)
+    if normalized_super_type:
+        update_data["superconductor_type"] = normalized_super_type
     
     # 特殊处理物理数据
     if "physical_data" in update_data:

@@ -297,14 +297,12 @@ function renderPaperCard(paper) {
         'iron_based': '<span class="badge" style="background-color: rgba(75, 192, 192, 0.8);">🟤 铁基</span>',
         'nickel_based': '<span class="badge" style="background-color: rgba(75, 239, 58, 0.8);">🟠 镍基</span>',
         'hydride': '<span class="badge" style="background-color: rgba(153, 102, 255, 0.8);">💧 高压氢化物</span>',
-        'carbon_organic': '<span class="badge" style="background-color: rgba(255, 206, 86, 0.8);">🟢 碳基与有机</span>',
-        'other_conventional': '<span class="badge" style="background-color: rgba(54, 162, 235, 0.8);">🔵 其他常规</span>',
-        'other_unconventional': '<span class="badge" style="background-color: rgba(204, 70, 70, 0.8);">🟣 其他非常规</span>',
-        'unknown': '<span class="badge bg-secondary">⚪ 未知类型</span>',
-        'conventional': '<span class="badge" style="background-color: rgba(54, 162, 235, 0.8);">🔵 常规超导</span>',
-        'unconventional': '<span class="badge" style="background-color: rgba(204, 70, 70, 0.8);">🟣 非常规超导</span>'
+        'carbon': '<span class="badge" style="background-color: rgba(54, 162, 235, 0.8);">🔵 碳基</span>',
+        'organic': '<span class="badge" style="background-color: rgba(255, 206, 86, 0.8);">🟢 有机</span>',
+        'others': '<span class="badge" style="background-color: rgba(204, 70, 70, 0.8);">⚪ 其他超导</span>'
     };
-    const scTypeBadge = scTypeBadges[paper.superconductor_type] || '';
+
+    const scTypeBadge = scTypeBadges[paper.superconductor_type] || legacyScTypeBadges[paper.superconductor_type] || scTypeBadges.others;
 
     // 审核状态徽章（从后端数据获取）
     const statusMap = {

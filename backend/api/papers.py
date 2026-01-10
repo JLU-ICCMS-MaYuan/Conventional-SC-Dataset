@@ -19,6 +19,24 @@ from backend.security import (
     get_current_admin
 )
 
+SUPERCONDUCTOR_TYPES = {"cuprate", "iron_based", "nickel_based", "hydride", "carbon", "organic", "others"}
+LEGACY_SC_TYPE_MAP = {
+    "carbon_organic": "carbon",
+    "conventional": "others",
+    "other_conventional": "others",
+    "unconventional": "others",
+    "other_unconventional": "others",
+    "unknown": "others"
+}
+
+
+def normalize_superconductor_type(value: str) -> str:
+    """兼容旧数据：将历史分类映射到七大类"""
+    if not value:
+        return "others"
+    normalized = LEGACY_SC_TYPE_MAP.get(value, value)
+    return normalized if normalized in SUPERCONDUCTOR_TYPES else "others"
+
 router = APIRouter(prefix="/api/papers", tags=["papers"])
 
 
@@ -27,7 +45,7 @@ async def create_paper(
     doi: str = Form(...),
     element_symbols: str = Form(...),  # JSON字符串
     article_type: str = Form(...),  # 文章类型: theoretical 或 experimental
-    superconductor_type: str = Form(...),  # 超导体类型: cuprate, iron_based, nickel_based, hydride, carbon_organic, other_conventional, other_unconventional, unknown
+    superconductor_type: str = Form(...),  # 超导体类型: cuprate, iron_based, nickel_based, hydride, carbon, organic, others
     physical_data: str = Form(...),  # JSON字符串，包含多组物理参数
     chemical_formula: Optional[str] = Form(None),
     crystal_structure: Optional[str] = Form(None),
@@ -390,6 +408,7 @@ def get_chart_data(db: Session = Depends(get_db)):
     
     result = []
     for paper in papers:
+        normalized_sc_type = normalize_superconductor_type(paper.superconductor_type)
         for data in paper.physical_parameters:
             if data.pressure is not None and data.tc is not None:
                 result.append({
@@ -399,6 +418,6 @@ def get_chart_data(db: Session = Depends(get_db)):
                     "label": paper.chemical_formula or paper.title[:20],
                     "doi": paper.doi,
                     "type": paper.article_type,
-                    "sc_type": paper.superconductor_type
+                    "sc_type": normalized_sc_type
                 })
     return result

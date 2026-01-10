@@ -92,7 +92,7 @@ class Paper(Base):
 
     # 用户必填的分类字段
     article_type = Column(String(20), nullable=False)  # 文章类型: 'theoretical' 或 'experimental'
-    superconductor_type = Column(String(50), nullable=False)  # 超导体类型: 'conventional', 'unconventional', 'unknown', etc.
+    superconductor_type = Column(String(50), nullable=False)  # 超导体类型: cuprate, iron_based, nickel_based, hydride, carbon, organic, others
 
     # 用户可选填写的字段
     chemical_formula = Column(String(200))  # 化学式，如 "YBa₂Cu₃O₇"

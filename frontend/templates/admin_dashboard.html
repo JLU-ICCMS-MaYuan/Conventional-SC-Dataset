@@ -106,12 +106,9 @@
                                     <option value="iron_based">铁基</option>
                                     <option value="nickel_based">镍基</option>
                                     <option value="hydride">高压氢化物</option>
-                                    <option value="carbon_organic">碳基与有机</option>
-                                    <option value="other_conventional">其他常规超导体</option>
-                                    <option value="other_unconventional">其他非常规超导体</option>
-                                    <option value="unknown">未知</option>
-                                    <option value="conventional">常规 (旧)</option>
-                                    <option value="unconventional">非常规 (旧)</option>
+                                    <option value="carbon">碳基</option>
+                                    <option value="organic">有机</option>
+                                    <option value="others">其他超导</option>
                                 </select>
                             </div>
                         </div>
@@ -178,6 +175,21 @@
         let token = '';
         let currentUser = null;
         let editModal = null;
+        const SUPER_TYPES = ['cuprate', 'iron_based', 'nickel_based', 'hydride', 'carbon', 'organic', 'others'];
+        const LEGACY_SUPER_TYPES = {
+            'carbon_organic': 'carbon',
+            'conventional': 'others',
+            'other_conventional': 'others',
+            'unconventional': 'others',
+            'other_unconventional': 'others',
+            'unknown': 'others'
+        };
+
+        function normalizeSuperconductorType(value) {
+            if (!value) return 'others';
+            const normalized = LEGACY_SUPER_TYPES[value] || value;
+            return SUPER_TYPES.includes(normalized) ? normalized : 'others';
+        }
 
         // 检查登录状态
         function checkAuth() {
@@ -429,7 +441,7 @@
                 document.getElementById('editVolume').value = paper.volume || '';
                 document.getElementById('editAuthors').value = paper.authors || '';
                 document.getElementById('editArticleType').value = paper.article_type || 'experimental';
-                document.getElementById('editSuperconductorType').value = paper.superconductor_type || 'unknown';
+                document.getElementById('editSuperconductorType').value = normalizeSuperconductorType(paper.superconductor_type);
                 document.getElementById('editReviewStatus').value = paper.review_status || 'unreviewed';
                 document.getElementById('editChemicalFormula').value = paper.chemical_formula || '';
                 document.getElementById('editCrystalStructure').value = paper.crystal_structure || '';

@@ -192,9 +192,9 @@
                     iron: getCSSVar('--sc-color-iron'),
                     nickel: getCSSVar('--sc-color-nickel'),
                     hydride: getCSSVar('--sc-color-hydride'),
+                    carbon: getCSSVar('--sc-color-carbon'),
                     organic: getCSSVar('--sc-color-organic'),
-                    conventional: getCSSVar('--sc-color-conventional'),
-                    unconventional: getCSSVar('--sc-color-unconventional'),
+                    others: getCSSVar('--sc-color-others'),
                     unknown: getCSSVar('--sc-color-unknown')
                 };
                 const shapes = {
@@ -231,9 +231,9 @@
                             { label: 'Legend: 铁基', backgroundColor: colors.iron, data: [], pointStyle: 'rect' },
                             { label: 'Legend: 镍基', backgroundColor: colors.nickel, data: [], pointStyle: 'rect' },
                             { label: 'Legend: 高压氢化物', backgroundColor: colors.hydride, data: [], pointStyle: 'rect' },
-                            { label: 'Legend: 碳基与有机', backgroundColor: colors.organic, data: [], pointStyle: 'rect' },
-                            { label: 'Legend: 常规超导', backgroundColor: colors.conventional, data: [], pointStyle: 'rect' },
-                            { label: 'Legend: 非常规超导', backgroundColor: colors.unconventional, data: [], pointStyle: 'rect' }
+                            { label: 'Legend: 碳基', backgroundColor: colors.carbon, data: [], pointStyle: 'rect' },
+                            { label: 'Legend: 有机', backgroundColor: colors.organic, data: [], pointStyle: 'rect' },
+                            { label: 'Legend: 其他超导', backgroundColor: colors.others, data: [], pointStyle: 'rect' }
                         ]
                     },
                     options: {
@@ -253,7 +253,7 @@
                                 max: 400
                             }
                         },
-                        plugins: {
+                        plugins: {z
                             legend: { 
                                 position: 'bottom', 
                                 labels: { 
@@ -376,9 +376,9 @@
                             { label: 'Legend: 铁基', backgroundColor: colors.iron, data: [], pointStyle: 'rect' },
                             { label: 'Legend: 镍基', backgroundColor: colors.nickel, data: [], pointStyle: 'rect' },
                             { label: 'Legend: 高压氢化物', backgroundColor: colors.hydride, data: [], pointStyle: 'rect' },
-                            { label: 'Legend: 碳基与有机', backgroundColor: colors.organic, data: [], pointStyle: 'rect' },
-                            { label: 'Legend: 常规超导', backgroundColor: colors.conventional, data: [], pointStyle: 'rect' },
-                            { label: 'Legend: 非常规超导', backgroundColor: colors.unconventional, data: [], pointStyle: 'rect' }
+                            { label: 'Legend: 碳基', backgroundColor: colors.carbon, data: [], pointStyle: 'rect' },
+                            { label: 'Legend: 有机', backgroundColor: colors.organic, data: [], pointStyle: 'rect' },
+                            { label: 'Legend: 其他超导', backgroundColor: colors.others, data: [], pointStyle: 'rect' }
                         ]
                     },
                     options: {
@@ -488,11 +488,9 @@
                             'iron_based': colors.iron,
                             'nickel_based': colors.nickel,
                             'hydride': colors.hydride,
-                            'carbon_organic': colors.organic,
-                            'conventional': colors.conventional,
-                            'other_conventional': colors.conventional,
-                            'unconventional': colors.unconventional,
-                            'other_unconventional': colors.unconventional
+                            'carbon': colors.carbon,
+                            'organic': colors.organic,
+                            'others': colors.others,
                         };
 
                         const expData = data.filter(d => d.type === 'experimental');

@@ -85,7 +85,7 @@ class PaperCreate(BaseModel):
 
     # 必填分类字段
     article_type: str = Field(..., description="文章类型: theoretical 或 experimental")
-    superconductor_type: str = Field(..., description="超导体类型: conventional, unconventional, unknown")
+    superconductor_type: str = Field(..., description="超导体类型: cuprate, iron_based, nickel_based, hydride, carbon, organic, others")
 
     # 可选字段
     chemical_formula: Optional[str] = Field(None, description="化学式")
@@ -111,15 +111,19 @@ class PaperCreate(BaseModel):
 
     @validator('superconductor_type')
     def validate_superconductor_type(cls, v):
-        allowed_types = [
-            'conventional', 'unconventional', 'unknown', 
-            'cuprate', 'iron_based', 'nickel_based', 
-            'hydride', 'carbon_organic', 
-            'other_conventional', 'other_unconventional'
-        ]
-        if v not in allowed_types:
+        legacy_map = {
+            'carbon_organic': 'carbon',
+            'conventional': 'others',
+            'other_conventional': 'others',
+            'unconventional': 'others',
+            'other_unconventional': 'others',
+            'unknown': 'others'
+        }
+        normalized = legacy_map.get(v, v)
+        allowed_types = ['cuprate', 'iron_based', 'nickel_based', 'hydride', 'carbon', 'organic', 'others']
+        if normalized not in allowed_types:
             raise ValueError(f"超导体类型必须是: {', '.join(allowed_types)}")
-        return v
+        return normalized
 
 class PaperData(BaseModel):
     # 数据字段

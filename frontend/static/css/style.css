@@ -339,9 +339,9 @@ body {
     --sc-color-iron: rgba(75, 192, 192, 0.8);
     --sc-color-nickel: rgba(75, 239, 58, 0.8);
     --sc-color-hydride: rgba(153, 102, 255, 0.8);
+    --sc-color-carbon: rgba(54, 162, 235, 0.8);
     --sc-color-organic: rgba(255, 206, 86, 0.8);
-    --sc-color-conventional: rgba(54, 162, 235, 0.8);
-    --sc-color-unconventional: rgba(204, 70, 70, 0.8);
+    --sc-color-others: rgba(204, 70, 70, 0.8);
     --sc-color-unknown: rgba(201, 203, 207, 0.8);
 
     --sc-shape-experimental: rectRot;
