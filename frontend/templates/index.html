@@ -253,10 +253,11 @@
                                 max: 400
                             }
                         },
-                        plugins: {z
+                        plugins: {
                             legend: { 
                                 position: 'bottom', 
                                 labels: { 
+                                    color: '#666',
                                     usePointStyle: true,
                                     boxWidth: 10, 
                                     font: { size: 10 },
@@ -265,6 +266,10 @@
                                         return originalLabels.map(item => {
                                             if (item.text.startsWith('Legend: ')) {
                                                 item.text = item.text.replace('Legend: ', '');
+                                            }
+                                            if (item.text === '实验数据' || item.text === '理论预测') {
+                                                item.fillStyle = '#6c757d';
+                                                item.strokeStyle = '#6c757d';
                                             }
                                             return item;
                                         });
@@ -402,6 +407,7 @@
                             legend: { 
                                 position: 'bottom', 
                                 labels: { 
+                                    color: '#666',
                                     usePointStyle: true,
                                     boxWidth: 10, 
                                     font: { size: 10 },
@@ -413,6 +419,10 @@
                                             .map(item => {
                                                 if (item.text.startsWith('Legend: ')) {
                                                     item.text = item.text.replace('Legend: ', '');
+                                                }
+                                                if (item.text === '实验数据' || item.text === '理论预测') {
+                                                    item.fillStyle = '#6c757d';
+                                                    item.strokeStyle = '#6c757d';
                                                 }
                                                 return item;
                                             });
