@@ -8,10 +8,32 @@ from datetime import datetime
 from typing import List, Optional
 from backend.database import get_db
 from backend.models import User, Paper
-from backend.auth import get_current_superadmin, get_current_admin
+from backend.security import get_current_superadmin, get_current_admin
 from backend.email_service import email_service
 
 router = APIRouter(prefix="/api/admin", tags=["管理员"])
+
+SUPERCONDUCTOR_TYPES = {"cuprate", "iron_based", "nickel_based", "hydride", "carbon", "organic", "others"}
+LEGACY_SUPERCONDUCTOR_MAP = {
+    "carbon_organic": "carbon",
+    "conventional": "others",
+    "other_conventional": "others",
+    "unconventional": "others",
+    "other_unconventional": "others",
+    "unknown": "others"
+}
+
+
+def normalize_superconductor_type_value(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    normalized = (LEGACY_SUPERCONDUCTOR_MAP.get(value, value) or "").strip()
+    if normalized not in SUPERCONDUCTOR_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="无效的超导体类型"
+        )
+    return normalized
 
 
 # Pydantic 模型
@@ -28,8 +50,14 @@ class ApproveRequest(BaseModel):
     approved: bool  # True=通过，False=拒绝
 
 
+class ChartVisibilityRequest(BaseModel):
+    paper_ids: List[int]
+    show: bool
+
+
 class ReviewPaperRequest(BaseModel):
-    paper_id: int
+    status: str  # approved, rejected, modifying, unreviewed
+    comment: Optional[str] = None
 
 
 class PaperReviewInfo(BaseModel):
@@ -159,16 +187,22 @@ async def get_all_admins(
 
 # ========== 文献审核功能（所有管理员） ==========
 
-@router.post("/papers/{paper_id}/review", summary="标记文献为已审核")
+@router.post("/papers/{paper_id}/review", summary="更新文献审核状态")
 async def review_paper(
     paper_id: int,
+    request: ReviewPaperRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_admin)
 ):
     """
-    将文献标记为已审核
+    更新文献的审核状态
 
-    所有已批准的管理员都可以操作
+    支持的状态:
+    - approved: 已通过
+    - rejected: 已拒绝
+    - modifying: 待修改
+    - unreviewed: 未审核
+    - admin_only: 仅管理员可见
     """
     paper = db.query(Paper).filter(Paper.id == paper_id).first()
 
@@ -178,64 +212,33 @@ async def review_paper(
             detail="文献不存在"
         )
 
-    if paper.review_status == "reviewed":
+    valid_statuses = ["approved", "rejected", "modifying", "unreviewed", "admin_only"]
+    if request.status not in valid_statuses:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"该文献已被审核（审核人：{paper.reviewer.real_name}）"
+            detail=f"无效的状态。必须是以下之一: {', '.join(valid_statuses)}"
         )
 
-    # 标记为已审核
-    paper.review_status = "reviewed"
-    paper.reviewed_by = current_user.id
-    paper.reviewed_at = datetime.utcnow()
+    # 更新审核信息
+    paper.review_status = request.status
+    paper.review_comment = request.comment
+    
+    if request.status == "unreviewed":
+        paper.reviewed_by = None
+        paper.reviewed_at = None
+    else:
+        paper.reviewed_by = current_user.id
+        paper.reviewed_at = datetime.utcnow()
+        
     db.commit()
 
     return {
-        "message": "文献已标记为已审核",
+        "message": f"文献审核状态已更新为: {request.status}",
         "paper_id": paper.id,
         "doi": paper.doi,
-        "title": paper.title,
-        "reviewer": current_user.real_name,
-        "reviewed_at": paper.reviewed_at.isoformat()
-    }
-
-
-@router.post("/papers/{paper_id}/unreview", summary="取消文献审核状态")
-async def unreview_paper(
-    paper_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_admin)
-):
-    """
-    取消文献的审核状态（标记为未审核）
-
-    所有已批准的管理员都可以操作
-    """
-    paper = db.query(Paper).filter(Paper.id == paper_id).first()
-
-    if not paper:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="文献不存在"
-        )
-
-    if paper.review_status == "unreviewed":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="该文献尚未被审核"
-        )
-
-    # 取消审核状态
-    paper.review_status = "unreviewed"
-    paper.reviewed_by = None
-    paper.reviewed_at = None
-    db.commit()
-
-    return {
-        "message": "已取消文献审核状态",
-        "paper_id": paper.id,
-        "doi": paper.doi,
-        "title": paper.title
+        "status": paper.review_status,
+        "reviewer": current_user.real_name if paper.reviewed_by else None,
+        "reviewed_at": paper.reviewed_at.isoformat() if paper.reviewed_at else None
     }
 
 
@@ -268,6 +271,9 @@ async def get_unreviewed_papers(
                 "title": paper.title,
                 "year": paper.year,
                 "journal": paper.journal,
+                "tc": paper.physical_parameters[0].tc if paper.physical_parameters else None,
+                "pressure": paper.physical_parameters[0].pressure if paper.physical_parameters else None,
+                "s_factor": paper.physical_parameters[0].s_factor if paper.physical_parameters else None,
                 "created_at": paper.created_at.isoformat(),
                 "contributor_name": paper.contributor_name
             }
@@ -313,21 +319,25 @@ class UpdatePaperRequest(BaseModel):
     year: Optional[int] = None
     abstract: Optional[str] = None
     article_type: Optional[str] = None  # theoretical 或 experimental
-    superconductor_type: Optional[str] = None  # conventional, unconventional, unknown
+    superconductor_type: Optional[str] = None  # cuprate, iron_based, nickel_based, hydride, carbon, organic, others
     chemical_formula: Optional[str] = None
     crystal_structure: Optional[str] = None
     contributor_name: Optional[str] = None
     contributor_affiliation: Optional[str] = None
     notes: Optional[str] = None
+    physical_data: Optional[List[dict]] = None  # 物理数据数组
+    show_in_chart: Optional[bool] = None
+    review_status: Optional[str] = None
 
 
 # ========== 全局文献管理功能 ==========
 
 @router.get("/papers/all", summary="获取所有文献（支持多维度筛选）")
 async def get_all_papers(
-    review_status: Optional[str] = None,  # reviewed, unreviewed
+    review_status: Optional[str] = None,  # unreviewed, approved, rejected, modifying
     article_type: Optional[str] = None,  # theoretical, experimental
-    superconductor_type: Optional[str] = None,  # conventional, unconventional, unknown
+    superconductor_type: Optional[str] = None,  # cuprate, iron_based, nickel_based, hydride, carbon, organic, others
+    show_in_chart: Optional[bool] = None,
     year_min: Optional[int] = None,
     year_max: Optional[int] = None,
     keyword: Optional[str] = None,  # 搜索标题、DOI、化学式
@@ -357,14 +367,20 @@ async def get_all_papers(
         query = query.filter(Paper.article_type == article_type)
 
     # 超导体类型筛选
-    if superconductor_type:
-        query = query.filter(Paper.superconductor_type == superconductor_type)
+    normalized_super_type = normalize_superconductor_type_value(superconductor_type) if superconductor_type else None
+
+    if normalized_super_type:
+        query = query.filter(Paper.superconductor_type == normalized_super_type)
 
     # 年份范围筛选
     if year_min:
         query = query.filter(Paper.year >= year_min)
     if year_max:
         query = query.filter(Paper.year <= year_max)
+
+    # 图表显示筛选
+    if show_in_chart is not None:
+        query = query.filter(Paper.show_in_chart == show_in_chart)
 
     # 关键词搜索
     if keyword:
@@ -395,12 +411,17 @@ async def get_all_papers(
                 "article_type": paper.article_type,
                 "superconductor_type": paper.superconductor_type,
                 "chemical_formula": paper.chemical_formula,
+                "tc": paper.physical_parameters[0].tc if paper.physical_parameters else None,
+                "pressure": paper.physical_parameters[0].pressure if paper.physical_parameters else None,
+                "s_factor": paper.physical_parameters[0].s_factor if paper.physical_parameters else None,
                 "compound_symbols": paper.compound.element_symbols,
                 "review_status": paper.review_status,
+                "review_comment": paper.review_comment,
                 "reviewer_name": paper.reviewer.real_name if paper.reviewer else None,
                 "contributor_name": paper.contributor_name,
                 "created_at": paper.created_at.isoformat(),
-                "images_count": len(paper.images)
+                "images_count": len(paper.images),
+                "show_in_chart": paper.show_in_chart
             }
             for paper in papers
         ]
@@ -443,9 +464,21 @@ async def get_paper_detail(
         "contributor_name": paper.contributor_name,
         "contributor_affiliation": paper.contributor_affiliation,
         "notes": paper.notes,
+        "data": [
+            {
+                "pressure": d.pressure,
+                "tc": d.tc,
+                "lambda_val": d.lambda_val,
+                "omega_log": d.omega_log,
+                "n_ef": d.n_ef,
+                "s_factor": d.s_factor
+            } for d in paper.physical_parameters
+        ],
         "review_status": paper.review_status,
+        "review_comment": paper.review_comment,
         "created_at": paper.created_at.isoformat(),
-        "compound_symbols": paper.compound.element_symbols
+        "compound_symbols": paper.compound.element_symbols,
+        "show_in_chart": paper.show_in_chart
     }
 
 
@@ -477,11 +510,17 @@ async def update_paper(
             detail="文章类型必须是 theoretical 或 experimental"
         )
 
-    # 验证超导体类型
-    if request.superconductor_type and request.superconductor_type not in ["conventional", "unconventional", "unknown"]:
+    normalized_super_type = None
+    if request.superconductor_type:
+        normalized_super_type = normalize_superconductor_type_value(request.superconductor_type)
+
+    # 验证审核状态
+    if request.review_status and request.review_status not in [
+        "approved", "rejected", "modifying", "unreviewed", "admin_only"
+    ]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="超导体类型必须是 conventional, unconventional 或 unknown"
+            detail="无效的审核状态"
         )
 
     # 验证年份范围
@@ -493,6 +532,32 @@ async def update_paper(
 
     # 更新字段（只更新非None的字段）
     update_data = request.dict(exclude_unset=True)
+    if normalized_super_type:
+        update_data["superconductor_type"] = normalized_super_type
+    
+    # 特殊处理物理数据
+    if "physical_data" in update_data:
+        new_data = update_data.pop("physical_data")
+        if new_data is not None:
+            # 删除旧数据
+            from backend.models import PaperData
+            db.query(PaperData).filter(PaperData.paper_id == paper_id).delete()
+            db.flush() # 确保删除执行
+            # 插入新数据
+            for item in new_data:
+                db_data = PaperData(
+                    paper_id=paper_id,
+                    pressure=item.get("pressure"),
+                    tc=item.get("tc"),
+                    lambda_val=item.get("lambda_val"),
+                    omega_log=item.get("omega_log"),
+                    n_ef=item.get("n_ef"),
+                    s_factor=item.get("s_factor") if item.get("s_factor") is not None else crud.compute_s_factor(
+                        item.get("pressure"), item.get("tc")
+                    )
+                )
+                db.add(db_data)
+
     for field, value in update_data.items():
         if value is not None:
             setattr(paper, field, value)
@@ -555,6 +620,7 @@ async def delete_paper(
 class BatchReviewRequest(BaseModel):
     """批量审核请求模型"""
     paper_ids: List[int]
+    status: str = "approved"  # 默认批量设为已通过
 
 
 @router.post("/papers/batch-review", summary="批量审核文献")
@@ -583,25 +649,60 @@ async def batch_review_papers(
             detail="未找到指定的文献"
         )
 
-    # 批量标记为已审核
+    # 批量标记
     reviewed_count = 0
-    skipped_count = 0
     for paper in papers:
-        if paper.review_status == "unreviewed":
-            paper.review_status = "reviewed"
+        paper.review_status = request.status
+        if request.status == "unreviewed":
+            paper.reviewed_by = None
+            paper.reviewed_at = None
+        else:
             paper.reviewed_by = current_user.id
             paper.reviewed_at = datetime.utcnow()
-            reviewed_count += 1
-        else:
-            skipped_count += 1
+        reviewed_count += 1
 
     db.commit()
 
     return {
-        "message": f"批量审核完成",
+        "message": f"批量更新完成，已将 {reviewed_count} 篇文献设为 {request.status}",
         "reviewed_count": reviewed_count,
-        "skipped_count": skipped_count,
         "total_requested": len(request.paper_ids)
+    }
+
+
+@router.post("/papers/batch-chart-visibility", summary="批量设置图表显示（仅超级管理员）")
+async def batch_chart_visibility(
+    request: ChartVisibilityRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_superadmin)
+):
+    """
+    批量更新文献是否显示在图表中
+    """
+    if not request.paper_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="未提供文献ID列表"
+        )
+
+    papers = db.query(Paper).filter(Paper.id.in_(request.paper_ids)).all()
+
+    if not papers:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="未找到指定的文献"
+        )
+
+    for paper in papers:
+        paper.show_in_chart = request.show
+
+    db.commit()
+
+    visibility_text = "显示" if request.show else "隐藏"
+    return {
+        "message": f"已将 {len(papers)} 篇文献设置为 {visibility_text}",
+        "updated_count": len(papers),
+        "show": request.show
     }
 
 

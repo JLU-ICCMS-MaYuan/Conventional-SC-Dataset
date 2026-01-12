@@ -4,7 +4,7 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Annotated
 import json
 from io import BytesIO
 
@@ -14,6 +14,29 @@ from backend.utils.doi_resolver import get_doi_metadata, validate_doi
 from backend.utils.citation import generate_aps_citation, generate_bibtex_citation
 from backend.utils.image_processor import process_image, validate_image as validate_image_util
 
+from backend.security import (
+    get_current_user,
+    get_current_admin
+)
+
+SUPERCONDUCTOR_TYPES = {"cuprate", "iron_based", "nickel_based", "hydride", "carbon", "organic", "others"}
+LEGACY_SC_TYPE_MAP = {
+    "carbon_organic": "carbon",
+    "conventional": "others",
+    "other_conventional": "others",
+    "unconventional": "others",
+    "other_unconventional": "others",
+    "unknown": "others"
+}
+
+
+def normalize_superconductor_type(value: str) -> str:
+    """兼容旧数据：将历史分类映射到七大类"""
+    if not value:
+        return "others"
+    normalized = LEGACY_SC_TYPE_MAP.get(value, value)
+    return normalized if normalized in SUPERCONDUCTOR_TYPES else "others"
+
 router = APIRouter(prefix="/api/papers", tags=["papers"])
 
 
@@ -22,63 +45,79 @@ async def create_paper(
     doi: str = Form(...),
     element_symbols: str = Form(...),  # JSON字符串
     article_type: str = Form(...),  # 文章类型: theoretical 或 experimental
-    superconductor_type: str = Form(...),  # 超导体类型: conventional, unconventional, unknown
+    superconductor_type: str = Form(...),  # 超导体类型: cuprate, iron_based, nickel_based, hydride, carbon, organic, others
+    physical_data: str = Form(...),  # JSON字符串，包含多组物理参数
     chemical_formula: Optional[str] = Form(None),
     crystal_structure: Optional[str] = Form(None),
-    contributor_name: Optional[str] = Form("匿名贡献者"),
-    contributor_affiliation: Optional[str] = Form("未提供单位"),
+    contributor_name: Optional[str] = Form(None),
+    contributor_affiliation: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
-    images: List[UploadFile] = File(...),
-    db: Session = Depends(get_db)
+    images: List[UploadFile] = File(default=[]),
+    db: Session = Depends(get_db),
+    current_user: Annotated[schemas.User, Depends(get_current_user)] = None
 ):
     """
     上传新文献
-
-    必填字段:
-    - doi: DOI标识符
-    - element_symbols: 元素符号列表（JSON字符串）
-    - article_type: 文章类型 (theoretical 或 experimental)
-    - superconductor_type: 超导体类型 (conventional, unconventional, unknown)
-    - images: 文献截图（1-5张）
-
-    可选字段:
-    - chemical_formula: 化学式
-    - crystal_structure: 晶体结构类型
-    - contributor_name: 贡献者姓名
-    - contributor_affiliation: 贡献者单位
-    - notes: 备注说明
     """
-    # 1. 解析元素符号列表
+    # 强制登录
+    if not current_user:
+        raise HTTPException(status_code=401, detail="请先登录后再上传文献")
+
+    # 1. 解析参数
     try:
         symbols_list = json.loads(element_symbols)
         if not isinstance(symbols_list, list) or len(symbols_list) == 0:
             raise ValueError("元素符号列表不能为空")
+        
+        data_list = json.loads(physical_data)
+        if not isinstance(data_list, list) or len(data_list) == 0:
+            raise ValueError("物理数据不能为空")
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"元素符号格式错误: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"参数格式错误: {str(e)}")
 
     # 2. 验证截图数量
-    if len(images) < 1 or len(images) > 5:
+    # 如果没有文件上传，FastAPI 会返回一个空列表
+    images_to_process = [img for img in images if img.filename]
+    
+    if len(images_to_process) > 5:
         raise HTTPException(
             status_code=400,
-            detail="请上传1-5张文献截图，优先上传化合物结构图"
+            detail="最多允许上传5张文献截图"
         )
 
-    # 3. 验证DOI并获取元数据
-    print(f"正在验证DOI: {doi}")
-    is_valid = await validate_doi(doi)
-    if not is_valid:
-        raise HTTPException(
-            status_code=400,
-            detail=f"DOI {doi} 无效或不存在，请检查格式"
-        )
+    # 3. 验证DOI并获取元数据 (管理员可跳过验证)
+    is_admin = current_user.is_admin if current_user else False
+    metadata = None
 
-    print(f"正在获取DOI元数据...")
-    metadata = await get_doi_metadata(doi)
-    if not metadata:
-        raise HTTPException(
-            status_code=500,
-            detail="无法获取文献元数据，请稍后重试"
-        )
+    if not is_admin:
+        print(f"正在验证DOI: {doi}")
+        is_valid = await validate_doi(doi)
+        if not is_valid:
+            raise HTTPException(
+                status_code=400,
+                detail=f"DOI {doi} 无效或不存在，请检查格式"
+            )
+
+        print(f"正在获取DOI元数据...")
+        metadata = await get_doi_metadata(doi)
+        if not metadata:
+            raise HTTPException(
+                status_code=500,
+                detail="无法获取文献元数据，请稍后重试"
+            )
+    else:
+        # 管理员尝试获取元数据，但如果失败则使用占位符
+        print(f"管理员上传，跳过强制DOI验证...")
+        metadata = await get_doi_metadata(doi)
+        if not metadata:
+            print("无法获取元数据，使用占位符...")
+            metadata = {
+                "title": f"Manual Entry: {doi}",
+                "authors": ["Administrator"],
+                "journal": "Unknown Journal",
+                "year": 2026,
+                "abstract": "Metadata manually skipped by administrator."
+            }
 
     # 4. 获取或创建元素组合
     compound = crud.get_or_create_compound(db, symbols_list)
@@ -106,6 +145,9 @@ async def create_paper(
     )
 
     # 7. 创建文献记录
+    # 优先使用登录用户的真实姓名作为贡献者
+    final_contributor_name = current_user.real_name if current_user else (contributor_name or "匿名贡献者")
+
     paper = crud.create_paper(
         db=db,
         compound_id=compound.id,
@@ -123,13 +165,16 @@ async def create_paper(
         citation_bibtex=citation_bibtex,
         chemical_formula=chemical_formula,
         crystal_structure=crystal_structure,
-        contributor_name=contributor_name or "匿名贡献者",
+        contributor_name=final_contributor_name,
         contributor_affiliation=contributor_affiliation or "未提供单位",
         notes=notes
     )
 
-    # 8. 处理并保存截图
-    for idx, image_file in enumerate(images, start=1):
+    # 8. 保存物理数据点
+    crud.create_paper_data(db=db, paper_id=paper.id, data_list=data_list)
+
+    # 9. 处理并保存截图
+    for idx, image_file in enumerate(images_to_process, start=1):
         # 读取图片数据
         image_data = await image_file.read()
 
@@ -161,7 +206,7 @@ async def create_paper(
 
     # 9. 返回响应
     paper_response = schemas.PaperResponse.from_orm(paper)
-    paper_response.image_count = len(images)
+    paper_response.image_count = len(images_to_process)
 
     return paper_response
 
@@ -174,7 +219,7 @@ def get_papers_by_compound(
     year_max: Optional[int] = None,
     journal: Optional[str] = None,
     crystal_structure: Optional[str] = None,
-    review_status: Optional[str] = None,  # 新增：审核状态筛选 (reviewed/unreviewed)
+    review_status: Optional[str] = None,  # 审核状态筛选 (approved/unreviewed/rejected/modifying)
     sort_by: str = "created_at",
     sort_order: str = "desc",
     limit: int = 50,
@@ -183,18 +228,6 @@ def get_papers_by_compound(
 ):
     """
     获取元素组合的文献列表
-
-    Args:
-        element_symbols: 元素符号组合，如 "Ba-Cu-O-Y"
-        keyword: 搜索关键词（可选）
-        year_min, year_max: 年份范围（可选）
-        journal: 期刊名称（可选）
-        crystal_structure: 晶体结构类型（可选）
-        review_status: 审核状态筛选 - 'reviewed'(已审核), 'unreviewed'(未审核), None(全部)
-        sort_by: 排序字段（created_at或year）
-        sort_order: 排序顺序（asc或desc）
-        limit: 返回数量限制
-        offset: 偏移量
     """
     # 解析元素符号
     symbols = element_symbols.split("-")
@@ -270,23 +303,50 @@ def get_paper_detail(paper_id: int, db: Session = Depends(get_db)):
     return paper_detail
 
 
-@router.get("/{paper_id}/images/{image_id}")
+@router.get("/{paper_id}/images/{image_order}")
 def get_paper_image(
     paper_id: int,
+    image_order: int,
+    thumbnail: bool = False,
+    db: Session = Depends(get_db)
+):
+    """
+    根据文献ID和图片顺序获取截图
+
+    Args:
+        paper_id: 文献ID
+        image_order: 图片顺序 (1-5)
+        thumbnail: 是否返回缩略图（默认False返回原图）
+    """
+    image = crud.get_image_by_order(db, paper_id, image_order)
+    if not image:
+        raise HTTPException(status_code=404, detail="图片不存在")
+
+    # 选择原图或缩略图
+    image_data = image.thumbnail_data if thumbnail else image.image_data
+
+    # 返回图片
+    return StreamingResponse(
+        BytesIO(image_data),
+        media_type="image/jpeg"
+    )
+
+
+@router.get("/images/{image_id}")
+def get_image_by_id(
     image_id: int,
     thumbnail: bool = False,
     db: Session = Depends(get_db)
 ):
     """
-    获取文献截图
+    根据图片ID获取截图
 
     Args:
-        paper_id: 文献ID
         image_id: 图片ID
-        thumbnail: 是否返回缩略图（默认False返回原图）
+        thumbnail: 是否返回缩略图
     """
     image = crud.get_image_by_id(db, image_id)
-    if not image or image.paper_id != paper_id:
+    if not image:
         raise HTTPException(status_code=404, detail="图片不存在")
 
     # 选择原图或缩略图
@@ -336,3 +396,28 @@ def export_papers(
             "Content-Disposition": f"attachment; filename=citations.{export_data.format}"
         }
     )
+
+
+@router.get("/stats/chart-data")
+def get_chart_data(db: Session = Depends(get_db)):
+    """获取用于图表展示的 P-Tc 数据点"""
+    from backend.models import Paper
+    
+    # 查询所有标记为在图表中显示的文献
+    papers = db.query(Paper).filter(Paper.show_in_chart == True).all()
+    
+    result = []
+    for paper in papers:
+        normalized_sc_type = normalize_superconductor_type(paper.superconductor_type)
+        for data in paper.physical_parameters:
+            if data.pressure is not None and data.tc is not None:
+                result.append({
+                    "x": data.pressure,
+                    "y": data.tc,
+                    "year": paper.year,
+                    "label": paper.chemical_formula or paper.title[:20],
+                    "doi": paper.doi,
+                    "type": paper.article_type,
+                    "sc_type": normalized_sc_type
+                })
+    return result

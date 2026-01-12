@@ -2,13 +2,13 @@ echo "PORT环境变量: ${PORT}"
 echo "======================================="
 
 # 检查data目录
-if [ -d "/app/data" ]; then
-    echo "✅ /app/data 目录存在"
-    ls -la /app/data
+if [ -d "./data" ]; then
+    echo "./data 目录存在"
+    ls -la ./data
 else
-    echo "❌ /app/data 目录不存在"
-    mkdir -p /app/data
-    echo "✅ 已创建 /app/data 目录"
+    echo "./data 目录不存在"
+    mkdir -p ./data
+    echo "./data 目录"
 fi
 
 echo "======================================="

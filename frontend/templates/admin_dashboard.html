@@ -4,12 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>管理员面板 - 超导文献数据库</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
     <!-- 导航栏 -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <nav class="navbar navbar-expand-lg navbar-dark navbar-custom sticky-top">
         <div class="container-fluid">
             <a class="navbar-brand" href="/">超导文献数据库</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -24,7 +24,7 @@
                         <a class="nav-link" href="/admin/papers">全局管理</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/admin/my-reviews">我审核的文献</a>
+                        <a class="nav-link" href="/admin/superadmin">超级管理员</a>
                     </li>
                 </ul>
                 <div class="d-flex align-items-center text-white">
@@ -102,11 +102,27 @@
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">超导体类型</label>
                                 <select class="form-select" id="editSuperconductorType">
-                                    <option value="conventional">常规</option>
-                                    <option value="unconventional">非常规</option>
-                                    <option value="unknown">未知</option>
+                                    <option value="cuprate">铜基</option>
+                                    <option value="iron_based">铁基</option>
+                                    <option value="nickel_based">镍基</option>
+                                    <option value="hydride">高压氢化物</option>
+                                    <option value="carbon">碳基</option>
+                                    <option value="organic">有机</option>
+                                    <option value="others">其他超导</option>
                                 </select>
                             </div>
+                        </div>
+
+                        <!-- 审核状态编辑 (由于是审核页面，可能需要在这里也能改状态) -->
+                        <div class="mb-3">
+                            <label class="form-label">审核状态</label>
+                            <select class="form-select" id="editReviewStatus">
+                                <option value="unreviewed">⏳ 未审核</option>
+                                <option value="approved">✅ 已通过</option>
+                                <option value="rejected">❌ 已拒绝</option>
+                                <option value="modifying">🛠️ 待修改</option>
+                                <option value="admin_only">🔒 仅管理员可见</option>
+                            </select>
                         </div>
 
                         <div class="row">
@@ -118,6 +134,14 @@
                                 <label class="form-label">晶体结构</label>
                                 <input type="text" class="form-control" id="editCrystalStructure">
                             </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">物理数据 (压强/Tc/λ等) <span class="text-danger">*</span></label>
+                            <div id="editDataPointsContainer">
+                                <!-- 动态数据行 -->
+                            </div>
+                            <button type="button" class="btn btn-outline-primary btn-sm mt-1" onclick="addEditDataRow()">+ 添加一组数据</button>
                         </div>
 
                         <div class="row">
@@ -145,32 +169,59 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/auth_state.js"></script>
     <script>
         let token = '';
         let currentUser = null;
         let editModal = null;
+        const SUPER_TYPES = ['cuprate', 'iron_based', 'nickel_based', 'hydride', 'carbon', 'organic', 'others'];
+        const LEGACY_SUPER_TYPES = {
+            'carbon_organic': 'carbon',
+            'conventional': 'others',
+            'other_conventional': 'others',
+            'unconventional': 'others',
+            'other_unconventional': 'others',
+            'unknown': 'others'
+        };
+
+        function normalizeSuperconductorType(value) {
+            if (!value) return 'others';
+            const normalized = LEGACY_SUPER_TYPES[value] || value;
+            return SUPER_TYPES.includes(normalized) ? normalized : 'others';
+        }
 
         // 检查登录状态
         function checkAuth() {
-            token = localStorage.getItem('admin_token');
-            const userStr = localStorage.getItem('admin_user');
+            if (!window.authState) {
+                alert('登录状态异常，请刷新重试');
+                return false;
+            }
 
-            if (!token || !userStr) {
+            const state = window.authState.get();
+            if (!state || !state.token || !state.user) {
                 alert('请先登录');
                 window.location.href = '/admin/login';
                 return false;
             }
 
-            currentUser = JSON.parse(userStr);
+            if (!state.user.is_admin) {
+                alert('当前账号没有管理员权限');
+                window.location.href = '/';
+                return false;
+            }
+
+            token = state.token;
+            currentUser = state.user;
             document.getElementById('userName').textContent = currentUser.real_name;
             return true;
         }
 
         // 退出登录
         function logout() {
-            localStorage.removeItem('admin_token');
-            localStorage.removeItem('admin_user');
+            if (window.authState) {
+                window.authState.clear();
+            }
             window.location.href = '/admin/login';
         }
 
@@ -228,8 +279,9 @@
                 // 构建按钮组（根据用户角色显示不同按钮）
                 let buttons = `
                     <a href="https://doi.org/${paper.doi}" target="_blank" class="btn btn-sm btn-outline-primary">查看原文</a>
-                    <button class="btn btn-sm btn-warning btn-edit" data-paper-id="${paper.id}">编辑</button>
-                    <button class="btn btn-sm btn-success btn-review" data-paper-id="${paper.id}" data-paper-title="${safeTitle}">标记为已审核</button>
+                    <button class="btn btn-sm btn-warning btn-edit" data-paper-id="${paper.id}">详情/编辑</button>
+                    <button class="btn btn-sm btn-success btn-approve" data-paper-id="${paper.id}" data-paper-title="${safeTitle}">通过</button>
+                    <button class="btn btn-sm btn-danger btn-reject" data-paper-id="${paper.id}" data-paper-title="${safeTitle}">拒绝</button>
                 `;
 
                 // 如果是超级管理员，显示删除按钮
@@ -244,6 +296,7 @@
                             <p class="text-muted mb-2">
                                 <strong>DOI:</strong> ${paper.doi}<br>
                                 <strong>期刊:</strong> ${safeJournal} (${paper.year || '未知年份'})<br>
+                                <strong>Tc / P:</strong> ${paper.tc ? paper.tc + ' K' : '-'} / ${paper.pressure ? paper.pressure + ' GPa' : '-'}<br>
                                 <strong>贡献者:</strong> ${safeContributor}<br>
                                 <strong>提交时间:</strong> ${new Date(paper.created_at).toLocaleString('zh-CN')}
                             </p>
@@ -258,11 +311,19 @@
             container.innerHTML = html;
 
             // 绑定事件
-            container.querySelectorAll('.btn-review').forEach(btn => {
+            container.querySelectorAll('.btn-approve').forEach(btn => {
                 btn.addEventListener('click', function() {
                     const paperId = this.getAttribute('data-paper-id');
                     const paperTitle = this.getAttribute('data-paper-title');
-                    reviewPaper(paperId, paperTitle);
+                    reviewPaper(paperId, paperTitle, 'approved');
+                });
+            });
+
+            container.querySelectorAll('.btn-reject').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const paperId = this.getAttribute('data-paper-id');
+                    const paperTitle = this.getAttribute('data-paper-title');
+                    reviewPaper(paperId, paperTitle, 'rejected');
                 });
             });
 
@@ -284,8 +345,9 @@
         }
 
         // 审核文献
-        async function reviewPaper(paperId, title) {
-            if (!confirm(`确认标记《${title}》为已审核？`)) {
+        async function reviewPaper(paperId, title, status = 'approved') {
+            const statusText = status === 'approved' ? '通过' : '拒绝';
+            if (!confirm(`确认标记《${title}》为${statusText}？`)) {
                 return;
             }
 
@@ -293,14 +355,19 @@
                 const response = await fetch(`/api/admin/papers/${paperId}/review`, {
                     method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        status: status,
+                        comment: ''
+                    })
                 });
 
                 const data = await response.json();
 
                 if (response.ok) {
-                    alert('已标记为已审核！');
+                    alert(`已标记为${statusText}！`);
                     loadUnreviewedPapers(); // 重新加载列表
                 } else {
                     alert('操作失败: ' + (data.detail || '未知错误'));
@@ -308,6 +375,45 @@
             } catch (error) {
                 console.error('审核失败:', error);
                 alert('操作失败，请检查网络连接');
+            }
+        }
+
+        // 编辑文献助手函数
+        function addEditDataRow(data = null) {
+            const container = document.getElementById('editDataPointsContainer');
+            const row = document.createElement('div');
+            row.className = 'edit-data-row card p-2 mb-2 bg-light';
+            row.innerHTML = `
+                <div class="row g-2">
+                    <div class="col-md-4 col-lg-2">
+                        <input type="number" step="any" class="form-control form-control-sm edit-pressure" placeholder="P (GPa)" value="${data ? data.pressure || '' : ''}">
+                    </div>
+                    <div class="col-md-4 col-lg-2">
+                        <input type="number" step="any" class="form-control form-control-sm edit-tc" placeholder="Tc (K)" value="${data ? data.tc || '' : ''}">
+                    </div>
+                    <div class="col-md-4 col-lg-2">
+                        <input type="number" step="any" class="form-control form-control-sm edit-lambda" placeholder="λ" value="${data ? data.lambda_val || '' : ''}">
+                    </div>
+                    <div class="col-md-4 col-lg-2">
+                        <input type="number" step="any" class="form-control form-control-sm edit-omega" placeholder="ω" value="${data ? data.omega_log || '' : ''}">
+                    </div>
+                    <div class="col-md-4 col-lg-2">
+                        <input type="number" step="any" class="form-control form-control-sm edit-nef" placeholder="N" value="${data ? data.n_ef || '' : ''}">
+                    </div>
+                    <div class="col-12 col-lg-2">
+                        <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="removeEditDataRow(this)">×</button>
+                    </div>
+                </div>
+            `;
+            container.appendChild(row);
+        }
+
+        function removeEditDataRow(button) {
+            const container = document.getElementById('editDataPointsContainer');
+            if (container.querySelectorAll('.edit-data-row').length > 1) {
+                button.closest('.edit-data-row').remove();
+            } else {
+                alert('至少需要保留一组数据');
             }
         }
 
@@ -335,9 +441,20 @@
                 document.getElementById('editVolume').value = paper.volume || '';
                 document.getElementById('editAuthors').value = paper.authors || '';
                 document.getElementById('editArticleType').value = paper.article_type || 'experimental';
-                document.getElementById('editSuperconductorType').value = paper.superconductor_type || 'unknown';
+                document.getElementById('editSuperconductorType').value = normalizeSuperconductorType(paper.superconductor_type);
+                document.getElementById('editReviewStatus').value = paper.review_status || 'unreviewed';
                 document.getElementById('editChemicalFormula').value = paper.chemical_formula || '';
                 document.getElementById('editCrystalStructure').value = paper.crystal_structure || '';
+                
+                // 填充物理数据
+                const dataContainer = document.getElementById('editDataPointsContainer');
+                dataContainer.innerHTML = '';
+                if (paper.data && paper.data.length > 0) {
+                    paper.data.forEach(d => addEditDataRow(d));
+                } else {
+                    addEditDataRow();
+                }
+
                 document.getElementById('editContributorName').value = paper.contributor_name || '';
                 document.getElementById('editContributorAffiliation').value = paper.contributor_affiliation || '';
                 document.getElementById('editNotes').value = paper.notes || '';
@@ -358,6 +475,29 @@
         async function savePaperEdits() {
             const paperId = document.getElementById('editPaperId').value;
 
+            // 收集物理数据
+            const physicalData = [];
+            const computeSFactor = (tcValue, pressureValue) => {
+                if (!Number.isFinite(tcValue) || !Number.isFinite(pressureValue)) return null;
+                return tcValue / Math.sqrt(1521 + Math.pow(pressureValue, 2));
+            };
+            document.querySelectorAll('.edit-data-row').forEach(row => {
+                const pressure = row.querySelector('.edit-pressure').value;
+                const tc = row.querySelector('.edit-tc').value;
+                if (pressure && tc) {
+                    const parsedPressure = parseFloat(pressure);
+                    const parsedTc = parseFloat(tc);
+                    physicalData.push({
+                        pressure: parsedPressure,
+                        tc: parsedTc,
+                        s_factor: computeSFactor(parsedTc, parsedPressure),
+                        lambda_val: row.querySelector('.edit-lambda').value ? parseFloat(row.querySelector('.edit-lambda').value) : null,
+                        omega_log: row.querySelector('.edit-omega').value ? parseFloat(row.querySelector('.edit-omega').value) : null,
+                        n_ef: row.querySelector('.edit-nef').value ? parseFloat(row.querySelector('.edit-nef').value) : null
+                    });
+                }
+            });
+
             const updateData = {
                 title: document.getElementById('editTitle').value,
                 journal: document.getElementById('editJournal').value,
@@ -366,8 +506,10 @@
                 authors: document.getElementById('editAuthors').value,
                 article_type: document.getElementById('editArticleType').value,
                 superconductor_type: document.getElementById('editSuperconductorType').value,
+                review_status: document.getElementById('editReviewStatus').value,
                 chemical_formula: document.getElementById('editChemicalFormula').value,
                 crystal_structure: document.getElementById('editCrystalStructure').value,
+                physical_data: physicalData,
                 contributor_name: document.getElementById('editContributorName').value,
                 contributor_affiliation: document.getElementById('editContributorAffiliation').value,
                 notes: document.getElementById('editNotes').value

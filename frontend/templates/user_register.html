@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>管理员注册 - 超导文献数据库</title>
+    <title>用户注册 - 超导文献数据库</title>
     <link href="/static/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
@@ -13,32 +13,29 @@
             <div class="col-md-6">
                 <div class="card shadow">
                     <div class="card-body p-5">
-                        <h2 class="text-center mb-4">📝 申请成为管理员</h2>
+                        <h2 class="text-center mb-4">📝 用户注册</h2>
 
-                        <!-- 第一步：填写信息并发送验证码 -->
+                        <!-- 第一步：填写信息 -->
                         <div id="step1">
                             <form id="registerForm">
                                 <div class="mb-3">
-                                    <label for="email" class="form-label">邮箱 *</label>
-                                    <input type="email" class="form-control" id="email" required>
-                                    <small class="text-muted">将用于接收验证码和登录</small>
+                                    <label for="realName" class="form-label">真实姓名 / 昵称</label>
+                                    <input type="text" class="form-control" id="realName" required placeholder="用于文献贡献者展示">
                                 </div>
 
                                 <div class="mb-3">
-                                    <label for="realName" class="form-label">真实姓名 *</label>
-                                    <input type="text" class="form-control" id="realName" required>
-                                    <small class="text-muted">审核文献时将显示此姓名</small>
+                                    <label for="email" class="form-label">邮箱</label>
+                                    <input type="email" class="form-control" id="email" required placeholder="用于登录和找回密码">
                                 </div>
 
                                 <div class="mb-3">
-                                    <label for="password" class="form-label">密码 *</label>
+                                    <label for="password" class="form-label">设置密码</label>
                                     <input type="password" class="form-control" id="password" required minlength="6">
-                                    <small class="text-muted">至少6位字符</small>
                                 </div>
 
                                 <div class="mb-3">
-                                    <label for="passwordConfirm" class="form-label">确认密码 *</label>
-                                    <input type="password" class="form-control" id="passwordConfirm" required>
+                                    <label for="confirmPassword" class="form-label">确认密码</label>
+                                    <input type="password" class="form-control" id="confirmPassword" required>
                                 </div>
 
                                 <div class="d-grid gap-2 mb-3">
@@ -47,47 +44,33 @@
                             </form>
                         </div>
 
-                        <!-- 第二步：输入验证码 -->
+                        <!-- 第二步：验证邮箱 -->
                         <div id="step2" style="display: none;">
                             <div class="alert alert-info">
-                                验证码已发送到您的邮箱，请在 5 分钟内完成验证
+                                验证码已发送到 <strong id="displayEmail"></strong>，请查收。
                             </div>
-
                             <form id="verifyForm">
                                 <div class="mb-3">
-                                    <label for="code" class="form-label">验证码 *</label>
-                                    <input type="text" class="form-control" id="code" required maxlength="6" placeholder="6位数字">
+                                    <label for="code" class="form-label">6位验证码</label>
+                                    <input type="text" class="form-control text-center fs-2" id="code" maxlength="6" pattern="\d{6}" required>
                                 </div>
-
                                 <div class="d-grid gap-2 mb-3">
-                                    <button type="submit" class="btn btn-success btn-lg">验证邮箱</button>
+                                    <button type="submit" class="btn btn-success btn-lg">完成注册</button>
                                 </div>
-
                                 <div class="text-center">
-                                    <button type="button" class="btn btn-link" onclick="location.reload()">返回重新填写</button>
+                                    <button type="button" class="btn btn-link" onclick="location.reload()">重新填写信息</button>
                                 </div>
                             </form>
                         </div>
 
-                        <!-- 第三步：等待审批 -->
-                        <div id="step3" style="display: none;">
-                            <div class="alert alert-success text-center">
-                                <h4>✅ 邮箱验证成功！</h4>
-                                <p class="mb-0">您的管理员申请已提交，请等待超级管理员审批。</p>
-                                <p class="mt-2 mb-0">审批通过后，您将收到邮件通知。</p>
-                            </div>
-
-                            <div class="text-center mt-4">
-                                <a href="/admin/login" class="btn btn-primary">前往登录页面</a>
-                            </div>
+                        <div class="text-center">
+                            <a href="/login" class="text-decoration-none">已有账号？立即登录</a>
                         </div>
 
                         <hr>
 
                         <div class="text-center">
-                            <a href="/admin/login" class="text-decoration-none">已有账号？立即登录</a>
-                            <br>
-                            <a href="/" class="btn btn-link mt-2">返回首页</a>
+                            <a href="/" class="btn btn-link">返回首页</a>
                         </div>
                     </div>
                 </div>
@@ -97,21 +80,23 @@
 
     <script src="/static/js/bootstrap.bundle.min.js"></script>
     <script>
-        let registeredEmail = '';
+        let userEmail = '';
 
-        // 第一步：注册并发送验证码
+        // 步骤1：提交注册信息
         document.getElementById('registerForm').addEventListener('submit', async function(e) {
             e.preventDefault();
 
+            const real_name = document.getElementById('realName').value;
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
-            const passwordConfirm = document.getElementById('passwordConfirm').value;
-            const realName = document.getElementById('realName').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
 
-            if (password !== passwordConfirm) {
-                alert('两次密码输入不一致！');
+            if (password !== confirmPassword) {
+                alert('两次输入的密码不一致');
                 return;
             }
+
+            userEmail = email;
 
             try {
                 const response = await fetch('/api/auth/register', {
@@ -122,19 +107,19 @@
                     body: JSON.stringify({
                         email,
                         password,
-                        real_name: realName,
-                        is_admin: true
+                        real_name,
+                        is_admin: false // 普通用户
                     })
                 });
 
                 const data = await response.json();
 
                 if (response.ok) {
-                    registeredEmail = email;
                     document.getElementById('step1').style.display = 'none';
                     document.getElementById('step2').style.display = 'block';
+                    document.getElementById('displayEmail').textContent = email;
                 } else {
-                    alert('注册失败: ' + (data.detail || '未知错误'));
+                    alert('注册错误: ' + (data.detail || '未知错误'));
                 }
             } catch (error) {
                 console.error('注册错误:', error);
@@ -142,7 +127,7 @@
             }
         });
 
-        // 第二步：验证邮箱
+        // 步骤2：验证验证码
         document.getElementById('verifyForm').addEventListener('submit', async function(e) {
             e.preventDefault();
 
@@ -155,7 +140,7 @@
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        email: registeredEmail,
+                        email: userEmail,
                         code: code
                     })
                 });
@@ -163,8 +148,8 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    document.getElementById('step2').style.display = 'none';
-                    document.getElementById('step3').style.display = 'block';
+                    alert('注册成功！');
+                    window.location.href = '/login';
                 } else {
                     alert('验证失败: ' + (data.detail || '未知错误'));
                 }

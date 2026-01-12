@@ -13,10 +13,10 @@ class EmailService:
 
     def __init__(self):
         # 从环境变量读取SMTP配置
-        self.smtp_server = os.getenv("SMTP_SERVER", "smtp.qq.com")  # 默认QQ邮箱
-        self.smtp_port = int(os.getenv("SMTP_PORT", "587"))  # TLS端口
+        self.smtp_server = os.getenv("SMTP_SERVER", "smtp.163.com")  # 默认163邮箱
+        self.smtp_port = int(os.getenv("SMTP_PORT", "465"))  # SSL端口
         self.smtp_username = os.getenv("SMTP_USERNAME", "")
-        self.smtp_password = os.getenv("SMTP_PASSWORD", "")  # QQ邮箱需要使用授权码
+        self.smtp_password = os.getenv("SMTP_PASSWORD", "")  # 163邮箱需要使用授权码
         self.sender_email = os.getenv("SMTP_SENDER_EMAIL", self.smtp_username)
 
     def send_verification_code(self, to_email: str, code: str, real_name: str) -> bool:
@@ -86,8 +86,13 @@ class EmailService:
             message.attach(part2)
 
             # 发送邮件
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                server.starttls()  # 启用TLS加密
+            if self.smtp_port == 465:
+                server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port)
+            else:
+                server = smtplib.SMTP(self.smtp_server, self.smtp_port)
+                server.starttls()
+            
+            with server:
                 server.login(self.smtp_username, self.smtp_password)
                 server.sendmail(self.sender_email, to_email, message.as_string())
 
@@ -152,8 +157,13 @@ class EmailService:
             part = MIMEText(html, "html", "utf-8")
             message.attach(part)
 
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+            if self.smtp_port == 465:
+                server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port)
+            else:
+                server = smtplib.SMTP(self.smtp_server, self.smtp_port)
                 server.starttls()
+            
+            with server:
                 server.login(self.smtp_username, self.smtp_password)
                 server.sendmail(self.sender_email, to_email, message.as_string())
 

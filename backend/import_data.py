@@ -55,8 +55,14 @@ def import_all_data(input_file: str = "data_export.json", clear_existing: bool =
             if existing:
                 compound_id_mapping[comp_data["id"]] = existing.id
             else:
+                symbols_str = comp_data["element_symbols"]
+                if "element_list" in comp_data and comp_data["element_list"]:
+                    symbol_list = comp_data["element_list"]
+                else:
+                    symbol_list = [s for s in symbols_str.split("-") if s]
                 compound = models.Compound(
-                    element_symbols=comp_data["element_symbols"],
+                    element_symbols=symbols_str,
+                    element_list=json.dumps(symbol_list),
                     created_at=datetime.fromisoformat(comp_data["created_at"])
                 )
                 db.add(compound)

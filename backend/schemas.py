@@ -41,7 +41,36 @@ class CompoundCreate(BaseModel):
 class CompoundResponse(BaseModel):
     id: int
     element_symbols: str
+    element_list: List[str]
     created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CompoundSearchRequest(BaseModel):
+    elements: List[str] = Field(..., description="选择的元素符号列表")
+    mode: str = Field("combination", description="筛选模式: only, combination, contains")
+
+    @validator('elements')
+    def validate_elements(cls, v):
+        if not v:
+            raise ValueError("至少需要选择一个元素")
+        return sorted(set(v))
+
+    @validator('mode')
+    def validate_mode(cls, v):
+        allowed = {'only', 'combination', 'contains'}
+        if v not in allowed:
+            raise ValueError(f"筛选模式必须是: {', '.join(allowed)}")
+        return v
+
+
+class CompoundSearchResult(BaseModel):
+    id: int
+    element_symbols: str
+    element_list: List[str]
+    paper_count: int
 
     class Config:
         from_attributes = True
@@ -56,7 +85,7 @@ class PaperCreate(BaseModel):
 
     # 必填分类字段
     article_type: str = Field(..., description="文章类型: theoretical 或 experimental")
-    superconductor_type: str = Field(..., description="超导体类型: conventional, unconventional, unknown")
+    superconductor_type: str = Field(..., description="超导体类型: cuprate, iron_based, nickel_based, hydride, carbon, organic, others")
 
     # 可选字段
     chemical_formula: Optional[str] = Field(None, description="化学式")
@@ -82,14 +111,34 @@ class PaperCreate(BaseModel):
 
     @validator('superconductor_type')
     def validate_superconductor_type(cls, v):
-        allowed_types = ['conventional', 'unconventional', 'unknown']
-        if v not in allowed_types:
+        legacy_map = {
+            'carbon_organic': 'carbon',
+            'conventional': 'others',
+            'other_conventional': 'others',
+            'unconventional': 'others',
+            'other_unconventional': 'others',
+            'unknown': 'others'
+        }
+        normalized = legacy_map.get(v, v)
+        allowed_types = ['cuprate', 'iron_based', 'nickel_based', 'hydride', 'carbon', 'organic', 'others']
+        if normalized not in allowed_types:
             raise ValueError(f"超导体类型必须是: {', '.join(allowed_types)}")
-        return v
+        return normalized
 
+class PaperData(BaseModel):
+    # 数据字段
+    pressure: float = Field(..., description="压强 (GPa)")
+    tc: float = Field(..., description="超导温度 Tc (K)")
+    lambda_val: Optional[float] = Field(None, description="λ (lambda)")
+    omega_log: Optional[float] = Field(None, description="ω_log")
+    n_ef: Optional[float] = Field(None, description="N(E_F)")
+    s_factor: Optional[float] = Field(None, description="s 因子")
+    class Config:
+        from_attributes = True # 这让 Pydantic 能处理 SQLAlchemy 对象
 
 class PaperResponse(BaseModel):
     """文献响应模型"""
+    data: List[PaperData] = Field([], validation_alias="physical_parameters")
     id: int
     compound_id: int
     doi: str
@@ -109,16 +158,20 @@ class PaperResponse(BaseModel):
     contributor_name: str
     contributor_affiliation: str
     notes: Optional[str] = None
+    show_in_chart: bool = True
+
     created_at: datetime
     image_count: int = 0  # 截图数量
     # 审核相关字段
     review_status: str = "unreviewed"
+    review_comment: Optional[str] = None
     reviewed_by: Optional[int] = None
     reviewed_at: Optional[datetime] = None
     reviewer_name: Optional[str] = None  # 审核人姓名（需要从关联查询获取）
 
     class Config:
         from_attributes = True
+        populate_by_name = True
 
 
 class PaperDetail(PaperResponse):
@@ -149,7 +202,7 @@ class PaperSearchParams(BaseModel):
     year_max: Optional[int] = Field(None, description="最大年份")
     journal: Optional[str] = Field(None, description="期刊名称")
     crystal_structure: Optional[str] = Field(None, description="晶体结构类型")
-    review_status: Optional[str] = Field(None, description="审核状态：reviewed(已审核), unreviewed(未审核)")
+    review_status: Optional[str] = Field(None, description="审核状态：unreviewed, approved, rejected, modifying, admin_only")
     sort_by: Optional[str] = Field("created_at", description="排序字段：created_at, year")
     sort_order: Optional[str] = Field("desc", description="排序顺序：asc, desc")
     limit: Optional[int] = Field(50, ge=1, le=200, description="返回数量限制")
@@ -183,3 +236,18 @@ class ErrorResponse(BaseModel):
     """错误响应"""
     error: str
     detail: Optional[str] = None
+
+# ============= 用户相关 =============
+
+class User(BaseModel):
+    id: int
+    email: str
+    real_name: str
+    is_admin: bool
+    is_superadmin: bool
+    is_approved: bool
+    created_at: datetime
+    approved_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True

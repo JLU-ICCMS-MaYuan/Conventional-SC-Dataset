@@ -4,7 +4,28 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_, func
 from typing import List, Optional
+import math
+import json
 from backend import models, schemas
+
+
+def compute_s_factor(pressure: Optional[float], tc: Optional[float]) -> Optional[float]:
+    """
+    根据压强与 Tc 计算 s_factor
+    公式: s = tc / sqrt(1521 + pressure^2)
+    """
+    if pressure is None or tc is None:
+        return None
+    try:
+        pressure_val = float(pressure)
+        tc_val = float(tc)
+    except (TypeError, ValueError):
+        return None
+
+    denominator = math.sqrt(1521 + pressure_val ** 2)
+    if denominator == 0:
+        return None
+    return tc_val / denominator
 
 
 # ============= 元素相关操作 =============
@@ -41,10 +62,17 @@ def get_or_create_compound(db: Session, element_symbols: List[str]) -> models.Co
     ).first()
 
     if compound:
+        if not getattr(compound, "element_list", None):
+            compound.element_list = json.dumps(sorted_symbols)
+            db.commit()
+            db.refresh(compound)
         return compound
 
     # 创建新的元素组合
-    compound = models.Compound(element_symbols=compound_key)
+    compound = models.Compound(
+        element_symbols=compound_key,
+        element_list=json.dumps(sorted_symbols)
+    )
     db.add(compound)
     db.flush()  # 获取ID但不提交
 
@@ -68,9 +96,64 @@ def get_compound_by_symbols(db: Session, element_symbols: List[str]) -> Optional
     """根据元素符号获取元素组合"""
     sorted_symbols = sorted(set(element_symbols))
     compound_key = "-".join(sorted_symbols)
-    return db.query(models.Compound).filter(
+    compound = db.query(models.Compound).filter(
         models.Compound.element_symbols == compound_key
     ).first()
+    if compound and not getattr(compound, "element_list", None):
+        compound.element_list = json.dumps(sorted_symbols)
+        db.commit()
+        db.refresh(compound)
+    return compound
+
+
+def search_compounds_by_elements(db: Session, element_symbols: List[str], mode: str) -> List[dict]:
+    """按照选择模式筛选元素组合"""
+    allowed_modes = {'only', 'combination', 'contains'}
+    mode = mode if mode in allowed_modes else 'combination'
+    selection = sorted(set(element_symbols))
+    if not selection:
+        return []
+
+    selection_set = set(selection)
+    compounds = db.query(models.Compound).all()
+    matched: List[dict] = []
+
+    def parse_elements(raw: Optional[str]) -> List[str]:
+        if not raw:
+            return []
+        try:
+            if raw.strip().startswith('['):
+                return json.loads(raw)
+        except Exception:
+            pass
+        return [part for part in raw.split("-") if part]
+
+    for compound in compounds:
+        elements = parse_elements(compound.element_list) or parse_elements(compound.element_symbols)
+        elements_sorted = sorted(set(elements))
+        element_set = set(elements_sorted)
+        if not element_set:
+            continue
+
+        match = False
+        if mode == 'only':
+            match = element_set == selection_set
+        elif mode == 'combination':
+            match = element_set.issubset(selection_set)
+        else:  # contains
+            match = selection_set.issubset(element_set)
+
+        if match:
+            paper_count = get_compound_papers_count(db, compound.id)
+            matched.append({
+                "id": compound.id,
+                "element_symbols": compound.element_symbols,
+                "element_list": elements_sorted,
+                "paper_count": paper_count
+            })
+
+    matched.sort(key=lambda item: (len(item["element_list"]), item["element_symbols"]))
+    return matched
 
 
 def check_compound_has_papers(db: Session, element_symbols: List[str]) -> bool:
@@ -105,7 +188,8 @@ def create_paper(
     crystal_structure: Optional[str] = None,
     contributor_name: str = "匿名贡献者",
     contributor_affiliation: str = "未提供单位",
-    notes: Optional[str] = None
+    notes: Optional[str] = None,
+    show_in_chart: bool = True
 ) -> models.Paper:
     """创建文献记录"""
     paper = models.Paper(
@@ -126,12 +210,43 @@ def create_paper(
         crystal_structure=crystal_structure,
         contributor_name=contributor_name,
         contributor_affiliation=contributor_affiliation,
-        notes=notes
+        notes=notes,
+        show_in_chart=show_in_chart
     )
     db.add(paper)
     db.commit()
     db.refresh(paper)
     return paper
+
+
+def create_paper_data(
+    db: Session,
+    paper_id: int,
+    data_list: List[dict]
+) -> List[models.PaperData]:
+    """为指定文献创建多组物理数据记录"""
+    db_data_list = []
+    for item in data_list:
+        pressure_val = item.get("pressure")
+        tc_val = item.get("tc")
+        s_factor_val = item.get("s_factor")
+        if s_factor_val is None:
+            s_factor_val = compute_s_factor(pressure_val, tc_val)
+
+        db_data = models.PaperData(
+            paper_id=paper_id,
+            pressure=pressure_val,
+            tc=tc_val,
+            lambda_val=item.get("lambda_val"),
+            omega_log=item.get("omega_log"),
+            n_ef=item.get("n_ef"),
+            s_factor=s_factor_val
+        )
+        db.add(db_data)
+        db_data_list.append(db_data)
+
+    db.commit()
+    return db_data_list
 
 
 def check_paper_exists(db: Session, compound_id: int, doi: str) -> bool:
@@ -148,10 +263,15 @@ def check_paper_exists(db: Session, compound_id: int, doi: str) -> bool:
 def get_papers_by_compound(
     db: Session,
     compound_id: int,
-    search_params: Optional[schemas.PaperSearchParams] = None
+    search_params: Optional[schemas.PaperSearchParams] = None,
+    is_admin: bool = False
 ) -> List[models.Paper]:
     """获取元素组合的文献列表（支持搜索和筛选）"""
     query = db.query(models.Paper).filter(models.Paper.compound_id == compound_id)
+
+    # 权限过滤：普通用户不能看到仅管理员可见的文献
+    if not is_admin:
+        query = query.filter(models.Paper.review_status != "admin_only")
 
     if search_params:
         # 关键词搜索
@@ -251,6 +371,16 @@ def get_paper_images(db: Session, paper_id: int) -> List[models.PaperImage]:
 def get_image_by_id(db: Session, image_id: int) -> Optional[models.PaperImage]:
     """根据ID获取截图"""
     return db.query(models.PaperImage).filter(models.PaperImage.id == image_id).first()
+
+
+def get_image_by_order(db: Session, paper_id: int, image_order: int) -> Optional[models.PaperImage]:
+    """根据文献ID和图片顺序获取截图"""
+    return db.query(models.PaperImage).filter(
+        and_(
+            models.PaperImage.paper_id == paper_id,
+            models.PaperImage.image_order == image_order
+        )
+    ).first()
 
 
 def get_paper_image_count(db: Session, paper_id: int) -> int:

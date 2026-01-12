@@ -1,7 +1,7 @@
 """
 数据库模型定义
 """
-from sqlalchemy import Column, Integer, String, Text, BLOB, DateTime, ForeignKey, UniqueConstraint, Boolean
+from sqlalchemy import Column, Integer, String, Text, BLOB, DateTime, ForeignKey, UniqueConstraint, Boolean, Float
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from backend.database import Base
@@ -31,6 +31,7 @@ class Compound(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     element_symbols = Column(String(200), unique=True, nullable=False, index=True)  # 如 "Ba-Cu-O-Y"（按字母排序）
+    element_list = Column(Text, nullable=False, default="[]")  # JSON数组，保存元素列表
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # 关系
@@ -91,7 +92,7 @@ class Paper(Base):
 
     # 用户必填的分类字段
     article_type = Column(String(20), nullable=False)  # 文章类型: 'theoretical' 或 'experimental'
-    superconductor_type = Column(String(20), nullable=False)  # 超导体类型: 'conventional', 'unconventional', 'unknown'
+    superconductor_type = Column(String(50), nullable=False)  # 超导体类型: cuprate, iron_based, nickel_based, hydride, carbon, organic, others
 
     # 用户可选填写的字段
     chemical_formula = Column(String(200))  # 化学式，如 "YBa₂Cu₃O₇"
@@ -101,14 +102,17 @@ class Paper(Base):
     notes = Column(Text)  # 备注说明
 
     # 审核相关字段
-    review_status = Column(String(20), default="unreviewed", nullable=False, index=True)  # 审核状态: 'reviewed' 或 'unreviewed'
+    review_status = Column(String(20), default="unreviewed", nullable=False, index=True)  # 审核状态: unreviewed, approved, rejected, modifying
     reviewed_by = Column(Integer, ForeignKey("users.id"))  # 审核人ID
     reviewed_at = Column(DateTime)  # 审核时间
+    review_comment = Column(Text)  # 审核意见/拒绝理由
+    show_in_chart = Column(Boolean, default=True, nullable=False)  # 是否用于前端图表
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # 关系
     compound = relationship("Compound", back_populates="papers")
+    physical_parameters = relationship("PaperData", back_populates="paper", cascade="all, delete-orphan")
     images = relationship("PaperImage", back_populates="paper", cascade="all, delete-orphan")
     reviewer = relationship("User", back_populates="reviewed_papers", foreign_keys=[reviewed_by])
 
@@ -120,6 +124,20 @@ class Paper(Base):
     def __repr__(self):
         return f"<Paper {self.doi}>"
 
+class PaperData(Base):
+    __tablename__ = "paper_data"
+    id = Column(Integer, primary_key=True, index=True)
+    paper_id = Column(Integer, ForeignKey("papers.id", ondelete="CASCADE"), nullable=False, index=True)
+    pressure = Column(Float)  # 压强 (GPa)
+    tc = Column(Float)        # 超导温度 Tc (K)
+    lambda_val = Column(Float) # λ (lambda)
+    omega_log = Column(Float)  # ω_log
+    n_ef = Column(Float)       # N(E_F)
+    s_factor = Column(Float)   # s因子 (用户自定义参数)
+    # 关系
+    paper = relationship("Paper", back_populates="physical_parameters")
+    def __repr__(self):
+        return f"<PaperData paper_id={self.paper_id} P={self.pressure} Tc={self.tc}>"
 
 class PaperImage(Base):
     """文献截图表 - 存储文献相关的图片"""

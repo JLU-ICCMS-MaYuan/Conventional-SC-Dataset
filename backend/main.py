@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pathlib import Path
 
-from backend.api import elements, compounds, papers, auth, admin
+from backend.api import elements, compounds, papers, admin, auth_routes
 
 # 创建FastAPI应用
 app = FastAPI(
@@ -30,7 +30,7 @@ app.add_middleware(
 app.include_router(elements.router)
 app.include_router(compounds.router)
 app.include_router(papers.router)
-app.include_router(auth.router)  # 认证API
+app.include_router(auth_routes.router)  # 认证API
 app.include_router(admin.router)  # 管理员API
 
 # 挂载静态文件目录
@@ -77,21 +77,42 @@ def compound_page(element_symbols: str):
     return {"error": "页面不存在"}
 
 
-# 管理员登录页面
-@app.get("/admin/login")
-def admin_login_page():
-    """返回管理员登录页面"""
-    login_file = TEMPLATES_DIR / "admin_login.html"
-    if login_file.exists():
-        return FileResponse(login_file)
-    return {"error": "页面不存在"}
-
-
 # 管理员注册页面
 @app.get("/admin/register")
 def admin_register_page():
     """返回管理员注册页面"""
     register_file = TEMPLATES_DIR / "admin_register.html"
+    if register_file.exists():
+        return FileResponse(register_file)
+    return {"error": "页面不存在"}
+
+
+# 统一登录页面
+def _serve_login_page():
+    login_file = TEMPLATES_DIR / "login.html"
+    if login_file.exists():
+        return FileResponse(login_file)
+    return {"error": "页面不存在"}
+
+
+@app.get("/admin/login")
+def admin_login_page():
+    """返回管理员登录页面"""
+    return _serve_login_page()
+
+
+# 用户登录页面
+@app.get("/login")
+def user_login_page():
+    """返回用户登录页面"""
+    return _serve_login_page()
+
+
+# 用户注册页面
+@app.get("/register")
+def user_register_page():
+    """返回用户注册页面"""
+    register_file = TEMPLATES_DIR / "user_register.html"
     if register_file.exists():
         return FileResponse(register_file)
     return {"error": "页面不存在"}
