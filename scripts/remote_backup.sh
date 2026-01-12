@@ -13,13 +13,13 @@ usage() {
   ./scripts/remote_backup.sh -r backup_xxx.tar.gz    # 下载并恢复指定备份
 
 可用环境变量:
-  BACKUP_REMOTE_HOST (默认 222.27.82.115)
-  BACKUP_REMOTE_PORT (默认 10086)
-  BACKUP_REMOTE_USER (默认 user@user@inspur)
-  BACKUP_REMOTE_DIR  (默认 backups/conventional-sc)
-  BACKUP_REMOTE_PASS (默认空; 如需自动输入密码需安装 sshpass)
-  BACKUP_WORKDIR     (默认 ./backups)
-  DATABASE_PATH      (默认 ./data/superconductor.db)
+  BACKUP_REMOTE_HOST  目标服务器
+  BACKUP_REMOTE_PORT  SSH 端口
+  BACKUP_REMOTE_USER  SSH 用户
+  BACKUP_REMOTE_DIR   远程目录 (默认 backups/conventional-sc)
+  BACKUP_REMOTE_PASS  SSH 密码 (默认空，建议使用密钥)
+  BACKUP_WORKDIR      本地临时目录 (默认 ./backups)
+  DATABASE_PATH       SQLite 文件 (默认 ./data/superconductor.db)
 EOF
 }
 
@@ -130,11 +130,11 @@ fi
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-: "${BACKUP_REMOTE_HOST:=222.27.82.115}"
-: "${BACKUP_REMOTE_PORT:=22}"
-: "${BACKUP_REMOTE_USER:=123}"
+: "${BACKUP_REMOTE_HOST:=example.com}"
+: "${BACKUP_REMOTE_PORT:=example_account}"
+: "${BACKUP_REMOTE_USER:=example_user}"
 : "${BACKUP_REMOTE_DIR:=backups/conventional-sc}"
-: "${BACKUP_REMOTE_PASS:=123}"
+: "${BACKUP_REMOTE_PASS:=example_password}"
 
 remote_host="$BACKUP_REMOTE_HOST"
 remote_port="$BACKUP_REMOTE_PORT"

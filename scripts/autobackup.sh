@@ -8,10 +8,10 @@ usage() {
   ./scripts/autobackup.sh -m day   # 每日备份（保留 14 个副本）
   ./scripts/autobackup.sh -m week  # 每周备份（保留 4 个副本）
 
-可用环境变量（与 remote_backup.sh 保持一致）:
-  BACKUP_REMOTE_HOST  目标服务器 (默认 222.27.82.115)
-  BACKUP_REMOTE_PORT  SSH 端口 (默认 22)
-  BACKUP_REMOTE_USER  SSH 用户 (默认 123)
+可用环境变量:
+  BACKUP_REMOTE_HOST  目标服务器
+  BACKUP_REMOTE_PORT  SSH 端口
+  BACKUP_REMOTE_USER  SSH 用户
   BACKUP_REMOTE_DIR   远程目录 (默认 backups/conventional-sc)
   BACKUP_REMOTE_PASS  SSH 密码 (默认空，建议使用密钥)
   BACKUP_WORKDIR      本地临时目录 (默认 ./backups)
@@ -92,11 +92,11 @@ esac
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-: "${BACKUP_REMOTE_HOST:=222.27.82.115}"
-: "${BACKUP_REMOTE_PORT:=22}"
-: "${BACKUP_REMOTE_USER:=123}"
+: "${BACKUP_REMOTE_HOST:=example.com}"
+: "${BACKUP_REMOTE_PORT:=example_account}"
+: "${BACKUP_REMOTE_USER:=example_user}"
 : "${BACKUP_REMOTE_DIR:=backups/conventional-sc}"
-: "${BACKUP_REMOTE_PASS:=}"
+: "${BACKUP_REMOTE_PASS:=example_password}"
 
 remote_host="$BACKUP_REMOTE_HOST"
 remote_port="$BACKUP_REMOTE_PORT"
