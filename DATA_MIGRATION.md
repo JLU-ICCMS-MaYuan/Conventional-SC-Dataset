@@ -233,6 +233,92 @@ crontab -e
 
 ---
 
+### 远程备份到 SSH 服务器
+
+新增脚本 `scripts/remote_backup.sh` 可自动导出 JSON + 数据库文件，打包后通过 SSH 上传。支持秘钥或密码两种方式（若要在非交互环境使用密码，请安装 `sshpass`）。
+
+环境变量 | 说明 | 默认值
+---------|------|-------
+`BACKUP_REMOTE_HOST` | 目标服务器 IP/域名 | `222.27.82.115`
+`BACKUP_REMOTE_USER` | SSH 用户名 | `123`
+`BACKUP_REMOTE_PORT` | SSH 端口 | `22`
+`BACKUP_REMOTE_DIR` | 远程存放目录（自动创建） | `backups/conventional-sc`
+`BACKUP_REMOTE_PASS` | SSH 密码（留空则走密钥/交互式输入） | *(空)*
+`BACKUP_PREFIX` | 备份文件前缀（默认 `backup`，可设成 `backup_day`、`backup_week`） | `backup`
+`BACKUP_WORKDIR` | 本地临时备份目录 | `./backups`
+`DATABASE_PATH` | SQLite 路径 | `data/superconductor.db`
+
+示例：以提供的 123/456 账户上传到 `/home/123/backups/conventional-sc`：
+
+```bash
+cd /path/to/Conventional-SC-Dataset
+BACKUP_REMOTE_USER=123 \
+BACKUP_REMOTE_PASS=456 \
+BACKUP_REMOTE_HOST=222.27.82.115 \
+BACKUP_REMOTE_DIR=/home/123/backups/conventional-sc \
+./scripts/remote_backup.sh
+```
+
+脚本会：
+1. 执行 `python -m backend.export_data backups/data_export_时间戳.json`
+2. 复制当前 `superconductor.db`
+3. 打包为 `backups/backup_时间戳.tar.gz`
+4. 通过 SSH/ SCP 上传并自动创建远程目录
+5. 删除本地中间的 JSON/DB 副本（tar 包保留，可用于本地回溯）
+
+**定时任务示例（每天 3 点）：**
+
+```
+0 3 * * * cd /var/www/conventional-sc-dataset && \
+BACKUP_REMOTE_PASS=456 BACKUP_REMOTE_USER=123 BACKUP_REMOTE_HOST=222.27.82.115 \
+BACKUP_REMOTE_DIR=/home/123/backups/conventional-sc ./scripts/remote_backup.sh >> logs/backup.log 2>&1
+```
+
+> 建议改用 SSH key：`ssh-keygen` → `ssh-copy-id 123@222.27.82.115`，然后不必在环境变量里放密码。
+
+#### 恢复远程备份
+
+1. 从远程服务器下载最新压缩包：
+   ```bash
+   scp 123@222.27.82.115:/home/123/backups/conventional-sc/backup_20250201_030000.tar.gz backups/
+   ```
+2. 解压并取出文件：
+   ```bash
+   tar -xzf backups/backup_20250201_030000.tar.gz -C backups/
+   cp backups/superconductor_20250201_030000.db data/superconductor.db
+   ```
+   或者运行 `python -m backend.import_data backups/data_export_20250201_030000.json` 将 JSON 数据导回新库。
+3. 启动后端检查：http://localhost:8000 ，确认文献数量与截图可用。
+
+---
+
+### 自动备份与保留策略
+
+`scripts/autobackup.sh` 封装了周期性备份及远程/本地保留策略：
+
+命令 | 说明 | 保留策略
+-----|------|---------
+`./scripts/autobackup.sh -m day` | 日常备份，文件名形如 `backup_day_YYYYmmdd_HHMMSS.tar.gz` | 仅保留最近 14 个
+`./scripts/autobackup.sh -m week` | 周度备份，文件名形如 `backup_week_YYYYmmdd_HHMMSS.tar.gz` | 仅保留最近 4 个
+
+脚本逻辑：
+1. 调用 `remote_backup.sh` 生成带前缀的备份并上传
+2. 远程服务器：列出 `backups/.../${前缀}_*.tar.gz`，删除超过配额的旧文件
+3. 本地 `backups/` 目录同步删除多余 tar 包，避免磁盘膨胀
+
+示例计划任务：
+```
+# 每天 02:30 运行日备份
+30 2 * * * cd /var/www/conventional-sc-dataset && BACKUP_REMOTE_PASS=456 ./scripts/autobackup.sh -m day >> logs/autobackup.log 2>&1
+
+# 每周一 03:00 运行周备份
+0 3 * * 1 cd /var/www/conventional-sc-dataset && BACKUP_REMOTE_PASS=456 ./scripts/autobackup.sh -m week >> logs/autobackup.log 2>&1
+```
+
+其余环境变量与 `remote_backup.sh` 相同，可按需覆盖。
+
+---
+
 ## ⚠️ 重要提醒
 
 ### 部署前必须做的事：

@@ -4,6 +4,7 @@
 """
 import json
 import base64
+import sys
 from pathlib import Path
 from sqlalchemy.orm import Session
 
@@ -124,4 +125,5 @@ def export_all_data(output_file: str = "data_export.json"):
 
 
 if __name__ == "__main__":
-    export_all_data("data/data_export.json")
+    output_path = sys.argv[1] if len(sys.argv) > 1 else "data/data_export.json"
+    export_all_data(output_path)
