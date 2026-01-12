@@ -35,7 +35,7 @@ sudo apt install -y python3 python3-venv python3-pip git sqlite3 sshpass
 ## 2. 获取项目代码
 
 ```bash
-git clone https://your_repo_url/conventional-sc-dataset.git
+git clone https://github.com/JLU-ICCMS-MaYuan/Conventional-SC-Dataset.git
 cd conventional-sc-dataset
 ```
 
