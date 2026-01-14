@@ -99,7 +99,7 @@
                         <h6 class="card-title mb-0 fw-bold">超导临界温度 (Tc) 历史演变</h6>
                     </div>
                     <div class="card-body p-2">
-                        <div style="position: relative; height: 400px; width: 100%;">
+                        <div class="ratio" style="--bs-aspect-ratio: 50%;">
                             <canvas id="staticChart"></canvas>
                         </div>
                     </div>
@@ -112,7 +112,7 @@
                         <h6 class="card-title mb-0 fw-bold">数据库实时 P-Tc 分布</h6>
                     </div>
                     <div class="card-body p-2">
-                        <div style="position: relative; height: 400px; width: 100%;">
+                        <div class="ratio" style="--bs-aspect-ratio: 50%;">
                             <canvas id="dynamicChart"></canvas>
                         </div>
                     </div>
@@ -201,7 +201,7 @@
                     experimental: getCSSVar('--sc-shape-experimental'),
                     theoretical: getCSSVar('--sc-shape-theoretical')
                 };
-
+                const chartAspectRatio = 2;
                 // 1. 左侧图表：超导历史 Tc 演变 (基于数据库数据)
                 const ctxStatic = document.getElementById('staticChart').getContext('2d');
                 const staticChart = new Chart(ctxStatic, {
@@ -238,7 +238,8 @@
                     },
                     options: {
                         responsive: true,
-                        maintainAspectRatio: false,
+                        maintainAspectRatio: true,
+                        aspectRatio: 2,
                         scales: {
                             x: {
                                 type: 'linear',
@@ -388,7 +389,8 @@
                     },
                     options: {
                         responsive: true,
-                        maintainAspectRatio: false,
+                        maintainAspectRatio: true,
+                        aspectRatio: 2,
                         scales: {
                             x: {
                                 type: 'linear',
