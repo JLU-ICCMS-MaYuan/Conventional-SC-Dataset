@@ -4,6 +4,7 @@
 """
 import json
 import base64
+import math
 from pathlib import Path
 from datetime import datetime
 from sqlalchemy.orm import Session
@@ -46,16 +47,18 @@ def import_all_data(input_file: str = "data_export.json", clear_existing: bool =
         # 1. 导入元素组合
         print("导入元素组合...")
         compound_id_mapping = {}  # 旧ID -> 新ID映射
+        symbol_to_compound_id = {}
         for comp_data in data["compounds"]:
+            symbols_str = comp_data["element_symbols"]
             # 检查是否已存在
             existing = db.query(models.Compound).filter(
-                models.Compound.element_symbols == comp_data["element_symbols"]
+                models.Compound.element_symbols == symbols_str
             ).first()
 
             if existing:
+                compound = existing
                 compound_id_mapping[comp_data["id"]] = existing.id
             else:
-                symbols_str = comp_data["element_symbols"]
                 if "element_list" in comp_data and comp_data["element_list"]:
                     symbol_list = comp_data["element_list"]
                 else:
@@ -69,6 +72,8 @@ def import_all_data(input_file: str = "data_export.json", clear_existing: bool =
                 db.flush()
                 compound_id_mapping[comp_data["id"]] = compound.id
 
+            symbol_to_compound_id[symbols_str] = compound.id
+
         db.commit()
         print(f"   ✅ 导入了 {len(data['compounds'])} 个元素组合")
 
@@ -77,11 +82,18 @@ def import_all_data(input_file: str = "data_export.json", clear_existing: bool =
         paper_id_mapping = {}  # 旧ID -> 新ID映射
         for paper_data in data["papers"]:
             # 检查是否已存在（根据DOI和compound_id）
-            old_compound_id = paper_data["compound_id"]
-            new_compound_id = compound_id_mapping.get(old_compound_id)
+            symbols_str = paper_data.get("element_symbols")
+            old_compound_id = paper_data.get("compound_id")
+            new_compound_id = None
+
+            if symbols_str:
+                new_compound_id = symbol_to_compound_id.get(symbols_str)
+            if not new_compound_id and old_compound_id is not None:
+                new_compound_id = compound_id_mapping.get(old_compound_id)
 
             if not new_compound_id:
-                print(f"   ⚠️  跳过文献 {paper_data['doi']}（元素组合不存在）")
+                identifier = paper_data.get("doi") or paper_data.get("title", "unknown")
+                print(f"   ⚠️  跳过文献 {identifier}（元素组合不存在）")
                 continue
 
             existing = db.query(models.Paper).filter(
@@ -122,7 +134,39 @@ def import_all_data(input_file: str = "data_export.json", clear_existing: bool =
         db.commit()
         print(f"   ✅ 导入了 {len(paper_id_mapping)} 篇文献")
 
-        # 3. 导入文献截图
+        # 3. 导入物理参数
+        print("导入物理参数...")
+        imported_params = 0
+        for param_data in data.get("paper_data", []):
+            old_paper_id = param_data.get("paper_id")
+            new_paper_id = paper_id_mapping.get(old_paper_id)
+
+            if not new_paper_id:
+                continue
+
+            pressure_val = param_data.get("pressure")
+            tc_val = param_data.get("tc")
+            s_factor_val = param_data.get("s_factor")
+            if s_factor_val is None and tc_val is not None:
+                pressure_safe = pressure_val if pressure_val is not None else 0
+                s_factor_val = tc_val / math.sqrt(1521 + pressure_safe ** 2)
+
+            param = models.PaperData(
+                paper_id=new_paper_id,
+                pressure=pressure_val,
+                tc=tc_val,
+                lambda_val=param_data.get("lambda_val"),
+                omega_log=param_data.get("omega_log"),
+                n_ef=param_data.get("n_ef"),
+                s_factor=s_factor_val
+            )
+            db.add(param)
+            imported_params += 1
+
+        db.commit()
+        print(f"   ✅ 导入了 {imported_params} 条物理参数")
+
+        # 4. 导入文献截图
         print("导入文献截图...")
         imported_images = 0
         for img_data in data["paper_images"]:
@@ -150,36 +194,10 @@ def import_all_data(input_file: str = "data_export.json", clear_existing: bool =
         db.commit()
         print(f"   ✅ 导入了 {imported_images} 张截图")
 
-        # 4. 导入元素组合关联
-        print("导入元素组合关联...")
-        for ce_data in data["compound_elements"]:
-            old_compound_id = ce_data["compound_id"]
-            new_compound_id = compound_id_mapping.get(old_compound_id)
-
-            if not new_compound_id:
-                continue
-
-            # 检查是否已存在
-            existing = db.query(models.CompoundElement).filter(
-                models.CompoundElement.compound_id == new_compound_id,
-                models.CompoundElement.element_id == ce_data["element_id"]
-            ).first()
-
-            if existing:
-                continue
-
-            ce = models.CompoundElement(
-                compound_id=new_compound_id,
-                element_id=ce_data["element_id"]
-            )
-            db.add(ce)
-
-        db.commit()
-        print(f"   ✅ 导入了元素组合关联")
-
         print("\n✅ 导入完成！")
         print(f"   元素组合: {len(compound_id_mapping)} 个")
         print(f"   文献: {len(paper_id_mapping)} 篇")
+        print(f"   物理参数: {imported_params} 条")
         print(f"   截图: {imported_images} 张")
 
     except Exception as e:
