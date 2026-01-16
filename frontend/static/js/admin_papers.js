@@ -81,7 +81,13 @@ function logout() {
 // ========== 加载文献列表 ==========
 
 async function loadPapers(page = 0) {
+    const isPageChange = page !== currentPage;
     currentPage = page;
+
+    if (isPageChange) {
+        selectedPapers.clear();
+        updateBatchActionsVisibility();
+    }
 
     // 获取筛选条件
     const filters = {
@@ -139,12 +145,16 @@ function renderPapers(papers) {
         return;
     }
 
+    const allCheckedOnPage = papers.length > 0 && papers.every(p => selectedPapers.has(p.id));
+
     let html = `
         <div class="table-responsive">
             <table class="table table-hover">
                 <thead>
                     <tr>
                         <th width="40">
+                            <input type="checkbox" id="selectAllTable" class="paper-checkbox"
+                                   ${allCheckedOnPage ? 'checked' : ''} onchange="toggleSelectAll()">
                         </th>
                         <th>标题</th>
                         <th>元素组合</th>
@@ -262,6 +272,7 @@ function renderPapers(papers) {
 
     container.innerHTML = html;
     updateBatchActionsVisibility();
+    updateSelectAllCheckbox();
 }
 
 // 渲染分页
@@ -319,8 +330,10 @@ function togglePaperSelection(paperId) {
 
 function toggleSelectAll() {
     const checkboxes = document.querySelectorAll('.paper-checkbox[data-paper-id]');
-    const selectAllChecked = document.getElementById('selectAll').checked ||
-                            document.getElementById('selectAllTable').checked;
+    const selectAllMain = document.getElementById('selectAll');
+    const selectAllTable = document.getElementById('selectAllTable');
+    const selectAllChecked = (selectAllMain && selectAllMain.checked) ||
+                             (selectAllTable && selectAllTable.checked);
 
     checkboxes.forEach(cb => {
         const paperId = parseInt(cb.getAttribute('data-paper-id'));
@@ -333,12 +346,19 @@ function toggleSelectAll() {
         }
     });
 
+    if (selectAllMain) selectAllMain.checked = selectAllChecked && checkboxes.length > 0;
+    if (selectAllTable) selectAllTable.checked = selectAllChecked && checkboxes.length > 0;
+
     updateBatchActionsVisibility();
 }
 
 function clearSelection() {
     selectedPapers.clear();
     document.querySelectorAll('.paper-checkbox').forEach(cb => cb.checked = false);
+    const selectAllMain = document.getElementById('selectAll');
+    const selectAllTable = document.getElementById('selectAllTable');
+    if (selectAllMain) selectAllMain.checked = false;
+    if (selectAllTable) selectAllTable.checked = false;
     updateBatchActionsVisibility();
 }
 

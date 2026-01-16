@@ -98,15 +98,25 @@ def export_all_data(output_file: str = "data_export.json"):
                 "s_factor": p.s_factor
             })
 
-        # 5. 导出文献截图（Base64编码）
+        # 5. 导出文献截图（保存为文件并在JSON中使用链接）
         print("导出文献截图数据...")
+        images_dir = Path("data/images")
+        images_dir.mkdir(parents=True, exist_ok=True)
+        
         images = db.query(models.PaperImage).all()
         for img in images:
+            # 生成文件名: paper_{paper_id}_order_{order}.jpg
+            image_filename = f"paper_{img.paper_id}_order_{img.image_order}.jpg"
+            image_path = images_dir / image_filename
+            
+            # 写入原图文件
+            with open(image_path, 'wb') as f:
+                f.write(img.image_data)
+            
             data["paper_images"].append({
                 "id": img.id,
                 "paper_id": img.paper_id,
-                "image_data": base64.b64encode(img.image_data).decode('utf-8'),
-                "thumbnail_data": base64.b64encode(img.thumbnail_data).decode('utf-8'),
+                "file_path": str(image_path),  # 使用本地路径
                 "image_order": img.image_order,
                 "file_size": img.file_size,
                 "created_at": img.created_at.isoformat()
