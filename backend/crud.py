@@ -50,11 +50,18 @@ def get_elements_by_symbols(db: Session, symbols: List[str]) -> List[models.Elem
 def get_or_create_compound(db: Session, element_symbols: List[str]) -> models.Compound:
     """
     获取或创建元素组合
-    element_symbols: 元素符号列表，如 ['Y', 'Ba', 'Cu', 'O']
+    强制执行标准化：仅保留有效元素符号并排序
     """
-    # 排序并连接元素符号（如 "Ba-Cu-O-Y"）
-    sorted_symbols = sorted(set(element_symbols))
+    # 获取有效元素集合
+    valid_elements = {e.symbol for e in db.query(models.Element).all()}
+    
+    # 过滤并去重排序
+    sorted_symbols = sorted(set(s for s in element_symbols if s in valid_elements))
     compound_key = "-".join(sorted_symbols)
+
+    if not sorted_symbols:
+        # 如果没有有效元素，返回 None
+        return None
 
     # 查找是否已存在
     compound = db.query(models.Compound).filter(
@@ -93,17 +100,15 @@ def get_or_create_compound(db: Session, element_symbols: List[str]) -> models.Co
 
 
 def get_compound_by_symbols(db: Session, element_symbols: List[str]) -> Optional[models.Compound]:
-    """根据元素符号获取元素组合"""
-    sorted_symbols = sorted(set(element_symbols))
+    """根据元素符号获取元素组合（包含标准化逻辑）"""
+    valid_elements = {e.symbol for e in db.query(models.Element).all()}
+    sorted_symbols = sorted(set(s for s in element_symbols if s in valid_elements))
+    if not sorted_symbols:
+        return None
     compound_key = "-".join(sorted_symbols)
-    compound = db.query(models.Compound).filter(
+    return db.query(models.Compound).filter(
         models.Compound.element_symbols == compound_key
     ).first()
-    if compound and not getattr(compound, "element_list", None):
-        compound.element_list = json.dumps(sorted_symbols)
-        db.commit()
-        db.refresh(compound)
-    return compound
 
 
 def search_compounds_by_elements(db: Session, element_symbols: List[str], mode: str) -> List[dict]:
