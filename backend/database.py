@@ -8,7 +8,14 @@ import os
 
 # 数据库文件路径，支持通过环境变量自定义持久化卷位置
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATABASE_PATH = os.environ.get("DATABASE_PATH") or os.path.join(BASE_DIR, "data", "superconductor.db")
+
+# 优先读取 DATA_DIR，如果设置了，则数据库放在 DATA_DIR/superconductor.db
+DATA_DIR = os.environ.get("DATA_DIR")
+if DATA_DIR:
+    DATABASE_PATH = os.path.join(DATA_DIR, "superconductor.db")
+else:
+    # 兼容旧的 DATABASE_PATH 变量或默认相对路径
+    DATABASE_PATH = os.environ.get("DATABASE_PATH") or os.path.join(BASE_DIR, "data", "superconductor.db")
 
 # 确保data目录存在
 os.makedirs(os.path.dirname(DATABASE_PATH), exist_ok=True)

@@ -18,9 +18,11 @@ import string
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # JWT 配置
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")  # 生产环境必须更改
+# 从环境变量读取密钥，生产环境必须设置
+SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "fallback-insecure-key-for-dev-only")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7天
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 60  # Token 有效期：60天
+
 
 # HTTPBearer 用于从请求头提取 token
 security = HTTPBearer()
