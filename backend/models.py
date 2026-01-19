@@ -18,9 +18,6 @@ class Element(Base):
     name_zh = Column(String(50))  # 中文名，如 "铜"
     atomic_number = Column(Integer, unique=True, nullable=False)  # 原子序数
 
-    # 关系
-    compound_elements = relationship("CompoundElement", back_populates="element")
-
     def __repr__(self):
         return f"<Element {self.symbol} ({self.name})>"
 
@@ -31,12 +28,12 @@ class Compound(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     element_symbols = Column(String(200), unique=True, nullable=False, index=True)  # 如 "Ba-Cu-O-Y"（按字母排序）
-    element_list = Column(Text, nullable=False, default="[]")  # JSON数组，保存元素列表
+    element_list = Column(Text, nullable=False, default="[]")  # JSON数组，保存元素符号列表
+    element_id_list = Column(Text, nullable=False, default="[]")  # JSON数组，保存元素ID列表
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # 关系
     papers = relationship("Paper", back_populates="compound", cascade="all, delete-orphan")
-    compound_elements = relationship("CompoundElement", back_populates="compound", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Compound {self.element_symbols}>"
@@ -106,7 +103,7 @@ class Paper(Base):
     reviewed_by = Column(Integer, ForeignKey("users.id"))  # 审核人ID
     reviewed_at = Column(DateTime)  # 审核时间
     review_comment = Column(Text)  # 审核意见/拒绝理由
-    show_in_chart = Column(Boolean, default=True, nullable=False)  # 是否用于前端图表
+    show_in_chart = Column(Boolean, default=False, nullable=False)  # 是否用于前端图表
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -156,24 +153,3 @@ class PaperImage(Base):
 
     def __repr__(self):
         return f"<PaperImage paper_id={self.paper_id} order={self.image_order}>"
-
-
-class CompoundElement(Base):
-    """元素组合-元素关联表 - 多对多关系"""
-    __tablename__ = "compound_elements"
-
-    id = Column(Integer, primary_key=True, index=True)
-    compound_id = Column(Integer, ForeignKey("compounds.id", ondelete="CASCADE"), nullable=False, index=True)
-    element_id = Column(Integer, ForeignKey("elements.id"), nullable=False, index=True)
-
-    # 关系
-    compound = relationship("Compound", back_populates="compound_elements")
-    element = relationship("Element", back_populates="compound_elements")
-
-    # 唯一约束：同一元素组合不能有重复元素
-    __table_args__ = (
-        UniqueConstraint('compound_id', 'element_id', name='uix_compound_element'),
-    )
-
-    def __repr__(self):
-        return f"<CompoundElement compound_id={self.compound_id} element_id={self.element_id}>"
