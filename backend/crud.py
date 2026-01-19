@@ -69,31 +69,33 @@ def get_or_create_compound(db: Session, element_symbols: List[str]) -> models.Co
     ).first()
 
     if compound:
+        needs_update = False
         if not getattr(compound, "element_list", None):
             compound.element_list = json.dumps(sorted_symbols)
+            needs_update = True
+        
+        if not getattr(compound, "element_id_list", None) or compound.element_id_list == "[]":
+            elements = get_elements_by_symbols(db, sorted_symbols)
+            element_ids = sorted([e.id for e in elements])
+            compound.element_id_list = json.dumps(element_ids)
+            needs_update = True
+            
+        if needs_update:
             db.commit()
             db.refresh(compound)
         return compound
 
+    # 获取元素对象和ID
+    elements = get_elements_by_symbols(db, sorted_symbols)
+    element_ids = sorted([e.id for e in elements])
+
     # 创建新的元素组合
     compound = models.Compound(
         element_symbols=compound_key,
-        element_list=json.dumps(sorted_symbols)
+        element_list=json.dumps(sorted_symbols),
+        element_id_list=json.dumps(element_ids)
     )
     db.add(compound)
-    db.flush()  # 获取ID但不提交
-
-    # 获取元素对象
-    elements = get_elements_by_symbols(db, sorted_symbols)
-
-    # 创建关联
-    for element in elements:
-        compound_element = models.CompoundElement(
-            compound_id=compound.id,
-            element_id=element.id
-        )
-        db.add(compound_element)
-
     db.commit()
     db.refresh(compound)
     return compound
@@ -112,48 +114,51 @@ def get_compound_by_symbols(db: Session, element_symbols: List[str]) -> Optional
 
 
 def search_compounds_by_elements(db: Session, element_symbols: List[str], mode: str) -> List[dict]:
-    """按照选择模式筛选元素组合"""
+    """按照选择模式筛选元素组合（优化版：使用 ID 列表对比）"""
     allowed_modes = {'only', 'combination', 'contains'}
     mode = mode if mode in allowed_modes else 'combination'
-    selection = sorted(set(element_symbols))
-    if not selection:
+    
+    # 1. 将输入的符号转换为 ID 集合
+    elements = get_elements_by_symbols(db, element_symbols)
+    selection_ids = set(e.id for e in elements)
+    if not selection_ids:
         return []
 
-    selection_set = set(selection)
     compounds = db.query(models.Compound).all()
     matched: List[dict] = []
 
-    def parse_elements(raw: Optional[str]) -> List[str]:
-        if not raw:
-            return []
-        try:
-            if raw.strip().startswith('['):
-                return json.loads(raw)
-        except Exception:
-            pass
-        return [part for part in raw.split("-") if part]
-
     for compound in compounds:
-        elements = parse_elements(compound.element_list) or parse_elements(compound.element_symbols)
-        elements_sorted = sorted(set(elements))
-        element_set = set(elements_sorted)
-        if not element_set:
+        # 2. 获取该化合物的 ID 集合
+        try:
+            if compound.element_id_list and compound.element_id_list != "[]":
+                comp_ids = set(json.loads(compound.element_id_list))
+            else:
+                # 兼容性处理：如果 ID 列表还没迁移，退回到解析符号
+                raw_symbols = json.loads(compound.element_list) if compound.element_list.startswith('[') else compound.element_symbols.split("-")
+                comp_ids = set(e.id for e in get_elements_by_symbols(db, raw_symbols))
+        except Exception:
             continue
 
+        if not comp_ids:
+            continue
+
+        # 3. 核心匹配逻辑
         match = False
         if mode == 'only':
-            match = element_set == selection_set
+            match = comp_ids == selection_ids
         elif mode == 'combination':
-            match = element_set.issubset(selection_set)
+            # 模式：组合（即该化合物包含的元素是用户选择的子集）
+            match = comp_ids.issubset(selection_ids)
         else:  # contains
-            match = selection_set.issubset(element_set)
+            # 模式：包含（即用户选择的元素是该化合物包含元素的子集）
+            match = selection_ids.issubset(comp_ids)
 
         if match:
             paper_count = get_compound_papers_count(db, compound.id)
             matched.append({
                 "id": compound.id,
                 "element_symbols": compound.element_symbols,
-                "element_list": elements_sorted,
+                "element_list": json.loads(compound.element_list) if compound.element_list.startswith('[') else compound.element_symbols.split("-"),
                 "paper_count": paper_count
             })
 
@@ -194,7 +199,7 @@ def create_paper(
     contributor_name: str = "匿名贡献者",
     contributor_affiliation: str = "未提供单位",
     notes: Optional[str] = None,
-    show_in_chart: bool = True
+    show_in_chart: bool = False
 ) -> models.Paper:
     """创建文献记录"""
     paper = models.Paper(
