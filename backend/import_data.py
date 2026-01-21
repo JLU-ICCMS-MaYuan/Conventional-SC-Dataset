@@ -10,17 +10,6 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from backend.database import SessionLocal, engine
-from backend import models
-
-
-import json
-import base64
-import math
-from pathlib import Path
-from datetime import datetime
-from sqlalchemy.orm import Session
-
-from backend.database import SessionLocal, engine
 from backend import models, crud
 
 
@@ -57,7 +46,7 @@ def import_all_data(input_file: str = "data/data_export.json", clear_existing: b
 
         if clear_existing:
             print("⚠️  清空现有数据...")
-            db.query(models.CompoundElement).delete()
+            # 注意：不再删除 CompoundElement，因为它已被移除
             db.query(models.PaperImage).delete()
             db.query(models.PaperData).delete()
             db.query(models.Paper).delete()
@@ -246,20 +235,11 @@ if __name__ == "__main__":
         input_f = sys.argv[1]
     
     clear = "--clear" in sys.argv
-    import_all_data(input_f, clear)
-
-
-
-if __name__ == "__main__":
-    import sys
-
-    input_file = "data/data_export.json"
-    clear_existing = "--clear" in sys.argv
-
-    if clear_existing:
+    
+    if clear:
         confirm = input("⚠️  确定要清空现有数据吗？(yes/no): ")
         if confirm.lower() != "yes":
             print("取消操作")
             sys.exit(0)
-
-    import_all_data(input_file, clear_existing)
+            
+    import_all_data(input_f, clear)

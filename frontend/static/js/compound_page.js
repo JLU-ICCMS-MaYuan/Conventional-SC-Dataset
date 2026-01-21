@@ -820,3 +820,72 @@ async function submitPaper() {
         }
     }
 }
+
+/**
+ * 批量导出当前显示的文献
+ * @param {string} format 'ris' 或 'json'
+ */
+async function exportAllDisplayedPapers(format) {
+    const papers = Array.from(paperCache.values());
+    if (papers.length === 0) {
+        alert('当前没有可导出的文献');
+        return;
+    }
+
+    const fileNameBase = `export_${elementSymbols || 'papers'}`;
+
+    if (format === 'ris') {
+        // 合并所有文献的 RIS 内容，中间用换行分隔
+        const risContent = papers.map(p => buildRISContent(p)).join('\n');
+        downloadFile(risContent, `${fileNameBase}.ris`, 'application/x-research-info-systems');
+    } else if (format === 'json') {
+        const exportData = {
+            papers: [],
+            paper_data: [],
+            paper_images: []
+        };
+
+        papers.forEach(p => {
+            // 1. 文献基本信息 (克隆并清理)
+            const paperCopy = { ...p };
+            const physicalParams = paperCopy.data || [];
+            delete paperCopy.data; // 移除嵌套数据，符合规范的 papers 列表格式
+            exportData.papers.push(paperCopy);
+
+            // 2. 物理数据点
+            physicalParams.forEach(d => {
+                exportData.paper_data.push({
+                    ...d,
+                    paper_id: p.id
+                });
+            });
+
+            // 3. 图片信息 (由于前端限制，导出元数据和访问链接)
+            for (let i = 1; i <= p.image_count; i++) {
+                exportData.paper_images.push({
+                    paper_id: p.id,
+                    image_order: i,
+                    url: `${window.location.origin}/api/papers/${p.id}/images/${i}`
+                });
+            }
+        });
+
+        const jsonContent = JSON.stringify(exportData, null, 2);
+        downloadFile(jsonContent, `${fileNameBase}.json`, 'application/json');
+    }
+}
+
+/**
+ * 通用文件下载函数
+ */
+function downloadFile(content, fileName, contentType) {
+    const blob = new Blob([content], { type: contentType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
