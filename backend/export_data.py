@@ -52,6 +52,7 @@ def export_all_data(output_file: str = "data_export.json"):
                 "id": comp.id,
                 "element_symbols": comp.element_symbols,
                 "element_list": json.loads(comp.element_list) if comp.element_list else comp.element_symbols.split("-"),
+                "element_id_list": json.loads(comp.element_id_list) if comp.element_id_list else [],
                 "created_at": comp.created_at.isoformat()
             })
             compound_symbol_map[comp.id] = comp.element_symbols

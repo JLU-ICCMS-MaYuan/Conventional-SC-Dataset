@@ -76,6 +76,18 @@
                         </div>
                         <button id="enter-compound-btn" class="btn btn-success" disabled>进入化合物页面</button>
                         <button id="clear-selection-btn" class="btn btn-secondary">清除选择</button>
+                        
+                        <!-- 快速上传下拉菜单 -->
+                        <div class="dropdown d-inline-block ms-1">
+                            <button class="btn btn-outline-info dropdown-toggle" type="button" id="fastUploadDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-cloud-upload"></i> 快速上传
+                            </button>
+                            <ul class="dropdown-menu shadow" aria-labelledby="fastUploadDropdown">
+                                <li><a class="dropdown-item" href="#" onclick="triggerFastUpload(); return false;">🚀 快速上传 (xlsx, csv, txt)</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="downloadFastUploadExample(); return false;">📄 快速上传示例 (.xlsx)</a></li>
+                            </ul>
+                        </div>
+                        <input type="file" id="fast-upload-input" style="display: none;" accept=".xlsx,.csv,.txt" onchange="handleFastUpload(this)">
                     </div>
                 </div>
             </div>

@@ -301,3 +301,77 @@ function clearSelection() {
     });
     updateSelectedDisplay();
 }
+
+/**
+ * 触发快速上传文件选择
+ */
+function triggerFastUpload() {
+    const auth = window.authState ? window.authState.get() : null;
+    if (!auth || !auth.token) {
+        if (confirm('只有注册用户可以批量上传文献。是否立即前往登录？')) {
+            window.location.href = '/login';
+        }
+        return;
+    }
+    document.getElementById('fast-upload-input').click();
+}
+
+/**
+ * 下载快速上传示例文件
+ */
+function downloadFastUploadExample() {
+    window.location.href = '/api/papers/batch-upload-example';
+}
+
+/**
+ * 处理选中的快速上传文件
+ */
+async function handleFastUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const auth = window.authState ? window.authState.get() : null;
+    const token = auth ? auth.token : null;
+
+    if (!token) {
+        alert('登录状态已失效，请重新登录');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    // 显示进度提示
+    const originalBtn = document.getElementById('fastUploadDropdown');
+    const originalHtml = originalBtn.innerHTML;
+    originalBtn.disabled = true;
+    originalBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> 上传中...';
+
+    try {
+        const response = await fetch('/api/papers/batch-upload', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+            body: formData
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            alert(`🎉 ${result.message}`);
+            // 清除选中状态并重置输入框
+            input.value = '';
+            // 刷新页面数据
+            window.location.reload();
+        } else {
+            alert(`❌ 上传失败: ${result.detail || JSON.stringify(result)}`);
+        }
+    } catch (error) {
+        console.error('批量上传出错:', error);
+        alert('❌ 网络请求失败，请检查连接');
+    } finally {
+        originalBtn.disabled = false;
+        originalBtn.innerHTML = originalHtml;
+    }
+}

@@ -2,11 +2,12 @@
 文献相关API
 """
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Response
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional, Annotated
 import json
 from io import BytesIO
+from pathlib import Path
 
 from backend.database import get_db
 from backend import crud, schemas
@@ -209,6 +210,98 @@ async def create_paper(
     paper_response.image_count = len(images_to_process)
 
     return paper_response
+
+
+@router.post("/batch-upload")
+async def batch_upload_papers(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: Annotated[schemas.User, Depends(get_current_user)] = None
+):
+    """
+    批量上传文献（支持 .xlsx, .csv, .txt）
+    """
+    if not current_user:
+        raise HTTPException(status_code=401, detail="请先登录后再进行批量上传")
+    
+    from backend.merge_csv import process_file
+    
+    try:
+        content = await file.read()
+        added_p, added_d, fragment = process_file(content, file.filename)
+        
+        # 将 fragment 中的数据存入数据库
+        # 注意：这里需要处理化合物创建和 ID 关联
+        temp_to_real_paper_ids = {}
+        
+        # 1. 处理文献
+        for p_data in fragment["papers"]:
+            # 获取或创建化合物
+            element_list = p_data["element_symbols"].split("-")
+            compound = crud.get_or_create_compound(db, element_list)
+            
+            # 检查 DOI 是否已存在
+            if crud.check_paper_exists(db, compound.id, p_data["doi"]):
+                continue
+                
+            # 创建文献
+            paper = crud.create_paper(
+                db=db,
+                compound_id=compound.id,
+                doi=p_data["doi"],
+                title=p_data["title"],
+                article_type=p_data["article_type"],
+                superconductor_type=p_data["superconductor_type"],
+                authors=p_data["authors"],
+                journal=p_data["journal"],
+                year=p_data["year"],
+                chemical_formula=p_data.get("chemical_formula"),
+                crystal_structure=p_data.get("crystal_structure"),
+                contributor_name=current_user.real_name,
+                contributor_affiliation="Batch Upload"
+            )
+            temp_to_real_paper_ids[p_data["id_temp"]] = paper.id
+            
+        # 2. 处理物理数据
+        for d_data in fragment["paper_data"]:
+            real_paper_id = temp_to_real_paper_ids.get(d_data["paper_id_temp"])
+            if not real_paper_id:
+                continue
+                
+            # 清理掉临时 ID
+            d_save = {k: v for k, v in d_data.items() if k != "paper_id_temp"}
+            crud.create_paper_data(db, real_paper_id, [d_save])
+            
+        return {
+            "message": f"批量处理完成！成功导入 {len(temp_to_real_paper_ids)} 篇新文献。",
+            "added_papers": len(temp_to_real_paper_ids),
+            "added_data_points": added_d
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"文件处理失败: {str(e)}")
+
+
+@router.get("/batch-upload-example")
+def get_batch_upload_example():
+    """
+    获取批量上传示例文件 (.xlsx)
+    """
+    from backend.merge_csv import create_example_xlsx
+    import os
+    
+    example_path = Path("data/batch_import_example.xlsx")
+    # 确保目录存在
+    os.makedirs(example_path.parent, exist_ok=True)
+    
+    if not example_path.exists():
+        create_example_xlsx(example_path)
+        
+    return FileResponse(
+        path=example_path,
+        filename="superconductor_batch_upload_example.xlsx",
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
 
 @router.get("/compound/{element_symbols}", response_model=List[schemas.PaperResponse])
