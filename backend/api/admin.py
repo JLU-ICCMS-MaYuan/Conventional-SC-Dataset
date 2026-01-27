@@ -70,6 +70,121 @@ class PaperReviewInfo(BaseModel):
     reviewer_name: Optional[str]
 
 
+class UserPermissionRequest(BaseModel):
+    is_admin: bool
+    is_superadmin: bool
+    is_approved: bool
+
+
+# ========== 超级管理员功能 ==========
+
+@router.get("/all-users", summary="获取所有用户列表（仅超级管理员）")
+async def get_all_users(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_superadmin)
+):
+    """获取数据库中所有用户及其统计信息"""
+    users = db.query(User).all()
+
+    result = []
+    for user in users:
+        # 统计提交的文献（基于姓名匹配）
+        from backend.models import Paper
+        submitted_count = db.query(Paper).filter(Paper.contributor_name == user.real_name).count()
+        # 统计审核的文献
+        reviewed_count = len(user.reviewed_papers)
+
+        result.append({
+            "id": user.id,
+            "email": user.email,
+            "real_name": user.real_name,
+            "is_admin": user.is_admin,
+            "is_superadmin": user.is_superadmin,
+            "is_approved": user.is_approved,
+            "is_email_verified": user.is_email_verified,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
+            "approved_at": user.approved_at.isoformat() if user.approved_at else None,
+            "submitted_count": submitted_count,
+            "reviewed_count": reviewed_count
+        })
+    
+    return result
+
+
+@router.put("/users/{user_id}/permissions", summary="修改用户权限（仅超级管理员）")
+async def update_user_permissions(
+    user_id: int,
+    request: UserPermissionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_superadmin)
+):
+    """修改指定用户的权限状态"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    
+    # 防止取消最后一个超级管理员的权限
+    if user.id == current_user.id and not request.is_superadmin:
+        raise HTTPException(status_code=400, detail="不能取消自己的超级管理员权限")
+
+    user.is_admin = request.is_admin
+    user.is_superadmin = request.is_superadmin
+    user.is_approved = request.is_approved
+    
+    if request.is_approved and not user.approved_at:
+        user.approved_at = datetime.utcnow()
+        user.approved_by = current_user.id
+
+    db.commit()
+    return {"message": "用户权限已更新", "user_id": user.id}
+
+
+@router.delete("/users/{user_id}", summary="删除用户（仅超级管理员）")
+async def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_superadmin)
+):
+    """删除用户"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    
+    if user.id == current_user.id:
+        raise HTTPException(status_code=400, detail="不能删除自己")
+
+    db.delete(user)
+    db.commit()
+    return {"message": f"用户 {user.real_name} 已删除"}
+
+
+@router.get("/users/{user_id}/submitted-papers", summary="获取用户提交的文献列表")
+async def get_user_submitted_papers(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_superadmin)
+):
+    """获取指定用户提交的所有文献（基于姓名匹配）"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    
+    from backend.models import Paper
+    papers = db.query(Paper).filter(Paper.contributor_name == user.real_name).order_by(Paper.created_at.desc()).all()
+
+    return [
+        {
+            "id": paper.id,
+            "doi": paper.doi,
+            "title": paper.title,
+            "year": paper.year,
+            "review_status": paper.review_status,
+            "created_at": paper.created_at.isoformat()
+        }
+        for paper in papers
+    ]
+
+
 # ========== 超级管理员功能 ==========
 
 @router.get("/pending-approvals", summary="获取待审批的管理员列表（仅超级管理员）")

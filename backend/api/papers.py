@@ -41,6 +41,27 @@ def normalize_superconductor_type(value: str) -> str:
 router = APIRouter(prefix="/api/papers", tags=["papers"])
 
 
+@router.get("/stats/user-ranking")
+def get_user_ranking(db: Session = Depends(get_db)):
+    """获取文献提交数前20的注册用户排名"""
+    from backend.models import Paper, User
+    
+    users = db.query(User).all()
+    rankings = []
+    
+    for user in users:
+        # 统计该用户提交的文献数（与超级管理员管理表逻辑一致）
+        count = db.query(Paper).filter(Paper.contributor_name == user.real_name).count()
+        rankings.append({"name": user.real_name, "count": count})
+    
+    # 按提交数降序排序
+    rankings.sort(key=lambda x: x["count"], reverse=True)
+    
+    # 过滤掉 0 篇的（可选，但图表展示 0 没意义，不过为了展示“更新了”，如果只有 0，至少返点东西）
+    # 这里保留 top 20，即使是 0
+    return rankings[:20]
+
+
 @router.post("/", response_model=schemas.PaperResponse)
 async def create_paper(
     doi: str = Form(...),

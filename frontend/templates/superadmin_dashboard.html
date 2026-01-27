@@ -6,6 +6,24 @@
     <title>超级管理员面板 - 超导文献数据库</title>
     <link href="/static/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .transition-all { transition: all 0.2s ease-in-out; }
+        .rotate-180 { transform: rotate(180deg); }
+        .user-expand-btn { 
+            width: 24px; 
+            height: 24px; 
+            display: inline-flex; 
+            align-items: center; 
+            justify-content: center; 
+            border-radius: 50%;
+            border: 1px solid #dee2e6;
+            background: #fff;
+            color: #6c757d;
+            cursor: pointer;
+            padding: 0;
+        }
+        .user-expand-btn:hover { background-color: #f8f9fa; color: #0d6efd; border-color: #0d6efd; }
+    </style>
 </head>
 <body>
     <!-- 导航栏 -->
@@ -38,7 +56,12 @@
     <div class="container mt-4">
         <ul class="nav nav-tabs mb-4" role="tablist">
             <li class="nav-item">
-                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#pending-tab">
+                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#all-users-tab">
+                    所有用户
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#pending-tab">
                     待审批管理员 <span class="badge bg-danger" id="pendingCount">0</span>
                 </button>
             </li>
@@ -50,8 +73,39 @@
         </ul>
 
         <div class="tab-content">
+            <!-- 所有用户 -->
+            <div class="tab-pane fade show active" id="all-users-tab">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h3>所有注册用户</h3>
+                    <button class="btn btn-primary btn-sm" onclick="loadAllUsers()">刷新列表</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>姓名</th>
+                                <th>邮箱</th>
+                                <th>注册日期</th>
+                                <th>权限 (管理员)</th>
+                                <th>提交文献</th>
+                                <th>审核文献</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="allUsersTable">
+                            <tr>
+                                <td colspan="7" class="text-center py-5">
+                                    <div class="spinner-border text-primary"></div>
+                                    <p class="mt-2">加载中...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- 待审批管理员 -->
-            <div class="tab-pane fade show active" id="pending-tab">
+            <div class="tab-pane fade" id="pending-tab">
                 <h3>待审批的管理员申请</h3>
                 <div id="pendingAdmins" class="mt-4">
                     <div class="text-center py-5">
@@ -264,10 +318,215 @@
             container.innerHTML = html;
         }
 
+        // 加载所有用户
+        async function loadAllUsers() {
+            try {
+                const response = await fetch('/api/admin/all-users', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('加载失败');
+                }
+
+                const users = await response.json();
+                renderAllUsers(users);
+            } catch (error) {
+                console.error('加载所有用户失败:', error);
+                document.getElementById('allUsersTable').innerHTML = `
+                    <tr><td colspan="7" class="text-center text-danger">加载失败: ${error.message}</td></tr>
+                `;
+            }
+        }
+
+        // 渲染所有用户表格
+        function renderAllUsers(users) {
+            const tbody = document.getElementById('allUsersTable');
+            let html = '';
+
+            if (users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center">暂无用户</td></tr>';
+                return;
+            }
+
+            users.forEach(user => {
+                const regDate = user.created_at ? new Date(user.created_at).toLocaleDateString() : '未知';
+                const isSuper = user.is_superadmin;
+                const isAdmin = user.is_admin || isSuper;
+                
+                html += `
+                    <tr id="user-row-${user.id}">
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <strong>${user.real_name}</strong>
+                                ${isSuper ? '<span class="badge bg-danger ms-2" style="font-size: 0.7rem;">超级管理员</span>' : ''}
+                            </div>
+                        </td>
+                        <td>${user.email}</td>
+                        <td>${regDate}</td>
+                        <td>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch" 
+                                    ${isAdmin ? 'checked' : ''} 
+                                    ${isSuper ? 'disabled' : ''} 
+                                    onchange="updateUserPermissions(${user.id}, this.checked, ${user.is_superadmin}, ${user.is_approved})">
+                                <label class="form-check-label">${isAdmin ? '管理员' : '普通用户'}</label>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <span class="badge bg-info text-dark">${user.submitted_count} 篇</span>
+                                <button class="user-expand-btn ms-2 transition-all" onclick="toggleUserPapers(${user.id})" title="点击查看文献">
+                                    <svg id="expand-icon-${user.id}" xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-chevron-down transition-all" viewBox="0 0 16 16">
+                                      <path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </td>
+                        <td><span class="badge bg-secondary">${user.reviewed_count} 篇</span></td>
+                        <td>
+                            <button class="btn btn-outline-danger btn-sm" 
+                                ${isSuper ? 'disabled' : ''} 
+                                onclick="deleteUser(${user.id}, '${user.real_name}')">
+                                删除
+                            </button>
+                        </td>
+                    </tr>
+                    <tr id="user-papers-${user.id}" class="d-none bg-light">
+                        <td colspan="7">
+                            <div class="p-3">
+                                <h6 class="border-bottom pb-2">《${user.real_name}》提交的文献列表</h6>
+                                <div id="papers-list-${user.id}" class="small">
+                                    <div class="text-center py-2"><div class="spinner-border spinner-border-sm"></div></div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            tbody.innerHTML = html;
+        }
+
+        // 更新用户权限
+        async function updateUserPermissions(userId, isAdmin, isSuper, isApproved) {
+            try {
+                const response = await fetch(`/api/admin/users/${userId}/permissions`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        is_admin: isAdmin,
+                        is_superadmin: isSuper,
+                        is_approved: isApproved || isAdmin // 如果设为管理员，自动设为已批准
+                    })
+                });
+
+                if (!response.ok) {
+                    const data = await response.json();
+                    throw new Error(data.detail || '更新失败');
+                }
+
+                // 刷新列表以更新 UI 状态
+                loadAllUsers();
+                loadApprovedAdmins();
+            } catch (error) {
+                alert('操作失败: ' + error.message);
+                loadAllUsers(); // 恢复原始状态
+            }
+        }
+
+        // 删除用户
+        async function deleteUser(userId, userName) {
+            if (!confirm(`⚠️ 警告：确定要删除用户“${userName}”吗？\n此操作不可撤销，且会清理该用户的所有关联记录！`)) {
+                return;
+            }
+
+            if (!confirm(`最后确认：真的要彻底删除“${userName}”吗？`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/users/${userId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    alert('用户已成功删除');
+                    loadAllUsers();
+                    loadPendingAdmins();
+                    loadApprovedAdmins();
+                } else {
+                    const data = await response.json();
+                    alert('删除失败: ' + (data.detail || '未知错误'));
+                }
+            } catch (error) {
+                console.error('删除用户失败:', error);
+                alert('操作失败，请检查网络连接');
+            }
+        }
+
+        // 展开/收起用户提交的文献
+        async function toggleUserPapers(userId) {
+            const papersRow = document.getElementById(`user-papers-${userId}`);
+            const icon = document.getElementById(`expand-icon-${userId}`);
+            
+            if (papersRow.classList.contains('d-none')) {
+                // 展开
+                papersRow.classList.remove('d-none');
+                icon.classList.add('rotate-180');
+                
+                // 加载文献
+                try {
+                    const response = await fetch(`/api/admin/users/${userId}/submitted-papers`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const papers = await response.json();
+                    
+                    const listContainer = document.getElementById(`papers-list-${userId}`);
+                    if (papers.length === 0) {
+                        listContainer.innerHTML = '<p class="text-muted mb-0">该用户尚未提交任何文献。</p>';
+                    } else {
+                        let html = '<div class="list-group list-group-flush">';
+                        papers.forEach(p => {
+                            const statusBadge = p.review_status === 'approved' ? '<span class="badge bg-success">已通过</span>' : 
+                                               (p.review_status === 'rejected' ? '<span class="badge bg-danger">已拒绝</span>' : 
+                                               '<span class="badge bg-warning text-dark">待审核</span>');
+                            html += `
+                                <div class="list-group-item bg-transparent d-flex justify-content-between align-items-center">
+                                    <span>
+                                        <strong>[${p.year || '?'}]</strong> ${p.title} 
+                                        <small class="text-muted">(DOI: ${p.doi})</small>
+                                    </span>
+                                    ${statusBadge}
+                                </div>
+                            `;
+                        });
+                        html += '</div>';
+                        listContainer.innerHTML = html;
+                    }
+                } catch (error) {
+                    document.getElementById(`papers-list-${userId}`).innerHTML = '<p class="text-danger">加载文献失败</p>';
+                }
+            } else {
+                // 收起
+                papersRow.classList.add('d-none');
+                icon.classList.remove('rotate-180');
+            }
+        }
+
         // 页面加载时初始化
         if (checkAuth()) {
             loadPendingAdmins();
             loadApprovedAdmins();
+            loadAllUsers();
         }
     </script>
 </body>
