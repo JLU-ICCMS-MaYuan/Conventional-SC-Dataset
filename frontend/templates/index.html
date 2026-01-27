@@ -118,7 +118,7 @@
                 </div>
             </div>
             <!-- 数据库实时 P-Tc 分布 -->
-            <div class="col-12">
+            <div class="col-12 mb-4">
                 <div class="card shadow-sm">
                     <div class="card-header bg-light py-2">
                         <h6 class="card-title mb-0 fw-bold">数据库实时 P-Tc 分布</h6>
@@ -126,6 +126,19 @@
                     <div class="card-body p-2">
                         <div class="ratio" style="--bs-aspect-ratio: 50%;">
                             <canvas id="dynamicChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- 贡献者排行 -->
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-light py-2">
+                        <h6 class="card-title mb-0 fw-bold">贡献者排行 (Top 20)</h6>
+                    </div>
+                    <div class="card-body p-2">
+                        <div style="height: 500px;">
+                            <canvas id="rankingChart"></canvas>
                         </div>
                     </div>
                 </div>
@@ -548,6 +561,82 @@
                         dynamicChart.update();
                     })
                     .catch(err => console.error('加载图表数据失败:', err));
+
+                // 3. 贡献者排行图表 (横向柱状图)
+                const ctxRanking = document.getElementById('rankingChart').getContext('2d');
+                const rankingChart = new Chart(ctxRanking, {
+                    type: 'bar',
+                    data: {
+                        labels: Array(20).fill(''), // 预留20个位置
+                        datasets: [{
+                            label: '提交文献数',
+                            data: Array(20).fill(null),
+                            backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            borderWidth: 1,
+                            barThickness: 15 // 固定柱子宽度更美观
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                beginAtZero: true,
+                                title: { display: true, text: '文献提交数量' },
+                                ticks: { stepSize: 1 }
+                            },
+                            y: {
+                                ticks: {
+                                    font: { weight: 'bold' },
+                                    autoSkip: false
+                                },
+                                grid: { display: false }
+                            }
+                        },
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        if (context.raw === null) return null;
+                                        return ` 提交了 ${context.raw} 篇文献`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // 加载排行榜数据
+                fetch('/api/papers/stats/user-ranking')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (!Array.isArray(data) || data.length === 0) return;
+                        
+                        // 准备20个名额的数据
+                        const displayLabels = Array(20).fill('');
+                        const displayData = Array(20).fill(null);
+                        let maxVal = 0;
+
+                        data.forEach((item, i) => {
+                            if (i < 20) {
+                                displayLabels[i] = item.name;
+                                displayData[i] = item.count;
+                                if (item.count > maxVal) maxVal = item.count;
+                            }
+                        });
+
+                        // 更新 X 轴范围：最大值的 1.5 倍向上取整
+                        const xAxisMax = Math.ceil((maxVal || 1) * 1.5);
+                        rankingChart.options.scales.x.max = xAxisMax;
+
+                        rankingChart.data.labels = displayLabels;
+                        rankingChart.data.datasets[0].data = displayData;
+                        rankingChart.update();
+                    })
+                    .catch(err => console.error('加载排行榜失败:', err));
             }, 300);
         });
     </script>
