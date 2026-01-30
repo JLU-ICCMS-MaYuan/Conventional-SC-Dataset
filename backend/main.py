@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pathlib import Path
 
-from backend.api import elements, compounds, papers, admin, auth_routes
+from backend.api import elements, compounds, papers, admin, auth_routes, tc_predict
 
 # 创建FastAPI应用
 app = FastAPI(
@@ -32,6 +32,7 @@ app.include_router(compounds.router)
 app.include_router(papers.router)
 app.include_router(auth_routes.router)  # 认证API
 app.include_router(admin.router)  # 管理员API
+app.include_router(tc_predict.router)  # Tc 预测 API
 
 # 挂载静态文件目录
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -156,6 +157,15 @@ def admin_papers_page():
     papers_file = TEMPLATES_DIR / "admin_papers.html"
     if papers_file.exists():
         return FileResponse(papers_file)
+    return {"error": "页面不存在"}
+
+
+@app.get("/tc-pre")
+def tc_prediction_page():
+    """Tc 预测实验页面"""
+    page_file = TEMPLATES_DIR / "tc_pre.html"
+    if page_file.exists():
+        return FileResponse(page_file)
     return {"error": "页面不存在"}
 
 

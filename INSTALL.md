@@ -11,7 +11,7 @@
         sudo yum update -y                   # 如果是 CentOS
     # 2. 创建应用运行专用用户 (sc-web)
         sudo useradd -m -s /bin/bash sc-web
-    # 3. 创建持久化数据目录（即使删代码，数据也不会丢）
+    # 3. 创建持久化数据目录
         sudo mkdir -p /var/lib/Conventional-SC-Dataset/data/images
         sudo chown -R sc-web:sc-web /var/lib/Conventional-SC-Dataset
     # 4.为所有用户安装miniconda
@@ -55,11 +55,11 @@
         Environment="DATA_DIR=/var/lib/Conventional-SC-Dataset/data"
         Environment="JWT_SECRET_KEY=your_key_here"#（在这里粘贴你的key）
         Environment="PATH=/root/anaconda3/envs/Conventional-SC-Dataset/bin"
-        Environment="SMTP_SERVER=smtp.163.com"#（默认163邮箱）
+        Environment="SMTP_SERVER=smtp.163.com" #（默认163邮箱）
         Environment="SMTP_PORT=465"
-        Environment="SMTP_USERNAME=your_email@example.com"(在这里填写你的邮箱)
-        Environment="SMTP_PASSWORD=your_password"#(163邮箱此处填写授权码)
-        Environment="SMTP_SENDER_EMAIL=默认发信名称"
+        Environment="SMTP_USERNAME=your_email@example.com" #(在这里填写你的邮箱)
+        Environment="SMTP_PASSWORD=your_password" #(163邮箱此处填写授权码)
+        Environment="SMTP_SENDER_EMAIL=your_email@example.com" #(在这里填写你的邮箱)
         ExecStart=/root/anaconda3/envs/Conventional-SC-Dataset/bin/gunicorn \
             -w 4 \
             -k uvicorn.workers.UvicornWorker \

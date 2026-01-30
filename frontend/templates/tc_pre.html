@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tc 预测实验页</title>
+    <link href="/static/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark navbar-custom shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">超导文献数据库</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#tcNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="tcNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">元素周期表</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" aria-current="page" href="/tc-pre">Tc 预测 (实验)</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container py-4">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="card shadow-sm mb-4">
+                    <div class="card-body">
+                        <h1 class="h3 mb-3">Tc 预测（测试功能）</h1>
+                        <p class="text-muted">
+                            上传一份 <strong>POSCAR</strong>以及对应的
+                            <strong>PDOS</strong> 数据（需包含 <code>PDOS_H.dat</code>），系统将在服务器上运行
+                            轻量版的 Tc 预测脚本，并返回估算结果。
+                        </p>
+                        <ul class="small text-muted">
+                            <li>目前仅支持 VASP 输出，PDOS 文件要求与原脚本一致</li>
+                            <li>至多读取 4 个金属 PDOS 文件，多余的将被忽略</li>
+                            <li>上传的文件只用于即时计算，不会被持久保存</li>
+                        </ul>
+                        <form id="tc-form" class="mt-4">
+                            <div class="mb-3">
+                                <label for="contcar-input" class="form-label">POSCAR</label>
+                                <input class="form-control" type="file" id="contcar-input" accept=".*" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="pdos-input" class="form-label">PDOS 文件 (含 PDOS_H)</label>
+                                <input class="form-control" type="file" id="pdos-input" multiple required>
+                                <div class="form-text">选择 2~5 个 PDOS_*.dat 文件，其中必须包含 PDOS_H.dat。</div>
+                            </div>
+                            <button class="btn btn-primary w-100" type="submit" id="tc-submit-btn">开始预测</button>
+                        </form>
+                        <div class="alert mt-3 d-none" id="tc-message" role="alert"></div>
+                        <div class="card mt-3 d-none" id="tc-result-card">
+                            <div class="card-body">
+                                <h5 class="card-title">预测结果</h5>
+                                <p class="display-6" id="tc-result-value">-- K</p>
+                                <dl class="row mb-0 small text-muted" id="tc-details"></dl>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="text-center text-muted small">
+                    <p class="mb-0">模型来源 吉林大学物理学院 姜博文</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="/static/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/tc_pre.js" defer></script>
+</body>
+</html>
