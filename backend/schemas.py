@@ -226,6 +226,16 @@ class ExportFormat(BaseModel):
 
 # ============= 通用响应 =============
 
+class TcPredictionResponse(BaseModel):
+    """TC 预测结果"""
+    predicted_tc: float = Field(..., description="预测超导临界温度 (K)")
+    f2_value: float = Field(..., description="特征值 f2")
+    dos_h_ratio: float = Field(..., description="H 态密度占比")
+    dos_h_atom_bond: float = Field(..., description="dos_H_atom_bond")
+    bonds_mean: float = Field(..., description="H-H 键长均值")
+    bonds_var: float = Field(..., description="H-H 键长方差")
+
+
 class MessageResponse(BaseModel):
     """通用消息响应"""
     message: str

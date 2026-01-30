@@ -9,6 +9,8 @@
 - Tc/压强图表、组合筛选、引用导出（APS/BibTeX/RIS）
 - 远程备份脚本，支持日/周自动保留策略
 
+## 实验功能
+- `/tc-pre`：上传 CONTCAR 与 PDOS（含 `PDOS_H.dat`），在线运行精简脚本估算 Tc
 
 
 可选：创建超级管理员  
@@ -21,4 +23,3 @@
 - 超级管理员审批：`/admin/superadmin`
 
 详见 [ADMIN_SYSTEM.md](ADMIN_SYSTEM.md)。
-
