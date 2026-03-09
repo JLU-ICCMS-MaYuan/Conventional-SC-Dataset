@@ -105,7 +105,7 @@ const ELEMENTS_DATA = [
     { symbol: 'Og', number: 118, row: 7, col: 18, category: 'noble-gas', exist: 'synthetic', radi: true },
 
     // 镧系元素（La系，原子序数58-71）- 放在第9行
-    { symbol: 'La', number: 57, row: 6, col: 3, category: 'lanthanide', exist: 'natural' },
+    { symbol: 'La', number: 57, row: 9, col: 3, category: 'lanthanide', exist: 'natural' },
     { symbol: 'Ce', number: 58, row: 9, col: 4, category: 'lanthanide', exist: 'natural' },
     { symbol: 'Pr', number: 59, row: 9, col: 5, category: 'lanthanide', exist: 'natural' },
     { symbol: 'Nd', number: 60, row: 9, col: 6, category: 'lanthanide', exist: 'natural' },
@@ -122,7 +122,7 @@ const ELEMENTS_DATA = [
     { symbol: 'Lu', number: 71, row: 9, col: 17, category: 'lanthanide', exist: 'natural' },
 
     // 锕系元素（Ac系，原子序数90-103）- 放在第10行
-    { symbol: 'Ac', number: 89, row: 7, col: 3, category: 'actinide', exist: 'natural' },
+    { symbol: 'Ac', number: 89, row: 10, col: 3, category: 'actinide', exist: 'natural' },
     { symbol: 'Th', number: 90, row: 10, col: 4, category: 'actinide', exist: 'natural' },
     { symbol: 'Pa', number: 91, row: 10, col: 5, category: 'actinide', exist: 'natural' },
     { symbol: 'U', number: 92, row: 10, col: 6, category: 'actinide', exist: 'natural' },
