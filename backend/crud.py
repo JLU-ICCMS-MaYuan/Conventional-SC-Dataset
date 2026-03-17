@@ -270,13 +270,13 @@ def check_paper_exists(db: Session, compound_id: int, doi: str) -> bool:
     return paper is not None
 
 
-def get_papers_by_compound(
+def get_papers_by_compound_query(
     db: Session,
     compound_id: int,
     search_params: Optional[schemas.PaperSearchParams] = None,
     is_admin: bool = False
-) -> List[models.Paper]:
-    """获取元素组合的文献列表（支持搜索和筛选）"""
+):
+    """构建元素组合文献查询（支持搜索和筛选）"""
     query = db.query(models.Paper).filter(models.Paper.compound_id == compound_id)
 
     # 权限过滤：普通用户不能看到仅管理员可见的文献
@@ -316,6 +316,62 @@ def get_papers_by_compound(
         if search_params.review_status:
             query = query.filter(models.Paper.review_status == search_params.review_status)
 
+    return query
+
+
+def get_papers_by_compound_ids_query(
+    db: Session,
+    compound_ids: List[int],
+    search_params: Optional[schemas.PaperSearchParams] = None,
+    is_admin: bool = False
+):
+    """构建多个元素组合的文献聚合查询（支持搜索和筛选）"""
+    query = db.query(models.Paper).filter(models.Paper.compound_id.in_(compound_ids))
+
+    if not is_admin:
+        query = query.filter(models.Paper.review_status != "admin_only")
+
+    if search_params:
+        if search_params.keyword:
+            keyword = f"%{search_params.keyword}%"
+            query = query.filter(
+                or_(
+                    models.Paper.title.like(keyword),
+                    models.Paper.abstract.like(keyword),
+                    models.Paper.authors.like(keyword),
+                    models.Paper.chemical_formula.like(keyword)
+                )
+            )
+
+        if search_params.year_min:
+            query = query.filter(models.Paper.year >= search_params.year_min)
+        if search_params.year_max:
+            query = query.filter(models.Paper.year <= search_params.year_max)
+
+        if search_params.journal:
+            query = query.filter(models.Paper.journal.like(f"%{search_params.journal}%"))
+
+        if search_params.crystal_structure:
+            query = query.filter(
+                models.Paper.crystal_structure.like(f"%{search_params.crystal_structure}%")
+            )
+
+        if search_params.review_status:
+            query = query.filter(models.Paper.review_status == search_params.review_status)
+
+    return query
+
+
+def get_papers_by_compound(
+    db: Session,
+    compound_id: int,
+    search_params: Optional[schemas.PaperSearchParams] = None,
+    is_admin: bool = False
+) -> List[models.Paper]:
+    """获取元素组合的文献列表（支持搜索和筛选）"""
+    query = get_papers_by_compound_query(db, compound_id, search_params, is_admin)
+
+    if search_params:
         # 排序
         if search_params.sort_by == "year":
             if search_params.sort_order == "asc":
@@ -335,6 +391,61 @@ def get_papers_by_compound(
         query = query.order_by(models.Paper.created_at.desc())
 
     return query.all()
+
+
+def count_papers_by_compound(
+    db: Session,
+    compound_id: int,
+    search_params: Optional[schemas.PaperSearchParams] = None,
+    is_admin: bool = False
+) -> int:
+    """统计元素组合在当前筛选条件下的文献总数"""
+    query = get_papers_by_compound_query(db, compound_id, search_params, is_admin)
+    return query.count()
+
+
+def get_papers_by_compound_ids(
+    db: Session,
+    compound_ids: List[int],
+    search_params: Optional[schemas.PaperSearchParams] = None,
+    is_admin: bool = False
+) -> List[models.Paper]:
+    """获取多个元素组合的聚合文献列表（支持搜索和筛选）"""
+    if not compound_ids:
+        return []
+
+    query = get_papers_by_compound_ids_query(db, compound_ids, search_params, is_admin)
+
+    if search_params:
+        if search_params.sort_by == "year":
+            if search_params.sort_order == "asc":
+                query = query.order_by(models.Paper.year.asc(), models.Paper.created_at.desc())
+            else:
+                query = query.order_by(models.Paper.year.desc(), models.Paper.created_at.desc())
+        else:
+            if search_params.sort_order == "asc":
+                query = query.order_by(models.Paper.created_at.asc())
+            else:
+                query = query.order_by(models.Paper.created_at.desc())
+
+        query = query.offset(search_params.offset).limit(search_params.limit)
+    else:
+        query = query.order_by(models.Paper.created_at.desc())
+
+    return query.all()
+
+
+def count_papers_by_compound_ids(
+    db: Session,
+    compound_ids: List[int],
+    search_params: Optional[schemas.PaperSearchParams] = None,
+    is_admin: bool = False
+) -> int:
+    """统计多个元素组合在当前筛选条件下的文献总数"""
+    if not compound_ids:
+        return 0
+    query = get_papers_by_compound_ids_query(db, compound_ids, search_params, is_admin)
+    return query.count()
 
 
 def get_paper_by_id(db: Session, paper_id: int) -> Optional[models.Paper]:

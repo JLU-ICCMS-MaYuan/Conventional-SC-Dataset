@@ -41,6 +41,50 @@ def normalize_superconductor_type(value: str) -> str:
 router = APIRouter(prefix="/api/papers", tags=["papers"])
 
 
+def serialize_paper_for_list(db: Session, paper) -> dict:
+    """序列化文献列表项，允许物理参数中的可空字段原样返回。"""
+    return {
+        "id": paper.id,
+        "compound_id": paper.compound_id,
+        "doi": paper.doi,
+        "title": paper.title,
+        "authors": paper.authors,
+        "journal": paper.journal,
+        "volume": paper.volume,
+        "pages": paper.pages,
+        "year": paper.year,
+        "abstract": paper.abstract,
+        "citation_aps": paper.citation_aps,
+        "citation_bibtex": paper.citation_bibtex,
+        "article_type": paper.article_type,
+        "superconductor_type": paper.superconductor_type,
+        "chemical_formula": paper.chemical_formula,
+        "crystal_structure": paper.crystal_structure,
+        "contributor_name": paper.contributor_name,
+        "contributor_affiliation": paper.contributor_affiliation,
+        "notes": paper.notes,
+        "review_status": paper.review_status,
+        "reviewed_by": paper.reviewed_by,
+        "reviewed_at": paper.reviewed_at.isoformat() if paper.reviewed_at else None,
+        "review_comment": paper.review_comment,
+        "show_in_chart": paper.show_in_chart,
+        "created_at": paper.created_at.isoformat() if paper.created_at else None,
+        "reviewer_name": paper.reviewer.real_name if paper.reviewer else None,
+        "image_count": crud.get_paper_image_count(db, paper.id),
+        "data": [
+            {
+                "pressure": item.pressure,
+                "tc": item.tc,
+                "lambda_val": item.lambda_val,
+                "omega_log": item.omega_log,
+                "n_ef": item.n_ef,
+                "s_factor": item.s_factor,
+            }
+            for item in paper.physical_parameters
+        ],
+    }
+
+
 @router.get("/stats/user-ranking")
 def get_user_ranking(db: Session = Depends(get_db)):
     """获取文献提交数前20的注册用户排名"""
@@ -336,8 +380,9 @@ def get_papers_by_compound(
     review_status: Optional[str] = None,  # 审核状态筛选 (approved/unreviewed/rejected/modifying)
     sort_by: str = "created_at",
     sort_order: str = "desc",
-    limit: int = 50,
+    limit: int = 30,
     offset: int = 0,
+    response: Response = None,
     db: Session = Depends(get_db)
 ):
     """
@@ -369,21 +414,65 @@ def get_papers_by_compound(
     )
 
     # 获取文献列表
+    total_count = crud.count_papers_by_compound(db, compound.id, search_params)
     papers = crud.get_papers_by_compound(db, compound.id, search_params)
+    if response is not None:
+        response.headers["X-Total-Count"] = str(total_count)
 
     # 添加图片数量和审核人姓名
-    papers_with_count = []
-    for paper in papers:
-        paper_resp = schemas.PaperResponse.from_orm(paper)
-        # 添加审核人姓名
-        if paper.reviewer:
-            paper_resp.reviewer_name = paper.reviewer.real_name
-        else:
-            paper_resp.reviewer_name = None
-        paper_resp.image_count = crud.get_paper_image_count(db, paper.id)
-        papers_with_count.append(paper_resp)
+    return [serialize_paper_for_list(db, paper) for paper in papers]
 
-    return papers_with_count
+
+@router.get("/by-elements")
+def get_papers_by_elements(
+    elements: str,
+    mode: str = "combination",
+    keyword: Optional[str] = None,
+    year_min: Optional[int] = None,
+    year_max: Optional[int] = None,
+    journal: Optional[str] = None,
+    crystal_structure: Optional[str] = None,
+    review_status: Optional[str] = None,
+    sort_by: str = "created_at",
+    sort_order: str = "desc",
+    limit: int = 30,
+    offset: int = 0,
+    response: Response = None,
+    db: Session = Depends(get_db)
+):
+    """按元素选择模式聚合获取文献列表，并支持全局分页。"""
+    symbols = [item for item in elements.split("-") if item]
+    compounds = crud.search_compounds_by_elements(db, symbols, mode)
+    compound_ids = [item["id"] for item in compounds]
+    compound_map = {item["id"]: item for item in compounds}
+
+    search_params = schemas.PaperSearchParams(
+        keyword=keyword,
+        year_min=year_min,
+        year_max=year_max,
+        journal=journal,
+        crystal_structure=crystal_structure,
+        review_status=review_status,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        limit=limit,
+        offset=offset
+    )
+
+    total_count = crud.count_papers_by_compound_ids(db, compound_ids, search_params)
+    papers = crud.get_papers_by_compound_ids(db, compound_ids, search_params)
+    if response is not None:
+        response.headers["X-Total-Count"] = str(total_count)
+
+    results = []
+    for paper in papers:
+        paper_resp = serialize_paper_for_list(db, paper)
+        combo = compound_map.get(paper.compound_id, {})
+        paper_resp["compound_element_symbols"] = combo.get("element_symbols", "")
+        paper_resp["compound_element_list"] = combo.get("element_list", [])
+        results.append(paper_resp)
+
+    return results
 
 
 @router.get("/crystal-structures")

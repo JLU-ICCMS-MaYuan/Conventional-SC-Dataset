@@ -5,6 +5,9 @@ let selectedFiles = [];
 let currentReviewStatus = 'all'; // 当前选择的审核状态筛选
 const paperCache = new Map();
 const urlParams = new URLSearchParams(window.location.search);
+const PAPERS_PER_PAGE = 30;
+let currentPage = 1;
+let currentSearchParams = {};
 let viewMode = urlParams.get('mode') || 'only';
 if (!['only', 'combination', 'contains'].includes(viewMode)) {
     viewMode = 'only';
@@ -112,14 +115,27 @@ async function loadCompoundInfo() {
 // 加载文献列表
 async function loadPapers(searchParams = {}) {
     const container = document.getElementById('papers-container');
+    const paginationContainer = document.getElementById('pagination-container');
     container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-3">加载中...</p></div>';
+    if (paginationContainer) {
+        paginationContainer.innerHTML = '';
+    }
+
+    currentSearchParams = { ...searchParams };
 
     try {
-        const queryString = buildQueryString(searchParams);
+        const queryString = buildQueryString(currentSearchParams);
         if (viewMode === 'only') {
-            const papers = await fetchPapersForCombination(elementSymbols, queryString);
-            renderSingleCombination(container, papers);
-            updateModeSubtitle(`共 ${papers.length} 篇文献`);
+            const result = await fetchPapersForCombination(elementSymbols, queryString);
+            const totalPages = Math.max(1, Math.ceil(result.totalCount / PAPERS_PER_PAGE));
+            if (result.totalCount > 0 && currentPage > totalPages) {
+                currentPage = totalPages;
+                loadPapers(currentSearchParams);
+                return;
+            }
+            renderSingleCombination(container, result.papers);
+            renderPagination(result.totalCount);
+            updateModeSubtitle(`共 ${result.totalCount} 篇文献，第 ${currentPage}/${totalPages} 页`);
         } else {
             await renderMultipleCombinations(container, queryString);
         }
@@ -132,6 +148,7 @@ async function loadPapers(searchParams = {}) {
 // 审核状态筛选
 function filterByReviewStatus(status) {
     currentReviewStatus = status;
+    currentPage = 1;
     loadPapers();
 }
 
@@ -141,6 +158,8 @@ function buildQueryString(searchParams = {}) {
     if (searchParams.year_min) params.append('year_min', searchParams.year_min);
     if (searchParams.year_max) params.append('year_max', searchParams.year_max);
     if (currentReviewStatus !== 'all') params.append('review_status', currentReviewStatus);
+    params.append('limit', String(PAPERS_PER_PAGE));
+    params.append('offset', String((currentPage - 1) * PAPERS_PER_PAGE));
     return params.toString();
 }
 
@@ -151,7 +170,10 @@ async function fetchPapersForCombination(symbols, queryString) {
     if (!response.ok) {
         throw new Error(data.detail || '加载失败');
     }
-    return data;
+    return {
+        papers: data,
+        totalCount: parseInt(response.headers.get('X-Total-Count') || String(data.length), 10)
+    };
 }
 
 function renderSingleCombination(container, papers) {
@@ -163,28 +185,19 @@ function renderSingleCombination(container, papers) {
 }
 
 async function renderMultipleCombinations(container, queryString) {
-    const combos = await fetchCombinationList(viewMode);
-    if (!combos || combos.length === 0) {
-        container.innerHTML = `
-            <div class="alert alert-info text-center">
-                <p class="mb-0">未找到符合条件的元素组合，请尝试切换筛选模式或重新选择元素。</p>
-            </div>
-        `;
-        updateModeSubtitle('暂无匹配的元素组合');
+    const paginationContainer = document.getElementById('pagination-container');
+    if (paginationContainer) {
+        paginationContainer.innerHTML = '';
+    }
+    const result = await fetchPapersByElements(viewMode, queryString);
+    const totalPages = Math.max(1, Math.ceil(result.totalCount / PAPERS_PER_PAGE));
+    if (result.totalCount > 0 && currentPage > totalPages) {
+        currentPage = totalPages;
+        loadPapers(currentSearchParams);
         return;
     }
 
-    const sections = await Promise.all(combos.map(async combo => {
-        try {
-            const papers = await fetchPapersForCombination(combo.element_symbols, queryString);
-            return { combo, papers };
-        } catch (error) {
-            return { combo, papers: [], error: error.message };
-        }
-    }));
-
-    const validSections = sections.filter(section => (section.papers && section.papers.length > 0));
-    if (validSections.length === 0) {
+    if (!result.papers || result.papers.length === 0) {
         container.innerHTML = `
             <div class="alert alert-warning text-center">
                 <p class="mb-0">当前筛选条件下没有可展示的文献，请尝试切换筛选模式或放宽筛选条件。</p>
@@ -194,9 +207,101 @@ async function renderMultipleCombinations(container, queryString) {
         return;
     }
 
-    const totalCount = validSections.reduce((sum, section) => sum + section.papers.length, 0);
-    updateModeSubtitle(`共 ${totalCount} 篇文献，涉及 ${validSections.length} 个组合`);
-    container.innerHTML = validSections.map(section => renderCombinationSection(section)).join('');
+    const sectionsMap = new Map();
+    result.papers.forEach(paper => {
+        const key = paper.compound_element_symbols;
+        if (!sectionsMap.has(key)) {
+            sectionsMap.set(key, {
+                combo: {
+                    element_symbols: paper.compound_element_symbols,
+                    element_list: paper.compound_element_list || []
+                },
+                papers: []
+            });
+        }
+        sectionsMap.get(key).papers.push(paper);
+    });
+
+    const sections = Array.from(sectionsMap.values());
+    renderPagination(result.totalCount);
+    updateModeSubtitle(`共 ${result.totalCount} 篇文献，第 ${currentPage}/${totalPages} 页，涉及 ${sections.length} 个组合`);
+    container.innerHTML = sections.map(section => renderCombinationSection(section)).join('');
+}
+
+async function fetchPapersByElements(mode, queryString) {
+    const symbols = getSelectedElementsFromPath().join('-');
+    const params = new URLSearchParams(queryString);
+    params.append('elements', symbols);
+    params.append('mode', mode);
+    const response = await fetch(`/api/papers/by-elements?${params.toString()}`);
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.detail || '加载失败');
+    }
+    return {
+        papers: data,
+        totalCount: parseInt(response.headers.get('X-Total-Count') || String(data.length), 10)
+    };
+}
+
+function renderPagination(totalCount) {
+    const container = document.getElementById('pagination-container');
+    if (!container) return;
+
+    const totalPages = Math.ceil(totalCount / PAPERS_PER_PAGE);
+    if (totalPages <= 1) {
+        container.innerHTML = '';
+        return;
+    }
+
+    const createItem = (label, page, disabled = false, active = false) => `
+        <li class="page-item ${disabled ? 'disabled' : ''} ${active ? 'active' : ''}">
+            <button class="page-link" type="button" ${disabled ? 'disabled' : ''} onclick="goToPage(${page})">${label}</button>
+        </li>
+    `;
+
+    const items = [];
+    items.push(createItem('上一页', currentPage - 1, currentPage === 1));
+
+    const startPage = Math.max(1, currentPage - 2);
+    const endPage = Math.min(totalPages, currentPage + 2);
+
+    if (startPage > 1) {
+        items.push(createItem('1', 1, false, currentPage === 1));
+        if (startPage > 2) {
+            items.push('<li class="page-item disabled"><span class="page-link">...</span></li>');
+        }
+    }
+
+    for (let page = startPage; page <= endPage; page += 1) {
+        items.push(createItem(String(page), page, false, page === currentPage));
+    }
+
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            items.push('<li class="page-item disabled"><span class="page-link">...</span></li>');
+        }
+        items.push(createItem(String(totalPages), totalPages, false, currentPage === totalPages));
+    }
+
+    items.push(createItem('下一页', currentPage + 1, currentPage === totalPages));
+
+    container.innerHTML = `
+        <nav aria-label="文献分页">
+            <ul class="pagination mb-0">
+                ${items.join('')}
+            </ul>
+        </nav>
+    `;
+}
+
+function goToPage(page) {
+    if (page < 1 || page === currentPage) {
+        return;
+    }
+    currentPage = page;
+    loadPapers(currentSearchParams);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 async function fetchCombinationList(mode) {
@@ -526,6 +631,7 @@ function searchPapers() {
     if (yearMin) searchParams.year_min = parseInt(yearMin);
     if (yearMax) searchParams.year_max = parseInt(yearMax);
 
+    currentPage = 1;
     loadPapers(searchParams);
 }
 
@@ -534,6 +640,7 @@ function resetSearch() {
     document.getElementById('keyword-input').value = '';
     document.getElementById('year-min-input').value = '';
     document.getElementById('year-max-input').value = '';
+    currentPage = 1;
     loadPapers();
 }
 

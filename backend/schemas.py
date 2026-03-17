@@ -205,7 +205,7 @@ class PaperSearchParams(BaseModel):
     review_status: Optional[str] = Field(None, description="审核状态：unreviewed, approved, rejected, modifying, admin_only")
     sort_by: Optional[str] = Field("created_at", description="排序字段：created_at, year")
     sort_order: Optional[str] = Field("desc", description="排序顺序：asc, desc")
-    limit: Optional[int] = Field(50, ge=1, le=200, description="返回数量限制")
+    limit: Optional[int] = Field(30, ge=1, le=30, description="返回数量限制")
     offset: Optional[int] = Field(0, ge=0, description="偏移量")
 
 

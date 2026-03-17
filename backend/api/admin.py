@@ -359,7 +359,7 @@ async def review_paper(
 
 @router.get("/papers/unreviewed", summary="获取未审核文献列表")
 async def get_unreviewed_papers(
-    limit: int = 50,
+    limit: int = 30,
     offset: int = 0,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_admin)
@@ -456,7 +456,7 @@ async def get_all_papers(
     year_min: Optional[int] = None,
     year_max: Optional[int] = None,
     keyword: Optional[str] = None,  # 搜索标题、DOI、化学式
-    limit: int = 50,
+    limit: int = 30,
     offset: int = 0,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_admin)
