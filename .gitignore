@@ -23,9 +23,6 @@ wheels/
 .installed.cfg
 *.egg
 
-# 数据库
-*.sqlite
-*.sqlite3
 
 # IDE
 .vscode/
@@ -49,3 +46,8 @@ Thumbs.db
 tmp/
 temp/
 *.tmp
+
+#AI
+AGENTS.md
+CLI_GUIDE.md
+INSTALL.md
