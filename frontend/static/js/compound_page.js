@@ -48,6 +48,58 @@ function calculateSFactor(tcValue, pressureValue) {
     return tc / Math.sqrt(1521 + Math.pow(pressure, 2));
 }
 
+function formatDataCell(value, unit = '') {
+    if (value === null || value === undefined || value === '') {
+        return 'null';
+    }
+    return `${value}${unit ? ` ${unit}` : ''}`;
+}
+
+function renderPhysicalDataTable(dataRows) {
+    if (!dataRows || dataRows.length === 0) {
+        return '<span class="text-muted">无物理参数数据</span>';
+    }
+
+    const synthesizedText = (d) => {
+        if (d.article_type === 'experimental' || d.article_type === 'e') return '是';
+        if (d.article_type === 'theoretical' || d.article_type === 't') return '否';
+        return 'null';
+    };
+
+    const rows = dataRows.map(d => `
+        <tr>
+            <td>${d.chemical_formula || 'null'}</td>
+            <td>${d.crystal_structure || 'null'}</td>
+            <td>${synthesizedText(d)}</td>
+            <td>${formatDataCell(d.tc, 'K')}</td>
+            <td>${formatDataCell(d.pressure, 'GPa')}</td>
+            <td>${formatDataCell(d.lambda_val)}</td>
+            <td>${formatDataCell(d.omega_log)}</td>
+            <td>${formatDataCell(d.n_ef)}</td>
+        </tr>
+    `).join('');
+
+    return `
+        <div class="table-responsive mt-1 mb-2">
+            <table class="table table-sm table-bordered align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>化学式</th>
+                        <th>空间群</th>
+                        <th>是否实验合成</th>
+                        <th>超导温度</th>
+                        <th>超导压强</th>
+                        <th>λ</th>
+                        <th>ω_log</th>
+                        <th>N(E_F)</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>
+    `;
+}
+
 // 初始化
 document.addEventListener('DOMContentLoaded', function() {
     // 从URL获取元素组合
@@ -275,17 +327,7 @@ function renderPaperCard(paper) {
     const mainData = paper.data && paper.data.length > 0 ? paper.data[0] : null;
     const tcSummary = mainData ? `${mainData.tc} K` : '未知';
     
-    // 渲染所有物理数据点
-    const physicalDataHtml = paper.data && paper.data.length > 0 ? 
-        paper.data.map(d => `
-            <div class="mb-1">
-                <span class="badge bg-primary">Tc: ${d.tc} K</span>
-                ${d.pressure !== null && d.pressure !== undefined ? `<span class="badge bg-secondary">P: ${d.pressure} GPa</span>` : ''}
-                ${d.lambda_val !== null && d.lambda_val !== undefined ? `<span class="badge bg-info">λ: ${d.lambda_val}</span>` : ''}
-                ${d.omega_log !== null && d.omega_log !== undefined ? `<span class="badge bg-info">ω_log: ${d.omega_log}</span>` : ''}
-                ${d.n_ef !== null && d.n_ef !== undefined ? `<span class="badge bg-info">N(E_F): ${d.n_ef}</span>` : ''}
-            </div>
-        `).join('') : '<span class="text-muted">无物理参数数据</span>';
+    const physicalDataHtml = renderPhysicalDataTable(paper.data);
 
     // 标签映射
     const articleTypeBadge = paper.article_type === 'theoretical' ?
@@ -356,12 +398,8 @@ function renderPaperCard(paper) {
                                 <strong>作者:</strong> ${authors.join(', ')}<br>
                                 <strong>期刊:</strong> ${paper.journal || '未知'} ${paper.volume ? `Vol. ${paper.volume}` : ''}
                                 ${paper.pages ? `p. ${paper.pages}` : ''} (${paper.year || '未知年份'})<br>
-                                ${paper.chemical_formula ? `<strong>化学式:</strong> ${paper.chemical_formula}<br>` : ''}
-                                ${paper.crystal_structure ? `<strong>晶体结构:</strong> ${paper.crystal_structure}<br>` : ''}
                                 <strong>物理参数:</strong> 
-                                <div class="mt-1 mb-2">
-                                    ${physicalDataHtml}
-                                </div>
+                                ${physicalDataHtml}
                                 <strong>DOI:</strong> <code>${paper.doi}</code>
                                 <div class="mt-2">
                                     <button class="btn btn-outline-secondary btn-sm" type="button" onclick="downloadPaperRIS(${paper.id})">

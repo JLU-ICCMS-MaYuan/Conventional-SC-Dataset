@@ -1,11 +1,17 @@
 """
 数据库模型定义
+
+当前数据主体采用 data/import_papers_to_sqlite.py 生成的新结构：
+- papers 保存论文元数据
+- compounds 保存具体化学式与组成
+- paper_data 关联论文与化合物，并保存物理数据点
+- paper_images 每篇论文一行，最多保存 fig1..fig40
 """
-from sqlalchemy import Column, Integer, String, Text, BLOB, DateTime, ForeignKey, UniqueConstraint, Boolean, Float
+from sqlalchemy import Column, Integer, String, Text, BLOB, DateTime, ForeignKey, Boolean, Float
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+
 from backend.database import Base
-import datetime
 
 
 class Element(Base):
@@ -13,57 +19,60 @@ class Element(Base):
     __tablename__ = "elements"
 
     id = Column(Integer, primary_key=True, index=True)
-    symbol = Column(String(3), unique=True, nullable=False, index=True)  # 元素符号，如 "Cu"
-    name = Column(String(50), nullable=False)  # 英文名，如 "Copper"
-    name_zh = Column(String(50))  # 中文名，如 "铜"
-    atomic_number = Column(Integer, unique=True, nullable=False)  # 原子序数
+    symbol = Column(String(3), unique=True, nullable=False, index=True)
+    name = Column(String(50), nullable=False)
+    name_zh = Column(String(50))
+    atomic_number = Column(Integer, unique=True, nullable=False)
 
     def __repr__(self):
         return f"<Element {self.symbol} ({self.name})>"
 
 
 class Compound(Base):
-    """元素组合表 - 存储元素组合（如Y-Ba-Cu-O系统）"""
+    """具体化合物表 - 存储化学式与元素组成"""
     __tablename__ = "compounds"
 
     id = Column(Integer, primary_key=True, index=True)
-    element_symbols = Column(String(200), unique=True, nullable=False, index=True)  # 如 "Ba-Cu-O-Y"（按字母排序）
-    element_list = Column(Text, nullable=False, default="[]")  # JSON数组，保存元素符号列表
-    element_id_list = Column(Text, nullable=False, default="[]")  # JSON数组，保存元素ID列表
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    chemical_formula = Column(Text, unique=True, index=True)
+    element_list = Column(Text)
+    composition = Column(Text)
+    element_id_list = Column(Text)
+    element_ratio = Column(Text)
 
-    # 关系
-    papers = relationship("Paper", back_populates="compound", cascade="all, delete-orphan")
+    physical_parameters = relationship("PaperData", back_populates="compound")
+
+    @property
+    def element_symbols(self) -> str:
+        """兼容旧前端：把具体化合物的元素列表显示为 H-S 形式。"""
+        import json
+
+        try:
+            values = json.loads(self.element_list or "[]")
+        except Exception:
+            values = []
+        return "-".join(values) if values else (self.chemical_formula or "")
 
     def __repr__(self):
-        return f"<Compound {self.element_symbols}>"
+        return f"<Compound {self.chemical_formula}>"
 
 
 class User(Base):
-    """用户/管理员表"""
+    """用户/管理员表，仍由网站认证系统使用"""
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    email = Column(String(200), unique=True, nullable=False, index=True)  # 邮箱（登录账号）
-    password_hash = Column(String(200), nullable=False)  # 密码哈希
-    real_name = Column(String(100), nullable=False)  # 真实姓名
-
-    # 管理员权限
-    is_admin = Column(Boolean, default=False)  # 是否为管理员
-    is_superadmin = Column(Boolean, default=False)  # 是否为超级管理员
-    is_approved = Column(Boolean, default=False)  # 是否已被超级管理员批准
-
-    # 邮箱验证
-    is_email_verified = Column(Boolean, default=False)  # 邮箱是否已验证
-    verification_code = Column(String(10))  # 验证码
-    verification_expires = Column(DateTime)  # 验证码过期时间
-
-    # 时间戳
+    email = Column(String(200), unique=True, nullable=False, index=True)
+    password_hash = Column(String(200), nullable=False)
+    real_name = Column(String(100), nullable=False)
+    is_admin = Column(Boolean, default=False)
+    is_superadmin = Column(Boolean, default=False)
+    is_approved = Column(Boolean, default=False)
+    is_email_verified = Column(Boolean, default=False)
+    verification_code = Column(String(10))
+    verification_expires = Column(DateTime)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    approved_at = Column(DateTime)  # 批准时间
-    approved_by = Column(Integer, ForeignKey("users.id"))  # 批准人ID
-
-    # 关系
+    approved_at = Column(DateTime)
+    approved_by = Column(Integer, ForeignKey("users.id"))
     reviewed_papers = relationship("Paper", back_populates="reviewer", foreign_keys="Paper.reviewed_by")
 
     def __repr__(self):
@@ -71,85 +80,144 @@ class User(Base):
 
 
 class Paper(Base):
-    """文献表 - 存储超导文献信息"""
+    """论文元数据表"""
     __tablename__ = "papers"
 
     id = Column(Integer, primary_key=True, index=True)
-    compound_id = Column(Integer, ForeignKey("compounds.id"), nullable=False, index=True)
-    doi = Column(String(200), nullable=False, index=True)  # DOI标识符
-    title = Column(Text, nullable=False)  # 文章标题
-    authors = Column(Text)  # 作者列表（JSON格式）
-    journal = Column(String(200))  # 期刊名称
-    volume = Column(String(50))  # 卷号
-    pages = Column(String(50))  # 页码
-    year = Column(Integer, index=True)  # 发表年份
-    abstract = Column(Text)  # 摘要
-    citation_aps = Column(Text)  # APS引用格式
-    citation_bibtex = Column(Text)  # BibTeX引用格式
+    doi = Column(Text, index=True)
+    paper_images_id = Column(Integer)
+    title = Column(Text)
+    authors = Column(Text)
+    journal = Column(Text)
+    volume = Column(Text)
+    pages = Column(Text)
+    year = Column(Integer, index=True)
+    abstract = Column(Text)
+    imagetxts = Column(Text)
+    imagetxts_cn = Column(Text)
+    is_referenced_by_count = Column("is-referenced-by-count", Integer)
 
-    # 用户必填的分类字段
-    article_type = Column(String(20), nullable=False)  # 文章类型: 'theoretical' 或 'experimental'
-    superconductor_type = Column(String(50), nullable=False)  # 超导体类型: cuprate, iron_based, nickel_based, hydride, carbon, organic, others
-
-    # 用户可选填写的字段
-    chemical_formula = Column(String(200))  # 化学式，如 "YBa₂Cu₃O₇"
-    crystal_structure = Column(String(200))  # 晶体结构类型，如 "钙钛矿型"
-    contributor_name = Column(String(100), default="匿名贡献者")  # 贡献者姓名
-    contributor_affiliation = Column(String(200), default="未提供单位")  # 贡献者单位
-    notes = Column(Text)  # 备注说明
-
-    # 审核相关字段
-    review_status = Column(String(20), default="unreviewed", nullable=False, index=True)  # 审核状态: unreviewed, approved, rejected, modifying
-    reviewed_by = Column(Integer, ForeignKey("users.id"))  # 审核人ID
-    reviewed_at = Column(DateTime)  # 审核时间
-    review_comment = Column(Text)  # 审核意见/拒绝理由
-    show_in_chart = Column(Boolean, default=False, nullable=False)  # 是否用于前端图表
-
+    # 网站业务字段：导入脚本只负责科研数据，网站启动时补齐这些列。
+    contributor_name = Column(String(100), default="Data Import")
+    contributor_affiliation = Column(String(200), default="System")
+    notes = Column(Text)
+    review_status = Column(String(20), default="unreviewed", nullable=False, index=True)
+    reviewed_by = Column(Integer, ForeignKey("users.id"))
+    reviewed_at = Column(DateTime)
+    review_comment = Column(Text)
+    show_in_chart = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    # 关系
-    compound = relationship("Compound", back_populates="papers")
     physical_parameters = relationship("PaperData", back_populates="paper", cascade="all, delete-orphan")
     images = relationship("PaperImage", back_populates="paper", cascade="all, delete-orphan")
     reviewer = relationship("User", back_populates="reviewed_papers", foreign_keys=[reviewed_by])
 
-    # 唯一约束：同一元素组合不能有重复的DOI
-    __table_args__ = (
-        UniqueConstraint('compound_id', 'doi', name='uix_compound_doi'),
-    )
-
     def __repr__(self):
         return f"<Paper {self.doi}>"
 
+
 class PaperData(Base):
+    """论文中的化合物/结构/条件数据点"""
     __tablename__ = "paper_data"
+
     id = Column(Integer, primary_key=True, index=True)
-    paper_id = Column(Integer, ForeignKey("papers.id", ondelete="CASCADE"), nullable=False, index=True)
-    pressure = Column(Float)  # 压强 (GPa)
-    tc = Column(Float)        # 超导温度 Tc (K)
-    lambda_val = Column(Float) # λ (lambda)
-    omega_log = Column(Float)  # ω_log
-    n_ef = Column(Float)       # N(E_F)
-    s_factor = Column(Float)   # s因子 (用户自定义参数)
-    # 关系
+    paper_id = Column(Integer, ForeignKey("papers.id"), index=True)
+    compound_id = Column(Integer, ForeignKey("compounds.id"), index=True)
+    article_type = Column(Text)
+    superconductor_type = Column(Text)
+    chemical_formula = Column(Text)
+    crystal_structure = Column(Text)
+    tc_press = Column(Text)
+    lambda_val = Column(Float)
+    omega_log = Column(Float)
+    n_ef = Column(Float)
+    s_factor = Column(Float)
+    sample_name = Column(Text)
+    data_source_note = Column(Text)
+    sequence_in_paper = Column(Integer)
+
     paper = relationship("Paper", back_populates="physical_parameters")
+    compound = relationship("Compound", back_populates="physical_parameters")
+
+    @property
+    def tc(self):
+        import json
+
+        try:
+            values = json.loads(self.tc_press or "[]")
+            return values[0] if len(values) > 0 else None
+        except Exception:
+            return None
+
+    @property
+    def pressure(self):
+        import json
+
+        try:
+            values = json.loads(self.tc_press or "[]")
+            return values[1] if len(values) > 1 else None
+        except Exception:
+            return None
+
     def __repr__(self):
-        return f"<PaperData paper_id={self.paper_id} P={self.pressure} Tc={self.tc}>"
+        return f"<PaperData paper_id={self.paper_id} compound_id={self.compound_id}>"
+
 
 class PaperImage(Base):
-    """文献截图表 - 存储文献相关的图片"""
+    """论文图片集合表，每行保存一篇论文最多40张图"""
     __tablename__ = "paper_images"
 
     id = Column(Integer, primary_key=True, index=True)
-    paper_id = Column(Integer, ForeignKey("papers.id", ondelete="CASCADE"), nullable=False, index=True)
-    image_data = Column(BLOB, nullable=False)  # 原图二进制数据
-    thumbnail_data = Column(BLOB, nullable=False)  # 缩略图二进制数据
-    image_order = Column(Integer, nullable=False)  # 图片顺序（1-5）
-    file_size = Column(Integer)  # 文件大小（字节）
+    paper_id = Column(Integer, ForeignKey("papers.id"), index=True)
+    figs = Column(Text)
+    image_data = Column(BLOB)
+    thumbnail_data = Column(BLOB)
+    image_order = Column(Integer)
+    file_size = Column(Integer)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    # 关系
+    fig1 = Column(BLOB)
+    fig2 = Column(BLOB)
+    fig3 = Column(BLOB)
+    fig4 = Column(BLOB)
+    fig5 = Column(BLOB)
+    fig6 = Column(BLOB)
+    fig7 = Column(BLOB)
+    fig8 = Column(BLOB)
+    fig9 = Column(BLOB)
+    fig10 = Column(BLOB)
+    fig11 = Column(BLOB)
+    fig12 = Column(BLOB)
+    fig13 = Column(BLOB)
+    fig14 = Column(BLOB)
+    fig15 = Column(BLOB)
+    fig16 = Column(BLOB)
+    fig17 = Column(BLOB)
+    fig18 = Column(BLOB)
+    fig19 = Column(BLOB)
+    fig20 = Column(BLOB)
+    fig21 = Column(BLOB)
+    fig22 = Column(BLOB)
+    fig23 = Column(BLOB)
+    fig24 = Column(BLOB)
+    fig25 = Column(BLOB)
+    fig26 = Column(BLOB)
+    fig27 = Column(BLOB)
+    fig28 = Column(BLOB)
+    fig29 = Column(BLOB)
+    fig30 = Column(BLOB)
+    fig31 = Column(BLOB)
+    fig32 = Column(BLOB)
+    fig33 = Column(BLOB)
+    fig34 = Column(BLOB)
+    fig35 = Column(BLOB)
+    fig36 = Column(BLOB)
+    fig37 = Column(BLOB)
+    fig38 = Column(BLOB)
+    fig39 = Column(BLOB)
+    fig40 = Column(BLOB)
+
     paper = relationship("Paper", back_populates="images")
 
     def __repr__(self):
-        return f"<PaperImage paper_id={self.paper_id} order={self.image_order}>"
+        return f"<PaperImage paper_id={self.paper_id}>"

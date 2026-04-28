@@ -6,8 +6,10 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from datetime import datetime
 from typing import List, Optional
+import json
 from backend.database import get_db
-from backend.models import User, Paper
+from backend.models import User, Paper, PaperData
+from backend import crud
 from backend.security import get_current_superadmin, get_current_admin
 from backend.email_service import email_service
 
@@ -34,6 +36,11 @@ def normalize_superconductor_type_value(value: Optional[str]) -> Optional[str]:
             detail="无效的超导体类型"
         )
     return normalized
+
+
+def to_storage_superconductor_type_value(value: Optional[str]) -> Optional[str]:
+    normalized = normalize_superconductor_type_value(value)
+    return crud.to_storage_superconductor_type(normalized)
 
 
 # Pydantic 模型
@@ -74,6 +81,33 @@ class UserPermissionRequest(BaseModel):
     is_admin: bool
     is_superadmin: bool
     is_approved: bool
+
+
+def admin_paper_summary(db: Session, paper: Paper) -> dict:
+    data = crud.paper_to_response(db, paper)
+    first_data = data["data"][0] if data["data"] else {}
+    return {
+        "id": paper.id,
+        "doi": paper.doi,
+        "title": paper.title,
+        "year": paper.year,
+        "journal": paper.journal,
+        "article_type": data.get("article_type"),
+        "superconductor_type": data.get("superconductor_type"),
+        "chemical_formula": data.get("chemical_formula"),
+        "tc": first_data.get("tc"),
+        "pressure": first_data.get("pressure"),
+        "s_factor": first_data.get("s_factor"),
+        "data": data.get("data", []),
+        "compound_symbols": data.get("compound_symbols"),
+        "review_status": paper.review_status,
+        "review_comment": paper.review_comment,
+        "reviewer_name": paper.reviewer.real_name if paper.reviewer else None,
+        "contributor_name": paper.contributor_name,
+        "created_at": paper.created_at.isoformat() if paper.created_at else None,
+        "images_count": crud.get_paper_image_count(db, paper.id),
+        "show_in_chart": paper.show_in_chart,
+    }
 
 
 # ========== 超级管理员功能 ==========
@@ -379,21 +413,7 @@ async def get_unreviewed_papers(
         "total": total,
         "offset": offset,
         "limit": limit,
-        "papers": [
-            {
-                "id": paper.id,
-                "doi": paper.doi,
-                "title": paper.title,
-                "year": paper.year,
-                "journal": paper.journal,
-                "tc": paper.physical_parameters[0].tc if paper.physical_parameters else None,
-                "pressure": paper.physical_parameters[0].pressure if paper.physical_parameters else None,
-                "s_factor": paper.physical_parameters[0].s_factor if paper.physical_parameters else None,
-                "created_at": paper.created_at.isoformat(),
-                "contributor_name": paper.contributor_name
-            }
-            for paper in papers
-        ]
+        "papers": [admin_paper_summary(db, paper) for paper in papers]
     }
 
 
@@ -477,15 +497,22 @@ async def get_all_papers(
     if review_status:
         query = query.filter(Paper.review_status == review_status)
 
+    joined_data = False
+
     # 文章类型筛选
     if article_type:
-        query = query.filter(Paper.article_type == article_type)
+        query = query.join(PaperData)
+        joined_data = True
+        query = query.filter(PaperData.article_type == crud.to_storage_article_type(article_type))
 
     # 超导体类型筛选
-    normalized_super_type = normalize_superconductor_type_value(superconductor_type) if superconductor_type else None
+    normalized_super_type = to_storage_superconductor_type_value(superconductor_type) if superconductor_type else None
 
     if normalized_super_type:
-        query = query.filter(Paper.superconductor_type == normalized_super_type)
+        if not joined_data:
+            query = query.join(PaperData)
+            joined_data = True
+        query = query.filter(PaperData.superconductor_type == normalized_super_type)
 
     # 年份范围筛选
     if year_min:
@@ -500,13 +527,17 @@ async def get_all_papers(
     # 关键词搜索
     if keyword:
         search_pattern = f"%{keyword}%"
+        if not joined_data:
+            query = query.outerjoin(PaperData)
+            joined_data = True
         query = query.filter(
             (Paper.title.like(search_pattern)) |
             (Paper.doi.like(search_pattern)) |
-            (Paper.chemical_formula.like(search_pattern))
+            (PaperData.chemical_formula.like(search_pattern))
         )
 
     # 获取总数
+    query = query.distinct()
     total = query.count()
 
     # 分页查询
@@ -516,30 +547,7 @@ async def get_all_papers(
         "total": total,
         "offset": offset,
         "limit": limit,
-        "papers": [
-            {
-                "id": paper.id,
-                "doi": paper.doi,
-                "title": paper.title,
-                "year": paper.year,
-                "journal": paper.journal,
-                "article_type": paper.article_type,
-                "superconductor_type": paper.superconductor_type,
-                "chemical_formula": paper.chemical_formula,
-                "tc": paper.physical_parameters[0].tc if paper.physical_parameters else None,
-                "pressure": paper.physical_parameters[0].pressure if paper.physical_parameters else None,
-                "s_factor": paper.physical_parameters[0].s_factor if paper.physical_parameters else None,
-                "compound_symbols": paper.compound.element_symbols,
-                "review_status": paper.review_status,
-                "review_comment": paper.review_comment,
-                "reviewer_name": paper.reviewer.real_name if paper.reviewer else None,
-                "contributor_name": paper.contributor_name,
-                "created_at": paper.created_at.isoformat(),
-                "images_count": len(paper.images),
-                "show_in_chart": paper.show_in_chart
-            }
-            for paper in papers
-        ]
+        "papers": [admin_paper_summary(db, paper) for paper in papers]
     }
 
 
@@ -562,39 +570,12 @@ async def get_paper_detail(
             detail="文献不存在"
         )
 
-    return {
-        "id": paper.id,
-        "doi": paper.doi,
-        "title": paper.title,
-        "authors": paper.authors,
-        "journal": paper.journal,
-        "volume": paper.volume,
-        "pages": paper.pages,
-        "year": paper.year,
-        "abstract": paper.abstract,
-        "article_type": paper.article_type,
-        "superconductor_type": paper.superconductor_type,
-        "chemical_formula": paper.chemical_formula,
-        "crystal_structure": paper.crystal_structure,
-        "contributor_name": paper.contributor_name,
-        "contributor_affiliation": paper.contributor_affiliation,
-        "notes": paper.notes,
-        "data": [
-            {
-                "pressure": d.pressure,
-                "tc": d.tc,
-                "lambda_val": d.lambda_val,
-                "omega_log": d.omega_log,
-                "n_ef": d.n_ef,
-                "s_factor": d.s_factor
-            } for d in paper.physical_parameters
-        ],
-        "review_status": paper.review_status,
-        "review_comment": paper.review_comment,
-        "created_at": paper.created_at.isoformat(),
-        "compound_symbols": paper.compound.element_symbols,
-        "show_in_chart": paper.show_in_chart
-    }
+    data = crud.paper_to_response(db, paper)
+    data.update({
+        "created_at": paper.created_at.isoformat() if paper.created_at else None,
+        "show_in_chart": paper.show_in_chart,
+    })
+    return data
 
 
 @router.put("/papers/{paper_id}", summary="编辑文献信息")
@@ -627,7 +608,7 @@ async def update_paper(
 
     normalized_super_type = None
     if request.superconductor_type:
-        normalized_super_type = normalize_superconductor_type_value(request.superconductor_type)
+        normalized_super_type = to_storage_superconductor_type_value(request.superconductor_type)
 
     # 验证审核状态
     if request.review_status and request.review_status not in [
@@ -647,35 +628,70 @@ async def update_paper(
 
     # 更新字段（只更新非None的字段）
     update_data = request.dict(exclude_unset=True)
-    if normalized_super_type:
-        update_data["superconductor_type"] = normalized_super_type
+    has_physical_data_update = "physical_data" in update_data
     
     # 特殊处理物理数据
-    if "physical_data" in update_data:
+    if has_physical_data_update:
         new_data = update_data.pop("physical_data")
         if new_data is not None:
-            # 删除旧数据
             from backend.models import PaperData
             db.query(PaperData).filter(PaperData.paper_id == paper_id).delete()
-            db.flush() # 确保删除执行
-            # 插入新数据
+            db.flush()
             for item in new_data:
+                formula = item.get("chemical_formula") or request.chemical_formula
+                compound = crud.get_or_create_compound(db, [], formula) if formula else None
+                tc_val = item.get("tc")
+                pressure_val = item.get("pressure")
+                item_article_type = item.get("article_type") or request.article_type
+                item_super_type = (
+                    to_storage_superconductor_type_value(item.get("superconductor_type"))
+                    if item.get("superconductor_type")
+                    else normalized_super_type
+                )
                 db_data = PaperData(
                     paper_id=paper_id,
-                    pressure=item.get("pressure"),
-                    tc=item.get("tc"),
+                    compound_id=compound.id if compound else item.get("compound_id"),
+                    article_type=crud.to_storage_article_type(item_article_type),
+                    superconductor_type=item_super_type,
+                    chemical_formula=formula,
+                    crystal_structure=item.get("crystal_structure") or request.crystal_structure,
+                    tc_press=json.dumps([tc_val, pressure_val], ensure_ascii=False),
                     lambda_val=item.get("lambda_val"),
                     omega_log=item.get("omega_log"),
                     n_ef=item.get("n_ef"),
                     s_factor=item.get("s_factor") if item.get("s_factor") is not None else crud.compute_s_factor(
-                        item.get("pressure"), item.get("tc")
-                    )
+                        pressure_val, tc_val
+                    ),
+                    sample_name=item.get("sample_name"),
+                    data_source_note=item.get("data_source_note"),
                 )
                 db.add(db_data)
 
+    paper_fields = {
+        "title", "authors", "journal", "volume", "pages", "year", "abstract",
+        "contributor_name", "contributor_affiliation", "notes",
+        "show_in_chart", "review_status",
+    }
     for field, value in update_data.items():
-        if value is not None:
+        if field in paper_fields and value is not None:
             setattr(paper, field, value)
+
+    data_fields_changed = any(
+        getattr(request, name) is not None
+        for name in ("article_type", "superconductor_type", "chemical_formula", "crystal_structure")
+    )
+    if data_fields_changed and not has_physical_data_update:
+        for item in paper.physical_parameters:
+            if request.article_type is not None:
+                item.article_type = crud.to_storage_article_type(request.article_type)
+            if normalized_super_type is not None:
+                item.superconductor_type = normalized_super_type
+            if request.chemical_formula is not None:
+                item.chemical_formula = request.chemical_formula
+                compound = crud.get_or_create_compound(db, [], request.chemical_formula)
+                item.compound_id = compound.id if compound else item.compound_id
+            if request.crystal_structure is not None:
+                item.crystal_structure = request.crystal_structure
 
     db.commit()
     db.refresh(paper)
@@ -714,7 +730,7 @@ async def delete_paper(
         "paper_id": paper.id,
         "doi": paper.doi,
         "title": paper.title,
-        "compound": paper.compound.element_symbols,
+        "compound": crud.paper_to_response(db, paper).get("compound_symbols"),
         "images_count": len(paper.images),
         "deleted_by": current_user.real_name,
         "deleted_at": datetime.utcnow().isoformat()
@@ -893,18 +909,21 @@ async def get_paper_images(
             detail="文献不存在"
         )
 
+    images = []
+    for row in paper.images:
+        for order in range(1, 41):
+            blob = getattr(row, f"fig{order}", None)
+            if blob:
+                images.append({
+                    "id": row.id * 100 + order,
+                    "order": order,
+                    "file_size": len(blob),
+                    "created_at": row.created_at.isoformat() if hasattr(row.created_at, "isoformat") else row.created_at
+                })
     return {
         "paper_id": paper.id,
-        "total_images": len(paper.images),
-        "images": [
-            {
-                "id": img.id,
-                "order": img.image_order,
-                "file_size": img.file_size,
-                "created_at": img.created_at.isoformat()
-            }
-            for img in sorted(paper.images, key=lambda x: x.image_order)
-        ]
+        "total_images": len(images),
+        "images": images
     }
 
 
@@ -920,10 +939,19 @@ async def delete_paper_image(
 
     管理员可以操作
     """
-    image = db.query(PaperImage).filter(
-        PaperImage.id == image_id,
-        PaperImage.paper_id == paper_id
-    ).first()
+    image = None
+    selected_order = None
+    if image_id >= 100:
+        row_id, selected_order = divmod(image_id, 100)
+        image = db.query(PaperImage).filter(
+            PaperImage.id == row_id,
+            PaperImage.paper_id == paper_id
+        ).first()
+    else:
+        image = db.query(PaperImage).filter(
+            PaperImage.id == image_id,
+            PaperImage.paper_id == paper_id
+        ).first()
 
     if not image:
         raise HTTPException(
@@ -931,30 +959,23 @@ async def delete_paper_image(
             detail="图片不存在"
         )
 
-    # 获取文献的所有图片
     paper = db.query(Paper).filter(Paper.id == paper_id).first()
-    if len(paper.images) <= 1:
+    image_count = crud.get_paper_image_count(db, paper_id)
+    if image_count <= 1:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="至少需要保留一张图片"
         )
 
-    deleted_order = image.image_order
-    db.delete(image)
-
-    # 重新排序剩余图片
-    remaining_images = db.query(PaperImage).filter(
-        PaperImage.paper_id == paper_id,
-        PaperImage.image_order > deleted_order
-    ).all()
-
-    for img in remaining_images:
-        img.image_order -= 1
+    if selected_order:
+        setattr(image, f"fig{selected_order}", None)
+    else:
+        db.delete(image)
 
     db.commit()
 
     return {
         "message": "图片已删除",
         "deleted_image_id": image_id,
-        "remaining_images": len(paper.images) - 1
+        "remaining_images": image_count - 1
     }

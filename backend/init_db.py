@@ -4,6 +4,7 @@
 """
 from backend.database import engine, SessionLocal, Base
 from backend.models import Element
+from sqlalchemy import text
 
 
 # 118个元素数据（原子序数、符号、英文名、中文名）
@@ -135,6 +136,7 @@ def init_database():
 
     # 创建所有表
     Base.metadata.create_all(bind=engine)
+    ensure_app_columns()
     print("✓ 数据库表创建完成")
 
     # 创建数据库会话
@@ -171,6 +173,33 @@ def init_database():
 
     print("\n数据库初始化完成！")
     print(f"数据库文件位置: {engine.url.database}")
+
+
+def ensure_app_columns():
+    """为导入脚本生成的新库补齐网站业务字段。
+
+    SQLAlchemy 的 create_all 不会修改已有表结构，因此这里对 papers 表做幂等补列。
+    """
+    columns = {
+        "contributor_name": "VARCHAR(100) DEFAULT 'Data Import'",
+        "contributor_affiliation": "VARCHAR(200) DEFAULT 'System'",
+        "notes": "TEXT",
+        "review_status": "VARCHAR(20) NOT NULL DEFAULT 'unreviewed'",
+        "reviewed_by": "INTEGER",
+        "reviewed_at": "DATETIME",
+        "review_comment": "TEXT",
+        "show_in_chart": "BOOLEAN NOT NULL DEFAULT 0",
+        "created_at": "DATETIME",
+    }
+    with engine.begin() as conn:
+        existing = {row[1] for row in conn.execute(text("PRAGMA table_info(papers)")).fetchall()}
+        for name, col_type in columns.items():
+            if name not in existing:
+                conn.execute(text(f'ALTER TABLE papers ADD COLUMN "{name}" {col_type}'))
+        conn.execute(text("UPDATE papers SET created_at = COALESCE(created_at, datetime('now'))"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_papers_review_status ON papers (review_status)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_papers_year ON papers (year)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_papers_doi ON papers (doi)"))
 
 
 if __name__ == "__main__":

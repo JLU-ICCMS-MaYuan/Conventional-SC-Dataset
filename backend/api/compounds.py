@@ -84,28 +84,22 @@ def get_compound_info(
     # 解析元素符号
     symbols = element_symbols.split("-")
 
-    # 如果元素组合不存在，自动创建（允许用户成为第一个贡献者）
-    compound = crud.get_compound_by_symbols(db, symbols)
+    compounds = crud.get_compounds_by_symbols(db, symbols, exact=True)
+    compound = compounds[0] if compounds else None
     if not compound:
-        # 验证元素是否都存在
         elements = crud.get_elements_by_symbols(db, symbols)
         if len(elements) != len(symbols):
             invalid_symbols = set(symbols) - {e.symbol for e in elements}
-            raise HTTPException(
-                status_code=400,
-                detail=f"以下元素不存在: {', '.join(invalid_symbols)}"
-            )
-        # 创建新的元素组合
-        compound = crud.get_or_create_compound(db, symbols)
+            raise HTTPException(status_code=400, detail=f"以下元素不存在: {', '.join(invalid_symbols)}")
 
     # 获取文献数量
-    paper_count = crud.get_compound_papers_count(db, compound.id)
+    paper_count = sum(crud.get_compound_papers_count(db, item.id) for item in compounds)
 
     return {
-        "id": compound.id,
-        "element_symbols": compound.element_symbols,
-        "element_list": json.loads(compound.element_list) if compound.element_list else symbols,
-        "created_at": compound.created_at,
+        "id": compound.id if compound else None,
+        "element_symbols": "-".join(symbols),
+        "element_list": symbols,
+        "created_at": None,
         "paper_count": paper_count
     }
 

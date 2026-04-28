@@ -23,6 +23,73 @@ function normalizeSuperconductorType(value) {
     return SUPER_TYPES.includes(normalized) ? normalized : 'others';
 }
 
+function escapeHtml(value) {
+    const div = document.createElement('div');
+    div.textContent = value ?? '';
+    return div.innerHTML;
+}
+
+function normalizeArticleType(value) {
+    if (value === 'e') return 'experimental';
+    if (value === 't') return 'theoretical';
+    return value || '';
+}
+
+function synthesizedLabel(value) {
+    const normalized = normalizeArticleType(value);
+    if (normalized === 'experimental') return '是';
+    if (normalized === 'theoretical') return '否';
+    return '-';
+}
+
+function formatDataValue(value, suffix = '') {
+    return value !== null && value !== undefined && value !== '' ? `${escapeHtml(value)}${suffix}` : '-';
+}
+
+function renderPhysicalDataTable(paper) {
+    const rows = Array.isArray(paper.data) && paper.data.length > 0 ? paper.data : [paper];
+    return `
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>化学式</th>
+                        <th>空间群</th>
+                        <th>是否实验合成</th>
+                        <th>Tc</th>
+                        <th>P</th>
+                        <th>λ</th>
+                        <th>ω_log</th>
+                        <th>N(EF)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows.map(item => `
+                        <tr>
+                            <td>${formatDataValue(item.chemical_formula || paper.chemical_formula)}</td>
+                            <td>${formatDataValue(item.crystal_structure || paper.crystal_structure)}</td>
+                            <td>${synthesizedLabel(item.article_type || paper.article_type)}</td>
+                            <td>${formatDataValue(item.tc, ' K')}</td>
+                            <td>${formatDataValue(item.pressure, ' GPa')}</td>
+                            <td>${formatDataValue(item.lambda_val)}</td>
+                            <td>${formatDataValue(item.omega_log)}</td>
+                            <td>${formatDataValue(item.n_ef)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+function nullableFloat(value) {
+    return value === '' || value === null || value === undefined ? null : parseFloat(value);
+}
+
+function dataInputValue(data, field) {
+    return data && data[field] !== null && data[field] !== undefined ? escapeHtml(data[field]) : '';
+}
+
 function calculateSFactor(tcValue, pressureValue) {
     const tc = parseFloat(tcValue);
     const pressure = parseFloat(pressureValue);
@@ -159,7 +226,7 @@ function renderPapers(papers) {
                         <th>标题</th>
                         <th>元素组合</th>
                         <th>年份</th>
-                        <th>Tc / P</th>
+                        <th>数据点</th>
                         <th>s_factor</th>
                         <th>类型</th>
                         <th>图表</th>
@@ -172,12 +239,6 @@ function renderPapers(papers) {
     `;
 
     papers.forEach(paper => {
-        const escapeHtml = (str) => {
-            const div = document.createElement('div');
-            div.textContent = str;
-            return div.innerHTML;
-        };
-
         const safeTitle = escapeHtml(paper.title);
         const isSelected = selectedPapers.has(paper.id);
 
@@ -229,12 +290,7 @@ function renderPapers(papers) {
                 </td>
                 <td><span class="badge bg-info">${paper.compound_symbols}</span></td>
                 <td>${paper.year || '-'}</td>
-                <td>
-                    <small>
-                        ${paper.tc ? paper.tc + ' K' : '-'} / 
-                        ${paper.pressure ? paper.pressure + ' GPa' : '-'}
-                    </small>
-                </td>
+                <td>${renderPhysicalDataTable(paper)}</td>
                 <td>
                     <small>
                         ${(paper.s_factor !== undefined && paper.s_factor !== null) ?
@@ -533,24 +589,37 @@ function addEditDataRow(data = null) {
     const container = document.getElementById('editDataPointsContainer');
     const row = document.createElement('div');
     row.className = 'edit-data-row card p-2 mb-2 bg-light';
+    const articleType = normalizeArticleType(data ? data.article_type : '') || document.getElementById('editArticleType').value || 'theoretical';
     row.innerHTML = `
         <div class="row g-2">
-            <div class="col-md-4 col-lg-2">
-                <input type="number" step="any" class="form-control form-control-sm edit-pressure" placeholder="P (GPa)" value="${data ? data.pressure || '' : ''}">
+            <div class="col-md-6 col-lg-2">
+                <input type="text" class="form-control form-control-sm edit-formula" placeholder="化学式" value="${dataInputValue(data, 'chemical_formula')}">
             </div>
-            <div class="col-md-4 col-lg-2">
-                <input type="number" step="any" class="form-control form-control-sm edit-tc" placeholder="Tc (K)" value="${data ? data.tc || '' : ''}">
+            <div class="col-md-6 col-lg-2">
+                <input type="text" class="form-control form-control-sm edit-structure" placeholder="空间群" value="${dataInputValue(data, 'crystal_structure')}">
             </div>
-            <div class="col-md-4 col-lg-2">
-                <input type="number" step="any" class="form-control form-control-sm edit-lambda" placeholder="λ" value="${data ? data.lambda_val || '' : ''}">
+            <div class="col-md-6 col-lg-2">
+                <select class="form-select form-select-sm edit-article-type" title="是否实验合成">
+                    <option value="experimental" ${articleType === 'experimental' ? 'selected' : ''}>实验合成：是</option>
+                    <option value="theoretical" ${articleType === 'theoretical' ? 'selected' : ''}>实验合成：否</option>
+                </select>
             </div>
-            <div class="col-md-4 col-lg-2">
-                <input type="number" step="any" class="form-control form-control-sm edit-omega" placeholder="ω" value="${data ? data.omega_log || '' : ''}">
+            <div class="col-md-6 col-lg-1">
+                <input type="number" step="any" class="form-control form-control-sm edit-pressure" placeholder="P (GPa)" value="${dataInputValue(data, 'pressure')}">
             </div>
-            <div class="col-md-4 col-lg-2">
-                <input type="number" step="any" class="form-control form-control-sm edit-nef" placeholder="N" value="${data ? data.n_ef || '' : ''}">
+            <div class="col-md-6 col-lg-1">
+                <input type="number" step="any" class="form-control form-control-sm edit-tc" placeholder="Tc (K)" value="${dataInputValue(data, 'tc')}">
             </div>
-            <div class="col-12 col-lg-2">
+            <div class="col-md-6 col-lg-1">
+                <input type="number" step="any" class="form-control form-control-sm edit-lambda" placeholder="λ" value="${dataInputValue(data, 'lambda_val')}">
+            </div>
+            <div class="col-md-6 col-lg-1">
+                <input type="number" step="any" class="form-control form-control-sm edit-omega" placeholder="ω" value="${dataInputValue(data, 'omega_log')}">
+            </div>
+            <div class="col-md-6 col-lg-1">
+                <input type="number" step="any" class="form-control form-control-sm edit-nef" placeholder="N" value="${dataInputValue(data, 'n_ef')}">
+            </div>
+            <div class="col-12 col-lg-1">
                 <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="removeEditDataRow(this)">×</button>
             </div>
         </div>
@@ -608,8 +677,6 @@ async function openEditModal(paperId) {
         
         setVal('editArticleType', paper.article_type || 'experimental');
         setVal('editSuperconductorType', normalizeSuperconductorType(paper.superconductor_type));
-        setVal('editChemicalFormula', paper.chemical_formula || '');
-        setVal('editCrystalStructure', paper.crystal_structure || '');
         
         // 2. 物理数据 (动态行处理)
         const dataContainer = document.getElementById('editDataPointsContainer');
@@ -734,18 +801,24 @@ async function savePaperEdits() {
     // 收集物理数据
     const physicalData = [];
     document.querySelectorAll('.edit-data-row').forEach(row => {
-        const pressure = row.querySelector('.edit-pressure').value;
-        const tc = row.querySelector('.edit-tc').value;
-        if (pressure && tc) {
-            const parsedPressure = parseFloat(pressure);
-            const parsedTc = parseFloat(tc);
+        const formula = row.querySelector('.edit-formula').value.trim();
+        const structure = row.querySelector('.edit-structure').value.trim();
+        const pressure = nullableFloat(row.querySelector('.edit-pressure').value);
+        const tc = nullableFloat(row.querySelector('.edit-tc').value);
+        const lambdaVal = nullableFloat(row.querySelector('.edit-lambda').value);
+        const omegaLog = nullableFloat(row.querySelector('.edit-omega').value);
+        const nEf = nullableFloat(row.querySelector('.edit-nef').value);
+        if (formula || structure || pressure !== null || tc !== null || lambdaVal !== null || omegaLog !== null || nEf !== null) {
             physicalData.push({
-                pressure: parsedPressure,
-                tc: parsedTc,
-                s_factor: calculateSFactor(parsedTc, parsedPressure),
-                lambda_val: row.querySelector('.edit-lambda').value ? parseFloat(row.querySelector('.edit-lambda').value) : null,
-                omega_log: row.querySelector('.edit-omega').value ? parseFloat(row.querySelector('.edit-omega').value) : null,
-                n_ef: row.querySelector('.edit-nef').value ? parseFloat(row.querySelector('.edit-nef').value) : null
+                chemical_formula: formula || null,
+                crystal_structure: structure || null,
+                article_type: row.querySelector('.edit-article-type').value,
+                pressure: pressure,
+                tc: tc,
+                s_factor: calculateSFactor(tc, pressure),
+                lambda_val: lambdaVal,
+                omega_log: omegaLog,
+                n_ef: nEf
             });
         }
     });
@@ -763,8 +836,6 @@ async function savePaperEdits() {
         authors: getVal('editAuthors'),
         article_type: getVal('editArticleType'),
         superconductor_type: getVal('editSuperconductorType'),
-        chemical_formula: getVal('editChemicalFormula'),
-        crystal_structure: getVal('editCrystalStructure'),
         physical_data: physicalData,
         contributor_name: getVal('editContributorName'),
         contributor_affiliation: getVal('editContributorAffiliation'),
