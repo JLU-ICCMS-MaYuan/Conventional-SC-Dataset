@@ -6,8 +6,8 @@ import math
 import re
 from typing import List, Optional
 
-from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from sqlalchemy import func, or_
+from sqlalchemy.orm import Query, Session
 
 from backend import models, schemas
 
@@ -202,7 +202,7 @@ def get_compound_by_symbols(db: Session, element_symbols: List[str]) -> Optional
     return matches[0] if matches else None
 
 
-def search_compounds_by_elements(db: Session, element_symbols: List[str], mode: str) -> List[dict]:
+def search_compounds_by_elements(db: Session, element_symbols: List[str], mode: str, limit: Optional[int] = None, offset: int = 0) -> dict:
     allowed_modes = {"only", "combination", "contains"}
     mode = mode if mode in allowed_modes else "combination"
     selection = set(element_symbols)
@@ -234,7 +234,45 @@ def search_compounds_by_elements(db: Session, element_symbols: List[str], mode: 
 
     matched = list(grouped.values())
     matched.sort(key=lambda item: (len(item["element_list"]), item["element_symbols"]))
-    return matched
+
+    total = len(matched)
+    page_size = limit if limit is not None else total
+    page_items = matched[offset: offset + limit] if limit is not None else matched
+    page = (offset // page_size) + 1 if page_size else 1
+    total_pages = (total + page_size - 1) // page_size if page_size and total > 0 else 0
+
+    return {
+        "items": page_items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+        "has_prev": offset > 0,
+        "has_next": offset + page_size < total if page_size else False,
+    }
+
+
+def get_matching_compound_ids(db: Session, element_symbols: List[str], mode: str) -> List[int]:
+    allowed_modes = {"only", "combination", "contains"}
+    mode = mode if mode in allowed_modes else "combination"
+    selection = set(element_symbols)
+    matched_ids: List[int] = []
+
+    for compound in db.query(models.Compound).all():
+        element_list = get_compound_element_list(compound)
+        symbols = set(element_list)
+        if not symbols:
+            continue
+        if mode == "only":
+            ok = symbols == selection
+        elif mode == "combination":
+            ok = symbols.issubset(selection)
+        else:
+            ok = selection.issubset(symbols)
+        if ok:
+            matched_ids.append(compound.id)
+
+    return matched_ids
 
 
 def check_compound_has_papers(db: Session, element_symbols: List[str]) -> bool:
@@ -323,56 +361,68 @@ def check_paper_exists(db: Session, compound_id: int, doi: str) -> bool:
     ).first() is not None
 
 
+def _build_papers_query(db: Session, compound_ids: List[int], search_params: Optional[schemas.PaperSearchParams] = None) -> Query:
+    query = db.query(models.Paper).join(models.PaperData).filter(models.PaperData.compound_id.in_(compound_ids)).distinct()
+    if not search_params:
+        return query
+    if search_params.keyword:
+        keyword = f"%{search_params.keyword}%"
+        query = query.filter(or_(
+            models.Paper.title.like(keyword),
+            models.Paper.abstract.like(keyword),
+            models.Paper.authors.like(keyword),
+            models.PaperData.chemical_formula.like(keyword),
+        ))
+    if search_params.year_min:
+        query = query.filter(models.Paper.year >= search_params.year_min)
+    if search_params.year_max:
+        query = query.filter(models.Paper.year <= search_params.year_max)
+    if search_params.journal:
+        query = query.filter(models.Paper.journal.like(f"%{search_params.journal}%"))
+    if search_params.crystal_structure:
+        query = query.filter(models.PaperData.crystal_structure.like(f"%{search_params.crystal_structure}%"))
+    if search_params.review_status:
+        query = query.filter(models.Paper.review_status == search_params.review_status)
+    return query
+
+
+def _apply_papers_sorting(query: Query, search_params: Optional[schemas.PaperSearchParams] = None) -> Query:
+    sort_by = search_params.sort_by if search_params and search_params.sort_by else "year"
+    sort_order = (search_params.sort_order if search_params and search_params.sort_order else "desc").lower()
+    is_asc = sort_order == "asc"
+
+    if sort_by == "created_at":
+        primary = models.Paper.created_at.asc().nullslast() if is_asc else models.Paper.created_at.desc().nullslast()
+    else:
+        primary = models.Paper.year.asc().nullslast() if is_asc else models.Paper.year.desc().nullslast()
+
+    secondary = models.Paper.id.asc() if is_asc else models.Paper.id.desc()
+    return query.order_by(primary, secondary)
+
+
 def get_papers_by_compound(db: Session, compound_id: int, search_params: Optional[schemas.PaperSearchParams] = None, is_admin: bool = False) -> List[models.Paper]:
-    query = db.query(models.Paper).join(models.PaperData).filter(models.PaperData.compound_id == compound_id).distinct()
+    query = _build_papers_query(db, [compound_id], search_params)
+    query = _apply_papers_sorting(query, search_params)
     if search_params:
-        if search_params.keyword:
-            keyword = f"%{search_params.keyword}%"
-            query = query.filter(or_(
-                models.Paper.title.like(keyword),
-                models.Paper.abstract.like(keyword),
-                models.Paper.authors.like(keyword),
-                models.PaperData.chemical_formula.like(keyword),
-            ))
-        if search_params.year_min:
-            query = query.filter(models.Paper.year >= search_params.year_min)
-        if search_params.year_max:
-            query = query.filter(models.Paper.year <= search_params.year_max)
-        if search_params.journal:
-            query = query.filter(models.Paper.journal.like(f"%{search_params.journal}%"))
-        if search_params.crystal_structure:
-            query = query.filter(models.PaperData.crystal_structure.like(f"%{search_params.crystal_structure}%"))
-        query = query.order_by(models.Paper.year.desc().nullslast(), models.Paper.id.desc())
         query = query.offset(search_params.offset).limit(search_params.limit)
-        return query.all()
-    return query.order_by(models.Paper.year.desc().nullslast(), models.Paper.id.desc()).all()
+    return query.all()
 
 
 def get_papers_by_compounds(db: Session, compound_ids: List[int], search_params: Optional[schemas.PaperSearchParams] = None) -> List[models.Paper]:
     if not compound_ids:
         return []
-    query = db.query(models.Paper).join(models.PaperData).filter(models.PaperData.compound_id.in_(compound_ids)).distinct()
+    query = _build_papers_query(db, compound_ids, search_params)
+    query = _apply_papers_sorting(query, search_params)
     if search_params:
-        if search_params.keyword:
-            keyword = f"%{search_params.keyword}%"
-            query = query.filter(or_(
-                models.Paper.title.like(keyword),
-                models.Paper.abstract.like(keyword),
-                models.Paper.authors.like(keyword),
-                models.PaperData.chemical_formula.like(keyword),
-            ))
-        if search_params.year_min:
-            query = query.filter(models.Paper.year >= search_params.year_min)
-        if search_params.year_max:
-            query = query.filter(models.Paper.year <= search_params.year_max)
-        if search_params.journal:
-            query = query.filter(models.Paper.journal.like(f"%{search_params.journal}%"))
-        if search_params.crystal_structure:
-            query = query.filter(models.PaperData.crystal_structure.like(f"%{search_params.crystal_structure}%"))
-        query = query.order_by(models.Paper.year.desc().nullslast(), models.Paper.id.desc())
         query = query.offset(search_params.offset).limit(search_params.limit)
-        return query.all()
-    return query.order_by(models.Paper.year.desc().nullslast(), models.Paper.id.desc()).all()
+    return query.all()
+
+
+def get_papers_by_compounds_count(db: Session, compound_ids: List[int], search_params: Optional[schemas.PaperSearchParams] = None) -> int:
+    if not compound_ids:
+        return 0
+    query = _build_papers_query(db, compound_ids, search_params)
+    return query.with_entities(func.count(func.distinct(models.Paper.id))).scalar() or 0
 
 
 def get_paper_by_id(db: Session, paper_id: int) -> Optional[models.Paper]:

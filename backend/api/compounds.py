@@ -104,10 +104,16 @@ def get_compound_info(
     }
 
 
-@router.post("/search", response_model=List[schemas.CompoundSearchResult])
+@router.post("/search", response_model=schemas.CompoundSearchPaginationResponse)
 def search_compounds(
     request: schemas.CompoundSearchRequest,
     db: Session = Depends(get_db)
 ):
     """根据筛选模式搜索元素组合列表"""
-    return crud.search_compounds_by_elements(db, request.elements, request.mode)
+    return crud.search_compounds_by_elements(
+        db,
+        request.elements,
+        request.mode,
+        limit=request.limit,
+        offset=request.offset,
+    )

@@ -331,7 +331,7 @@ def get_batch_upload_example():
     )
 
 
-@router.get("/compound/{element_symbols}", response_model=List[schemas.PaperResponse])
+@router.get("/compound/{element_symbols}", response_model=schemas.PaperPaginationResponse)
 def get_papers_by_compound(
     element_symbols: str,
     keyword: Optional[str] = None,
@@ -340,7 +340,7 @@ def get_papers_by_compound(
     journal: Optional[str] = None,
     crystal_structure: Optional[str] = None,
     review_status: Optional[str] = None,  # 审核状态筛选 (approved/unreviewed/rejected/modifying)
-    sort_by: str = "created_at",
+    sort_by: str = "year",
     sort_order: str = "desc",
     limit: int = 50,
     offset: int = 0,
@@ -350,10 +350,8 @@ def get_papers_by_compound(
     """
     获取元素组合的文献列表
     """
-    # 解析元素符号
     symbols = element_symbols.split("-")
 
-    # 新结构中一个元素组合可能对应多个具体化合物。
     compounds = crud.get_compounds_by_symbols(db, symbols, exact=True)
     if not compounds:
         raise HTTPException(
@@ -361,7 +359,6 @@ def get_papers_by_compound(
             detail=f"元素组合 {element_symbols} 不存在或暂无文献"
         )
 
-    # 构建搜索参数
     search_params = schemas.PaperSearchParams(
         keyword=keyword,
         year_min=year_min,
@@ -376,8 +373,70 @@ def get_papers_by_compound(
     )
 
     compound_ids = [compound.id for compound in compounds]
+    total = crud.get_papers_by_compounds_count(db, compound_ids, search_params)
     papers = crud.get_papers_by_compounds(db, compound_ids, search_params)
-    return [crud.paper_to_response(db, paper, image_db=image_db) for paper in papers]
+
+    page_size = limit
+    page = (offset // page_size) + 1 if page_size else 1
+    total_pages = (total + page_size - 1) // page_size if total > 0 else 0
+
+    return {
+        "items": [crud.paper_to_response(db, paper, image_db=image_db) for paper in papers],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+        "has_prev": offset > 0,
+        "has_next": offset + page_size < total,
+    }
+
+
+@router.post("/search-by-mode", response_model=schemas.PaperPaginationResponse)
+def search_papers_by_mode(
+    request: schemas.PaperModeSearchRequest,
+    db: Session = Depends(get_db),
+    image_db: Session = Depends(get_image_db)
+):
+    compound_ids = crud.get_matching_compound_ids(db, request.elements, request.mode)
+    if not compound_ids:
+        return {
+            "items": [],
+            "total": 0,
+            "page": 1,
+            "page_size": request.limit,
+            "total_pages": 0,
+            "has_prev": False,
+            "has_next": False,
+        }
+
+    search_params = schemas.PaperSearchParams(
+        keyword=request.keyword,
+        year_min=request.year_min,
+        year_max=request.year_max,
+        journal=request.journal,
+        crystal_structure=request.crystal_structure,
+        review_status=request.review_status,
+        sort_by=request.sort_by,
+        sort_order=request.sort_order,
+        limit=request.limit,
+        offset=request.offset,
+    )
+
+    total = crud.get_papers_by_compounds_count(db, compound_ids, search_params)
+    papers = crud.get_papers_by_compounds(db, compound_ids, search_params)
+    page_size = request.limit
+    page = (request.offset // page_size) + 1 if page_size else 1
+    total_pages = (total + page_size - 1) // page_size if total > 0 else 0
+
+    return {
+        "items": [crud.paper_to_response(db, paper, image_db=image_db) for paper in papers],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+        "has_prev": request.offset > 0,
+        "has_next": request.offset + page_size < total,
+    }
 
 
 @router.get("/crystal-structures")

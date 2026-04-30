@@ -6,6 +6,20 @@ let currentReviewStatus = 'all'; // 当前选择的审核状态筛选
 const paperCache = new Map();
 const urlParams = new URLSearchParams(window.location.search);
 let viewMode = urlParams.get('mode') || 'only';
+const ONLY_MODE_PAGE_SIZE = 50;
+const currentSearchParams = {};
+const onlyModePagination = {
+    page: 1,
+    pageSize: ONLY_MODE_PAGE_SIZE,
+    total: 0,
+    totalPages: 0,
+};
+const multiModePagination = {
+    page: 1,
+    pageSize: ONLY_MODE_PAGE_SIZE,
+    total: 0,
+    totalPages: 0,
+};
 if (!['only', 'combination', 'contains'].includes(viewMode)) {
     viewMode = 'only';
 }
@@ -170,29 +184,44 @@ async function loadCompoundInfo() {
 }
 
 // 加载文献列表
-async function loadPapers(searchParams = {}) {
+async function loadPapers(searchParams = null) {
     const container = document.getElementById('papers-container');
     container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-3">加载中...</p></div>';
+    if (searchParams !== null) {
+        Object.keys(currentSearchParams).forEach(key => delete currentSearchParams[key]);
+        Object.assign(currentSearchParams, searchParams);
+    }
 
     try {
-        const queryString = buildQueryString(searchParams);
+        const queryString = buildQueryString(currentSearchParams);
         if (viewMode === 'only') {
-            const papers = await fetchPapersForCombination(elementSymbols, queryString);
-            renderSingleCombination(container, papers);
-            updateModeSubtitle(`共 ${papers.length} 篇文献`);
+            const payload = await fetchPapersForCombination(elementSymbols, queryString);
+            renderSingleCombination(container, payload);
+            updateModeSubtitle(`共 ${payload.total} 篇文献`);
+            renderPagination(payload, 'paper');
         } else {
             await renderMultipleCombinations(container, queryString);
         }
     } catch (error) {
         console.error('加载文献失败:', error);
         container.innerHTML = `<div class="alert alert-danger">加载失败：${error.message}</div>`;
+        clearPaginationUi();
     }
 }
 
 // 审核状态筛选
 function filterByReviewStatus(status) {
     currentReviewStatus = status;
-    loadPapers();
+    resetCurrentPage();
+    loadPapers(currentSearchParams);
+}
+
+function getActivePaginationState() {
+    return viewMode === 'only' ? onlyModePagination : multiModePagination;
+}
+
+function resetCurrentPage() {
+    getActivePaginationState().page = 1;
 }
 
 function buildQueryString(searchParams = {}) {
@@ -201,7 +230,52 @@ function buildQueryString(searchParams = {}) {
     if (searchParams.year_min) params.append('year_min', searchParams.year_min);
     if (searchParams.year_max) params.append('year_max', searchParams.year_max);
     if (currentReviewStatus !== 'all') params.append('review_status', currentReviewStatus);
+    const pagination = getActivePaginationState();
+    params.append('limit', pagination.pageSize);
+    params.append('offset', (pagination.page - 1) * pagination.pageSize);
     return params.toString();
+}
+
+function normalizePaperListPayload(data) {
+    if (Array.isArray(data)) {
+        return {
+            items: data,
+            total: data.length,
+            page: 1,
+            page_size: data.length,
+            total_pages: data.length > 0 ? 1 : 0,
+            has_prev: false,
+            has_next: false,
+        };
+    }
+
+    return {
+        items: Array.isArray(data?.items) ? data.items : [],
+        total: Number.isFinite(data?.total) ? data.total : (Array.isArray(data?.items) ? data.items.length : 0),
+        page: Number.isFinite(data?.page) ? data.page : 1,
+        page_size: Number.isFinite(data?.page_size) ? data.page_size : ONLY_MODE_PAGE_SIZE,
+        total_pages: Number.isFinite(data?.total_pages) ? data.total_pages : 0,
+        has_prev: Boolean(data?.has_prev),
+        has_next: Boolean(data?.has_next),
+    };
+}
+
+function groupPapersByCompound(papers) {
+    const grouped = new Map();
+    for (const paper of papers) {
+        const key = paper.compound_symbols || paper.chemical_formula || '未知组合';
+        if (!grouped.has(key)) {
+            grouped.set(key, {
+                combo: {
+                    element_symbols: key,
+                    element_list: key.split('-').filter(Boolean),
+                },
+                papers: [],
+            });
+        }
+        grouped.get(key).papers.push(paper);
+    }
+    return Array.from(grouped.values()).sort((a, b) => a.combo.element_symbols.localeCompare(b.combo.element_symbols));
 }
 
 async function fetchPapersForCombination(symbols, queryString) {
@@ -211,62 +285,164 @@ async function fetchPapersForCombination(symbols, queryString) {
     if (!response.ok) {
         throw new Error(data.detail || '加载失败');
     }
-    return data;
+    return normalizePaperListPayload(data);
 }
 
-function renderSingleCombination(container, papers) {
-    if (!papers || papers.length === 0) {
+function renderSingleCombination(container, payload) {
+    const papers = Array.isArray(payload?.items) ? payload.items : [];
+    if (papers.length === 0) {
         container.innerHTML = renderEmptyState();
         return;
     }
     container.innerHTML = papers.map(paper => renderPaperCard(paper)).join('');
 }
 
-async function renderMultipleCombinations(container, queryString) {
-    const combos = await fetchCombinationList(viewMode);
-    if (!combos || combos.length === 0) {
-        container.innerHTML = `
-            <div class="alert alert-info text-center">
-                <p class="mb-0">未找到符合条件的元素组合，请尝试切换筛选模式或重新选择元素。</p>
-            </div>
-        `;
-        updateModeSubtitle('暂无匹配的元素组合');
+function clearPaginationUi() {
+    const summaryEl = document.getElementById('papers-summary');
+    const paginationEl = document.getElementById('papers-pagination');
+    if (summaryEl) {
+        summaryEl.innerHTML = '';
+        summaryEl.style.display = 'none';
+    }
+    if (paginationEl) {
+        paginationEl.innerHTML = '';
+        paginationEl.style.display = 'none';
+    }
+}
+
+function renderPagination(payload, mode = 'paper') {
+    const summaryEl = document.getElementById('papers-summary');
+    const paginationEl = document.getElementById('papers-pagination');
+    if (!summaryEl || !paginationEl) return;
+
+    const pagination = mode === 'paper' ? getActivePaginationState() : multiModePagination;
+    pagination.page = payload.page || 1;
+    pagination.pageSize = payload.page_size || ONLY_MODE_PAGE_SIZE;
+    pagination.total = payload.total || 0;
+    pagination.totalPages = payload.total_pages || 0;
+
+    if (pagination.total === 0) {
+        clearPaginationUi();
         return;
     }
 
-    const sections = await Promise.all(combos.map(async combo => {
-        try {
-            const papers = await fetchPapersForCombination(combo.element_symbols, queryString);
-            return { combo, papers };
-        } catch (error) {
-            return { combo, papers: [], error: error.message };
-        }
-    }));
+    const start = (pagination.page - 1) * pagination.pageSize + 1;
+    const itemCount = Array.isArray(payload.items) ? payload.items.length : 0;
+    const end = Math.min(start + itemCount - 1, pagination.total);
+    summaryEl.style.display = 'block';
+    summaryEl.textContent = mode === 'paper'
+        ? `第 ${start}-${end} 条，共 ${pagination.total} 条`
+        : `第 ${start}-${end} 个组合，共 ${pagination.total} 个组合`;
 
-    const validSections = sections.filter(section => (section.papers && section.papers.length > 0));
-    if (validSections.length === 0) {
+    if (pagination.totalPages <= 1) {
+        paginationEl.innerHTML = '';
+        paginationEl.style.display = 'none';
+        return;
+    }
+
+    paginationEl.style.display = 'block';
+    paginationEl.innerHTML = `
+        <nav aria-label="分页导航">
+            <ul class="pagination justify-content-center flex-wrap mb-0">
+                <li class="page-item ${payload.has_prev ? '' : 'disabled'}">
+                    <button class="page-link" type="button" onclick="changePage('${mode}', ${pagination.page - 1})" ${payload.has_prev ? '' : 'disabled'}>上一页</button>
+                </li>
+                ${renderPageNumberItems(pagination.page, pagination.totalPages, mode)}
+                <li class="page-item ${payload.has_next ? '' : 'disabled'}">
+                    <button class="page-link" type="button" onclick="changePage('${mode}', ${pagination.page + 1})" ${payload.has_next ? '' : 'disabled'}>下一页</button>
+                </li>
+            </ul>
+        </nav>
+    `;
+}
+
+function renderPageNumberItems(currentPage, totalPages, mode = 'paper') {
+    const maxVisiblePages = 5;
+    const halfWindow = Math.floor(maxVisiblePages / 2);
+    let start = Math.max(1, currentPage - halfWindow);
+    let end = Math.min(totalPages, start + maxVisiblePages - 1);
+    start = Math.max(1, end - maxVisiblePages + 1);
+
+    let html = '';
+    for (let page = start; page <= end; page++) {
+        html += `
+            <li class="page-item ${page === currentPage ? 'active' : ''}">
+                <button class="page-link" type="button" onclick="changePage('${mode}', ${page})">${page}</button>
+            </li>
+        `;
+    }
+    return html;
+}
+
+function changePage(mode, page) {
+    const pagination = mode === 'paper' ? getActivePaginationState() : multiModePagination;
+    if (page < 1 || page > pagination.totalPages || page === pagination.page) {
+        return;
+    }
+    pagination.page = page;
+    loadPapers(currentSearchParams);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function renderMultipleCombinations(container, queryString) {
+    const payload = await fetchPapersByMode(viewMode);
+    const papers = payload.items || [];
+    if (papers.length === 0) {
         container.innerHTML = `
             <div class="alert alert-warning text-center">
                 <p class="mb-0">当前筛选条件下没有可展示的文献，请尝试切换筛选模式或放宽筛选条件。</p>
             </div>
         `;
         updateModeSubtitle('暂无符合条件的文献');
+        clearPaginationUi();
         return;
     }
 
-    const totalCount = validSections.reduce((sum, section) => sum + section.papers.length, 0);
-    updateModeSubtitle(`共 ${totalCount} 篇文献，涉及 ${validSections.length} 个组合`);
-    container.innerHTML = validSections.map(section => renderCombinationSection(section)).join('');
+    const sections = groupPapersByCompound(papers);
+    updateModeSubtitle(`当前页共 ${papers.length} 篇文献，总计 ${payload.total} 篇`);
+    container.innerHTML = sections.map(section => renderCombinationSection(section)).join('');
+    renderPagination(payload, 'paper');
+}
+
+async function fetchPapersByMode(mode) {
+    const elements = getSelectedElementsFromPath();
+    const pagination = multiModePagination;
+    const body = {
+        elements,
+        mode,
+        keyword: currentSearchParams.keyword || null,
+        year_min: currentSearchParams.year_min || null,
+        year_max: currentSearchParams.year_max || null,
+        review_status: currentReviewStatus !== 'all' ? currentReviewStatus : null,
+        limit: pagination.pageSize,
+        offset: (pagination.page - 1) * pagination.pageSize,
+        sort_by: 'year',
+        sort_order: 'desc',
+    };
+
+    const response = await fetch('/api/papers/search-by-mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.detail || '文献检索失败');
+    }
+    return normalizePaperListPayload(data);
 }
 
 async function fetchCombinationList(mode) {
     const elements = getSelectedElementsFromPath();
+    const pagination = multiModePagination;
     const response = await fetch('/api/compounds/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             elements,
-            mode
+            mode,
+            limit: pagination.pageSize,
+            offset: (pagination.page - 1) * pagination.pageSize,
         })
     });
     const data = await response.json();
@@ -578,6 +754,7 @@ function searchPapers() {
     if (yearMin) searchParams.year_min = parseInt(yearMin);
     if (yearMax) searchParams.year_max = parseInt(yearMax);
 
+    resetCurrentPage();
     loadPapers(searchParams);
 }
 
@@ -586,7 +763,8 @@ function resetSearch() {
     document.getElementById('keyword-input').value = '';
     document.getElementById('year-min-input').value = '';
     document.getElementById('year-max-input').value = '';
-    loadPapers();
+    resetCurrentPage();
+    loadPapers({});
 }
 
 // 处理图片选择
