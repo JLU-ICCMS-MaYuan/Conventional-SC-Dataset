@@ -10,8 +10,9 @@
 from sqlalchemy import Column, Integer, String, Text, BLOB, DateTime, ForeignKey, Boolean, Float
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+import json
 
-from backend.database import Base
+from backend.database import Base, ImageBase
 
 
 class Element(Base):
@@ -109,7 +110,6 @@ class Paper(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     physical_parameters = relationship("PaperData", back_populates="paper", cascade="all, delete-orphan")
-    images = relationship("PaperImage", back_populates="paper", cascade="all, delete-orphan")
     reviewer = relationship("User", back_populates="reviewed_papers", foreign_keys=[reviewed_by])
 
     def __repr__(self):
@@ -127,6 +127,7 @@ class PaperData(Base):
     superconductor_type = Column(Text)
     chemical_formula = Column(Text)
     crystal_structure = Column(Text)
+    tc = Column(Text)
     tc_press = Column(Text)
     lambda_val = Column(Float)
     omega_log = Column(Float)
@@ -139,36 +140,62 @@ class PaperData(Base):
     paper = relationship("Paper", back_populates="physical_parameters")
     compound = relationship("Compound", back_populates="physical_parameters")
 
-    @property
-    def tc(self):
-        import json
-
+    @staticmethod
+    def _parse_range(value):
         try:
-            values = json.loads(self.tc_press or "[]")
-            return values[0] if len(values) > 0 else None
+            parsed = json.loads(value) if value else None
         except Exception:
             return None
+        if not isinstance(parsed, list):
+            return None
+        cleaned = []
+        for item in parsed:
+            if item is None:
+                cleaned.append(None)
+                continue
+            try:
+                cleaned.append(float(item))
+            except (TypeError, ValueError):
+                return None
+        return cleaned[:2] if cleaned else None
+
+    @staticmethod
+    def _representative_value(values):
+        if not values:
+            return None
+        numeric = [float(v) for v in values if v is not None]
+        if not numeric:
+            return None
+        if len(numeric) == 1:
+            return numeric[0]
+        return sum(numeric[:2]) / min(len(numeric), 2)
 
     @property
-    def pressure(self):
-        import json
+    def tc_range(self):
+        return self._parse_range(self.tc)
 
-        try:
-            values = json.loads(self.tc_press or "[]")
-            return values[1] if len(values) > 1 else None
-        except Exception:
-            return None
+    @property
+    def pressure_range(self):
+        return self._parse_range(self.tc_press)
+
+    @property
+    def tc_value(self):
+        return self._representative_value(self.tc_range)
+
+    @property
+    def pressure_value(self):
+        return self._representative_value(self.pressure_range)
 
     def __repr__(self):
         return f"<PaperData paper_id={self.paper_id} compound_id={self.compound_id}>"
 
 
-class PaperImage(Base):
+class PaperImage(ImageBase):
     """论文图片集合表，每行保存一篇论文最多40张图"""
     __tablename__ = "paper_images"
 
     id = Column(Integer, primary_key=True, index=True)
-    paper_id = Column(Integer, ForeignKey("papers.id"), index=True)
+    paper_id = Column(Integer, index=True, nullable=False)
     figs = Column(Text)
     image_data = Column(BLOB)
     thumbnail_data = Column(BLOB)
@@ -216,8 +243,6 @@ class PaperImage(Base):
     fig38 = Column(BLOB)
     fig39 = Column(BLOB)
     fig40 = Column(BLOB)
-
-    paper = relationship("Paper", back_populates="images")
 
     def __repr__(self):
         return f"<PaperImage paper_id={self.paper_id}>"

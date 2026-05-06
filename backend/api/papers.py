@@ -9,7 +9,7 @@ import json
 from io import BytesIO
 from pathlib import Path
 
-from backend.database import get_db
+from backend.database import get_db, get_image_db
 from backend import crud, schemas
 from backend.models import Paper, PaperData
 from backend.utils.doi_resolver import get_doi_metadata, validate_doi
@@ -74,6 +74,7 @@ async def create_paper(
     notes: Optional[str] = Form(None),
     images: List[UploadFile] = File(default=[]),
     db: Session = Depends(get_db),
+    image_db: Session = Depends(get_image_db),
     current_user: Annotated[schemas.User, Depends(get_current_user)] = None
 ):
     """
@@ -224,7 +225,7 @@ async def create_paper(
 
         # 保存到数据库
         crud.create_paper_image(
-            db=db,
+            image_db=image_db,
             paper_id=paper.id,
             image_data=compressed_data,
             thumbnail_data=thumbnail_data,
@@ -233,7 +234,7 @@ async def create_paper(
         )
 
     # 9. 返回响应
-    return crud.paper_to_response(db, paper, compound.id)
+    return crud.paper_to_response(db, paper, compound.id, image_db=image_db)
 
 
 @router.post("/batch-upload")
@@ -343,7 +344,8 @@ def get_papers_by_compound(
     sort_order: str = "desc",
     limit: int = 50,
     offset: int = 0,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    image_db: Session = Depends(get_image_db)
 ):
     """
     获取元素组合的文献列表
@@ -373,16 +375,9 @@ def get_papers_by_compound(
         offset=offset
     )
 
-    rows = []
-    seen = set()
-    for compound in compounds:
-        for paper in crud.get_papers_by_compound(db, compound.id, search_params):
-            key = (paper.id, compound.id)
-            if key in seen:
-                continue
-            seen.add(key)
-            rows.append(crud.paper_to_response(db, paper, compound.id))
-    return rows
+    compound_ids = [compound.id for compound in compounds]
+    papers = crud.get_papers_by_compounds(db, compound_ids, search_params)
+    return [crud.paper_to_response(db, paper, image_db=image_db) for paper in papers]
 
 
 @router.get("/crystal-structures")
@@ -398,7 +393,7 @@ def get_crystal_structures(db: Session = Depends(get_db)):
 
 
 @router.get("/{paper_id}", response_model=schemas.PaperDetail)
-def get_paper_detail(paper_id: int, db: Session = Depends(get_db)):
+def get_paper_detail(paper_id: int, db: Session = Depends(get_db), image_db: Session = Depends(get_image_db)):
     """
     获取文献详情
     """
@@ -406,7 +401,7 @@ def get_paper_detail(paper_id: int, db: Session = Depends(get_db)):
     if not paper:
         raise HTTPException(status_code=404, detail="文献不存在")
 
-    data = crud.paper_to_response(db, paper)
+    data = crud.paper_to_response(db, paper, image_db=image_db)
     data["element_symbols"] = data.get("compound_symbols") or ""
     return data
 
@@ -416,7 +411,7 @@ def get_paper_image(
     paper_id: int,
     image_order: int,
     thumbnail: bool = False,
-    db: Session = Depends(get_db)
+    image_db: Session = Depends(get_image_db)
 ):
     """
     根据文献ID和图片顺序获取截图
@@ -426,7 +421,7 @@ def get_paper_image(
         image_order: 图片顺序 (1-5)
         thumbnail: 是否返回缩略图（默认False返回原图）
     """
-    image = crud.get_image_by_order(db, paper_id, image_order)
+    image = crud.get_image_by_order(image_db, paper_id, image_order)
     if not image:
         raise HTTPException(status_code=404, detail="图片不存在")
 
@@ -447,7 +442,7 @@ def get_paper_image(
 def get_image_by_id(
     image_id: int,
     thumbnail: bool = False,
-    db: Session = Depends(get_db)
+    image_db: Session = Depends(get_image_db)
 ):
     """
     根据图片ID获取截图
@@ -456,7 +451,7 @@ def get_image_by_id(
         image_id: 图片ID
         thumbnail: 是否返回缩略图
     """
-    image = crud.get_image_by_id(db, image_id)
+    image = crud.get_image_by_id(image_db, image_id)
     if not image:
         raise HTTPException(status_code=404, detail="图片不存在")
 
@@ -526,10 +521,14 @@ def get_chart_data(db: Session = Depends(get_db)):
     result = []
     rows = db.query(PaperData).join(Paper).all()
     for data in rows:
-        if data.pressure is not None and data.tc is not None:
+        x = data.pressure_value
+        y = data.tc_value
+        if x is not None and y is not None:
             result.append({
-                "x": data.pressure,
-                "y": data.tc,
+                "x": x,
+                "y": y,
+                "x_range": data.pressure_range,
+                "y_range": data.tc_range,
                 "year": data.paper.year,
                 "label": data.chemical_formula or (data.paper.title or "")[:20],
                 "doi": data.paper.doi,

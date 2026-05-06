@@ -4,12 +4,11 @@
 """
 import json
 import base64
-import math
 from pathlib import Path
 from datetime import datetime
 from sqlalchemy.orm import Session
 
-from backend.database import SessionLocal, engine
+from backend.database import MetadataSessionLocal, ImageSessionLocal
 from backend import models, crud
 
 
@@ -36,7 +35,8 @@ def import_all_data(input_file: str = "data/data_export.json", clear_existing: b
         print(f"❌ 文件不存在: {input_path}")
         return
 
-    db = SessionLocal()
+    db = MetadataSessionLocal()
+    image_db = ImageSessionLocal()
     valid_elements = get_all_element_symbols(db)
 
     try:
@@ -46,22 +46,19 @@ def import_all_data(input_file: str = "data/data_export.json", clear_existing: b
 
         if clear_existing:
             print("⚠️  清空现有数据...")
-            # 注意：不再删除 CompoundElement，因为它已被移除
-            db.query(models.PaperImage).delete()
+            image_db.query(models.PaperImage).delete()
+            image_db.commit()
             db.query(models.PaperData).delete()
             db.query(models.Paper).delete()
             db.query(models.Compound).delete()
             db.commit()
 
-        # 映射表
-        compound_id_mapping = {}  # 旧ID -> 新ID
+        compound_id_mapping = {}
         paper_id_mapping = {}
 
-        # 1. 导入或创建元素组合
         print("处理元素组合...")
         compounds_to_process = data.get("compounds", [])
-        
-        # 如果JSON里没有compounds，从papers中提取
+
         if not compounds_to_process and "papers" in data:
             print("   JSON中缺少compounds信息，正在从papers中推断...")
             seen_combos = set()
@@ -72,7 +69,7 @@ def import_all_data(input_file: str = "data/data_export.json", clear_existing: b
                     combo_key = "-".join(std_list)
                     if combo_key not in seen_combos:
                         compounds_to_process.append({
-                            "id": p.get("compound_id", -1), # 临时ID
+                            "id": p.get("compound_id", -1),
                             "element_symbols": combo_key,
                             "element_list": std_list,
                             "created_at": p.get("created_at", datetime.now().isoformat())
@@ -80,75 +77,45 @@ def import_all_data(input_file: str = "data/data_export.json", clear_existing: b
                         seen_combos.add(combo_key)
 
         for comp_data in compounds_to_process:
-            raw_symbols = comp_data.get("element_list") or comp_data["element_symbols"].split("-")
-            std_list = standardize_elements(raw_symbols, valid_elements)
-            
-            if not std_list:
-                print(f"   ⚠️ 跳过无效组合: {comp_data.get('element_symbols')}")
+            std_list = comp_data.get("element_list") or []
+            chemical_formula = comp_data.get("chemical_formula")
+            if chemical_formula:
+                compound = crud.get_or_create_compound(db, std_list, chemical_formula)
+            else:
+                compound = crud.get_or_create_compound(db, std_list)
+            if not compound:
                 continue
-
-            # 使用 CRUD 逻辑确保标准化
-            compound = crud.get_or_create_compound(db, std_list)
-            compound_id_mapping[comp_data["id"]] = compound.id
-            # 同时记录原始字符串到映射，以防paper引用它
-            compound_id_mapping[comp_data["element_symbols"]] = compound.id
+            if "id" in comp_data:
+                compound_id_mapping[comp_data["id"]] = compound.id
+            if chemical_formula:
+                compound_id_mapping[chemical_formula] = compound.id
 
         db.commit()
-        print(f"   ✅ 元素组合准备就绪")
+        print("   ✅ 元素组合准备就绪")
 
-        # 2. 导入文献
         print("导入文献...")
         for paper_data in data.get("papers", []):
-            # 确定所属化合物
-            new_compound_id = None
-            
-            # 尝试多种方式匹配化合物
-            old_cid = paper_data.get("compound_id")
-            if old_cid in compound_id_mapping:
-                new_compound_id = compound_id_mapping[old_cid]
-            
-            if not new_compound_id:
-                raw_symbols = paper_data.get("element_list") or paper_data.get("element_symbols", "").split("-")
-                std_list = standardize_elements(raw_symbols, valid_elements)
-                if std_list:
-                    compound = crud.get_or_create_compound(db, std_list)
-                    new_compound_id = compound.id
-
-            if not new_compound_id:
-                print(f"   ⚠️ 跳过文献 {paper_data.get('doi')} (无法识别元素组合)")
-                continue
-
-            # 检查重复
-            existing = db.query(models.Paper).filter(
-                models.Paper.compound_id == new_compound_id,
-                models.Paper.doi == paper_data["doi"]
-            ).first()
-
+            existing = db.query(models.Paper).filter(models.Paper.doi == paper_data["doi"]).first()
             if existing:
                 paper_id_mapping[paper_data["id"]] = existing.id
                 continue
 
-            # 正常导入
             paper = models.Paper(
-                compound_id=new_compound_id,
                 doi=paper_data["doi"],
-                title=paper_data["title"],
-                article_type=paper_data["article_type"],
-                superconductor_type=paper_data["superconductor_type"],
-                authors=paper_data["authors"],
-                journal=paper_data["journal"],
-                volume=paper_data.get("volume", ""),
-                pages=paper_data.get("pages", ""),
+                title=paper_data.get("title"),
+                authors=paper_data.get("authors"),
+                journal=paper_data.get("journal"),
+                volume=paper_data.get("volume"),
+                pages=paper_data.get("pages"),
                 year=paper_data.get("year"),
-                abstract=paper_data.get("abstract", ""),
-                citation_aps=paper_data.get("citation_aps", ""),
-                citation_bibtex=paper_data.get("citation_bibtex", ""),
-                chemical_formula=paper_data.get("chemical_formula"),
-                crystal_structure=paper_data.get("crystal_structure"),
+                abstract=paper_data.get("abstract"),
                 contributor_name=paper_data.get("contributor_name", "Data Import"),
                 contributor_affiliation=paper_data.get("contributor_affiliation", "System"),
-                notes=paper_data.get("notes", ""),
-                created_at=datetime.fromisoformat(paper_data["created_at"]) if "created_at" in paper_data else datetime.now()
+                notes=paper_data.get("notes"),
+                review_status=paper_data.get("review_status", "unreviewed"),
+                review_comment=paper_data.get("review_comment"),
+                show_in_chart=paper_data.get("show_in_chart", False),
+                created_at=datetime.fromisoformat(paper_data["created_at"]) if paper_data.get("created_at") else datetime.now(),
             )
             db.add(paper)
             db.flush()
@@ -157,48 +124,63 @@ def import_all_data(input_file: str = "data/data_export.json", clear_existing: b
         db.commit()
         print(f"   ✅ 文献导入完成 ({len(paper_id_mapping)} 篇)")
 
-        # 3. 导入物理参数
         print("导入物理参数...")
         imported_params = 0
         for param_data in data.get("paper_data", []):
             old_paper_id = param_data.get("paper_id")
             new_paper_id = paper_id_mapping.get(old_paper_id)
-            if not new_paper_id: continue
+            if not new_paper_id:
+                continue
+
+            compound_id = None
+            old_compound_id = param_data.get("compound_id")
+            if old_compound_id in compound_id_mapping:
+                compound_id = compound_id_mapping[old_compound_id]
+            elif param_data.get("chemical_formula") in compound_id_mapping:
+                compound_id = compound_id_mapping[param_data.get("chemical_formula")]
+            elif param_data.get("chemical_formula"):
+                compound = crud.get_or_create_compound(db, [], param_data.get("chemical_formula"))
+                compound_id = compound.id if compound else None
 
             param = models.PaperData(
                 paper_id=new_paper_id,
-                pressure=param_data.get("pressure"),
-                tc=param_data.get("tc"),
+                compound_id=compound_id,
+                article_type=param_data.get("article_type"),
+                superconductor_type=param_data.get("superconductor_type"),
+                chemical_formula=param_data.get("chemical_formula"),
+                crystal_structure=param_data.get("crystal_structure"),
+                tc=json.dumps(param_data.get("tc"), ensure_ascii=False) if param_data.get("tc") is not None else None,
+                tc_press=json.dumps(param_data.get("tc_press"), ensure_ascii=False) if param_data.get("tc_press") is not None else None,
                 lambda_val=param_data.get("lambda_val"),
                 omega_log=param_data.get("omega_log"),
                 n_ef=param_data.get("n_ef"),
-                s_factor=param_data.get("s_factor")
+                s_factor=param_data.get("s_factor"),
+                sample_name=param_data.get("sample_name"),
+                data_source_note=param_data.get("data_source_note"),
+                sequence_in_paper=param_data.get("sequence_in_paper"),
             )
             db.add(param)
             imported_params += 1
 
         db.commit()
-        print(f"   ✅ 物理参数导入完成")
+        print(f"   ✅ 物理参数导入完成 ({imported_params} 条)")
 
-        # 4. 导入截图
         print("导入文献截图...")
         imported_images = 0
         from backend.utils.image_processor import process_image
 
         for img_data in data.get("paper_images", []):
             new_paper_id = paper_id_mapping.get(img_data.get("paper_id"))
-            if not new_paper_id: continue
+            if not new_paper_id:
+                continue
 
             image_bin = None
             thumb_bin = None
-
-            # 优先从文件路径读取
             file_path = img_data.get("file_path")
             if file_path and Path(file_path).exists():
                 with open(file_path, 'rb') as f:
                     raw_data = f.read()
                     image_bin, thumb_bin = process_image(raw_data)
-            # 否则从 Base64 读取
             elif "image_data" in img_data:
                 image_bin = base64.b64decode(img_data["image_data"])
                 if "thumbnail_data" in img_data:
@@ -211,21 +193,23 @@ def import_all_data(input_file: str = "data/data_export.json", clear_existing: b
                     paper_id=new_paper_id,
                     image_data=image_bin,
                     thumbnail_data=thumb_bin,
-                    image_order=img_data["image_order"],
+                    image_order=img_data.get("image_order", 1),
                     file_size=len(image_bin)
                 )
-                db.add(image)
+                image_db.add(image)
                 imported_images += 1
 
-        db.commit()
-        print(f"   ✅ 截图导入完成")
+        image_db.commit()
+        print(f"   ✅ 截图导入完成 ({imported_images} 张)")
 
     except Exception as e:
         print(f"❌ 导入失败: {e}")
         db.rollback()
+        image_db.rollback()
         raise
     finally:
         db.close()
+        image_db.close()
 
 
 if __name__ == "__main__":

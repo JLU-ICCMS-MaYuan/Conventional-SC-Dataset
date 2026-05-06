@@ -3,12 +3,10 @@
 将数据库中的所有数据导出为JSON文件
 """
 import json
-import base64
 import sys
 from pathlib import Path
-from sqlalchemy.orm import Session
 
-from backend.database import SessionLocal
+from backend.database import MetadataSessionLocal, ImageSessionLocal
 from backend import models
 
 
@@ -19,7 +17,8 @@ def export_all_data(output_file: str = "data_export.json"):
     Args:
         output_file: 输出文件路径
     """
-    db = SessionLocal()
+    db = MetadataSessionLocal()
+    image_db = ImageSessionLocal()
 
     try:
         print("开始导出数据...")
@@ -32,7 +31,6 @@ def export_all_data(output_file: str = "data_export.json"):
             "paper_images": []
         }
 
-        # 1. 导出元素（通常不需要，因为会自动初始化）
         print("导出元素数据...")
         elements = db.query(models.Element).all()
         for elem in elements:
@@ -43,87 +41,102 @@ def export_all_data(output_file: str = "data_export.json"):
                 "atomic_number": elem.atomic_number
             })
 
-        # 2. 导出元素组合
         print("导出元素组合数据...")
         compounds = db.query(models.Compound).all()
-        compound_symbol_map = {}
         for comp in compounds:
             data["compounds"].append({
                 "id": comp.id,
-                "element_symbols": comp.element_symbols,
-                "element_list": json.loads(comp.element_list) if comp.element_list else comp.element_symbols.split("-"),
+                "chemical_formula": comp.chemical_formula,
+                "element_list": json.loads(comp.element_list) if comp.element_list else [],
                 "element_id_list": json.loads(comp.element_id_list) if comp.element_id_list else [],
-                "created_at": comp.created_at.isoformat()
+                "composition": json.loads(comp.composition) if comp.composition else [],
+                "element_ratio": json.loads(comp.element_ratio) if comp.element_ratio else [],
             })
-            compound_symbol_map[comp.id] = comp.element_symbols
 
-        # 3. 导出文献
         print("导出文献数据...")
         papers = db.query(models.Paper).all()
         for paper in papers:
             data["papers"].append({
                 "id": paper.id,
-                "element_symbols": compound_symbol_map.get(paper.compound_id),
                 "doi": paper.doi,
                 "title": paper.title,
-                "article_type": paper.article_type,
-                "superconductor_type": paper.superconductor_type,
                 "authors": paper.authors,
                 "journal": paper.journal,
                 "volume": paper.volume,
                 "pages": paper.pages,
                 "year": paper.year,
                 "abstract": paper.abstract,
-                "citation_aps": paper.citation_aps,
-                "citation_bibtex": paper.citation_bibtex,
-                "chemical_formula": paper.chemical_formula,
-                "crystal_structure": paper.crystal_structure,
                 "contributor_name": paper.contributor_name,
                 "contributor_affiliation": paper.contributor_affiliation,
                 "notes": paper.notes,
-                "created_at": paper.created_at.isoformat()
+                "review_status": paper.review_status,
+                "review_comment": paper.review_comment,
+                "show_in_chart": paper.show_in_chart,
+                "created_at": paper.created_at.isoformat() if paper.created_at else None,
             })
 
-        # 4. 导出物理参数 (PaperData)
         print("导出物理参数数据...")
         physical_params = db.query(models.PaperData).all()
         for p in physical_params:
             data["paper_data"].append({
                 "id": p.id,
                 "paper_id": p.paper_id,
-                "pressure": p.pressure,
-                "tc": p.tc,
+                "compound_id": p.compound_id,
+                "article_type": p.article_type,
+                "superconductor_type": p.superconductor_type,
+                "chemical_formula": p.chemical_formula,
+                "crystal_structure": p.crystal_structure,
+                "tc": p.tc_range,
+                "tc_press": p.pressure_range,
                 "lambda_val": p.lambda_val,
                 "omega_log": p.omega_log,
                 "n_ef": p.n_ef,
-                "s_factor": p.s_factor
+                "s_factor": p.s_factor,
+                "sample_name": p.sample_name,
+                "data_source_note": p.data_source_note,
+                "sequence_in_paper": p.sequence_in_paper,
             })
 
-        # 5. 导出文献截图（保存为文件并在JSON中使用链接）
         print("导出文献截图数据...")
         images_dir = Path("data/images")
         images_dir.mkdir(parents=True, exist_ok=True)
-        
-        images = db.query(models.PaperImage).all()
-        for img in images:
-            # 生成文件名: paper_{paper_id}_order_{order}.jpg
-            image_filename = f"paper_{img.paper_id}_order_{img.image_order}.jpg"
-            image_path = images_dir / image_filename
-            
-            # 写入原图文件
-            with open(image_path, 'wb') as f:
-                f.write(img.image_data)
-            
-            data["paper_images"].append({
-                "id": img.id,
-                "paper_id": img.paper_id,
-                "file_path": str(image_path),  # 使用本地路径
-                "image_order": img.image_order,
-                "file_size": img.file_size,
-                "created_at": img.created_at.isoformat()
-            })
 
-        # 写入JSON文件
+        images = image_db.query(models.PaperImage).all()
+        for img in images:
+            if img.image_data:
+                image_filename = f"paper_{img.paper_id}_order_{img.image_order or 1}.jpg"
+                image_path = images_dir / image_filename
+                with open(image_path, 'wb') as f:
+                    f.write(img.image_data)
+                data["paper_images"].append({
+                    "id": img.id,
+                    "paper_id": img.paper_id,
+                    "file_path": str(image_path),
+                    "image_order": img.image_order or 1,
+                    "file_size": img.file_size,
+                    "created_at": img.created_at.isoformat() if img.created_at else None
+                })
+                continue
+
+            figs = []
+            for i in range(1, 41):
+                blob = getattr(img, f"fig{i}", None)
+                if not blob:
+                    continue
+                image_filename = f"paper_{img.paper_id}_fig_{i}.jpg"
+                image_path = images_dir / image_filename
+                with open(image_path, 'wb') as f:
+                    f.write(blob)
+                figs.append({
+                    "id": img.id * 100 + i,
+                    "paper_id": img.paper_id,
+                    "file_path": str(image_path),
+                    "image_order": i,
+                    "file_size": len(blob),
+                    "created_at": img.created_at.isoformat() if img.created_at else None
+                })
+            data["paper_images"].extend(figs)
+
         output_path = Path(output_file)
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
@@ -142,6 +155,7 @@ def export_all_data(output_file: str = "data_export.json"):
         raise
     finally:
         db.close()
+        image_db.close()
 
 
 if __name__ == "__main__":

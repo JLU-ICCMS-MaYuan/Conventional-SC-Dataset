@@ -90,6 +90,47 @@ def parse_formula_counts(formula: Optional[str]) -> dict[str, int]:
     return out
 
 
+def normalize_numeric_range(value) -> Optional[list[float]]:
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        raise ValueError("区间字段必须是数组")
+
+    cleaned = []
+    for item in value:
+        if item is None:
+            continue
+        try:
+            cleaned.append(float(item))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("区间字段必须只包含数字") from exc
+
+    if not cleaned:
+        return None
+    if len(cleaned) > 2:
+        raise ValueError("区间字段最多只能包含两个数值")
+    if len(cleaned) == 2 and cleaned[0] > cleaned[1]:
+        cleaned.sort()
+    return cleaned
+
+
+def representative_value(values: Optional[list[float]]) -> Optional[float]:
+    if not values:
+        return None
+    if len(values) == 1:
+        return values[0]
+    return sum(values[:2]) / min(len(values), 2)
+
+
+def range_to_json(value) -> Optional[str]:
+    normalized = normalize_numeric_range(value)
+    return json.dumps(normalized, ensure_ascii=False) if normalized is not None else None
+
+
+def compute_s_factor_from_ranges(pressure_range, tc_range) -> Optional[float]:
+    return compute_s_factor(representative_value(pressure_range), representative_value(tc_range))
+
+
 def get_all_elements(db: Session) -> List[models.Element]:
     return db.query(models.Element).order_by(models.Element.atomic_number).all()
 
@@ -165,10 +206,11 @@ def search_compounds_by_elements(db: Session, element_symbols: List[str], mode: 
     allowed_modes = {"only", "combination", "contains"}
     mode = mode if mode in allowed_modes else "combination"
     selection = set(element_symbols)
-    matched: List[dict] = []
+    grouped: dict[str, dict] = {}
 
     for compound in db.query(models.Compound).all():
-        symbols = set(get_compound_element_list(compound))
+        element_list = get_compound_element_list(compound)
+        symbols = set(element_list)
         if not symbols:
             continue
         if mode == "only":
@@ -177,14 +219,20 @@ def search_compounds_by_elements(db: Session, element_symbols: List[str], mode: 
             ok = symbols.issubset(selection)
         else:
             ok = selection.issubset(symbols)
-        if ok:
-            matched.append({
-                "id": compound.id,
-                "element_symbols": get_compound_key(compound),
-                "element_list": get_compound_element_list(compound),
-                "paper_count": get_compound_papers_count(db, compound.id),
-            })
+        if not ok:
+            continue
 
+        key = get_compound_key(compound)
+        if key not in grouped:
+            grouped[key] = {
+                "id": compound.id,
+                "element_symbols": key,
+                "element_list": element_list,
+                "paper_count": 0,
+            }
+        grouped[key]["paper_count"] += get_compound_papers_count(db, compound.id)
+
+    matched = list(grouped.values())
     matched.sort(key=lambda item: (len(item["element_list"]), item["element_symbols"]))
     return matched
 
@@ -240,11 +288,11 @@ def create_paper(
 def create_paper_data(db: Session, paper_id: int, data_list: List[dict], compound_id: Optional[int] = None) -> List[models.PaperData]:
     db_data_list = []
     for idx, item in enumerate(data_list, start=1):
-        pressure_val = item.get("pressure")
-        tc_val = item.get("tc")
+        pressure_range = normalize_numeric_range(item.get("tc_press"))
+        tc_range = normalize_numeric_range(item.get("tc"))
         s_factor_val = item.get("s_factor")
         if s_factor_val is None:
-            s_factor_val = compute_s_factor(pressure_val, tc_val)
+            s_factor_val = compute_s_factor_from_ranges(pressure_range, tc_range)
         db_data = models.PaperData(
             paper_id=paper_id,
             compound_id=compound_id or item.get("compound_id"),
@@ -252,7 +300,8 @@ def create_paper_data(db: Session, paper_id: int, data_list: List[dict], compoun
             superconductor_type=to_storage_superconductor_type(item.get("superconductor_type")),
             chemical_formula=item.get("chemical_formula"),
             crystal_structure=item.get("crystal_structure"),
-            tc_press=json.dumps([tc_val, pressure_val], ensure_ascii=False),
+            tc=range_to_json(tc_range),
+            tc_press=range_to_json(pressure_range),
             lambda_val=item.get("lambda_val"),
             omega_log=item.get("omega_log"),
             n_ef=item.get("n_ef"),
@@ -299,6 +348,33 @@ def get_papers_by_compound(db: Session, compound_id: int, search_params: Optiona
     return query.order_by(models.Paper.year.desc().nullslast(), models.Paper.id.desc()).all()
 
 
+def get_papers_by_compounds(db: Session, compound_ids: List[int], search_params: Optional[schemas.PaperSearchParams] = None) -> List[models.Paper]:
+    if not compound_ids:
+        return []
+    query = db.query(models.Paper).join(models.PaperData).filter(models.PaperData.compound_id.in_(compound_ids)).distinct()
+    if search_params:
+        if search_params.keyword:
+            keyword = f"%{search_params.keyword}%"
+            query = query.filter(or_(
+                models.Paper.title.like(keyword),
+                models.Paper.abstract.like(keyword),
+                models.Paper.authors.like(keyword),
+                models.PaperData.chemical_formula.like(keyword),
+            ))
+        if search_params.year_min:
+            query = query.filter(models.Paper.year >= search_params.year_min)
+        if search_params.year_max:
+            query = query.filter(models.Paper.year <= search_params.year_max)
+        if search_params.journal:
+            query = query.filter(models.Paper.journal.like(f"%{search_params.journal}%"))
+        if search_params.crystal_structure:
+            query = query.filter(models.PaperData.crystal_structure.like(f"%{search_params.crystal_structure}%"))
+        query = query.order_by(models.Paper.year.desc().nullslast(), models.Paper.id.desc())
+        query = query.offset(search_params.offset).limit(search_params.limit)
+        return query.all()
+    return query.order_by(models.Paper.year.desc().nullslast(), models.Paper.id.desc()).all()
+
+
 def get_paper_by_id(db: Session, paper_id: int) -> Optional[models.Paper]:
     return db.query(models.Paper).filter(models.Paper.id == paper_id).first()
 
@@ -307,7 +383,7 @@ def get_papers_by_ids(db: Session, paper_ids: List[int]) -> List[models.Paper]:
     return db.query(models.Paper).filter(models.Paper.id.in_(paper_ids)).all()
 
 
-def create_paper_image(db: Session, paper_id: int, image_data: bytes, thumbnail_data: bytes, image_order: int, file_size: int) -> models.PaperImage:
+def create_paper_image(image_db: Session, paper_id: int, image_data: bytes, thumbnail_data: bytes, image_order: int, file_size: int) -> models.PaperImage:
     image = models.PaperImage(
         paper_id=paper_id,
         image_data=image_data,
@@ -315,45 +391,65 @@ def create_paper_image(db: Session, paper_id: int, image_data: bytes, thumbnail_
         image_order=image_order,
         file_size=file_size,
     )
-    db.add(image)
-    db.commit()
-    db.refresh(image)
+    image_db.add(image)
+    image_db.commit()
+    image_db.refresh(image)
     return image
 
 
-def get_paper_images(db: Session, paper_id: int) -> List[models.PaperImage]:
-    return db.query(models.PaperImage).filter(models.PaperImage.paper_id == paper_id).all()
+def get_paper_images(image_db: Session, paper_id: int) -> List[models.PaperImage]:
+    return image_db.query(models.PaperImage).filter(models.PaperImage.paper_id == paper_id).all()
 
 
-def get_image_by_id(db: Session, image_id: int) -> Optional[models.PaperImage]:
+def get_image_by_id(image_db: Session, image_id: int) -> Optional[models.PaperImage]:
     if image_id >= 100:
         row_id, order = divmod(image_id, 100)
-        row = db.query(models.PaperImage).filter(models.PaperImage.id == row_id).first()
+        row = image_db.query(models.PaperImage).filter(models.PaperImage.id == row_id).first()
         if row and 1 <= order <= 40 and getattr(row, f"fig{order}", None):
             setattr(row, "_selected_fig_order", order)
             return row
         return None
-    return db.query(models.PaperImage).filter(models.PaperImage.id == image_id).first()
+    return image_db.query(models.PaperImage).filter(models.PaperImage.id == image_id).first()
 
 
-def get_image_by_order(db: Session, paper_id: int, image_order: int) -> Optional[models.PaperImage]:
-    row = db.query(models.PaperImage).filter(models.PaperImage.paper_id == paper_id).first()
+def get_image_by_order(image_db: Session, paper_id: int, image_order: int) -> Optional[models.PaperImage]:
+    row = image_db.query(models.PaperImage).filter(models.PaperImage.paper_id == paper_id).first()
     if not row:
         return None
     if getattr(row, f"fig{image_order}", None):
         setattr(row, "_selected_fig_order", image_order)
         return row
+    direct_row = image_db.query(models.PaperImage).filter(
+        models.PaperImage.paper_id == paper_id,
+        models.PaperImage.image_order == image_order,
+    ).first()
+    if direct_row:
+        return direct_row
     return None
 
 
-def get_paper_image_count(db: Session, paper_id: int) -> int:
-    rows = get_paper_images(db, paper_id)
+def get_paper_image_count(image_db: Session, paper_id: int) -> int:
+    rows = get_paper_images(image_db, paper_id)
     count = 0
     for row in rows:
+        direct_image_present = bool(row.image_data)
+        if direct_image_present:
+            count += 1
+        fig_count = 0
         for i in range(1, 41):
             if getattr(row, f"fig{i}", None):
-                count += 1
+                fig_count += 1
+        count += fig_count
     return count
+
+
+def delete_all_paper_images(image_db: Session, paper_id: int) -> int:
+    rows = get_paper_images(image_db, paper_id)
+    deleted_count = get_paper_image_count(image_db, paper_id)
+    for row in rows:
+        image_db.delete(row)
+    image_db.commit()
+    return deleted_count
 
 
 def get_total_papers_count(db: Session) -> int:
@@ -376,7 +472,7 @@ def get_all_crystal_structures(db: Session) -> List[str]:
     return sorted([r[0] for r in results if r[0]])
 
 
-def paper_to_response(db: Session, paper: models.Paper, compound_id: Optional[int] = None) -> dict:
+def paper_to_response(db: Session, paper: models.Paper, compound_id: Optional[int] = None, image_db: Optional[Session] = None) -> dict:
     points = paper.physical_parameters
     if compound_id is not None:
         points = [p for p in points if p.compound_id == compound_id]
@@ -386,6 +482,7 @@ def paper_to_response(db: Session, paper: models.Paper, compound_id: Optional[in
     structure = first.crystal_structure if first else None
     article_type = normalize_article_type(first.article_type) if first else None
     sc_type = normalize_superconductor_type(first.superconductor_type if first else None)
+    image_count = get_paper_image_count(image_db, paper.id) if image_db is not None else 0
 
     return {
         "id": paper.id,
@@ -409,7 +506,7 @@ def paper_to_response(db: Session, paper: models.Paper, compound_id: Optional[in
         "notes": paper.notes or (first.data_source_note if first else None),
         "show_in_chart": bool(paper.show_in_chart),
         "created_at": paper.created_at,
-        "image_count": get_paper_image_count(db, paper.id),
+        "image_count": image_count,
         "review_status": paper.review_status or "unreviewed",
         "review_comment": paper.review_comment,
         "reviewed_by": paper.reviewed_by,
@@ -420,8 +517,8 @@ def paper_to_response(db: Session, paper: models.Paper, compound_id: Optional[in
         "data_source_note": first.data_source_note if first else None,
         "data": [
             {
-                "pressure": d.pressure,
-                "tc": d.tc,
+                "tc": d.tc_range,
+                "tc_press": d.pressure_range,
                 "lambda_val": d.lambda_val,
                 "omega_log": d.omega_log,
                 "n_ef": d.n_ef,

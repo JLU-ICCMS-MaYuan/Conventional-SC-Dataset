@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from datetime import datetime
 from typing import List, Optional
 import json
-from backend.database import get_db
+from backend.database import get_db, get_image_db
 from backend.models import User, Paper, PaperData
 from backend import crud
 from backend.security import get_current_superadmin, get_current_admin
@@ -83,8 +83,8 @@ class UserPermissionRequest(BaseModel):
     is_approved: bool
 
 
-def admin_paper_summary(db: Session, paper: Paper) -> dict:
-    data = crud.paper_to_response(db, paper)
+def admin_paper_summary(db: Session, image_db: Session, paper: Paper) -> dict:
+    data = crud.paper_to_response(db, paper, image_db=image_db)
     first_data = data["data"][0] if data["data"] else {}
     return {
         "id": paper.id,
@@ -96,7 +96,7 @@ def admin_paper_summary(db: Session, paper: Paper) -> dict:
         "superconductor_type": data.get("superconductor_type"),
         "chemical_formula": data.get("chemical_formula"),
         "tc": first_data.get("tc"),
-        "pressure": first_data.get("pressure"),
+        "tc_press": first_data.get("tc_press"),
         "s_factor": first_data.get("s_factor"),
         "data": data.get("data", []),
         "compound_symbols": data.get("compound_symbols"),
@@ -105,7 +105,7 @@ def admin_paper_summary(db: Session, paper: Paper) -> dict:
         "reviewer_name": paper.reviewer.real_name if paper.reviewer else None,
         "contributor_name": paper.contributor_name,
         "created_at": paper.created_at.isoformat() if paper.created_at else None,
-        "images_count": crud.get_paper_image_count(db, paper.id),
+        "images_count": crud.get_paper_image_count(image_db, paper.id),
         "show_in_chart": paper.show_in_chart,
     }
 
@@ -396,6 +396,7 @@ async def get_unreviewed_papers(
     limit: int = 50,
     offset: int = 0,
     db: Session = Depends(get_db),
+    image_db: Session = Depends(get_image_db),
     current_user: User = Depends(get_current_admin)
 ):
     """
@@ -413,7 +414,7 @@ async def get_unreviewed_papers(
         "total": total,
         "offset": offset,
         "limit": limit,
-        "papers": [admin_paper_summary(db, paper) for paper in papers]
+        "papers": [admin_paper_summary(db, image_db, paper) for paper in papers]
     }
 
 
@@ -479,6 +480,7 @@ async def get_all_papers(
     limit: int = 50,
     offset: int = 0,
     db: Session = Depends(get_db),
+    image_db: Session = Depends(get_image_db),
     current_user: User = Depends(get_current_admin)
 ):
     """
@@ -547,7 +549,7 @@ async def get_all_papers(
         "total": total,
         "offset": offset,
         "limit": limit,
-        "papers": [admin_paper_summary(db, paper) for paper in papers]
+        "papers": [admin_paper_summary(db, image_db, paper) for paper in papers]
     }
 
 
@@ -555,6 +557,7 @@ async def get_all_papers(
 async def get_paper_detail(
     paper_id: int,
     db: Session = Depends(get_db),
+    image_db: Session = Depends(get_image_db),
     current_user: User = Depends(get_current_admin)
 ):
     """
@@ -570,7 +573,7 @@ async def get_paper_detail(
             detail="文献不存在"
         )
 
-    data = crud.paper_to_response(db, paper)
+    data = crud.paper_to_response(db, paper, image_db=image_db)
     data.update({
         "created_at": paper.created_at.isoformat() if paper.created_at else None,
         "show_in_chart": paper.show_in_chart,
@@ -640,8 +643,8 @@ async def update_paper(
             for item in new_data:
                 formula = item.get("chemical_formula") or request.chemical_formula
                 compound = crud.get_or_create_compound(db, [], formula) if formula else None
-                tc_val = item.get("tc")
-                pressure_val = item.get("pressure")
+                tc_range = crud.normalize_numeric_range(item.get("tc"))
+                pressure_range = crud.normalize_numeric_range(item.get("tc_press"))
                 item_article_type = item.get("article_type") or request.article_type
                 item_super_type = (
                     to_storage_superconductor_type_value(item.get("superconductor_type"))
@@ -655,12 +658,13 @@ async def update_paper(
                     superconductor_type=item_super_type,
                     chemical_formula=formula,
                     crystal_structure=item.get("crystal_structure") or request.crystal_structure,
-                    tc_press=json.dumps([tc_val, pressure_val], ensure_ascii=False),
+                    tc=crud.range_to_json(tc_range),
+                    tc_press=crud.range_to_json(pressure_range),
                     lambda_val=item.get("lambda_val"),
                     omega_log=item.get("omega_log"),
                     n_ef=item.get("n_ef"),
-                    s_factor=item.get("s_factor") if item.get("s_factor") is not None else crud.compute_s_factor(
-                        pressure_val, tc_val
+                    s_factor=item.get("s_factor") if item.get("s_factor") is not None else crud.compute_s_factor_from_ranges(
+                        pressure_range, tc_range
                     ),
                     sample_name=item.get("sample_name"),
                     data_source_note=item.get("data_source_note"),
@@ -709,6 +713,7 @@ async def update_paper(
 async def delete_paper(
     paper_id: int,
     db: Session = Depends(get_db),
+    image_db: Session = Depends(get_image_db),
     current_user: User = Depends(get_current_superadmin)
 ):
     """
@@ -726,17 +731,18 @@ async def delete_paper(
         )
 
     # 记录删除的文献信息（用于日志）
+    image_count = crud.get_paper_image_count(image_db, paper.id)
     deleted_info = {
         "paper_id": paper.id,
         "doi": paper.doi,
         "title": paper.title,
-        "compound": crud.paper_to_response(db, paper).get("compound_symbols"),
-        "images_count": len(paper.images),
+        "compound": crud.paper_to_response(db, paper, image_db=image_db).get("compound_symbols"),
+        "images_count": image_count,
         "deleted_by": current_user.real_name,
         "deleted_at": datetime.utcnow().isoformat()
     }
 
-    # 删除文献（会自动级联删除 paper_images）
+    crud.delete_all_paper_images(image_db, paper.id)
     db.delete(paper)
     db.commit()
 
@@ -841,6 +847,7 @@ async def batch_chart_visibility(
 async def batch_delete_papers(
     request: BatchReviewRequest,
     db: Session = Depends(get_db),
+    image_db: Session = Depends(get_image_db),
     current_user: User = Depends(get_current_superadmin)
 ):
     """
@@ -871,6 +878,7 @@ async def batch_delete_papers(
             "doi": paper.doi,
             "title": paper.title
         })
+        crud.delete_all_paper_images(image_db, paper.id)
         db.delete(paper)
 
     db.commit()
@@ -894,6 +902,7 @@ from backend.utils.image_processor import process_image
 async def get_paper_images(
     paper_id: int,
     db: Session = Depends(get_db),
+    image_db: Session = Depends(get_image_db),
     current_user: User = Depends(get_current_admin)
 ):
     """
@@ -910,7 +919,14 @@ async def get_paper_images(
         )
 
     images = []
-    for row in paper.images:
+    for row in crud.get_paper_images(image_db, paper_id):
+        if row.image_data:
+            images.append({
+                "id": row.id,
+                "order": row.image_order or 1,
+                "file_size": row.file_size or len(row.image_data),
+                "created_at": row.created_at.isoformat() if hasattr(row.created_at, "isoformat") else row.created_at
+            })
         for order in range(1, 41):
             blob = getattr(row, f"fig{order}", None)
             if blob:
@@ -932,6 +948,7 @@ async def delete_paper_image(
     paper_id: int,
     image_id: int,
     db: Session = Depends(get_db),
+    image_db: Session = Depends(get_image_db),
     current_user: User = Depends(get_current_admin)
 ):
     """
@@ -943,12 +960,12 @@ async def delete_paper_image(
     selected_order = None
     if image_id >= 100:
         row_id, selected_order = divmod(image_id, 100)
-        image = db.query(PaperImage).filter(
+        image = image_db.query(PaperImage).filter(
             PaperImage.id == row_id,
             PaperImage.paper_id == paper_id
         ).first()
     else:
-        image = db.query(PaperImage).filter(
+        image = image_db.query(PaperImage).filter(
             PaperImage.id == image_id,
             PaperImage.paper_id == paper_id
         ).first()
@@ -960,7 +977,7 @@ async def delete_paper_image(
         )
 
     paper = db.query(Paper).filter(Paper.id == paper_id).first()
-    image_count = crud.get_paper_image_count(db, paper_id)
+    image_count = crud.get_paper_image_count(image_db, paper_id)
     if image_count <= 1:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -970,9 +987,9 @@ async def delete_paper_image(
     if selected_order:
         setattr(image, f"fig{selected_order}", None)
     else:
-        db.delete(image)
+        image_db.delete(image)
 
-    db.commit()
+    image_db.commit()
 
     return {
         "message": "图片已删除",

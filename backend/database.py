@@ -5,44 +5,100 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
+from pathlib import Path
 
 # 数据库文件路径，支持通过环境变量自定义持久化卷位置
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DEFAULT_DATA_DIR = os.environ.get("DATA_DIR") or os.path.join(BASE_DIR, "data")
 
-# 优先读取 DATA_DIR，如果设置了，则数据库放在 DATA_DIR/superconductor.db
-DATA_DIR = os.environ.get("DATA_DIR")
-if DATA_DIR:
-    DATABASE_PATH = os.path.join(DATA_DIR, "superconductor.db")
-else:
-    # 兼容旧的 DATABASE_PATH 变量或默认相对路径
-    DATABASE_PATH = os.environ.get("DATABASE_PATH") or os.path.join(BASE_DIR, "data", "superconductor.db")
 
-# 确保data目录存在
-os.makedirs(os.path.dirname(DATABASE_PATH), exist_ok=True)
+def _pick_existing_path(directory: str, candidates: list[str], default_name: str) -> str:
+    base_path = Path(directory)
+    for name in candidates:
+        candidate = base_path / name
+        if candidate.exists():
+            return candidate.as_posix()
+    return (base_path / default_name).as_posix()
 
-# SQLite数据库连接字符串
-SQLALCHEMY_DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
+
+METADATA_DATABASE_PATH = os.environ.get("METADATA_DATABASE_PATH")
+IMAGE_DATABASE_PATH = os.environ.get("IMAGE_DATABASE_PATH")
+
+if not METADATA_DATABASE_PATH:
+    legacy_database_path = os.environ.get("DATABASE_PATH")
+    if legacy_database_path:
+        METADATA_DATABASE_PATH = legacy_database_path
+    else:
+        METADATA_DATABASE_PATH = _pick_existing_path(
+            DEFAULT_DATA_DIR,
+            ["hydride_literature.db", "hydride_literature_bak.db", "superconductor.db"],
+            "hydride_literature.db",
+        )
+
+if not IMAGE_DATABASE_PATH:
+    IMAGE_DATABASE_PATH = _pick_existing_path(
+        DEFAULT_DATA_DIR,
+        [
+            "hydride_literature_image.db",
+            "hydride_literature_images.db",
+            "hydride_literature_bak_images.db",
+            "superconductor_images.db",
+        ],
+        "hydride_literature_images.db",
+    )
+
+# 兼容旧代码保留 DATABASE_PATH 名称，指向 metadata DB
+DATABASE_PATH = METADATA_DATABASE_PATH
+
+for path in (METADATA_DATABASE_PATH, IMAGE_DATABASE_PATH):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+METADATA_DATABASE_URL = f"sqlite:///{METADATA_DATABASE_PATH}"
+IMAGE_DATABASE_URL = f"sqlite:///{IMAGE_DATABASE_PATH}"
 
 # 创建数据库引擎
 # check_same_thread=False 允许多线程访问（仅SQLite需要）
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
+metadata_engine = create_engine(
+    METADATA_DATABASE_URL,
+    connect_args={"check_same_thread": False}
+)
+image_engine = create_engine(
+    IMAGE_DATABASE_URL,
     connect_args={"check_same_thread": False}
 )
 
 # 创建Session类
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+MetadataSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=metadata_engine)
+ImageSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=image_engine)
 
 # 创建基类
-Base = declarative_base()
+MetadataBase = declarative_base()
+ImageBase = declarative_base()
+
+# 兼容旧导入
+engine = metadata_engine
+SessionLocal = MetadataSessionLocal
+Base = MetadataBase
 
 
 def get_db():
     """
-    获取数据库会话的依赖函数
+    获取主数据库会话的依赖函数
     用于FastAPI的依赖注入
     """
-    db = SessionLocal()
+    db = MetadataSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def get_image_db():
+    """
+    获取图片数据库会话的依赖函数
+    用于FastAPI的依赖注入
+    """
+    db = ImageSessionLocal()
     try:
         yield db
     finally:

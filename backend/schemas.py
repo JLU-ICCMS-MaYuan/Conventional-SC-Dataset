@@ -127,8 +127,8 @@ class PaperCreate(BaseModel):
 
 class PaperData(BaseModel):
     # 数据字段
-    pressure: Optional[float] = Field(None, description="压强 (GPa)")
-    tc: Optional[float] = Field(None, description="超导温度 Tc (K)")
+    tc: Optional[List[float]] = Field(None, description="超导温度 Tc (K)，单值或区间")
+    tc_press: Optional[List[float]] = Field(None, description="压强 (GPa)，单值或区间")
     lambda_val: Optional[float] = Field(None, description="λ (lambda)")
     omega_log: Optional[float] = Field(None, description="ω_log")
     n_ef: Optional[float] = Field(None, description="N(E_F)")

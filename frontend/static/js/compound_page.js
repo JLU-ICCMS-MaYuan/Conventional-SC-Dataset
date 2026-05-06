@@ -55,9 +55,17 @@ function formatDataCell(value, unit = '') {
     return `${value}${unit ? ` ${unit}` : ''}`;
 }
 
+function formatRangeCell(values, unit = '') {
+    if (!Array.isArray(values) || values.length === 0) {
+        return 'null';
+    }
+    return `${values.join(' - ')}${unit ? ` ${unit}` : ''}`;
+}
+
 function renderPhysicalDataTable(dataRows) {
-    if (!dataRows || dataRows.length === 0) {
-        return '<span class="text-muted">无物理参数数据</span>';
+    const completeRows = (dataRows || []).filter(d => Array.isArray(d.tc) && d.tc.length > 0 && Array.isArray(d.tc_press) && d.tc_press.length > 0);
+    if (completeRows.length === 0) {
+        return '<span class="text-muted">无完整的物理参数数据</span>';
     }
 
     const synthesizedText = (d) => {
@@ -66,13 +74,13 @@ function renderPhysicalDataTable(dataRows) {
         return 'null';
     };
 
-    const rows = dataRows.map(d => `
+    const rows = completeRows.map(d => `
         <tr>
             <td>${d.chemical_formula || 'null'}</td>
             <td>${d.crystal_structure || 'null'}</td>
             <td>${synthesizedText(d)}</td>
-            <td>${formatDataCell(d.tc, 'K')}</td>
-            <td>${formatDataCell(d.pressure, 'GPa')}</td>
+            <td>${formatRangeCell(d.tc, 'K')}</td>
+            <td>${formatRangeCell(d.tc_press, 'GPa')}</td>
             <td>${formatDataCell(d.lambda_val)}</td>
             <td>${formatDataCell(d.omega_log)}</td>
             <td>${formatDataCell(d.n_ef)}</td>
@@ -326,7 +334,7 @@ function renderPaperCard(paper) {
     // 物理数据处理
     const mainData = paper.data && paper.data.length > 0 ? paper.data[0] : null;
     const tcSummary = mainData ? `${mainData.tc} K` : '未知';
-    
+
     const physicalDataHtml = renderPhysicalDataTable(paper.data);
 
     // 标签映射
@@ -385,7 +393,6 @@ function renderPaperCard(paper) {
                     </div>
                 </div>
 
-                <!-- 详细信息（默认隐藏） -->
                 <div id="details-${paper.id}" class="paper-details mt-3" style="display: none;">
                     <div class="row">
                         <!-- 左侧：详细文献信息 -->
@@ -398,8 +405,6 @@ function renderPaperCard(paper) {
                                 <strong>作者:</strong> ${authors.join(', ')}<br>
                                 <strong>期刊:</strong> ${paper.journal || '未知'} ${paper.volume ? `Vol. ${paper.volume}` : ''}
                                 ${paper.pages ? `p. ${paper.pages}` : ''} (${paper.year || '未知年份'})<br>
-                                <strong>物理参数:</strong> 
-                                ${physicalDataHtml}
                                 <strong>DOI:</strong> <code>${paper.doi}</code>
                                 <div class="mt-2">
                                     <button class="btn btn-outline-secondary btn-sm" type="button" onclick="downloadPaperRIS(${paper.id})">
@@ -409,11 +414,16 @@ function renderPaperCard(paper) {
                             </p>
 
                             ${paper.abstract ? `
-                                <details>
-                                    <summary class="text-primary" style="cursor: pointer;">查看摘要</summary>
-                                    <p class="mt-2">${paper.abstract}</p>
-                                </details>
+                                <div class="mb-3">
+                                    <strong>摘要:</strong>
+                                    <p class="mt-2 mb-0">${paper.abstract}</p>
+                                </div>
                             ` : ''}
+
+                            <div class="mb-2">
+                                <strong>物理参数:</strong>
+                                ${physicalDataHtml}
+                            </div>
 
                             <div class="mt-3 text-muted small">
                                 贡献者: ${paper.contributor_name} (${paper.contributor_affiliation}) |
@@ -452,6 +462,10 @@ function renderPaperCard(paper) {
 function togglePaperDetails(paperId) {
     const details = document.getElementById(`details-${paperId}`);
     const chevron = document.getElementById(`chevron-${paperId}`);
+
+    if (!details || !chevron) {
+        return;
+    }
 
     if (details.style.display === 'none') {
         details.style.display = 'block';
@@ -736,8 +750,8 @@ async function submitPaper() {
         }
 
         physicalData.push({
-            pressure: parseFloat(pressure),
-            tc: parseFloat(tc),
+            tc_press: [parseFloat(pressure)],
+            tc: [parseFloat(tc)],
             s_factor: calculateSFactor(tc, pressure),
             lambda_val: lambda_val ? parseFloat(lambda_val) : null,
             omega_log: omega_log ? parseFloat(omega_log) : null,

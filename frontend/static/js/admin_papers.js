@@ -46,6 +46,13 @@ function formatDataValue(value, suffix = '') {
     return value !== null && value !== undefined && value !== '' ? `${escapeHtml(value)}${suffix}` : '-';
 }
 
+function formatRangeValue(values, suffix = '') {
+    if (!Array.isArray(values) || values.length === 0) {
+        return '-';
+    }
+    return `${escapeHtml(values.join(' - '))}${suffix}`;
+}
+
 function renderPhysicalDataTable(paper) {
     const rows = Array.isArray(paper.data) && paper.data.length > 0 ? paper.data : [paper];
     return `
@@ -69,8 +76,8 @@ function renderPhysicalDataTable(paper) {
                             <td>${formatDataValue(item.chemical_formula || paper.chemical_formula)}</td>
                             <td>${formatDataValue(item.crystal_structure || paper.crystal_structure)}</td>
                             <td>${synthesizedLabel(item.article_type || paper.article_type)}</td>
-                            <td>${formatDataValue(item.tc, ' K')}</td>
-                            <td>${formatDataValue(item.pressure, ' GPa')}</td>
+                            <td>${formatRangeValue(item.tc, ' K')}</td>
+                            <td>${formatRangeValue(item.tc_press, ' GPa')}</td>
                             <td>${formatDataValue(item.lambda_val)}</td>
                             <td>${formatDataValue(item.omega_log)}</td>
                             <td>${formatDataValue(item.n_ef)}</td>
@@ -87,7 +94,12 @@ function nullableFloat(value) {
 }
 
 function dataInputValue(data, field) {
-    return data && data[field] !== null && data[field] !== undefined ? escapeHtml(data[field]) : '';
+    if (!data) return '';
+    const value = data[field];
+    if (Array.isArray(value)) {
+        return value.length > 0 && value[0] !== null && value[0] !== undefined ? escapeHtml(value[0]) : '';
+    }
+    return value !== null && value !== undefined ? escapeHtml(value) : '';
 }
 
 function calculateSFactor(tcValue, pressureValue) {
@@ -605,7 +617,7 @@ function addEditDataRow(data = null) {
                 </select>
             </div>
             <div class="col-md-6 col-lg-1">
-                <input type="number" step="any" class="form-control form-control-sm edit-pressure" placeholder="P (GPa)" value="${dataInputValue(data, 'pressure')}">
+                <input type="number" step="any" class="form-control form-control-sm edit-pressure" placeholder="P (GPa)" value="${dataInputValue(data, 'tc_press')}">
             </div>
             <div class="col-md-6 col-lg-1">
                 <input type="number" step="any" class="form-control form-control-sm edit-tc" placeholder="Tc (K)" value="${dataInputValue(data, 'tc')}">
@@ -685,18 +697,7 @@ async function openEditModal(paperId) {
             if (paper.data && paper.data.length > 0) {
                 paper.data.forEach(d => addEditDataRow(d));
             } else {
-                // 如果没有数据，且 paper 本身有 tc/pressure (兼容旧数据结构)
-                if (paper.tc || paper.pressure) {
-                    addEditDataRow({
-                        tc: paper.tc,
-                        pressure: paper.pressure,
-                        lambda_val: paper.lambda_val,
-                        omega_log: paper.omega_log,
-                        n_ef: paper.n_ef
-                    });
-                } else {
-                    addEditDataRow();
-                }
+                addEditDataRow();
             }
         }
 
@@ -813,8 +814,8 @@ async function savePaperEdits() {
                 chemical_formula: formula || null,
                 crystal_structure: structure || null,
                 article_type: row.querySelector('.edit-article-type').value,
-                pressure: pressure,
-                tc: tc,
+                tc_press: pressure !== null ? [pressure] : null,
+                tc: tc !== null ? [tc] : null,
                 s_factor: calculateSFactor(tc, pressure),
                 lambda_val: lambdaVal,
                 omega_log: omegaLog,

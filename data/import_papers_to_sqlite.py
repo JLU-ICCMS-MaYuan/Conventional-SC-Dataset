@@ -161,6 +161,7 @@ DATA_POINT_KEYS = (
     "superconductor_type",
     "chemical_formula",
     "crystal_structure",
+    "tc",
     "tc_press",
     "lambda_val",
     "omega_log",
@@ -189,7 +190,8 @@ Return a JSON object with these exact fields:
       "superconductor_type": string|null,
       "chemical_formula": string|null,
       "crystal_structure": string|null,
-      "tc_press": [number|null, number|null]|null,
+      "tc": [number|null] | [number|null, number|null] | null,
+      "tc_press": [number|null] | [number|null, number|null] | null,
       "lambda_val": number|null,
       "omega_log": number|null,
       "n_ef": number|null,
@@ -222,14 +224,14 @@ Field constraints:
     chemical_formula and/or crystal_structure when available.
 
 Numeric extraction rules:
-- tc_press format: [tc, pressure]
-  * tc in K, pressure in GPa
-  * pressure MUST correspond to the tc in the same entry
-  * if tc is null, pressure must be null
-  * do NOT use synthesis pressure as tc pressure
+- tc format: [tc] for a single value, or [tc_min, tc_max] for a range
+  * tc in K
+  * range like "10-15 K" -> tc uses [10, 15]
+  * "above X K" / "below X K" -> tc extracts [X]
+- tc_press format: [pressure] for a single value, or [pressure_min, pressure_max] for a range
+  * pressure in GPa
+  * do NOT use synthesis pressure as superconducting pressure
   * use 0 only if ambient-pressure superconducting Tc is explicitly reported
-  * range like "10-15 K" -> tc uses MAX value
-  * "above X K" / "below X K" -> tc extracts X
 - lambda_val corresponds to λ (electron-phonon coupling)
 - omega_log is logarithmic average phonon frequency
 - n_ef is DOS at Fermi level
@@ -346,18 +348,27 @@ def to_float(value: Any) -> float | None:
         return None
 
 
-def parse_tc_press(value: Any) -> list[float | None] | None:
-    if not isinstance(value, list) or len(value) != 2:
+def parse_numeric_range(value: Any) -> list[float | None] | None:
+    if not isinstance(value, list) or not value or len(value) > 2:
         return None
-    return [to_float(value[0]), to_float(value[1])]
+    normalized = [to_float(item) for item in value]
+    cleaned = [item for item in normalized if item is not None]
+    if not cleaned:
+        return None
+    if len(cleaned) == 2 and cleaned[0] > cleaned[1]:
+        cleaned.sort()
+    return cleaned
 
 
-def calc_s_factor(tc_press: list[float | None] | None) -> float | None:
-    if not tc_press or len(tc_press) != 2:
+def calc_s_factor(tc_range: list[float | None] | None, pressure_range: list[float | None] | None) -> float | None:
+    if not tc_range or not pressure_range:
         return None
-    tc, pressure = tc_press
-    if tc is None or pressure is None:
+    tc_values = [v for v in tc_range if v is not None]
+    pressure_values = [v for v in pressure_range if v is not None]
+    if not tc_values or not pressure_values:
         return None
+    tc = sum(tc_values[:2]) / min(len(tc_values), 2)
+    pressure = sum(pressure_values[:2]) / min(len(pressure_values), 2)
     return tc / ((1521 + pressure * pressure) ** 0.5)
 
 
@@ -516,7 +527,8 @@ def normalize_parsed_doc(parsed: ParsedDoc, md_text: str, md_path: Path) -> Pars
         p["superconductor_type"] = to_text(p["superconductor_type"])
         p["chemical_formula"] = to_text(p["chemical_formula"])
         p["crystal_structure"] = to_text(p["crystal_structure"])
-        p["tc_press"] = parse_tc_press(p["tc_press"])
+        p["tc"] = parse_numeric_range(p["tc"])
+        p["tc_press"] = parse_numeric_range(p["tc_press"])
         p["lambda_val"] = to_float(p["lambda_val"])
         p["omega_log"] = to_float(p["omega_log"])
         p["n_ef"] = to_float(p["n_ef"])
@@ -528,6 +540,7 @@ def normalize_parsed_doc(parsed: ParsedDoc, md_text: str, md_path: Path) -> Pars
             for k in (
                 "chemical_formula",
                 "crystal_structure",
+                "tc",
                 "tc_press",
                 "lambda_val",
                 "omega_log",
@@ -628,6 +641,7 @@ def create_schema(conn: sqlite3.Connection) -> None:
             superconductor_type TEXT,
             chemical_formula TEXT,
             crystal_structure TEXT,
+            tc TEXT,
             tc_press TEXT,
             lambda_val REAL,
             omega_log REAL,
@@ -687,6 +701,7 @@ def ensure_compat_columns(conn: sqlite3.Connection) -> None:
     ensure_column(conn, "compounds", "composition", "TEXT")
     ensure_column(conn, "compounds", "element_id_list", "TEXT")
     ensure_column(conn, "compounds", "element_ratio", "TEXT")
+    ensure_column(conn, "paper_data", "tc", "TEXT")
     ensure_column(conn, "paper_data", "tc_press", "TEXT")
     ensure_column(conn, "paper_images", "figs", "TEXT")
     for i in range(1, 41):
@@ -968,9 +983,9 @@ def replace_paper_data(conn: sqlite3.Connection, paper_id: int, points: list[dic
             """
             INSERT INTO paper_data (
                 paper_id, compound_id, article_type, superconductor_type, chemical_formula,
-                crystal_structure, tc_press, lambda_val, omega_log, n_ef, s_factor,
+                crystal_structure, tc, tc_press, lambda_val, omega_log, n_ef, s_factor,
                 sample_name, data_source_note, sequence_in_paper
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 paper_id,
@@ -979,11 +994,12 @@ def replace_paper_data(conn: sqlite3.Connection, paper_id: int, points: list[dic
                 p.get("superconductor_type"),
                 p.get("chemical_formula"),
                 p.get("crystal_structure"),
+                json.dumps(p.get("tc"), ensure_ascii=False) if p.get("tc") is not None else None,
                 json.dumps(p.get("tc_press"), ensure_ascii=False) if p.get("tc_press") is not None else None,
                 p.get("lambda_val"),
                 p.get("omega_log"),
                 p.get("n_ef"),
-                calc_s_factor(p.get("tc_press")),
+                calc_s_factor(p.get("tc"), p.get("tc_press")),
                 p.get("sample_name"),
                 p.get("data_source_note"),
                 idx,
