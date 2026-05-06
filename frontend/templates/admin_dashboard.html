@@ -6,6 +6,71 @@
     <title>管理员面板 - 超导文献数据库</title>
     <link href="/static/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .image-preview-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(108, 117, 125, 0.72);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            z-index: 2000;
+        }
+
+        .image-preview-overlay[hidden] {
+            display: none;
+        }
+
+        .image-preview-dialog {
+            width: min(960px, 100%);
+            max-height: 100%;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+            overflow: hidden;
+        }
+
+        .image-preview-stage {
+            display: grid;
+            grid-template-columns: 64px minmax(0, 1fr) 64px;
+            align-items: center;
+            gap: 12px;
+            padding: 20px 16px 12px;
+            background: #f8f9fa;
+        }
+
+        .image-preview-figure {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 320px;
+        }
+
+        .image-preview-figure img {
+            max-width: 100%;
+            max-height: 65vh;
+            object-fit: contain;
+            border-radius: 8px;
+            background: #fff;
+        }
+
+        .image-preview-nav,
+        .image-preview-close {
+            border: none;
+        }
+
+        .image-preview-meta {
+            padding: 0 20px 20px;
+        }
+
+        .image-preview-caption {
+            text-align: center;
+            color: #6c757d;
+            margin-bottom: 12px;
+        }
+    </style>
     <script>
         window.MathJax = {
             tex: {
@@ -185,12 +250,47 @@
         </div>
     </div>
 
+    <div id="imagePreviewOverlay" class="image-preview-overlay" hidden onclick="handlePreviewOverlayClick(event)">
+        <div class="image-preview-dialog" role="dialog" aria-modal="true" aria-label="图片预览">
+            <div class="d-flex justify-content-end p-3 pb-0">
+                <button type="button" class="btn-close image-preview-close" aria-label="关闭" onclick="closeImagePreview()"></button>
+            </div>
+            <div class="image-preview-stage">
+                <button type="button" class="btn btn-outline-secondary image-preview-nav" onclick="changePreviewImage(-1)">上一张</button>
+                <figure class="image-preview-figure mb-0">
+                    <img id="imagePreviewImg" src="" alt="预览图片">
+                </figure>
+                <button type="button" class="btn btn-outline-secondary image-preview-nav" onclick="changePreviewImage(1)">下一张</button>
+            </div>
+            <div class="image-preview-meta">
+                <div id="imagePreviewCaption" class="image-preview-caption small"></div>
+                <div id="imagePreviewIntro"></div>
+                <div class="mt-3">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                        <div class="fw-semibold">化合物与物理数据</div>
+                        <div class="d-flex gap-2">
+                            <button type="button" id="previewPrevGroupBtn" class="btn btn-outline-secondary btn-sm" onclick="changePreviewGroup(-1)">上一组</button>
+                            <button type="button" id="previewNextGroupBtn" class="btn btn-outline-secondary btn-sm" onclick="changePreviewGroup(1)">下一组</button>
+                        </div>
+                    </div>
+                    <div id="imagePreviewData"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="/static/js/bootstrap.bundle.min.js"></script>
     <script src="/static/js/auth_state.js"></script>
     <script>
         let token = '';
         let currentUser = null;
         let editModal = null;
+        let currentReviewGroups = [];
+        let currentPreviewPaper = null;
+        let previewGroupIndex = 0;
+        let previewGroupImages = [];
+        let previewGroupIntro = null;
+        let previewImageIndex = 0;
         const dashboardPagination = {
             page: 1,
             pageSize: 50,
@@ -290,12 +390,316 @@
             `;
         }
 
+        function openImagePreviewByGroup(groupIndex, startIndex) {
+            const group = Array.isArray(currentReviewGroups) ? currentReviewGroups[groupIndex] : null;
+            if (!group) {
+                return;
+            }
+            const images = Array.isArray(group.images) ? group.images : [];
+            openImagePreview(groupIndex, images, startIndex, group.intro || null);
+        }
+
+        function openImagePreview(groupIndex, images, startIndex, intro) {
+            const overlay = document.getElementById('imagePreviewOverlay');
+            if (!overlay || !Array.isArray(images) || images.length === 0) {
+                return;
+            }
+
+            previewGroupIndex = groupIndex;
+            previewGroupImages = images;
+            previewGroupIntro = intro || null;
+            previewImageIndex = Math.max(0, Math.min(startIndex, images.length - 1));
+            overlay.hidden = false;
+            document.body.style.overflow = 'hidden';
+            renderImagePreview();
+        }
+
+        function handlePreviewKeydown(event) {
+            const overlay = document.getElementById('imagePreviewOverlay');
+            if (!overlay || overlay.hidden) {
+                return;
+            }
+
+            if (event.key === 'ArrowLeft') {
+                event.preventDefault();
+                changePreviewImage(-1);
+                return;
+            }
+
+            if (event.key === 'ArrowRight') {
+                event.preventDefault();
+                changePreviewImage(1);
+                return;
+            }
+
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                closeImagePreview();
+            }
+        }
+
+        function closeImagePreview() {
+            const overlay = document.getElementById('imagePreviewOverlay');
+            if (!overlay) return;
+            overlay.hidden = true;
+            document.body.style.overflow = '';
+            currentPreviewPaper = null;
+            previewGroupIndex = 0;
+            previewGroupImages = [];
+            previewGroupIntro = null;
+            previewImageIndex = 0;
+        }
+
+        function handlePreviewOverlayClick(event) {
+            if (event.target?.id === 'imagePreviewOverlay') {
+                closeImagePreview();
+            }
+        }
+
+        function changePreviewImage(step) {
+            if (!Array.isArray(previewGroupImages) || previewGroupImages.length === 0) {
+                return;
+            }
+            const nextIndex = previewImageIndex + step;
+            if (nextIndex < 0) {
+                if (previewGroupIndex > 0) {
+                    const previousGroup = currentReviewGroups[previewGroupIndex - 1];
+                    const previousImages = Array.isArray(previousGroup?.images) ? previousGroup.images : [];
+                    if (previousImages.length > 0) {
+                        previewGroupIndex -= 1;
+                        previewGroupImages = previousImages;
+                        previewGroupIntro = previousGroup.intro || null;
+                        previewImageIndex = previousImages.length - 1;
+                        renderImagePreview();
+                    }
+                }
+                return;
+            }
+            if (nextIndex >= previewGroupImages.length) {
+                if (previewGroupIndex < currentReviewGroups.length - 1) {
+                    const nextGroup = currentReviewGroups[previewGroupIndex + 1];
+                    const nextImages = Array.isArray(nextGroup?.images) ? nextGroup.images : [];
+                    if (nextImages.length > 0) {
+                        previewGroupIndex += 1;
+                        previewGroupImages = nextImages;
+                        previewGroupIntro = nextGroup.intro || null;
+                        previewImageIndex = 0;
+                        renderImagePreview();
+                    }
+                }
+                return;
+            }
+            previewImageIndex = nextIndex;
+            renderImagePreview();
+        }
+
+        function changePreviewGroup(step) {
+            if (!Array.isArray(currentReviewGroups) || currentReviewGroups.length === 0) {
+                return;
+            }
+
+            let nextGroupIndex = previewGroupIndex + step;
+            while (nextGroupIndex >= 0 && nextGroupIndex < currentReviewGroups.length) {
+                const nextGroup = currentReviewGroups[nextGroupIndex];
+                const nextImages = Array.isArray(nextGroup?.images) ? nextGroup.images : [];
+                if (nextImages.length > 0) {
+                    previewGroupIndex = nextGroupIndex;
+                    previewGroupImages = nextImages;
+                    previewGroupIntro = nextGroup.intro || null;
+                    previewImageIndex = step > 0 ? 0 : nextImages.length - 1;
+                    renderImagePreview();
+                    return;
+                }
+                nextGroupIndex += step;
+            }
+        }
+
+        function renderPhysicalDataEditor(rows) {
+            const values = Array.isArray(rows) && rows.length > 0 ? rows : [{}];
+            return values.map((item, index) => {
+                const articleType = normalizeArticleType(item?.article_type) || document.getElementById('editArticleType')?.value || 'theoretical';
+                const pressureValue = Array.isArray(item?.tc_press) ? item.tc_press[0] : (Array.isArray(item?.pressure) ? item.pressure[0] : item?.tc_press ?? item?.pressure ?? '');
+                const tcValue = Array.isArray(item?.tc) ? item.tc[0] : (item?.tc ?? '');
+                return `
+                    <div class="edit-data-row card p-2 mb-2 bg-light" data-preview-row-index="${index}">
+                        <div class="row g-2">
+                            <div class="col-md-6 col-lg-2">
+                                <input type="text" class="form-control form-control-sm edit-formula" placeholder="化学式" value="${dataInputValue(item, 'chemical_formula')}">
+                            </div>
+                            <div class="col-md-6 col-lg-2">
+                                <input type="text" class="form-control form-control-sm edit-structure" placeholder="空间群" value="${dataInputValue(item, 'crystal_structure')}">
+                            </div>
+                            <div class="col-md-6 col-lg-2">
+                                <select class="form-select form-select-sm edit-article-type" title="是否实验合成">
+                                    <option value="experimental" ${articleType === 'experimental' ? 'selected' : ''}>实验合成：是</option>
+                                    <option value="theoretical" ${articleType === 'theoretical' ? 'selected' : ''}>实验合成：否</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 col-lg-1">
+                                <input type="number" step="any" class="form-control form-control-sm edit-pressure" placeholder="P (GPa)" value="${escapeHtml(pressureValue)}">
+                            </div>
+                            <div class="col-md-6 col-lg-1">
+                                <input type="number" step="any" class="form-control form-control-sm edit-tc" placeholder="Tc (K)" value="${escapeHtml(tcValue)}">
+                            </div>
+                            <div class="col-md-6 col-lg-1">
+                                <input type="number" step="any" class="form-control form-control-sm edit-lambda" placeholder="λ" value="${dataInputValue(item, 'lambda_val')}">
+                            </div>
+                            <div class="col-md-6 col-lg-1">
+                                <input type="number" step="any" class="form-control form-control-sm edit-omega" placeholder="ω" value="${dataInputValue(item, 'omega_log')}">
+                            </div>
+                            <div class="col-md-6 col-lg-1">
+                                <input type="number" step="any" class="form-control form-control-sm edit-nef" placeholder="N" value="${dataInputValue(item, 'n_ef')}">
+                            </div>
+                            <div class="col-12 col-lg-1">
+                                <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="removePreviewDataRow(this)">×</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function collectPhysicalDataFromRows(container) {
+            if (!container) {
+                return [];
+            }
+
+            const computeSFactor = (tcValue, pressureValue) => {
+                if (!Number.isFinite(tcValue) || !Number.isFinite(pressureValue)) return null;
+                return tcValue / Math.sqrt(1521 + Math.pow(pressureValue, 2));
+            };
+
+            const physicalData = [];
+            container.querySelectorAll('.edit-data-row').forEach(row => {
+                const formula = row.querySelector('.edit-formula')?.value.trim() || '';
+                const structure = row.querySelector('.edit-structure')?.value.trim() || '';
+                const pressure = nullableFloat(row.querySelector('.edit-pressure')?.value);
+                const tc = nullableFloat(row.querySelector('.edit-tc')?.value);
+                const lambdaVal = nullableFloat(row.querySelector('.edit-lambda')?.value);
+                const omegaLog = nullableFloat(row.querySelector('.edit-omega')?.value);
+                const nEf = nullableFloat(row.querySelector('.edit-nef')?.value);
+                const articleType = row.querySelector('.edit-article-type')?.value || 'theoretical';
+
+                if (formula || structure || pressure !== null || tc !== null || lambdaVal !== null || omegaLog !== null || nEf !== null) {
+                    physicalData.push({
+                        chemical_formula: formula || null,
+                        crystal_structure: structure || null,
+                        article_type: articleType,
+                        tc_press: pressure !== null ? [pressure] : null,
+                        tc: tc !== null ? [tc] : null,
+                        s_factor: computeSFactor(tc, pressure),
+                        lambda_val: lambdaVal,
+                        omega_log: omegaLog,
+                        n_ef: nEf
+                    });
+                }
+            });
+
+            return physicalData;
+        }
+
+        function syncPreviewDataToMainEditor() {
+            const previewDataEl = document.getElementById('imagePreviewData');
+            const mainContainer = document.getElementById('editDataPointsContainer');
+            if (!previewDataEl || !mainContainer) {
+                return;
+            }
+
+            const previewRows = previewDataEl.querySelectorAll('.edit-data-row');
+            if (previewRows.length === 0) {
+                return;
+            }
+
+            if (currentPreviewPaper) {
+                currentPreviewPaper.data = collectPhysicalDataFromRows(previewDataEl);
+            }
+
+            mainContainer.innerHTML = '';
+            previewRows.forEach(row => {
+                mainContainer.appendChild(row.cloneNode(true));
+            });
+        }
+
+        function removePreviewDataRow(button) {
+            const previewDataEl = document.getElementById('imagePreviewData');
+            if (!previewDataEl) {
+                return;
+            }
+            const rows = previewDataEl.querySelectorAll('.edit-data-row');
+            if (rows.length <= 1) {
+                alert('至少需要保留一组数据');
+                return;
+            }
+            button.closest('.edit-data-row')?.remove();
+            syncPreviewDataToMainEditor();
+        }
+
+        function renderImagePreview() {
+            const overlay = document.getElementById('imagePreviewOverlay');
+            const imageEl = document.getElementById('imagePreviewImg');
+            const captionEl = document.getElementById('imagePreviewCaption');
+            const introEl = document.getElementById('imagePreviewIntro');
+            const dataEl = document.getElementById('imagePreviewData');
+            const prevGroupBtn = document.getElementById('previewPrevGroupBtn');
+            const nextGroupBtn = document.getElementById('previewNextGroupBtn');
+            if (!overlay || !imageEl || !captionEl || !introEl || !dataEl || previewGroupImages.length === 0) {
+                return;
+            }
+
+            const currentImage = previewGroupImages[previewImageIndex];
+            imageEl.src = `/api/papers/images/${currentImage.id}`;
+            imageEl.alt = `图片 ${currentImage.order}`;
+            captionEl.textContent = `第 ${previewGroupIndex + 1} 组 · 图片 ${currentImage.order} / 第 ${previewImageIndex + 1} 张，共 ${previewGroupImages.length} 张`;
+            introEl.innerHTML = renderImageGroupIntro(previewGroupIntro);
+            dataEl.innerHTML = `
+                <div class="mb-2 d-flex justify-content-end">
+                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="addPreviewDataRow()">+ 添加一组数据</button>
+                </div>
+                <div id="previewDataRows">${renderPhysicalDataEditor(currentPreviewPaper?.data)}</div>
+            `;
+
+            const navButtons = overlay.querySelectorAll('.image-preview-nav');
+            if (navButtons.length === 2) {
+                navButtons[0].disabled = previewImageIndex === 0;
+                navButtons[1].disabled = previewImageIndex === previewGroupImages.length - 1;
+            }
+
+            if (prevGroupBtn) {
+                prevGroupBtn.disabled = previewGroupIndex === 0;
+            }
+            if (nextGroupBtn) {
+                nextGroupBtn.disabled = previewGroupIndex === currentReviewGroups.length - 1;
+            }
+
+            dataEl.querySelectorAll('input, select, textarea').forEach(field => {
+                field.addEventListener('input', syncPreviewDataToMainEditor);
+                field.addEventListener('change', syncPreviewDataToMainEditor);
+            });
+            syncPreviewDataToMainEditor();
+            typesetMath(introEl);
+        }
+
+        function addPreviewDataRow() {
+            const previewRows = document.getElementById('previewDataRows');
+            if (!previewRows) {
+                return;
+            }
+            const rowCount = previewRows.querySelectorAll('.edit-data-row').length;
+            previewRows.insertAdjacentHTML('beforeend', renderPhysicalDataEditor([{}]).replace('data-preview-row-index="0"', `data-preview-row-index="${rowCount}"`));
+            previewRows.querySelectorAll('input, select, textarea').forEach(field => {
+                field.addEventListener('input', syncPreviewDataToMainEditor);
+                field.addEventListener('change', syncPreviewDataToMainEditor);
+            });
+            syncPreviewDataToMainEditor();
+        }
+
         function renderDashboardImageGroups(payload) {
             const container = document.getElementById('editImageGroups');
             if (!container) return;
 
             const groups = Array.isArray(payload?.review_groups) ? payload.review_groups : [];
             const warnings = Array.isArray(payload?.grouping_meta?.warnings) ? payload.grouping_meta.warnings : [];
+            currentReviewGroups = groups;
 
             if (groups.length === 0) {
                 container.innerHTML = '<div class="text-muted small">暂无图片分组数据</div>';
@@ -306,17 +710,21 @@
                 ? `<div class="alert alert-warning py-2 small mb-3">${warnings.map(item => escapeHtml(item)).join('<br>')}</div>`
                 : '';
 
-            container.innerHTML = warningHtml + groups.map(group => {
+            container.innerHTML = warningHtml + groups.map((group, groupIndex) => {
                 const images = Array.isArray(group.images) ? group.images : [];
+                const intro = group.intro || null;
                 const imagesHtml = images.length > 0
-                    ? `<div class="d-flex flex-wrap gap-2">${images.map(img => `
-                        <a href="/api/papers/images/${img.id}" target="_blank" class="text-decoration-none">
+                    ? `<div class="d-flex flex-wrap gap-2">${images.map((img, index) => `
+                        <button type="button"
+                                class="btn p-0 border-0 bg-transparent text-decoration-none"
+                                onclick="openImagePreviewByGroup(${groupIndex}, ${index})"
+                                aria-label="放大查看图片 ${img.order}">
                             <img src="/api/papers/images/${img.id}?thumbnail=true"
                                  alt="图片 ${img.order}"
                                  class="img-thumbnail"
                                  style="width: 140px; height: 140px; object-fit: cover;">
                             <div class="small text-center text-muted mt-1">图片 ${img.order}</div>
-                        </a>
+                        </button>
                     `).join('')}</div>`
                     : '<div class="text-muted small">该组暂无图片</div>';
 
@@ -325,7 +733,7 @@
                         <div class="card-body">
                             <div class="fw-semibold mb-2">第 ${group.group_index} 组</div>
                             ${imagesHtml}
-                            ${renderImageGroupIntro(group.intro)}
+                            ${renderImageGroupIntro(intro)}
                         </div>
                     </div>
                 `;
@@ -708,6 +1116,7 @@
                 }
 
                 const paper = await response.json();
+                currentPreviewPaper = paper;
 
                 document.getElementById('editPaperId').value = paper.id;
                 document.getElementById('editDoi').value = paper.doi;
@@ -727,6 +1136,7 @@
                 } else {
                     addEditDataRow();
                 }
+                syncPreviewDataToMainEditor();
 
                 document.getElementById('editContributorName').value = paper.contributor_name || '';
                 document.getElementById('editContributorAffiliation').value = paper.contributor_affiliation || '';
@@ -750,33 +1160,7 @@
             const paperId = document.getElementById('editPaperId').value;
 
             // 收集物理数据
-            const physicalData = [];
-            const computeSFactor = (tcValue, pressureValue) => {
-                if (!Number.isFinite(tcValue) || !Number.isFinite(pressureValue)) return null;
-                return tcValue / Math.sqrt(1521 + Math.pow(pressureValue, 2));
-            };
-            document.querySelectorAll('.edit-data-row').forEach(row => {
-                const formula = row.querySelector('.edit-formula').value.trim();
-                const structure = row.querySelector('.edit-structure').value.trim();
-                const pressure = nullableFloat(row.querySelector('.edit-pressure').value);
-                const tc = nullableFloat(row.querySelector('.edit-tc').value);
-                const lambdaVal = nullableFloat(row.querySelector('.edit-lambda').value);
-                const omegaLog = nullableFloat(row.querySelector('.edit-omega').value);
-                const nEf = nullableFloat(row.querySelector('.edit-nef').value);
-                if (formula || structure || pressure !== null || tc !== null || lambdaVal !== null || omegaLog !== null || nEf !== null) {
-                    physicalData.push({
-                        chemical_formula: formula || null,
-                        crystal_structure: structure || null,
-                        article_type: row.querySelector('.edit-article-type').value,
-                        tc_press: pressure !== null ? [pressure] : null,
-                        tc: tc !== null ? [tc] : null,
-                        s_factor: computeSFactor(tc, pressure),
-                        lambda_val: lambdaVal,
-                        omega_log: omegaLog,
-                        n_ef: nEf
-                    });
-                }
-            });
+            const physicalData = collectPhysicalDataFromRows(document.getElementById('editDataPointsContainer'));
 
             const updateData = {
                 title: document.getElementById('editTitle').value,
@@ -860,6 +1244,8 @@
         }
 
         // 页面加载时初始化
+        document.addEventListener('keydown', handlePreviewKeydown);
+
         if (checkAuth()) {
             loadUnreviewedPapers();
         }
