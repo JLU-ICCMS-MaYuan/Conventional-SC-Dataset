@@ -908,7 +908,7 @@ async def get_paper_images(
     """
     获取文献的所有截图列表
 
-    返回图片ID、顺序、文件大小等信息
+    返回平铺图片列表以及按组整理的审核视图数据
     """
     paper = db.query(Paper).filter(Paper.id == paper_id).first()
 
@@ -918,29 +918,8 @@ async def get_paper_images(
             detail="文献不存在"
         )
 
-    images = []
-    for row in crud.get_paper_images(image_db, paper_id):
-        if row.image_data:
-            images.append({
-                "id": row.id,
-                "order": row.image_order or 1,
-                "file_size": row.file_size or len(row.image_data),
-                "created_at": row.created_at.isoformat() if hasattr(row.created_at, "isoformat") else row.created_at
-            })
-        for order in range(1, 41):
-            blob = getattr(row, f"fig{order}", None)
-            if blob:
-                images.append({
-                    "id": row.id * 100 + order,
-                    "order": order,
-                    "file_size": len(blob),
-                    "created_at": row.created_at.isoformat() if hasattr(row.created_at, "isoformat") else row.created_at
-                })
-    return {
-        "paper_id": paper.id,
-        "total_images": len(images),
-        "images": images
-    }
+    rows = crud.get_paper_images(image_db, paper_id)
+    return crud.build_paper_image_review_groups(paper, rows)
 
 
 @router.delete("/papers/{paper_id}/images/{image_id}", summary="删除文献截图")

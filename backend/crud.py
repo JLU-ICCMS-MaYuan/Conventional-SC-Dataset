@@ -4,7 +4,7 @@
 import json
 import math
 import re
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Query, Session
@@ -451,6 +451,163 @@ def get_paper_images(image_db: Session, paper_id: int) -> List[models.PaperImage
     return image_db.query(models.PaperImage).filter(models.PaperImage.paper_id == paper_id).all()
 
 
+def flatten_paper_images(rows: List[models.PaperImage]) -> List[dict[str, Any]]:
+    images: List[dict[str, Any]] = []
+    for row in rows:
+        created_at = row.created_at.isoformat() if hasattr(row.created_at, "isoformat") else row.created_at
+        if row.image_data:
+            images.append({
+                "id": row.id,
+                "order": row.image_order or 1,
+                "file_size": row.file_size or len(row.image_data),
+                "created_at": created_at,
+            })
+        for order in range(1, 41):
+            blob = getattr(row, f"fig{order}", None)
+            if blob:
+                images.append({
+                    "id": row.id * 100 + order,
+                    "order": order,
+                    "file_size": len(blob),
+                    "created_at": created_at,
+                })
+    images.sort(key=lambda item: item["order"])
+    return images
+
+
+def _normalize_text_groups(raw_value: Optional[str]) -> List[Optional[str]]:
+    parsed = safe_json_loads(raw_value, [])
+    if isinstance(parsed, list):
+        out: List[Optional[str]] = []
+        for item in parsed:
+            if item is None:
+                out.append(None)
+            elif isinstance(item, str):
+                text = item.strip()
+                out.append(text or None)
+            else:
+                out.append(str(item))
+        return out
+    if isinstance(parsed, str):
+        text = parsed.strip()
+        return [text] if text else []
+    return []
+
+
+def _normalize_fig_group_sizes(rows: List[models.PaperImage], total_images: int) -> tuple[List[int], list[str], str]:
+    warnings: list[str] = []
+    for row in rows:
+        parsed = safe_json_loads(row.figs, None)
+        if parsed is None:
+            continue
+        if isinstance(parsed, str):
+            parsed = safe_json_loads(parsed, None)
+        if not isinstance(parsed, list):
+            warnings.append("figs is not a list; fallback grouping applied")
+            return [], warnings, "fallback"
+        sizes: List[int] = []
+        invalid = False
+        for item in parsed:
+            if item in (None, ""):
+                continue
+            try:
+                size = int(item)
+            except (TypeError, ValueError):
+                invalid = True
+                break
+            if size <= 0:
+                invalid = True
+                break
+            sizes.append(size)
+        if invalid or not sizes:
+            warnings.append("figs contains invalid group sizes; fallback grouping applied")
+            return [], warnings, "fallback"
+        if sum(sizes) != total_images:
+            warnings.append(f"figs image count {sum(sizes)} does not match actual image count {total_images}")
+        return sizes, warnings, "figs"
+    return [], warnings, "fallback"
+
+
+def _balanced_group_sizes(total_images: int, group_count: int) -> List[int]:
+    if total_images <= 0 or group_count <= 0:
+        return []
+    base = total_images // group_count
+    remainder = total_images % group_count
+    sizes: List[int] = []
+    for index in range(group_count):
+        size = base + (1 if index < remainder else 0)
+        if size > 0:
+            sizes.append(size)
+    return sizes
+
+
+def build_paper_image_review_groups(paper: models.Paper, rows: List[models.PaperImage]) -> dict[str, Any]:
+    images = flatten_paper_images(rows)
+    texts = _normalize_text_groups(getattr(paper, "imagetxts", None))
+    texts_cn = _normalize_text_groups(getattr(paper, "imagetxts_cn", None))
+    warnings: list[str] = []
+
+    fig_sizes, fig_warnings, source = _normalize_fig_group_sizes(rows, len(images))
+    warnings.extend(fig_warnings)
+
+    if fig_sizes:
+        group_sizes = fig_sizes
+    elif texts:
+        group_sizes = _balanced_group_sizes(len(images), len(texts))
+        source = "balanced_fallback"
+    elif len(images) > 0:
+        group_sizes = [len(images)]
+        source = "single_group_fallback"
+    else:
+        group_sizes = []
+        source = "empty"
+
+    if len(texts) < len(group_sizes):
+        warnings.append(f"intro count {len(texts)} is less than group count {len(group_sizes)}")
+    elif len(texts) > len(group_sizes) and group_sizes:
+        warnings.append(f"intro count {len(texts)} exceeds group count {len(group_sizes)}")
+
+    review_groups: List[dict[str, Any]] = []
+    cursor = 0
+    for index, group_size in enumerate(group_sizes, start=1):
+        if cursor >= len(images):
+            break
+        if group_size <= 0:
+            continue
+        group_images = images[cursor: cursor + group_size]
+        cursor += group_size
+        review_groups.append({
+            "group_index": index,
+            "images": group_images,
+            "intro": {
+                "text": texts[index - 1] if index - 1 < len(texts) else None,
+                "text_cn": texts_cn[index - 1] if index - 1 < len(texts_cn) else None,
+            },
+        })
+
+    if cursor < len(images):
+        warnings.append(f"{len(images) - cursor} images were not covered by grouping and were appended to a trailing group")
+        review_groups.append({
+            "group_index": len(review_groups) + 1,
+            "images": images[cursor:],
+            "intro": {
+                "text": texts[len(review_groups)] if len(review_groups) < len(texts) else None,
+                "text_cn": texts_cn[len(review_groups)] if len(review_groups) < len(texts_cn) else None,
+            },
+        })
+
+    return {
+        "paper_id": paper.id,
+        "total_images": len(images),
+        "images": images,
+        "review_groups": review_groups,
+        "grouping_meta": {
+            "grouping_source": source,
+            "warnings": warnings,
+        },
+    }
+
+
 def get_image_by_id(image_db: Session, image_id: int) -> Optional[models.PaperImage]:
     if image_id >= 100:
         row_id, order = divmod(image_id, 100)
@@ -480,17 +637,7 @@ def get_image_by_order(image_db: Session, paper_id: int, image_order: int) -> Op
 
 def get_paper_image_count(image_db: Session, paper_id: int) -> int:
     rows = get_paper_images(image_db, paper_id)
-    count = 0
-    for row in rows:
-        direct_image_present = bool(row.image_data)
-        if direct_image_present:
-            count += 1
-        fig_count = 0
-        for i in range(1, 41):
-            if getattr(row, f"fig{i}", None):
-                fig_count += 1
-        count += fig_count
-    return count
+    return len(flatten_paper_images(rows))
 
 
 def delete_all_paper_images(image_db: Session, paper_id: int) -> int:
