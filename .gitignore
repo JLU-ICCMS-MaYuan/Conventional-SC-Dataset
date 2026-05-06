@@ -53,3 +53,6 @@ AGENTS.md
 CLI_GUIDE.md
 INSTALL.md
 CLAUDE.md
+
+#数据库
+hydride_literature_images.db
