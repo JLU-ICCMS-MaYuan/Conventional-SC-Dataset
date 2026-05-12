@@ -198,6 +198,11 @@ async function loadPapers(searchParams = null) {
         return;
     }
 
+    if (currentDatabase === 'htsc2025') {
+        await loadHTSC2025Materials(container);
+        return;
+    }
+
     try {
         const queryString = buildQueryString(currentSearchParams);
         if (viewMode === 'only') {
@@ -426,7 +431,7 @@ function renderAlexandriaPageNumbers(current, total) {
 
 function changeAlexandriaPage(page) {
     const pagination = getActivePaginationState();
-    if (page < 1 || page > Math.ceil(pagination.total / pagination.pageSize) || page === pagination.page) return;
+    if (page < 1 || page === pagination.page) return;
     pagination.page = page;
     loadPapers(currentSearchParams);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -460,6 +465,144 @@ function toggleAlexandriaDetail(matId) {
                     </div>
                 `;
                 detailEl.innerHTML = html;
+            })
+            .catch(err => {
+                detailEl.innerHTML = `<div class="text-danger small">加载失败: ${err.message}</div>`;
+            });
+    } else {
+        detailEl.style.display = 'none';
+    }
+}
+
+// HTSC-2025 搜索和渲染
+async function loadHTSC2025Materials(container) {
+    const elements = getSelectedElementsFromPath();
+    const pagination = getActivePaginationState();
+
+    try {
+        const body = {
+            elements,
+            mode: viewMode,
+            min_tc: parseFloat(document.getElementById('min-tc-input').value) || null,
+            limit: pagination.pageSize,
+            offset: (pagination.page - 1) * pagination.pageSize,
+        };
+
+        const response = await fetch('/api/htsc2025/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+
+        if (!response.ok) {
+            throw new Error((await response.json()).detail || '查询失败');
+        }
+
+        const data = await response.json();
+        const items = data.items || [];
+
+        pagination.total = data.total || 0;
+        pagination.totalPages = Math.ceil(pagination.total / pagination.pageSize) || 1;
+
+        if (items.length === 0) {
+            container.innerHTML = `<div class="alert alert-warning text-center"><p class="mb-0">HTSC-2025 数据集中未找到匹配的材料</p></div>`;
+            clearPaginationUi();
+            return;
+        }
+
+        container.innerHTML = items.map(item => renderHTSC2025Card(item)).join('');
+
+        const subtitleEl = document.getElementById('compound-subtitle');
+        if (subtitleEl) {
+            subtitleEl.innerHTML = `HTSC-2025 常压超导 · ${viewMode === 'only' ? '精确匹配' : viewMode === 'contains' ? '包含元素' : '子集'} · ${data.total} 个材料`;
+        }
+
+        renderHTSC2025Pagination(data);
+    } catch (error) {
+        console.error('HTSC-2025 查询失败:', error);
+        container.innerHTML = `<div class="alert alert-danger">HTSC-2025 查询失败：${error.message}</div>`;
+        clearPaginationUi();
+    }
+}
+
+function renderHTSC2025Card(item) {
+    const cc = item.composition || {};
+    const compStr = Object.entries(cc).map(([el, n]) => `${el}${n > 1 ? '<sub>' + n.toFixed(1).replace(/\.0$/, '') + '</sub>' : ''}`).join('');
+    const tcColor = item.tc > 77 ? 'text-danger fw-bold' : item.tc > 30 ? 'text-warning' : 'text-info';
+
+    return `
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h5 class="card-title mb-1">${item.formula || item.name}</h5>
+                        <p class="text-muted small mb-1">${compStr} · ${item.class || '未知类别'} · ${item.elements.join(' · ')}</p>
+                    </div>
+                    <div class="text-end">
+                        <span class="fs-4 fw-bold ${tcColor}">${item.tc} K</span>
+                        <br><small class="text-muted">Tc</small>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <button class="btn btn-outline-primary btn-sm" onclick="toggleCIFDetail('${item.name}')">
+                        查看 CIF 结构
+                    </button>
+                    <div id="cif-detail-${item.name.replace(/[^a-zA-Z0-9-]/g, '_')}" class="mt-2" style="display: none;">
+                        <pre class="bg-light p-3 rounded small" style="max-height: 400px; overflow-y: auto;"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderHTSC2025Pagination(data) {
+    const summaryEl = document.getElementById('papers-summary');
+    const paginationEl = document.getElementById('papers-pagination');
+    if (!summaryEl || !paginationEl) return;
+
+    const pagination = getActivePaginationState();
+    const total = data.total || 0;
+    const pageSize = pagination.pageSize;
+    const totalPages = Math.ceil(total / pageSize) || 1;
+    const page = pagination.page;
+
+    if (total === 0) { clearPaginationUi(); return; }
+
+    const start = (page - 1) * pageSize + 1;
+    const end = Math.min(start + (data.items ? data.items.length : 0) - 1, total);
+    summaryEl.style.display = 'block';
+    summaryEl.textContent = `第 ${start}-${end} 个材料，共 ${total} 个`;
+
+    if (totalPages <= 1) { paginationEl.innerHTML = ''; paginationEl.style.display = 'none'; return; }
+
+    paginationEl.style.display = 'block';
+    paginationEl.innerHTML = `
+        <nav aria-label="分页导航">
+            <ul class="pagination justify-content-center flex-wrap mb-0">
+                <li class="page-item ${data.has_prev ? '' : 'disabled'}">
+                    <button class="page-link" type="button" onclick="changePage('htsc2025', ${page - 1})" ${data.has_prev ? '' : 'disabled'}>上一页</button>
+                </li>
+                <li class="page-item ${data.has_next ? '' : 'disabled'}">
+                    <button class="page-link" type="button" onclick="changePage('htsc2025', ${page + 1})" ${data.has_next ? '' : 'disabled'}>下一页</button>
+                </li>
+            </ul>
+        </nav>
+    `;
+}
+
+function toggleCIFDetail(name) {
+    const safeId = name.replace(/[^a-zA-Z0-9-]/g, '_');
+    const detailEl = document.getElementById(`cif-detail-${safeId}`);
+    if (!detailEl) return;
+
+    if (detailEl.style.display === 'none') {
+        detailEl.style.display = 'block';
+        fetch(`/api/htsc2025/detail/${encodeURIComponent(name)}`)
+            .then(r => r.json())
+            .then(data => {
+                const pre = detailEl.querySelector('pre');
+                if (pre) pre.textContent = data.cif || '(无 CIF 数据)';
             })
             .catch(err => {
                 detailEl.innerHTML = `<div class="text-danger small">加载失败: ${err.message}</div>`;
@@ -609,9 +752,6 @@ function renderPageNumberItems(currentPage, totalPages, mode = 'paper') {
 
 function changePage(mode, page) {
     const pagination = mode === 'paper' ? getActivePaginationState() : multiModePagination;
-    if (page < 1 || page > pagination.totalPages || page === pagination.page) {
-        return;
-    }
     pagination.page = page;
     loadPapers(currentSearchParams);
     window.scrollTo({ top: 0, behavior: 'smooth' });
