@@ -41,22 +41,33 @@
     </div>
 
     <div class="container mt-4">
-        <!-- 审核状态筛选 -->
+        <!-- 审核状态筛选 + 数据库选择 -->
         <div class="card mb-3">
             <div class="card-body">
-                <h6 class="card-subtitle mb-2 text-muted small">审核状态筛选</h6>
-                <div class="btn-group" role="group">
-                    <input type="radio" class="btn-check" name="review-status" id="status-all" value="all" checked>
-                    <label class="btn btn-outline-primary" for="status-all" onclick="filterByReviewStatus('all')">全部</label>
+                <div class="row align-items-center">
+                    <div class="col-auto">
+                        <h6 class="card-subtitle text-muted small mb-1">审核状态筛选</h6>
+                        <div class="btn-group" role="group">
+                            <input type="radio" class="btn-check" name="review-status" id="status-all" value="all" checked>
+                            <label class="btn btn-outline-primary" for="status-all" onclick="filterByReviewStatus('all')">全部</label>
 
-                    <input type="radio" class="btn-check" name="review-status" id="status-approved" value="approved">
-                    <label class="btn btn-outline-success" for="status-approved" onclick="filterByReviewStatus('approved')">✅ 已通过</label>
+                            <input type="radio" class="btn-check" name="review-status" id="status-approved" value="approved">
+                            <label class="btn btn-outline-success" for="status-approved" onclick="filterByReviewStatus('approved')">✅ 已通过</label>
 
-                    <input type="radio" class="btn-check" name="review-status" id="status-unreviewed" value="unreviewed">
-                    <label class="btn btn-outline-warning" for="status-unreviewed" onclick="filterByReviewStatus('unreviewed')">⏳ 未审核</label>
+                            <input type="radio" class="btn-check" name="review-status" id="status-unreviewed" value="unreviewed">
+                            <label class="btn btn-outline-warning" for="status-unreviewed" onclick="filterByReviewStatus('unreviewed')">⏳ 未审核</label>
 
-                    <input type="radio" class="btn-check" name="review-status" id="status-rejected" value="rejected">
-                    <label class="btn btn-outline-danger" for="status-rejected" onclick="filterByReviewStatus('rejected')">❌ 已拒绝</label>
+                            <input type="radio" class="btn-check" name="review-status" id="status-rejected" value="rejected">
+                            <label class="btn btn-outline-danger" for="status-rejected" onclick="filterByReviewStatus('rejected')">❌ 已拒绝</label>
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <h6 class="card-subtitle text-muted small mb-1">数据库</h6>
+                        <select class="form-select" id="db-select" onchange="onDatabaseChange()" style="width: auto;">
+                            <option value="local">本地数据库</option>
+                            <option value="alexandria">Alexandria 电声耦合</option>
+                        </select>
+                    </div>
                 </div>
             </div>
         </div>
@@ -74,13 +85,23 @@
                     <div class="col-md-2">
                         <input type="number" class="form-control" id="year-max-input" placeholder="最大年份">
                     </div>
-                    <div class="col-md-4">
+                    <!-- Alexandria 专属筛选 -->
+                    <div class="col-md-2 alexandria-filter" style="display: none;">
+                        <input type="number" step="0.01" class="form-control" id="min-tc-input" placeholder="最低 Tc (K)">
+                    </div>
+                    <div class="col-md-1 alexandria-filter" style="display: none;">
+                        <div class="form-check mt-2">
+                            <input type="checkbox" class="form-check-input" id="stable-only-input">
+                            <label class="form-check-label small" for="stable-only-input">仅稳定</label>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
                         <div class="d-flex gap-2">
                             <button class="btn btn-primary flex-grow-1" onclick="searchPapers()">搜索</button>
                             <button class="btn btn-outline-secondary" type="button" onclick="resetSearch()">重置</button>
-                            
+
                             <!-- 批量导出下拉菜单 -->
-                            <div class="dropdown">
+                            <div class="dropdown" id="export-dropdown">
                                 <button class="btn btn-outline-primary dropdown-toggle" type="button" id="exportDropdown" data-bs-toggle="dropdown" aria-expanded="false">
                                     <i class="bi bi-download"></i> 批量导出
                                 </button>

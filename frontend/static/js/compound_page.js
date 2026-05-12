@@ -3,6 +3,7 @@ let elementSymbols = '';
 let uploadModal, imageModal;
 let selectedFiles = [];
 let currentReviewStatus = 'all'; // 当前选择的审核状态筛选
+let currentDatabase = 'local'; // 'local' 或 'alexandria'
 const paperCache = new Map();
 const urlParams = new URLSearchParams(window.location.search);
 let viewMode = urlParams.get('mode') || 'only';
@@ -192,6 +193,11 @@ async function loadPapers(searchParams = null) {
         Object.assign(currentSearchParams, searchParams);
     }
 
+    if (currentDatabase === 'alexandria') {
+        await loadAlexandriaMaterials(container);
+        return;
+    }
+
     try {
         const queryString = buildQueryString(currentSearchParams);
         if (viewMode === 'only') {
@@ -207,6 +213,25 @@ async function loadPapers(searchParams = null) {
         container.innerHTML = `<div class="alert alert-danger">加载失败：${error.message}</div>`;
         clearPaginationUi();
     }
+}
+
+// 数据库切换
+function onDatabaseChange() {
+    currentDatabase = document.getElementById('db-select').value;
+    const isLocal = currentDatabase === 'local';
+
+    // 显示/隐藏对应筛选控件
+    document.querySelectorAll('.alexandria-filter').forEach(el => el.style.display = isLocal ? 'none' : '');
+    document.getElementById('export-dropdown').style.display = isLocal ? '' : 'none';
+
+    // 审核状态筛选只对本地数据库有效
+    const reviewGroup = document.querySelector('.btn-group[role="group"]');
+    if (reviewGroup) {
+        reviewGroup.closest('.col-auto').style.display = isLocal ? '' : 'none';
+    }
+
+    resetCurrentPage();
+    loadPapers(currentSearchParams);
 }
 
 // 审核状态筛选
@@ -234,6 +259,214 @@ function buildQueryString(searchParams = {}) {
     params.append('limit', pagination.pageSize);
     params.append('offset', (pagination.page - 1) * pagination.pageSize);
     return params.toString();
+}
+
+// Alexandria 搜索和渲染
+async function loadAlexandriaMaterials(container) {
+    const elements = getSelectedElementsFromPath();
+    const pagination = getActivePaginationState();
+
+    try {
+        const body = {
+            elements,
+            mode: viewMode,
+            min_tc: parseFloat(document.getElementById('min-tc-input').value) || null,
+            stable_only: document.getElementById('stable-only-input').checked,
+            limit: pagination.pageSize,
+            offset: (pagination.page - 1) * pagination.pageSize,
+        };
+
+        const response = await fetch('/api/alexandria/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+
+        if (!response.ok) {
+            throw new Error((await response.json()).detail || '查询失败');
+        }
+
+        const data = await response.json();
+        const items = data.items || [];
+
+        // 更新分页状态
+        pagination.total = data.total || 0;
+        pagination.totalPages = Math.ceil(pagination.total / pagination.pageSize) || 1;
+
+        if (items.length === 0) {
+            container.innerHTML = `<div class="alert alert-warning text-center"><p class="mb-0">Alexandria 数据库中未找到匹配的电声耦合材料数据</p></div>`;
+            clearPaginationUi();
+            return;
+        }
+
+        // 渲染材料卡片
+        container.innerHTML = items.map(item => renderAlexandriaCard(item)).join('');
+
+        // 更新标题显示数据库名和数量
+        const subtitleEl = document.getElementById('compound-subtitle');
+        if (subtitleEl) {
+            subtitleEl.innerHTML = `Alexandria 电声耦合数据库 · ${viewMode === 'only' ? '精确匹配' : viewMode === 'contains' ? '包含元素' : '子集'} · ${data.total} 个材料`;
+        }
+
+        // 渲染分页
+        renderAlexandriaPagination(data);
+    } catch (error) {
+        console.error('Alexandria 查询失败:', error);
+        container.innerHTML = `<div class="alert alert-danger">Alexandria 查询失败：${error.message}</div>`;
+        clearPaginationUi();
+    }
+}
+
+function renderAlexandriaCard(item) {
+    const elements = item.elements || [];
+    const elementsText = elements.join(' · ');
+    const tcStr = item.tc_max != null ? `${item.tc_max} K` : '—';
+    const lambdaStr = item.lambda_val != null ? item.lambda_val.toFixed(4) : '—';
+    const spgStr = item.spg != null ? item.spg : '—';
+    const nsitesStr = item.nsites != null ? item.nsites : '—';
+    const bgStr = item.band_gap != null ? `${item.band_gap.toFixed(3)} eV` : '—';
+    const dosStr = item.dos_ef != null ? item.dos_ef.toFixed(3) : '—';
+    const stabilityBadge = item.imag
+        ? '<span class="badge bg-warning">可能不稳定（虚声子）</span>'
+        : '<span class="badge bg-success">动力学稳定</span>';
+
+    return `
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h5 class="card-title mb-1">${item.formula || '未知'}</h5>
+                        <p class="text-muted small mb-1">${elementsText} · mat_id: ${item.mat_id} · ${stabilityBadge}</p>
+                    </div>
+                    <div class="text-end">
+                        <span class="fs-4 fw-bold text-primary">${tcStr}</span>
+                        <br><small class="text-muted">Tc 最大</small>
+                    </div>
+                </div>
+                <hr class="my-2">
+                <div class="row text-center small">
+                    <div class="col"><strong>λ</strong><br>${lambdaStr}</div>
+                    <div class="col"><strong>空间群</strong><br>${spgStr}</div>
+                    <div class="col"><strong>原子数</strong><br>${nsitesStr}</div>
+                    <div class="col"><strong>带隙</strong><br>${bgStr}</div>
+                    <div class="col"><strong>N(Ef)</strong><br>${dosStr}</div>
+                </div>
+                <div class="mt-2">
+                    <button class="btn btn-outline-primary btn-sm" onclick="toggleAlexandriaDetail('${item.mat_id}')">
+                        查看原始数据
+                    </button>
+                    <div id="alex-detail-${item.mat_id}" class="mt-2" style="display: none;">
+                        <div class="text-center text-muted small py-2">
+                            <div class="spinner-border spinner-border-sm"></div> 加载中...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderAlexandriaPagination(data) {
+    const summaryEl = document.getElementById('papers-summary');
+    const paginationEl = document.getElementById('papers-pagination');
+    if (!summaryEl || !paginationEl) return;
+
+    const pagination = getActivePaginationState();
+    const total = data.total || 0;
+    const pageSize = pagination.pageSize;
+    const totalPages = Math.ceil(total / pageSize) || 1;
+    const page = pagination.page;
+
+    if (total === 0) {
+        clearPaginationUi();
+        return;
+    }
+
+    const start = (page - 1) * pageSize + 1;
+    const end = Math.min(start + (data.items ? data.items.length : 0) - 1, total);
+    summaryEl.style.display = 'block';
+    summaryEl.textContent = `第 ${start}-${end} 个材料，共 ${total} 个`;
+
+    if (totalPages <= 1) {
+        paginationEl.innerHTML = '';
+        paginationEl.style.display = 'none';
+        return;
+    }
+
+    paginationEl.style.display = 'block';
+    paginationEl.innerHTML = `
+        <nav aria-label="分页导航">
+            <ul class="pagination justify-content-center flex-wrap mb-0">
+                <li class="page-item ${data.has_prev ? '' : 'disabled'}">
+                    <button class="page-link" type="button" onclick="changeAlexandriaPage(${page - 1})" ${data.has_prev ? '' : 'disabled'}>上一页</button>
+                </li>
+                ${renderAlexandriaPageNumbers(page, totalPages)}
+                <li class="page-item ${data.has_next ? '' : 'disabled'}">
+                    <button class="page-link" type="button" onclick="changeAlexandriaPage(${page + 1})" ${data.has_next ? '' : 'disabled'}>下一页</button>
+                </li>
+            </ul>
+        </nav>
+    `;
+}
+
+function renderAlexandriaPageNumbers(current, total) {
+    const maxVisible = 5;
+    const half = Math.floor(maxVisible / 2);
+    let start = Math.max(1, current - half);
+    let end = Math.min(total, start + maxVisible - 1);
+    start = Math.max(1, end - maxVisible + 1);
+    let html = '';
+    for (let p = start; p <= end; p++) {
+        html += `<li class="page-item ${p === current ? 'active' : ''}">
+            <button class="page-link" type="button" onclick="changeAlexandriaPage(${p})">${p}</button>
+        </li>`;
+    }
+    return html;
+}
+
+function changeAlexandriaPage(page) {
+    const pagination = getActivePaginationState();
+    if (page < 1 || page > Math.ceil(pagination.total / pagination.pageSize) || page === pagination.page) return;
+    pagination.page = page;
+    loadPapers(currentSearchParams);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function toggleAlexandriaDetail(matId) {
+    const detailEl = document.getElementById(`alex-detail-${matId}`);
+    if (!detailEl) return;
+
+    if (detailEl.style.display === 'none') {
+        detailEl.style.display = 'block';
+        // 查询原始数据
+        fetch(`/api/alexandria/material/${matId}`)
+            .then(r => r.json())
+            .then(data => {
+                const tc = data.tc || {};
+                const html = `
+                    <div class="bg-light p-3 rounded small">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong>λ:</strong> ${(tc.lambda || '—').toFixed ? tc.lambda.toFixed(4) : (tc.lambda || '—')}<br>
+                                <strong>ω_log:</strong> ${tc.wlog != null ? tc.wlog.toFixed(2) + ' K' : '—'}<br>
+                                <strong>μ*:</strong> ${tc.mustr ? '[' + tc.mustr.join(', ') + ']' : '—'}<br>
+                            </div>
+                            <div class="col-md-6">
+                                <strong>Tc McMillan:</strong> ${tc.TcMcMillan ? '[' + tc.TcMcMillan.join(', ') + ']' : '—'}<br>
+                                <strong>Tc Allen-Dynes:</strong> ${tc.TcAllenDynes ? '[' + tc.TcAllenDynes.join(', ') + ']' : '—'}<br>
+                                <strong>能量:</strong> ${data.energy_total != null ? data.energy_total.toFixed(4) + ' eV' : '—'}<br>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                detailEl.innerHTML = html;
+            })
+            .catch(err => {
+                detailEl.innerHTML = `<div class="text-danger small">加载失败: ${err.message}</div>`;
+            });
+    } else {
+        detailEl.style.display = 'none';
+    }
 }
 
 function normalizePaperListPayload(data) {
@@ -607,11 +840,11 @@ function renderPaperCard(paper) {
                             </div>
                         </div>
 
-                        <!-- 右侧：第一张大图 -->
+                        <!-- 右侧：第一张大图（点击展开后才加载） -->
                         ${paper.image_count > 0 ? `
                         <div class="col-md-4">
-                            <img src="/api/papers/${paper.id}/images/1"
-                                 class="img-fluid paper-main-image"
+                            <img data-src="/api/papers/${paper.id}/images/1"
+                                 class="img-fluid paper-main-image lazy-image"
                                  onclick="viewImage('/api/papers/${paper.id}/images/1')"
                                  alt="主图"
                                  style="cursor: pointer; border-radius: 8px; max-height: 400px; width: 100%; object-fit: contain; border: 2px solid #dee2e6;">
@@ -634,7 +867,7 @@ function renderPaperCard(paper) {
     `;
 }
 
-// 切换文献详情显示
+// 切换文献详情显示（点击展开后才加载图片）
 function togglePaperDetails(paperId) {
     const details = document.getElementById(`details-${paperId}`);
     const chevron = document.getElementById(`chevron-${paperId}`);
@@ -646,20 +879,27 @@ function togglePaperDetails(paperId) {
     if (details.style.display === 'none') {
         details.style.display = 'block';
         chevron.textContent = '▲';
+
+        // 展开时加载懒加载图片（将 data-src 赋给 src）
+        details.querySelectorAll('.lazy-image').forEach(img => {
+            if (!img.src && img.dataset.src) {
+                img.src = img.dataset.src;
+            }
+        });
     } else {
         details.style.display = 'none';
         chevron.textContent = '▼';
     }
 }
 
-// 渲染其他截图（从第2张开始）
+// 渲染其他截图（从第2张开始，点击展开后才加载）
 function renderOtherImages(paperId, count) {
     if (count <= 1) return '';
 
     let html = '';
     for (let i = 2; i <= count; i++) {
-        html += `<img src="/api/papers/${paperId}/images/${i}?thumbnail=true"
-                      class="paper-image-thumbnail"
+        html += `<img data-src="/api/papers/${paperId}/images/${i}?thumbnail=true"
+                      class="paper-image-thumbnail lazy-image"
                       onclick="viewImage('/api/papers/${paperId}/images/${i}')"
                       alt="截图${i}">`;
     }

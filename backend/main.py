@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pathlib import Path
 
-from backend.api import elements, compounds, papers, admin, auth_routes, tc_predict
+from backend.api import elements, compounds, papers, admin, auth_routes, tc_predict, alexandria
 
 # 创建FastAPI应用
 app = FastAPI(
@@ -33,6 +33,7 @@ app.include_router(papers.router)
 app.include_router(auth_routes.router)  # 认证API
 app.include_router(admin.router)  # 管理员API
 app.include_router(tc_predict.router)  # Tc 预测 API
+app.include_router(alexandria.router)  # Alexandria 数据库 API
 
 # 挂载静态文件目录
 BASE_DIR = Path(__file__).resolve().parent.parent
