@@ -3,12 +3,27 @@ let elementSymbols = '';
 let uploadModal, imageModal;
 let selectedFiles = [];
 let currentReviewStatus = 'all'; // 当前选择的审核状态筛选
+let currentDatabase = 'local'; // 'local' 或 'alexandria'
 const paperCache = new Map();
 const urlParams = new URLSearchParams(window.location.search);
 const PAPERS_PER_PAGE = 30;
 let currentPage = 1;
 let currentSearchParams = {};
 let viewMode = urlParams.get('mode') || 'only';
+const ONLY_MODE_PAGE_SIZE = 50;
+const currentSearchParams = {};
+const onlyModePagination = {
+    page: 1,
+    pageSize: ONLY_MODE_PAGE_SIZE,
+    total: 0,
+    totalPages: 0,
+};
+const multiModePagination = {
+    page: 1,
+    pageSize: ONLY_MODE_PAGE_SIZE,
+    total: 0,
+    totalPages: 0,
+};
 if (!['only', 'combination', 'contains'].includes(viewMode)) {
     viewMode = 'only';
 }
@@ -28,9 +43,9 @@ function getSelectedElementsFromPath() {
 
 function getModeDescription(mode = viewMode) {
     const map = {
-        only: '模式：仅显示当前组合',
-        combination: '模式：显示所有子组合（已存在组合）',
-        contains: '模式：显示包含所选元素的组合'
+        only: I18N.t('compound.mode_desc_only'),
+        combination: I18N.t('compound.mode_desc_combination'),
+        contains: I18N.t('compound.mode_desc_contains')
     };
     return map[mode] || map.only;
 }
@@ -49,6 +64,66 @@ function calculateSFactor(tcValue, pressureValue) {
         return null;
     }
     return tc / Math.sqrt(1521 + Math.pow(pressure, 2));
+}
+
+function formatDataCell(value, unit = '') {
+    if (value === null || value === undefined || value === '') {
+        return 'null';
+    }
+    return `${value}${unit ? ` ${unit}` : ''}`;
+}
+
+function formatRangeCell(values, unit = '') {
+    if (!Array.isArray(values) || values.length === 0) {
+        return 'null';
+    }
+    return `${values.join(' - ')}${unit ? ` ${unit}` : ''}`;
+}
+
+function renderPhysicalDataTable(dataRows) {
+    const completeRows = (dataRows || []).filter(d => Array.isArray(d.tc) && d.tc.length > 0 && Array.isArray(d.tc_press) && d.tc_press.length > 0);
+    if (completeRows.length === 0) {
+        return `<span class="text-muted">${I18N.t('compound.no_physical_data')}</span>`;
+    }
+
+    const synthesizedText = (d) => {
+        if (d.article_type === 'experimental' || d.article_type === 'e') return I18N.t('common.yes');
+        if (d.article_type === 'theoretical' || d.article_type === 't') return I18N.t('common.no');
+        return 'null';
+    };
+
+    const rows = completeRows.map(d => `
+        <tr>
+            <td>${d.chemical_formula || 'null'}</td>
+            <td>${d.crystal_structure || 'null'}</td>
+            <td>${synthesizedText(d)}</td>
+            <td>${formatRangeCell(d.tc, 'K')}</td>
+            <td>${formatRangeCell(d.tc_press, 'GPa')}</td>
+            <td>${formatDataCell(d.lambda_val)}</td>
+            <td>${formatDataCell(d.omega_log)}</td>
+            <td>${formatDataCell(d.n_ef)}</td>
+        </tr>
+    `).join('');
+
+    return `
+        <div class="table-responsive mt-1 mb-2">
+            <table class="table table-sm table-bordered align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>${I18N.t('compound.chemical_formula')}</th>
+                        <th>${I18N.t('compound.crystal_structure')}</th>
+                        <th>${I18N.t('compound.is_experimental')}</th>
+                        <th>${I18N.t('compound.superconducting_temp')}</th>
+                        <th>${I18N.t('compound.superconducting_pressure')}</th>
+                        <th>λ</th>
+                        <th>ω_log</th>
+                        <th>N(E_F)</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>
+    `;
 }
 
 // 初始化
@@ -98,14 +173,14 @@ async function loadCompoundInfo() {
         const response = await fetch(`/api/compounds/${elementSymbols}`);
         if (response.ok) {
             const data = await response.json();
-            document.getElementById('compound-title').textContent = `${data.element_symbols} 系统超导体`;
+            document.getElementById('compound-title').textContent = `${data.element_symbols} ${I18N.t('compound.system_sc')}`;
             if (viewMode === 'only') {
                 updateModeSubtitle(`当前组合共收录 ${data.paper_count} 篇文献`);
             } else {
                 updateModeSubtitle('正在汇总相关组合文献…');
             }
         } else {
-            document.getElementById('compound-title').textContent = '元素组合不存在';
+            document.getElementById('compound-title').textContent = I18N.t('compound.combination_not_found');
         }
     } catch (error) {
         console.error('加载元素组合信息失败:', error);
@@ -113,43 +188,74 @@ async function loadCompoundInfo() {
 }
 
 // 加载文献列表
-async function loadPapers(searchParams = {}) {
+async function loadPapers(searchParams = null) {
     const container = document.getElementById('papers-container');
     const paginationContainer = document.getElementById('pagination-container');
     container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-3">加载中...</p></div>';
-    if (paginationContainer) {
-        paginationContainer.innerHTML = '';
+    if (searchParams !== null) {
+        Object.keys(currentSearchParams).forEach(key => delete currentSearchParams[key]);
+        Object.assign(currentSearchParams, searchParams);
     }
 
-    currentSearchParams = { ...searchParams };
+    if (currentDatabase === 'alexandria') {
+        await loadAlexandriaMaterials(container);
+        return;
+    }
+
+    if (currentDatabase === 'htsc2025') {
+        await loadHTSC2025Materials(container);
+        return;
+    }
 
     try {
         const queryString = buildQueryString(currentSearchParams);
         if (viewMode === 'only') {
-            const result = await fetchPapersForCombination(elementSymbols, queryString);
-            const totalPages = Math.max(1, Math.ceil(result.totalCount / PAPERS_PER_PAGE));
-            if (result.totalCount > 0 && currentPage > totalPages) {
-                currentPage = totalPages;
-                loadPapers(currentSearchParams);
-                return;
-            }
-            renderSingleCombination(container, result.papers);
-            renderPagination(result.totalCount);
-            updateModeSubtitle(`共 ${result.totalCount} 篇文献，第 ${currentPage}/${totalPages} 页`);
+            const payload = await fetchPapersForCombination(elementSymbols, queryString);
+            renderSingleCombination(container, payload);
+            updateModeSubtitle(`共 ${payload.total} 篇文献`);
+            renderPagination(payload, 'paper');
         } else {
             await renderMultipleCombinations(container, queryString);
         }
     } catch (error) {
         console.error('加载文献失败:', error);
         container.innerHTML = `<div class="alert alert-danger">加载失败：${error.message}</div>`;
+        clearPaginationUi();
     }
+}
+
+// 数据库切换
+function onDatabaseChange() {
+    currentDatabase = document.getElementById('db-select').value;
+    const isLocal = currentDatabase === 'local';
+
+    // 显示/隐藏对应筛选控件
+    document.querySelectorAll('.alexandria-filter').forEach(el => el.style.display = isLocal ? 'none' : '');
+    document.getElementById('export-dropdown').style.display = isLocal ? '' : 'none';
+
+    // 审核状态筛选只对本地数据库有效
+    const reviewGroup = document.querySelector('.btn-group[role="group"]');
+    if (reviewGroup) {
+        reviewGroup.closest('.col-auto').style.display = isLocal ? '' : 'none';
+    }
+
+    resetCurrentPage();
+    loadPapers(currentSearchParams);
 }
 
 // 审核状态筛选
 function filterByReviewStatus(status) {
     currentReviewStatus = status;
-    currentPage = 1;
-    loadPapers();
+    resetCurrentPage();
+    loadPapers(currentSearchParams);
+}
+
+function getActivePaginationState() {
+    return viewMode === 'only' ? onlyModePagination : multiModePagination;
+}
+
+function resetCurrentPage() {
+    getActivePaginationState().page = 1;
 }
 
 function buildQueryString(searchParams = {}) {
@@ -158,9 +264,398 @@ function buildQueryString(searchParams = {}) {
     if (searchParams.year_min) params.append('year_min', searchParams.year_min);
     if (searchParams.year_max) params.append('year_max', searchParams.year_max);
     if (currentReviewStatus !== 'all') params.append('review_status', currentReviewStatus);
-    params.append('limit', String(PAPERS_PER_PAGE));
-    params.append('offset', String((currentPage - 1) * PAPERS_PER_PAGE));
+    const pagination = getActivePaginationState();
+    params.append('limit', pagination.pageSize);
+    params.append('offset', (pagination.page - 1) * pagination.pageSize);
     return params.toString();
+}
+
+// Alexandria 搜索和渲染
+async function loadAlexandriaMaterials(container) {
+    const elements = getSelectedElementsFromPath();
+    const pagination = getActivePaginationState();
+
+    try {
+        const body = {
+            elements,
+            mode: viewMode,
+            min_tc: parseFloat(document.getElementById('min-tc-input').value) || null,
+            stable_only: document.getElementById('stable-only-input').checked,
+            limit: pagination.pageSize,
+            offset: (pagination.page - 1) * pagination.pageSize,
+        };
+
+        const response = await fetch('/api/alexandria/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+
+        if (!response.ok) {
+            throw new Error((await response.json()).detail || '查询失败');
+        }
+
+        const data = await response.json();
+        const items = data.items || [];
+
+        // 更新分页状态
+        pagination.total = data.total || 0;
+        pagination.totalPages = Math.ceil(pagination.total / pagination.pageSize) || 1;
+
+        if (items.length === 0) {
+            container.innerHTML = `<div class="alert alert-warning text-center"><p class="mb-0">Alexandria 数据库中未找到匹配的电声耦合材料数据</p></div>`;
+            clearPaginationUi();
+            return;
+        }
+
+        // 渲染材料卡片
+        container.innerHTML = items.map(item => renderAlexandriaCard(item)).join('');
+
+        // 更新标题显示数据库名和数量
+        const subtitleEl = document.getElementById('compound-subtitle');
+        if (subtitleEl) {
+            subtitleEl.innerHTML = `${I18N.t('compound.alexandria_title')} · ${I18N.t(viewMode === 'only' ? 'index.mode_only' : viewMode === 'contains' ? 'index.mode_contains' : 'index.mode_combination')} · ${data.total} ${I18N.t('compound.material_count')}`;
+        }
+
+        // 渲染分页
+        renderAlexandriaPagination(data);
+    } catch (error) {
+        console.error('Alexandria 查询失败:', error);
+        container.innerHTML = `<div class="alert alert-danger">Alexandria 查询失败：${error.message}</div>`;
+        clearPaginationUi();
+    }
+}
+
+function renderAlexandriaCard(item) {
+    const elements = item.elements || [];
+    const elementsText = elements.join(' · ');
+    const tcStr = item.tc_max != null ? `${item.tc_max} K` : '—';
+    const lambdaStr = item.lambda_val != null ? item.lambda_val.toFixed(4) : '—';
+    const spgStr = item.spg != null ? item.spg : '—';
+    const nsitesStr = item.nsites != null ? item.nsites : '—';
+    const bgStr = item.band_gap != null ? `${item.band_gap.toFixed(3)} eV` : '—';
+    const dosStr = item.dos_ef != null ? item.dos_ef.toFixed(3) : '—';
+    const stabilityBadge = item.imag
+        ? `<span class="badge bg-warning">${I18N.t('compound.unstable')}</span>`
+        : `<span class="badge bg-success">${I18N.t('compound.stable')}</span>`;
+
+    return `
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h5 class="card-title mb-1">${item.formula || '未知'}</h5>
+                        <p class="text-muted small mb-1">${elementsText} · mat_id: ${item.mat_id} · ${stabilityBadge}</p>
+                    </div>
+                    <div class="text-end">
+                        <span class="fs-4 fw-bold text-primary">${tcStr}</span>
+                        <br><small class="text-muted">Tc 最大</small>
+                    </div>
+                </div>
+                <hr class="my-2">
+                <div class="row text-center small">
+                    <div class="col"><strong>λ</strong><br>${lambdaStr}</div>
+                    <div class="col"><strong>空间群</strong><br>${spgStr}</div>
+                    <div class="col"><strong>原子数</strong><br>${nsitesStr}</div>
+                    <div class="col"><strong>带隙</strong><br>${bgStr}</div>
+                    <div class="col"><strong>N(Ef)</strong><br>${dosStr}</div>
+                </div>
+                <div class="mt-2">
+                    <button class="btn btn-outline-primary btn-sm" onclick="toggleAlexandriaDetail('${item.mat_id}')">
+                        查看原始数据
+                    </button>
+                    <div id="alex-detail-${item.mat_id}" class="mt-2" style="display: none;">
+                        <div class="text-center text-muted small py-2">
+                            <div class="spinner-border spinner-border-sm"></div> 加载中...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderAlexandriaPagination(data) {
+    const summaryEl = document.getElementById('papers-summary');
+    const paginationEl = document.getElementById('papers-pagination');
+    if (!summaryEl || !paginationEl) return;
+
+    const pagination = getActivePaginationState();
+    const total = data.total || 0;
+    const pageSize = pagination.pageSize;
+    const totalPages = Math.ceil(total / pageSize) || 1;
+    const page = pagination.page;
+
+    if (total === 0) {
+        clearPaginationUi();
+        return;
+    }
+
+    const start = (page - 1) * pageSize + 1;
+    const end = Math.min(start + (data.items ? data.items.length : 0) - 1, total);
+    summaryEl.style.display = 'block';
+    summaryEl.textContent = I18N.t('compound.page_material_info', { start, end, total });
+
+    if (totalPages <= 1) {
+        paginationEl.innerHTML = '';
+        paginationEl.style.display = 'none';
+        return;
+    }
+
+    paginationEl.style.display = 'block';
+    paginationEl.innerHTML = `
+        <nav aria-label="分页导航">
+            <ul class="pagination justify-content-center flex-wrap mb-0">
+                <li class="page-item ${data.has_prev ? '' : 'disabled'}">
+                    <button class="page-link" type="button" onclick="changeAlexandriaPage(${page - 1})" ${data.has_prev ? '' : 'disabled'}>${I18N.t('compound.prev_page')}</button>
+                </li>
+                ${renderAlexandriaPageNumbers(page, totalPages)}
+                <li class="page-item ${data.has_next ? '' : 'disabled'}">
+                    <button class="page-link" type="button" onclick="changeAlexandriaPage(${page + 1})" ${data.has_next ? '' : 'disabled'}>${I18N.t('compound.next_page')}</button>
+                </li>
+            </ul>
+        </nav>
+    `;
+}
+
+function renderAlexandriaPageNumbers(current, total) {
+    const maxVisible = 5;
+    const half = Math.floor(maxVisible / 2);
+    let start = Math.max(1, current - half);
+    let end = Math.min(total, start + maxVisible - 1);
+    start = Math.max(1, end - maxVisible + 1);
+    let html = '';
+    for (let p = start; p <= end; p++) {
+        html += `<li class="page-item ${p === current ? 'active' : ''}">
+            <button class="page-link" type="button" onclick="changeAlexandriaPage(${p})">${p}</button>
+        </li>`;
+    }
+    return html;
+}
+
+function changeAlexandriaPage(page) {
+    const pagination = getActivePaginationState();
+    if (page < 1 || page === pagination.page) return;
+    pagination.page = page;
+    loadPapers(currentSearchParams);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function toggleAlexandriaDetail(matId) {
+    const detailEl = document.getElementById(`alex-detail-${matId}`);
+    if (!detailEl) return;
+
+    if (detailEl.style.display === 'none') {
+        detailEl.style.display = 'block';
+        // 查询原始数据
+        fetch(`/api/alexandria/material/${matId}`)
+            .then(r => r.json())
+            .then(data => {
+                const tc = data.tc || {};
+                const html = `
+                    <div class="bg-light p-3 rounded small">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong>λ:</strong> ${(tc.lambda || '—').toFixed ? tc.lambda.toFixed(4) : (tc.lambda || '—')}<br>
+                                <strong>ω_log:</strong> ${tc.wlog != null ? tc.wlog.toFixed(2) + ' K' : '—'}<br>
+                                <strong>μ*:</strong> ${tc.mustr ? '[' + tc.mustr.join(', ') + ']' : '—'}<br>
+                            </div>
+                            <div class="col-md-6">
+                                <strong>Tc McMillan:</strong> ${tc.TcMcMillan ? '[' + tc.TcMcMillan.join(', ') + ']' : '—'}<br>
+                                <strong>Tc Allen-Dynes:</strong> ${tc.TcAllenDynes ? '[' + tc.TcAllenDynes.join(', ') + ']' : '—'}<br>
+                                <strong>能量:</strong> ${data.energy_total != null ? data.energy_total.toFixed(4) + ' eV' : '—'}<br>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                detailEl.innerHTML = html;
+            })
+            .catch(err => {
+                detailEl.innerHTML = `<div class="text-danger small">加载失败: ${err.message}</div>`;
+            });
+    } else {
+        detailEl.style.display = 'none';
+    }
+}
+
+// HTSC-2025 搜索和渲染
+async function loadHTSC2025Materials(container) {
+    const elements = getSelectedElementsFromPath();
+    const pagination = getActivePaginationState();
+
+    try {
+        const body = {
+            elements,
+            mode: viewMode,
+            min_tc: parseFloat(document.getElementById('min-tc-input').value) || null,
+            limit: pagination.pageSize,
+            offset: (pagination.page - 1) * pagination.pageSize,
+        };
+
+        const response = await fetch('/api/htsc2025/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+
+        if (!response.ok) {
+            throw new Error((await response.json()).detail || '查询失败');
+        }
+
+        const data = await response.json();
+        const items = data.items || [];
+
+        pagination.total = data.total || 0;
+        pagination.totalPages = Math.ceil(pagination.total / pagination.pageSize) || 1;
+
+        if (items.length === 0) {
+            container.innerHTML = `<div class="alert alert-warning text-center"><p class="mb-0">HTSC-2025 数据集中未找到匹配的材料</p></div>`;
+            clearPaginationUi();
+            return;
+        }
+
+        container.innerHTML = items.map(item => renderHTSC2025Card(item)).join('');
+
+        const subtitleEl = document.getElementById('compound-subtitle');
+        if (subtitleEl) {
+            subtitleEl.innerHTML = `${I18N.t('compound.htsc2025_title')} · ${I18N.t(viewMode === 'only' ? 'index.mode_only' : viewMode === 'contains' ? 'index.mode_contains' : 'index.mode_combination')} · ${data.total} ${I18N.t('compound.material_count')}`;
+        }
+
+        renderHTSC2025Pagination(data);
+    } catch (error) {
+        console.error('HTSC-2025 查询失败:', error);
+        container.innerHTML = `<div class="alert alert-danger">HTSC-2025 查询失败：${error.message}</div>`;
+        clearPaginationUi();
+    }
+}
+
+function renderHTSC2025Card(item) {
+    const cc = item.composition || {};
+    const compStr = Object.entries(cc).map(([el, n]) => `${el}${n > 1 ? '<sub>' + n.toFixed(1).replace(/\.0$/, '') + '</sub>' : ''}`).join('');
+    const tcColor = item.tc > 77 ? 'text-danger fw-bold' : item.tc > 30 ? 'text-warning' : 'text-info';
+
+    return `
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h5 class="card-title mb-1">${item.formula || item.name}</h5>
+                        <p class="text-muted small mb-1">${compStr} · ${item.class || '未知类别'} · ${item.elements.join(' · ')}</p>
+                    </div>
+                    <div class="text-end">
+                        <span class="fs-4 fw-bold ${tcColor}">${item.tc} K</span>
+                        <br><small class="text-muted">Tc</small>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <button class="btn btn-outline-primary btn-sm" onclick="toggleCIFDetail('${item.name}')">
+                        ${I18N.t('compound.view_cif')}
+                    </button>
+                    <div id="cif-detail-${item.name.replace(/[^a-zA-Z0-9-]/g, '_')}" class="mt-2" style="display: none;">
+                        <pre class="bg-light p-3 rounded small" style="max-height: 400px; overflow-y: auto;"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderHTSC2025Pagination(data) {
+    const summaryEl = document.getElementById('papers-summary');
+    const paginationEl = document.getElementById('papers-pagination');
+    if (!summaryEl || !paginationEl) return;
+
+    const pagination = getActivePaginationState();
+    const total = data.total || 0;
+    const pageSize = pagination.pageSize;
+    const totalPages = Math.ceil(total / pageSize) || 1;
+    const page = pagination.page;
+
+    if (total === 0) { clearPaginationUi(); return; }
+
+    const start = (page - 1) * pageSize + 1;
+    const end = Math.min(start + (data.items ? data.items.length : 0) - 1, total);
+    summaryEl.style.display = 'block';
+    summaryEl.textContent = I18N.t('compound.page_material_info', { start, end, total });
+
+    if (totalPages <= 1) { paginationEl.innerHTML = ''; paginationEl.style.display = 'none'; return; }
+
+    paginationEl.style.display = 'block';
+    paginationEl.innerHTML = `
+        <nav aria-label="分页导航">
+            <ul class="pagination justify-content-center flex-wrap mb-0">
+                <li class="page-item ${data.has_prev ? '' : 'disabled'}">
+                    <button class="page-link" type="button" onclick="changePage('htsc2025', ${page - 1})" ${data.has_prev ? '' : 'disabled'}>${I18N.t('compound.prev_page')}</button>
+                </li>
+                <li class="page-item ${data.has_next ? '' : 'disabled'}">
+                    <button class="page-link" type="button" onclick="changePage('htsc2025', ${page + 1})" ${data.has_next ? '' : 'disabled'}>${I18N.t('compound.next_page')}</button>
+                </li>
+            </ul>
+        </nav>
+    `;
+}
+
+function toggleCIFDetail(name) {
+    const safeId = name.replace(/[^a-zA-Z0-9-]/g, '_');
+    const detailEl = document.getElementById(`cif-detail-${safeId}`);
+    if (!detailEl) return;
+
+    if (detailEl.style.display === 'none') {
+        detailEl.style.display = 'block';
+        fetch(`/api/htsc2025/detail/${encodeURIComponent(name)}`)
+            .then(r => r.json())
+            .then(data => {
+                const pre = detailEl.querySelector('pre');
+                if (pre) pre.textContent = data.cif || '(无 CIF 数据)';
+            })
+            .catch(err => {
+                detailEl.innerHTML = `<div class="text-danger small">加载失败: ${err.message}</div>`;
+            });
+    } else {
+        detailEl.style.display = 'none';
+    }
+}
+
+function normalizePaperListPayload(data) {
+    if (Array.isArray(data)) {
+        return {
+            items: data,
+            total: data.length,
+            page: 1,
+            page_size: data.length,
+            total_pages: data.length > 0 ? 1 : 0,
+            has_prev: false,
+            has_next: false,
+        };
+    }
+
+    return {
+        items: Array.isArray(data?.items) ? data.items : [],
+        total: Number.isFinite(data?.total) ? data.total : (Array.isArray(data?.items) ? data.items.length : 0),
+        page: Number.isFinite(data?.page) ? data.page : 1,
+        page_size: Number.isFinite(data?.page_size) ? data.page_size : ONLY_MODE_PAGE_SIZE,
+        total_pages: Number.isFinite(data?.total_pages) ? data.total_pages : 0,
+        has_prev: Boolean(data?.has_prev),
+        has_next: Boolean(data?.has_next),
+    };
+}
+
+function groupPapersByCompound(papers) {
+    const grouped = new Map();
+    for (const paper of papers) {
+        const key = paper.compound_symbols || paper.chemical_formula || '未知组合';
+        if (!grouped.has(key)) {
+            grouped.set(key, {
+                combo: {
+                    element_symbols: key,
+                    element_list: key.split('-').filter(Boolean),
+                },
+                papers: [],
+            });
+        }
+        grouped.get(key).papers.push(paper);
+    }
+    return Array.from(grouped.values()).sort((a, b) => a.combo.element_symbols.localeCompare(b.combo.element_symbols));
 }
 
 async function fetchPapersForCombination(symbols, queryString) {
@@ -170,148 +665,161 @@ async function fetchPapersForCombination(symbols, queryString) {
     if (!response.ok) {
         throw new Error(data.detail || '加载失败');
     }
-    return {
-        papers: data,
-        totalCount: parseInt(response.headers.get('X-Total-Count') || String(data.length), 10)
-    };
+    return normalizePaperListPayload(data);
 }
 
-function renderSingleCombination(container, papers) {
-    if (!papers || papers.length === 0) {
+function renderSingleCombination(container, payload) {
+    const papers = Array.isArray(payload?.items) ? payload.items : [];
+    if (papers.length === 0) {
         container.innerHTML = renderEmptyState();
         return;
     }
     container.innerHTML = papers.map(paper => renderPaperCard(paper)).join('');
 }
 
-async function renderMultipleCombinations(container, queryString) {
-    const paginationContainer = document.getElementById('pagination-container');
-    if (paginationContainer) {
-        paginationContainer.innerHTML = '';
+function clearPaginationUi() {
+    const summaryEl = document.getElementById('papers-summary');
+    const paginationEl = document.getElementById('papers-pagination');
+    if (summaryEl) {
+        summaryEl.innerHTML = '';
+        summaryEl.style.display = 'none';
     }
-    const result = await fetchPapersByElements(viewMode, queryString);
-    const totalPages = Math.max(1, Math.ceil(result.totalCount / PAPERS_PER_PAGE));
-    if (result.totalCount > 0 && currentPage > totalPages) {
-        currentPage = totalPages;
-        loadPapers(currentSearchParams);
+    if (paginationEl) {
+        paginationEl.innerHTML = '';
+        paginationEl.style.display = 'none';
+    }
+}
+
+function renderPagination(payload, mode = 'paper') {
+    const summaryEl = document.getElementById('papers-summary');
+    const paginationEl = document.getElementById('papers-pagination');
+    if (!summaryEl || !paginationEl) return;
+
+    const pagination = mode === 'paper' ? getActivePaginationState() : multiModePagination;
+    pagination.page = payload.page || 1;
+    pagination.pageSize = payload.page_size || ONLY_MODE_PAGE_SIZE;
+    pagination.total = payload.total || 0;
+    pagination.totalPages = payload.total_pages || 0;
+
+    if (pagination.total === 0) {
+        clearPaginationUi();
         return;
     }
 
-    if (!result.papers || result.papers.length === 0) {
+    const start = (pagination.page - 1) * pagination.pageSize + 1;
+    const itemCount = Array.isArray(payload.items) ? payload.items.length : 0;
+    const end = Math.min(start + itemCount - 1, pagination.total);
+    summaryEl.style.display = 'block';
+    summaryEl.textContent = mode === 'paper'
+        ? `第 ${start}-${end} 条，共 ${pagination.total} 条`
+        : `第 ${start}-${end} 个组合，共 ${pagination.total} 个组合`;
+
+    if (pagination.totalPages <= 1) {
+        paginationEl.innerHTML = '';
+        paginationEl.style.display = 'none';
+        return;
+    }
+
+    paginationEl.style.display = 'block';
+    paginationEl.innerHTML = `
+        <nav aria-label="分页导航">
+            <ul class="pagination justify-content-center flex-wrap mb-0">
+                <li class="page-item ${payload.has_prev ? '' : 'disabled'}">
+                    <button class="page-link" type="button" onclick="changePage('${mode}', ${pagination.page - 1})" ${payload.has_prev ? '' : 'disabled'}>${I18N.t('compound.prev_page')}</button>
+                </li>
+                ${renderPageNumberItems(pagination.page, pagination.totalPages, mode)}
+                <li class="page-item ${payload.has_next ? '' : 'disabled'}">
+                    <button class="page-link" type="button" onclick="changePage('${mode}', ${pagination.page + 1})" ${payload.has_next ? '' : 'disabled'}>${I18N.t('compound.next_page')}</button>
+                </li>
+            </ul>
+        </nav>
+    `;
+}
+
+function renderPageNumberItems(currentPage, totalPages, mode = 'paper') {
+    const maxVisiblePages = 5;
+    const halfWindow = Math.floor(maxVisiblePages / 2);
+    let start = Math.max(1, currentPage - halfWindow);
+    let end = Math.min(totalPages, start + maxVisiblePages - 1);
+    start = Math.max(1, end - maxVisiblePages + 1);
+
+    let html = '';
+    for (let page = start; page <= end; page++) {
+        html += `
+            <li class="page-item ${page === currentPage ? 'active' : ''}">
+                <button class="page-link" type="button" onclick="changePage('${mode}', ${page})">${page}</button>
+            </li>
+        `;
+    }
+    return html;
+}
+
+function changePage(mode, page) {
+    const pagination = mode === 'paper' ? getActivePaginationState() : multiModePagination;
+    pagination.page = page;
+    loadPapers(currentSearchParams);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function renderMultipleCombinations(container, queryString) {
+    const payload = await fetchPapersByMode(viewMode);
+    const papers = payload.items || [];
+    if (papers.length === 0) {
         container.innerHTML = `
             <div class="alert alert-warning text-center">
                 <p class="mb-0">当前筛选条件下没有可展示的文献，请尝试切换筛选模式或放宽筛选条件。</p>
             </div>
         `;
         updateModeSubtitle('暂无符合条件的文献');
+        clearPaginationUi();
         return;
     }
 
-    const sectionsMap = new Map();
-    result.papers.forEach(paper => {
-        const key = paper.compound_element_symbols;
-        if (!sectionsMap.has(key)) {
-            sectionsMap.set(key, {
-                combo: {
-                    element_symbols: paper.compound_element_symbols,
-                    element_list: paper.compound_element_list || []
-                },
-                papers: []
-            });
-        }
-        sectionsMap.get(key).papers.push(paper);
-    });
-
-    const sections = Array.from(sectionsMap.values());
-    renderPagination(result.totalCount);
-    updateModeSubtitle(`共 ${result.totalCount} 篇文献，第 ${currentPage}/${totalPages} 页，涉及 ${sections.length} 个组合`);
+    const sections = groupPapersByCompound(papers);
+    updateModeSubtitle(`当前页共 ${papers.length} 篇文献，总计 ${payload.total} 篇`);
     container.innerHTML = sections.map(section => renderCombinationSection(section)).join('');
+    renderPagination(payload, 'paper');
 }
 
-async function fetchPapersByElements(mode, queryString) {
-    const symbols = getSelectedElementsFromPath().join('-');
-    const params = new URLSearchParams(queryString);
-    params.append('elements', symbols);
-    params.append('mode', mode);
-    const response = await fetch(`/api/papers/by-elements?${params.toString()}`);
+async function fetchPapersByMode(mode) {
+    const elements = getSelectedElementsFromPath();
+    const pagination = multiModePagination;
+    const body = {
+        elements,
+        mode,
+        keyword: currentSearchParams.keyword || null,
+        year_min: currentSearchParams.year_min || null,
+        year_max: currentSearchParams.year_max || null,
+        review_status: currentReviewStatus !== 'all' ? currentReviewStatus : null,
+        limit: pagination.pageSize,
+        offset: (pagination.page - 1) * pagination.pageSize,
+        sort_by: 'year',
+        sort_order: 'desc',
+    };
+
+    const response = await fetch('/api/papers/search-by-mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
     const data = await response.json();
     if (!response.ok) {
-        throw new Error(data.detail || '加载失败');
+        throw new Error(data.detail || '文献检索失败');
     }
-    return {
-        papers: data,
-        totalCount: parseInt(response.headers.get('X-Total-Count') || String(data.length), 10)
-    };
-}
-
-function renderPagination(totalCount) {
-    const container = document.getElementById('pagination-container');
-    if (!container) return;
-
-    const totalPages = Math.ceil(totalCount / PAPERS_PER_PAGE);
-    if (totalPages <= 1) {
-        container.innerHTML = '';
-        return;
-    }
-
-    const createItem = (label, page, disabled = false, active = false) => `
-        <li class="page-item ${disabled ? 'disabled' : ''} ${active ? 'active' : ''}">
-            <button class="page-link" type="button" ${disabled ? 'disabled' : ''} onclick="goToPage(${page})">${label}</button>
-        </li>
-    `;
-
-    const items = [];
-    items.push(createItem('上一页', currentPage - 1, currentPage === 1));
-
-    const startPage = Math.max(1, currentPage - 2);
-    const endPage = Math.min(totalPages, currentPage + 2);
-
-    if (startPage > 1) {
-        items.push(createItem('1', 1, false, currentPage === 1));
-        if (startPage > 2) {
-            items.push('<li class="page-item disabled"><span class="page-link">...</span></li>');
-        }
-    }
-
-    for (let page = startPage; page <= endPage; page += 1) {
-        items.push(createItem(String(page), page, false, page === currentPage));
-    }
-
-    if (endPage < totalPages) {
-        if (endPage < totalPages - 1) {
-            items.push('<li class="page-item disabled"><span class="page-link">...</span></li>');
-        }
-        items.push(createItem(String(totalPages), totalPages, false, currentPage === totalPages));
-    }
-
-    items.push(createItem('下一页', currentPage + 1, currentPage === totalPages));
-
-    container.innerHTML = `
-        <nav aria-label="文献分页">
-            <ul class="pagination mb-0">
-                ${items.join('')}
-            </ul>
-        </nav>
-    `;
-}
-
-function goToPage(page) {
-    if (page < 1 || page === currentPage) {
-        return;
-    }
-    currentPage = page;
-    loadPapers(currentSearchParams);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    return normalizePaperListPayload(data);
 }
 
 async function fetchCombinationList(mode) {
     const elements = getSelectedElementsFromPath();
+    const pagination = multiModePagination;
     const response = await fetch('/api/compounds/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             elements,
-            mode
+            mode,
+            limit: pagination.pageSize,
+            offset: (pagination.page - 1) * pagination.pageSize,
         })
     });
     const data = await response.json();
@@ -326,13 +834,13 @@ function renderCombinationSection(section) {
     const papers = section.papers || [];
     const title = combo.element_symbols;
     const elementsText = combo.element_list.join(' · ');
-    const countBadge = `<span class="badge bg-secondary ms-2">${papers.length} 篇</span>`;
+    const countBadge = `<span class="badge bg-secondary ms-2">${papers.length} ${I18N.t('index.chart_papers')}</span>`;
 
     let content = '';
     if (section.error) {
         content = `<div class="alert alert-danger">加载失败：${section.error}</div>`;
     } else if (papers.length === 0) {
-        content = renderEmptyState(`组合 ${title} 暂无符合条件的文献`);
+        content = renderEmptyState(`${I18N.t('compound.system_sc')} ${title} ${I18N.t('compound.no_papers')}`);
     } else {
         content = papers.map(paper => renderPaperCard(paper)).join('');
     }
@@ -352,9 +860,9 @@ function renderCombinationSection(section) {
 
 function renderEmptyState(customText) {
     const statusMap = {
-        'approved': '已通过',
-        'unreviewed': '未审核',
-        'rejected': '已拒绝'
+        'approved': I18N.t('compound.review_status_approved'),
+        'unreviewed': I18N.t('compound.review_status_unreviewed'),
+        'rejected': I18N.t('compound.review_status_rejected')
     };
     const statusText = statusMap[currentReviewStatus] || '';
     const message = customText || `这个元素组合还没有${statusText}文献记录${currentReviewStatus === 'all' ? '，<strong>成为第一个贡献者吧！</strong>' : ''}`;
@@ -379,18 +887,8 @@ function renderPaperCard(paper) {
     // 物理数据处理
     const mainData = paper.data && paper.data.length > 0 ? paper.data[0] : null;
     const tcSummary = mainData ? `${mainData.tc} K` : '未知';
-    
-    // 渲染所有物理数据点
-    const physicalDataHtml = paper.data && paper.data.length > 0 ? 
-        paper.data.map(d => `
-            <div class="mb-1">
-                <span class="badge bg-primary">Tc: ${d.tc} K</span>
-                ${d.pressure !== null && d.pressure !== undefined ? `<span class="badge bg-secondary">P: ${d.pressure} GPa</span>` : ''}
-                ${d.lambda_val !== null && d.lambda_val !== undefined ? `<span class="badge bg-info">λ: ${d.lambda_val}</span>` : ''}
-                ${d.omega_log !== null && d.omega_log !== undefined ? `<span class="badge bg-info">ω_log: ${d.omega_log}</span>` : ''}
-                ${d.n_ef !== null && d.n_ef !== undefined ? `<span class="badge bg-info">N(E_F): ${d.n_ef}</span>` : ''}
-            </div>
-        `).join('') : '<span class="text-muted">无物理参数数据</span>';
+
+    const physicalDataHtml = renderPhysicalDataTable(paper.data);
 
     // 标签映射
     const articleTypeBadge = paper.article_type === 'theoretical' ?
@@ -448,7 +946,6 @@ function renderPaperCard(paper) {
                     </div>
                 </div>
 
-                <!-- 详细信息（默认隐藏） -->
                 <div id="details-${paper.id}" class="paper-details mt-3" style="display: none;">
                     <div class="row">
                         <!-- 左侧：详细文献信息 -->
@@ -461,12 +958,6 @@ function renderPaperCard(paper) {
                                 <strong>作者:</strong> ${authors.join(', ')}<br>
                                 <strong>期刊:</strong> ${paper.journal || '未知'} ${paper.volume ? `Vol. ${paper.volume}` : ''}
                                 ${paper.pages ? `p. ${paper.pages}` : ''} (${paper.year || '未知年份'})<br>
-                                ${paper.chemical_formula ? `<strong>化学式:</strong> ${paper.chemical_formula}<br>` : ''}
-                                ${paper.crystal_structure ? `<strong>晶体结构:</strong> ${paper.crystal_structure}<br>` : ''}
-                                <strong>物理参数:</strong> 
-                                <div class="mt-1 mb-2">
-                                    ${physicalDataHtml}
-                                </div>
                                 <strong>DOI:</strong> <code>${paper.doi}</code>
                                 <div class="mt-2">
                                     <button class="btn btn-outline-secondary btn-sm" type="button" onclick="downloadPaperRIS(${paper.id})">
@@ -476,11 +967,16 @@ function renderPaperCard(paper) {
                             </p>
 
                             ${paper.abstract ? `
-                                <details>
-                                    <summary class="text-primary" style="cursor: pointer;">查看摘要</summary>
-                                    <p class="mt-2">${paper.abstract}</p>
-                                </details>
+                                <div class="mb-3">
+                                    <strong>摘要:</strong>
+                                    <p class="mt-2 mb-0">${paper.abstract}</p>
+                                </div>
                             ` : ''}
+
+                            <div class="mb-2">
+                                <strong>物理参数:</strong>
+                                ${physicalDataHtml}
+                            </div>
 
                             <div class="mt-3 text-muted small">
                                 贡献者: ${paper.contributor_name} (${paper.contributor_affiliation}) |
@@ -488,11 +984,11 @@ function renderPaperCard(paper) {
                             </div>
                         </div>
 
-                        <!-- 右侧：第一张大图 -->
+                        <!-- 右侧：第一张大图（点击展开后才加载） -->
                         ${paper.image_count > 0 ? `
                         <div class="col-md-4">
-                            <img src="/api/papers/${paper.id}/images/1"
-                                 class="img-fluid paper-main-image"
+                            <img data-src="/api/papers/${paper.id}/images/1"
+                                 class="img-fluid paper-main-image lazy-image"
                                  onclick="viewImage('/api/papers/${paper.id}/images/1')"
                                  alt="主图"
                                  style="cursor: pointer; border-radius: 8px; max-height: 400px; width: 100%; object-fit: contain; border: 2px solid #dee2e6;">
@@ -515,28 +1011,39 @@ function renderPaperCard(paper) {
     `;
 }
 
-// 切换文献详情显示
+// 切换文献详情显示（点击展开后才加载图片）
 function togglePaperDetails(paperId) {
     const details = document.getElementById(`details-${paperId}`);
     const chevron = document.getElementById(`chevron-${paperId}`);
 
+    if (!details || !chevron) {
+        return;
+    }
+
     if (details.style.display === 'none') {
         details.style.display = 'block';
         chevron.textContent = '▲';
+
+        // 展开时加载懒加载图片（将 data-src 赋给 src）
+        details.querySelectorAll('.lazy-image').forEach(img => {
+            if (!img.src && img.dataset.src) {
+                img.src = img.dataset.src;
+            }
+        });
     } else {
         details.style.display = 'none';
         chevron.textContent = '▼';
     }
 }
 
-// 渲染其他截图（从第2张开始）
+// 渲染其他截图（从第2张开始，点击展开后才加载）
 function renderOtherImages(paperId, count) {
     if (count <= 1) return '';
 
     let html = '';
     for (let i = 2; i <= count; i++) {
-        html += `<img src="/api/papers/${paperId}/images/${i}?thumbnail=true"
-                      class="paper-image-thumbnail"
+        html += `<img data-src="/api/papers/${paperId}/images/${i}?thumbnail=true"
+                      class="paper-image-thumbnail lazy-image"
                       onclick="viewImage('/api/papers/${paperId}/images/${i}')"
                       alt="截图${i}">`;
     }
@@ -631,7 +1138,7 @@ function searchPapers() {
     if (yearMin) searchParams.year_min = parseInt(yearMin);
     if (yearMax) searchParams.year_max = parseInt(yearMax);
 
-    currentPage = 1;
+    resetCurrentPage();
     loadPapers(searchParams);
 }
 
@@ -640,8 +1147,8 @@ function resetSearch() {
     document.getElementById('keyword-input').value = '';
     document.getElementById('year-min-input').value = '';
     document.getElementById('year-max-input').value = '';
-    currentPage = 1;
-    loadPapers();
+    resetCurrentPage();
+    loadPapers({});
 }
 
 // 处理图片选择
@@ -702,19 +1209,27 @@ function addDataRow() {
     newRow.className = 'data-row card p-3 mb-2 bg-light';
     newRow.innerHTML = `
         <div class="row g-2">
-            <div class="col-md-3">
-                <label class="small">压强 (GPa) *</label>
-                <input type="number" step="any" class="form-control form-control-sm pressure-val" required placeholder="0.0">
-            </div>
-            <div class="col-md-3">
-                <label class="small">Tc (K) *</label>
-                <input type="number" step="any" class="form-control form-control-sm tc-val" required placeholder="0.0">
+            <div class="col-md-2">
+                <label class="small">${I18N.t('compound.chemical_formula')}</label>
+                <input type="text" class="form-control form-control-sm formula-val" placeholder="e.g. YBa₂Cu₃O₇">
             </div>
             <div class="col-md-2">
+                <label class="small">${I18N.t('compound.crystal_structure')}</label>
+                <input type="text" class="form-control form-control-sm structure-val" list="structure-datalist" placeholder="e.g. Perovskite" autocomplete="off">
+            </div>
+            <div class="col-md-2">
+                <label class="small">${I18N.t('compound.pressure_gpa')}</label>
+                <input type="number" step="any" class="form-control form-control-sm pressure-val" required placeholder="0.0">
+            </div>
+            <div class="col-md-2">
+                <label class="small">${I18N.t('compound.tc_k')}</label>
+                <input type="number" step="any" class="form-control form-control-sm tc-val" required placeholder="0.0">
+            </div>
+            <div class="col-md-1">
                 <label class="small">λ</label>
                 <input type="number" step="any" class="form-control form-control-sm lambda-val" placeholder="λ">
             </div>
-            <div class="col-md-2">
+            <div class="col-md-1">
                 <label class="small">ω_log</label>
                 <input type="number" step="any" class="form-control form-control-sm omega-val" placeholder="ω">
             </div>
@@ -792,9 +1307,11 @@ async function submitPaper() {
     dataRows.forEach((row, index) => {
         const pressureInput = row.querySelector('.pressure-val');
         const tcInput = row.querySelector('.tc-val');
-        
+
         const pressure = pressureInput.value;
         const tc = tcInput.value;
+        const formula = row.querySelector('.formula-val').value.trim();
+        const structure = row.querySelector('.structure-val').value.trim();
         const lambda_val = row.querySelector('.lambda-val').value;
         const omega_log = row.querySelector('.omega-val').value;
         const n_ef = row.querySelector('.nef-val').value;
@@ -805,8 +1322,10 @@ async function submitPaper() {
         }
 
         physicalData.push({
-            pressure: parseFloat(pressure),
-            tc: parseFloat(tc),
+            chemical_formula: formula || null,
+            crystal_structure: structure || null,
+            tc_press: [parseFloat(pressure)],
+            tc: [parseFloat(tc)],
             s_factor: calculateSFactor(tc, pressure),
             lambda_val: lambda_val ? parseFloat(lambda_val) : null,
             omega_log: omega_log ? parseFloat(omega_log) : null,
@@ -831,12 +1350,6 @@ async function submitPaper() {
     formData.append('article_type', articleType.value);
     formData.append('superconductor_type', superconductorType);
     formData.append('physical_data', JSON.stringify(physicalData));
-
-    const formula = document.getElementById('formula-input').value.trim();
-    if (formula) formData.append('chemical_formula', formula);
-
-    const structure = document.getElementById('structure-input').value.trim();
-    if (structure) formData.append('crystal_structure', structure);
 
     const contributorName = document.getElementById('contributor-name-input').value.trim();
     if (contributorName) formData.append('contributor_name', contributorName);
@@ -887,25 +1400,36 @@ async function submitPaper() {
             document.getElementById('data-points-container').innerHTML = `
                 <div class="data-row card p-3 mb-2 bg-light">
                     <div class="row g-2">
-                        <div class="col-md-3">
-                            <label class="small">压强 (GPa) *</label>
-                            <input type="number" step="any" class="form-control form-control-sm pressure-val" required placeholder="0.0">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="small">Tc (K) *</label>
-                            <input type="number" step="any" class="form-control form-control-sm tc-val" required placeholder="0.0">
+                        <div class="col-md-2">
+                            <label class="small">${I18N.t('compound.chemical_formula')}</label>
+                            <input type="text" class="form-control form-control-sm formula-val" placeholder="e.g. YBa₂Cu₃O₇">
                         </div>
                         <div class="col-md-2">
+                            <label class="small">${I18N.t('compound.crystal_structure')}</label>
+                            <input type="text" class="form-control form-control-sm structure-val" list="structure-datalist" placeholder="e.g. Perovskite" autocomplete="off">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="small">${I18N.t('compound.pressure_gpa')}</label>
+                            <input type="number" step="any" class="form-control form-control-sm pressure-val" required placeholder="0.0">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="small">${I18N.t('compound.tc_k')}</label>
+                            <input type="number" step="any" class="form-control form-control-sm tc-val" required placeholder="0.0">
+                        </div>
+                        <div class="col-md-1">
                             <label class="small">λ</label>
                             <input type="number" step="any" class="form-control form-control-sm lambda-val" placeholder="λ">
                         </div>
-                        <div class="col-md-2">
+                        <div class="col-md-1">
                             <label class="small">ω_log</label>
                             <input type="number" step="any" class="form-control form-control-sm omega-val" placeholder="ω">
                         </div>
-                        <div class="col-md-2">
+                        <div class="col-md-1">
                             <label class="small">N(Ef)</label>
                             <input type="number" step="any" class="form-control form-control-sm nef-val" placeholder="N">
+                        </div>
+                        <div class="col-md-1 d-flex align-items-end">
+                            <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="removeDataRow(this)">×</button>
                         </div>
                     </div>
                 </div>
@@ -996,3 +1520,9 @@ function downloadFile(content, fileName, contentType) {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 }
+
+// 语言切换时重新加载数据以更新动态文本
+document.addEventListener('langChange', () => {
+    loadCompoundInfo();
+    loadPapers();
+});

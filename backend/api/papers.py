@@ -9,8 +9,9 @@ import json
 from io import BytesIO
 from pathlib import Path
 
-from backend.database import get_db
+from backend.database import get_db, get_image_db
 from backend import crud, schemas
+from backend.models import Paper, PaperData
 from backend.utils.doi_resolver import get_doi_metadata, validate_doi
 from backend.utils.citation import generate_aps_citation, generate_bibtex_citation
 from backend.utils.image_processor import process_image, validate_image as validate_image_util
@@ -33,10 +34,7 @@ LEGACY_SC_TYPE_MAP = {
 
 def normalize_superconductor_type(value: str) -> str:
     """兼容旧数据：将历史分类映射到七大类"""
-    if not value:
-        return "others"
-    normalized = LEGACY_SC_TYPE_MAP.get(value, value)
-    return normalized if normalized in SUPERCONDUCTOR_TYPES else "others"
+    return crud.normalize_superconductor_type(value)
 
 router = APIRouter(prefix="/api/papers", tags=["papers"])
 
@@ -94,8 +92,8 @@ def get_user_ranking(db: Session = Depends(get_db)):
     rankings = []
     
     for user in users:
-        # 统计该用户提交的文献数（与超级管理员管理表逻辑一致）
-        count = db.query(Paper).filter(Paper.contributor_name == user.real_name).count()
+        # 新数据结构不再保存贡献者，保留排行接口形状。
+        count = 0
         rankings.append({"name": user.real_name, "count": count})
     
     # 按提交数降序排序
@@ -120,6 +118,7 @@ async def create_paper(
     notes: Optional[str] = Form(None),
     images: List[UploadFile] = File(default=[]),
     db: Session = Depends(get_db),
+    image_db: Session = Depends(get_image_db),
     current_user: Annotated[schemas.User, Depends(get_current_user)] = None
 ):
     """
@@ -185,8 +184,10 @@ async def create_paper(
                 "abstract": "Metadata manually skipped by administrator."
             }
 
-    # 4. 获取或创建元素组合
-    compound = crud.get_or_create_compound(db, symbols_list)
+    # 4. 获取或创建化合物。新结构以具体化学式为主，未填化学式时退回元素组合。
+    compound = crud.get_or_create_compound(db, symbols_list, chemical_formula)
+    if not compound:
+        raise HTTPException(status_code=400, detail="无法识别化合物")
 
     # 5. 检查文献是否已存在
     if crud.check_paper_exists(db, compound.id, doi):
@@ -237,7 +238,13 @@ async def create_paper(
     )
 
     # 8. 保存物理数据点
-    crud.create_paper_data(db=db, paper_id=paper.id, data_list=data_list)
+    for item in data_list:
+        item.setdefault("compound_id", compound.id)
+        item.setdefault("article_type", article_type)
+        item.setdefault("superconductor_type", superconductor_type)
+        item.setdefault("chemical_formula", chemical_formula)
+        item.setdefault("crystal_structure", crystal_structure)
+    crud.create_paper_data(db=db, paper_id=paper.id, data_list=data_list, compound_id=compound.id)
 
     # 9. 处理并保存截图
     for idx, image_file in enumerate(images_to_process, start=1):
@@ -262,7 +269,7 @@ async def create_paper(
 
         # 保存到数据库
         crud.create_paper_image(
-            db=db,
+            image_db=image_db,
             paper_id=paper.id,
             image_data=compressed_data,
             thumbnail_data=thumbnail_data,
@@ -271,10 +278,7 @@ async def create_paper(
         )
 
     # 9. 返回响应
-    paper_response = schemas.PaperResponse.from_orm(paper)
-    paper_response.image_count = len(images_to_process)
-
-    return paper_response
+    return crud.paper_to_response(db, paper, compound.id, image_db=image_db)
 
 
 @router.post("/batch-upload")
@@ -303,7 +307,9 @@ async def batch_upload_papers(
         for p_data in fragment["papers"]:
             # 获取或创建化合物
             element_list = p_data["element_symbols"].split("-")
-            compound = crud.get_or_create_compound(db, element_list)
+            compound = crud.get_or_create_compound(db, element_list, p_data.get("chemical_formula"))
+            if not compound:
+                continue
             
             # 检查 DOI 是否已存在
             if crud.check_paper_exists(db, compound.id, p_data["doi"]):
@@ -369,7 +375,7 @@ def get_batch_upload_example():
     )
 
 
-@router.get("/compound/{element_symbols}", response_model=List[schemas.PaperResponse])
+@router.get("/compound/{element_symbols}", response_model=schemas.PaperPaginationResponse)
 def get_papers_by_compound(
     element_symbols: str,
     keyword: Optional[str] = None,
@@ -378,28 +384,25 @@ def get_papers_by_compound(
     journal: Optional[str] = None,
     crystal_structure: Optional[str] = None,
     review_status: Optional[str] = None,  # 审核状态筛选 (approved/unreviewed/rejected/modifying)
-    sort_by: str = "created_at",
+    sort_by: str = "year",
     sort_order: str = "desc",
     limit: int = 30,
     offset: int = 0,
-    response: Response = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    image_db: Session = Depends(get_image_db)
 ):
     """
     获取元素组合的文献列表
     """
-    # 解析元素符号
     symbols = element_symbols.split("-")
 
-    # 获取元素组合
-    compound = crud.get_compound_by_symbols(db, symbols)
-    if not compound:
+    compounds = crud.get_compounds_by_symbols(db, symbols, exact=True)
+    if not compounds:
         raise HTTPException(
             status_code=404,
             detail=f"元素组合 {element_symbols} 不存在或暂无文献"
         )
 
-    # 构建搜索参数
     search_params = schemas.PaperSearchParams(
         keyword=keyword,
         year_min=year_min,
@@ -413,66 +416,71 @@ def get_papers_by_compound(
         offset=offset
     )
 
-    # 获取文献列表
-    total_count = crud.count_papers_by_compound(db, compound.id, search_params)
-    papers = crud.get_papers_by_compound(db, compound.id, search_params)
-    if response is not None:
-        response.headers["X-Total-Count"] = str(total_count)
+    compound_ids = [compound.id for compound in compounds]
+    total = crud.get_papers_by_compounds_count(db, compound_ids, search_params)
+    papers = crud.get_papers_by_compounds(db, compound_ids, search_params)
 
-    # 添加图片数量和审核人姓名
-    return [serialize_paper_for_list(db, paper) for paper in papers]
+    page_size = limit
+    page = (offset // page_size) + 1 if page_size else 1
+    total_pages = (total + page_size - 1) // page_size if total > 0 else 0
+
+    return {
+        "items": [crud.paper_to_response(db, paper, image_db=image_db) for paper in papers],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+        "has_prev": offset > 0,
+        "has_next": offset + page_size < total,
+    }
 
 
-@router.get("/by-elements")
-def get_papers_by_elements(
-    elements: str,
-    mode: str = "combination",
-    keyword: Optional[str] = None,
-    year_min: Optional[int] = None,
-    year_max: Optional[int] = None,
-    journal: Optional[str] = None,
-    crystal_structure: Optional[str] = None,
-    review_status: Optional[str] = None,
-    sort_by: str = "created_at",
-    sort_order: str = "desc",
-    limit: int = 30,
-    offset: int = 0,
-    response: Response = None,
-    db: Session = Depends(get_db)
+@router.post("/search-by-mode", response_model=schemas.PaperPaginationResponse)
+def search_papers_by_mode(
+    request: schemas.PaperModeSearchRequest,
+    db: Session = Depends(get_db),
+    image_db: Session = Depends(get_image_db)
 ):
-    """按元素选择模式聚合获取文献列表，并支持全局分页。"""
-    symbols = [item for item in elements.split("-") if item]
-    compounds = crud.search_compounds_by_elements(db, symbols, mode)
-    compound_ids = [item["id"] for item in compounds]
-    compound_map = {item["id"]: item for item in compounds}
+    compound_ids = crud.get_matching_compound_ids(db, request.elements, request.mode)
+    if not compound_ids:
+        return {
+            "items": [],
+            "total": 0,
+            "page": 1,
+            "page_size": request.limit,
+            "total_pages": 0,
+            "has_prev": False,
+            "has_next": False,
+        }
 
     search_params = schemas.PaperSearchParams(
-        keyword=keyword,
-        year_min=year_min,
-        year_max=year_max,
-        journal=journal,
-        crystal_structure=crystal_structure,
-        review_status=review_status,
-        sort_by=sort_by,
-        sort_order=sort_order,
-        limit=limit,
-        offset=offset
+        keyword=request.keyword,
+        year_min=request.year_min,
+        year_max=request.year_max,
+        journal=request.journal,
+        crystal_structure=request.crystal_structure,
+        review_status=request.review_status,
+        sort_by=request.sort_by,
+        sort_order=request.sort_order,
+        limit=request.limit,
+        offset=request.offset,
     )
 
-    total_count = crud.count_papers_by_compound_ids(db, compound_ids, search_params)
-    papers = crud.get_papers_by_compound_ids(db, compound_ids, search_params)
-    if response is not None:
-        response.headers["X-Total-Count"] = str(total_count)
+    total = crud.get_papers_by_compounds_count(db, compound_ids, search_params)
+    papers = crud.get_papers_by_compounds(db, compound_ids, search_params)
+    page_size = request.limit
+    page = (request.offset // page_size) + 1 if page_size else 1
+    total_pages = (total + page_size - 1) // page_size if total > 0 else 0
 
-    results = []
-    for paper in papers:
-        paper_resp = serialize_paper_for_list(db, paper)
-        combo = compound_map.get(paper.compound_id, {})
-        paper_resp["compound_element_symbols"] = combo.get("element_symbols", "")
-        paper_resp["compound_element_list"] = combo.get("element_list", [])
-        results.append(paper_resp)
-
-    return results
+    return {
+        "items": [crud.paper_to_response(db, paper, image_db=image_db) for paper in papers],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+        "has_prev": request.offset > 0,
+        "has_next": request.offset + page_size < total,
+    }
 
 
 @router.get("/crystal-structures")
@@ -488,7 +496,7 @@ def get_crystal_structures(db: Session = Depends(get_db)):
 
 
 @router.get("/{paper_id}", response_model=schemas.PaperDetail)
-def get_paper_detail(paper_id: int, db: Session = Depends(get_db)):
+def get_paper_detail(paper_id: int, db: Session = Depends(get_db), image_db: Session = Depends(get_image_db)):
     """
     获取文献详情
     """
@@ -496,14 +504,9 @@ def get_paper_detail(paper_id: int, db: Session = Depends(get_db)):
     if not paper:
         raise HTTPException(status_code=404, detail="文献不存在")
 
-    # 获取元素组合信息
-    compound = paper.compound
-
-    paper_detail = schemas.PaperDetail.from_orm(paper)
-    paper_detail.element_symbols = compound.element_symbols
-    paper_detail.image_count = crud.get_paper_image_count(db, paper.id)
-
-    return paper_detail
+    data = crud.paper_to_response(db, paper, image_db=image_db)
+    data["element_symbols"] = data.get("compound_symbols") or ""
+    return data
 
 
 @router.get("/{paper_id}/images/{image_order}")
@@ -511,7 +514,7 @@ def get_paper_image(
     paper_id: int,
     image_order: int,
     thumbnail: bool = False,
-    db: Session = Depends(get_db)
+    image_db: Session = Depends(get_image_db)
 ):
     """
     根据文献ID和图片顺序获取截图
@@ -521,12 +524,15 @@ def get_paper_image(
         image_order: 图片顺序 (1-5)
         thumbnail: 是否返回缩略图（默认False返回原图）
     """
-    image = crud.get_image_by_order(db, paper_id, image_order)
+    image = crud.get_image_by_order(image_db, paper_id, image_order)
     if not image:
         raise HTTPException(status_code=404, detail="图片不存在")
 
-    # 选择原图或缩略图
     image_data = image.thumbnail_data if thumbnail else image.image_data
+    if not image_data:
+        image_data = getattr(image, f"fig{image_order}", None)
+    if not image_data:
+        raise HTTPException(status_code=404, detail="图片不存在")
 
     # 返回图片
     return StreamingResponse(
@@ -539,7 +545,7 @@ def get_paper_image(
 def get_image_by_id(
     image_id: int,
     thumbnail: bool = False,
-    db: Session = Depends(get_db)
+    image_db: Session = Depends(get_image_db)
 ):
     """
     根据图片ID获取截图
@@ -548,12 +554,22 @@ def get_image_by_id(
         image_id: 图片ID
         thumbnail: 是否返回缩略图
     """
-    image = crud.get_image_by_id(db, image_id)
+    image = crud.get_image_by_id(image_db, image_id)
     if not image:
         raise HTTPException(status_code=404, detail="图片不存在")
 
-    # 选择原图或缩略图
     image_data = image.thumbnail_data if thumbnail else image.image_data
+    if not image_data:
+        selected_order = getattr(image, "_selected_fig_order", None)
+        if selected_order:
+            image_data = getattr(image, f"fig{selected_order}", None)
+        if not image_data:
+            for i in range(1, 41):
+                image_data = getattr(image, f"fig{i}", None)
+                if image_data:
+                    break
+    if not image_data:
+        raise HTTPException(status_code=404, detail="图片不存在")
 
     # 返回图片
     return StreamingResponse(
@@ -581,13 +597,14 @@ def export_papers(
     if len(papers) == 0:
         raise HTTPException(status_code=404, detail="未找到文献")
 
-    # 生成引用
+    # 生成引用。新结构不持久化 citation 字段，按元数据即时生成。
     citations = []
     for paper in papers:
+        authors = json.loads(crud.authors_to_json(paper.authors))
         if export_data.format == "aps":
-            citations.append(paper.citation_aps)
+            citations.append(generate_aps_citation(authors, paper.title, paper.journal, paper.volume, paper.pages, paper.year, paper.doi))
         elif export_data.format == "bibtex":
-            citations.append(paper.citation_bibtex)
+            citations.append(generate_bibtex_citation(authors, paper.title, paper.journal, paper.volume, paper.pages, paper.year, paper.doi))
 
     # 返回文本
     export_text = "\n\n".join(citations)
@@ -603,24 +620,22 @@ def export_papers(
 
 @router.get("/stats/chart-data")
 def get_chart_data(db: Session = Depends(get_db)):
-    """获取用于图表展示的 P-Tc 数据点"""
-    from backend.models import Paper
-    
-    # 查询所有标记为在图表中显示的文献
-    papers = db.query(Paper).filter(Paper.show_in_chart == True).all()
-    
+    """获取用于图表展示的 P-Tc 数据点（仅 show_in_chart=True 的文献）"""
     result = []
-    for paper in papers:
-        normalized_sc_type = normalize_superconductor_type(paper.superconductor_type)
-        for data in paper.physical_parameters:
-            if data.pressure is not None and data.tc is not None:
-                result.append({
-                    "x": data.pressure,
-                    "y": data.tc,
-                    "year": paper.year,
-                    "label": paper.chemical_formula or paper.title[:20],
-                    "doi": paper.doi,
-                    "type": paper.article_type,
-                    "sc_type": normalized_sc_type
-                })
+    rows = db.query(PaperData).join(Paper).filter(Paper.show_in_chart == True).all()
+    for data in rows:
+        x = data.pressure_value
+        y = data.tc_value
+        if x is not None and y is not None:
+            result.append({
+                "x": x,
+                "y": y,
+                "x_range": data.pressure_range,
+                "y_range": data.tc_range,
+                "year": data.paper.year,
+                "label": data.chemical_formula or (data.paper.title or "")[:20],
+                "doi": data.paper.doi,
+                "type": crud.normalize_article_type(data.article_type),
+                "sc_type": crud.normalize_superconductor_type(data.superconductor_type),
+            })
     return result

@@ -6,37 +6,118 @@
     <title>管理员面板 - 超导文献数据库</title>
     <link href="/static/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .image-preview-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(108, 117, 125, 0.72);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            z-index: 2000;
+        }
+
+        .image-preview-overlay[hidden] {
+            display: none;
+        }
+
+        .image-preview-dialog {
+            width: min(960px, 100%);
+            max-height: 100%;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+            overflow: hidden;
+        }
+
+        .image-preview-stage {
+            display: grid;
+            grid-template-columns: 64px minmax(0, 1fr) 64px;
+            align-items: center;
+            gap: 12px;
+            padding: 20px 16px 12px;
+            background: #f8f9fa;
+        }
+
+        .image-preview-figure {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 320px;
+        }
+
+        .image-preview-figure img {
+            max-width: 100%;
+            max-height: 65vh;
+            object-fit: contain;
+            border-radius: 8px;
+            background: #fff;
+        }
+
+        .image-preview-nav,
+        .image-preview-close {
+            border: none;
+        }
+
+        .image-preview-meta {
+            padding: 0 20px 20px;
+        }
+
+        .image-preview-caption {
+            text-align: center;
+            color: #6c757d;
+            margin-bottom: 12px;
+        }
+    </style>
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']]
+            },
+            options: {
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+            },
+            startup: {
+                typeset: false
+            }
+        };
+    </script>
+    <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 </head>
 <body>
     <!-- 导航栏 -->
     <nav class="navbar navbar-expand-lg navbar-dark navbar-custom sticky-top">
         <div class="container-fluid">
-            <a class="navbar-brand" href="/">超导文献数据库</a>
+            <a class="navbar-brand" href="/" data-i18n="nav.title">超导文献数据库</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link active" href="/admin/dashboard">审核文献</a>
+                        <a class="nav-link active" href="/admin/dashboard" data-i18n="admin.review_papers">审核文献</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/admin/papers">全局管理</a>
+                        <a class="nav-link" href="/admin/papers" data-i18n="admin.global_management">全局管理</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/admin/superadmin">超级管理员</a>
+                        <a class="nav-link" href="/admin/superadmin" data-i18n="admin.superadmin">超级管理员</a>
                     </li>
                 </ul>
                 <div class="d-flex align-items-center text-white">
-                    <span class="me-3">欢迎，<span id="userName"></span></span>
-                    <button class="btn btn-outline-light btn-sm" onclick="logout()">退出</button>
+                    <span class="me-3"><span data-i18n="common.welcome">欢迎，</span><span id="userName"></span></span>
+                    <button class="btn btn-outline-light btn-sm me-2" onclick="logout()" data-i18n="common.logout">退出</button>
+                    <button class="btn btn-outline-light btn-sm" onclick="I18N.toggle()" data-i18n="common.language">中/EN</button>
                 </div>
             </div>
         </div>
     </nav>
 
     <div class="container mt-4">
-        <h2>待审核文献列表</h2>
+        <h2 data-i18n="admin.pending_review">待审核文献列表</h2>
 
         <div id="unreviewedPapers" class="mt-4">
             <div class="text-center py-5">
@@ -46,6 +127,11 @@
                 <p class="mt-3">正在加载...</p>
             </div>
         </div>
+
+        <div id="dashboardPaginationSummary" class="mt-3 text-muted small"></div>
+        <nav id="dashboardPagination" class="mt-3" style="display:none;">
+            <ul class="pagination justify-content-center mb-0"></ul>
+        </nav>
     </div>
 
     <!-- 编辑文献模态框 -->
@@ -53,7 +139,7 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">编辑文献信息</h5>
+                    <h5 class="modal-title" data-i18n="admin.edit_paper">编辑文献信息</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
@@ -61,46 +147,46 @@
                         <input type="hidden" id="editPaperId">
 
                         <div class="mb-3">
-                            <label class="form-label">DOI <small class="text-muted">(只读)</small></label>
+                            <label class="form-label" data-i18n="admin.doi_readonly">DOI (只读)</label>
                             <input type="text" class="form-control" id="editDoi" readonly>
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label">标题 <span class="text-danger">*</span></label>
+                            <label class="form-label" data-i18n="admin.title">标题 <span class="text-danger">*</span></label>
                             <input type="text" class="form-control" id="editTitle" required>
                         </div>
 
                         <div class="row">
                             <div class="col-md-6 mb-3">
-                                <label class="form-label">期刊</label>
+                                <label class="form-label" data-i18n="admin.journal">期刊</label>
                                 <input type="text" class="form-control" id="editJournal">
                             </div>
                             <div class="col-md-3 mb-3">
-                                <label class="form-label">年份</label>
+                                <label class="form-label" data-i18n="admin.year">年份</label>
                                 <input type="number" class="form-control" id="editYear" min="1900" max="2100">
                             </div>
                             <div class="col-md-3 mb-3">
-                                <label class="form-label">卷号</label>
+                                <label class="form-label" data-i18n="admin.volume">卷号</label>
                                 <input type="text" class="form-control" id="editVolume">
                             </div>
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label">作者</label>
+                            <label class="form-label" data-i18n="admin.authors">作者</label>
                             <textarea class="form-control" id="editAuthors" rows="2"></textarea>
-                            <small class="text-muted">JSON格式，如：["张三", "李四"]</small>
+                            <small class="text-muted" data-i18n="admin.authors_hint">JSON格式，如：["张三", "李四"]</small>
                         </div>
 
                         <div class="row">
                             <div class="col-md-6 mb-3">
-                                <label class="form-label">文章类型</label>
+                                <label class="form-label" data-i18n="admin.article_type">文章类型</label>
                                 <select class="form-select" id="editArticleType">
                                     <option value="theoretical">理论</option>
                                     <option value="experimental">实验</option>
                                 </select>
                             </div>
                             <div class="col-md-6 mb-3">
-                                <label class="form-label">超导体类型</label>
+                                <label class="form-label" data-i18n="admin.superconductor_type">超导体类型</label>
                                 <select class="form-select" id="editSuperconductorType">
                                     <option value="cuprate">铜基</option>
                                     <option value="iron_based">铁基</option>
@@ -113,9 +199,8 @@
                             </div>
                         </div>
 
-                        <!-- 审核状态编辑 (由于是审核页面，可能需要在这里也能改状态) -->
                         <div class="mb-3">
-                            <label class="form-label">审核状态</label>
+                            <label class="form-label" data-i18n="admin.review_status">审核状态</label>
                             <select class="form-select" id="editReviewStatus">
                                 <option value="unreviewed">⏳ 未审核</option>
                                 <option value="approved">✅ 已通过</option>
@@ -125,56 +210,93 @@
                             </select>
                         </div>
 
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">化学式</label>
-                                <input type="text" class="form-control" id="editChemicalFormula">
+                        <div class="mb-3">
+                            <label class="form-label" data-i18n="admin.compound_physical_data">化合物与物理数据 <span class="text-danger">*</span></label>
+                            <div id="editDataPointsContainer">
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">晶体结构</label>
-                                <input type="text" class="form-control" id="editCrystalStructure">
-                            </div>
+                            <button type="button" class="btn btn-outline-primary btn-sm mt-1" onclick="addEditDataRow()" data-i18n="admin.add_data_row">+ 添加一组数据</button>
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label">物理数据 (压强/Tc/λ等) <span class="text-danger">*</span></label>
-                            <div id="editDataPointsContainer">
-                                <!-- 动态数据行 -->
+                            <label class="form-label" data-i18n="admin.image_groups_intro">图片分组与介绍</label>
+                            <div id="editImageGroups" class="border rounded p-3 bg-light-subtle">
+                                <div class="text-muted small" data-i18n="admin.loading_images">打开文献后加载图片分组...</div>
                             </div>
-                            <button type="button" class="btn btn-outline-primary btn-sm mt-1" onclick="addEditDataRow()">+ 添加一组数据</button>
                         </div>
 
                         <div class="row">
                             <div class="col-md-6 mb-3">
-                                <label class="form-label">贡献者</label>
+                                <label class="form-label" data-i18n="admin.contributor">贡献者</label>
                                 <input type="text" class="form-control" id="editContributorName">
                             </div>
                             <div class="col-md-6 mb-3">
-                                <label class="form-label">贡献者单位</label>
+                                <label class="form-label" data-i18n="admin.contributor_affiliation">贡献者单位</label>
                                 <input type="text" class="form-control" id="editContributorAffiliation">
                             </div>
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label">备注</label>
+                            <label class="form-label" data-i18n="admin.notes">备注</label>
                             <textarea class="form-control" id="editNotes" rows="3"></textarea>
                         </div>
                     </form>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                    <button type="button" class="btn btn-primary" onclick="savePaperEdits()">保存修改</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-i18n="common.cancel">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="savePaperEdits()" data-i18n="common.save">保存修改</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="imagePreviewOverlay" class="image-preview-overlay" hidden onclick="handlePreviewOverlayClick(event)">
+        <div class="image-preview-dialog" role="dialog" aria-modal="true" aria-label="图片预览">
+            <div class="d-flex justify-content-end p-3 pb-0">
+                <button type="button" class="btn-close image-preview-close" aria-label="关闭" onclick="closeImagePreview()"></button>
+            </div>
+            <div class="image-preview-stage">
+                <button type="button" class="btn btn-outline-secondary image-preview-nav" onclick="changePreviewImage(-1)" data-i18n="common.prev">上一张</button>
+                <figure class="image-preview-figure mb-0">
+                    <img id="imagePreviewImg" src="" alt="Preview">
+                </figure>
+                <button type="button" class="btn btn-outline-secondary image-preview-nav" onclick="changePreviewImage(1)" data-i18n="common.next">下一张</button>
+            </div>
+            <div class="image-preview-meta">
+                <div id="imagePreviewCaption" class="image-preview-caption small"></div>
+                <div id="imagePreviewIntro"></div>
+                <div class="mt-3">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                        <div class="fw-semibold">化合物与物理数据</div>
+                        <div class="d-flex gap-2">
+                            <button type="button" id="previewPrevGroupBtn" class="btn btn-outline-secondary btn-sm" onclick="changePreviewGroup(-1)" data-i18n="common.prev_group">上一组</button>
+                            <button type="button" id="previewNextGroupBtn" class="btn btn-outline-secondary btn-sm" onclick="changePreviewGroup(1)" data-i18n="common.next_group">下一组</button>
+                        </div>
+                    </div>
+                    <div id="imagePreviewData"></div>
                 </div>
             </div>
         </div>
     </div>
 
     <script src="/static/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/i18n.js"></script>
     <script src="/static/js/auth_state.js"></script>
     <script>
         let token = '';
         let currentUser = null;
         let editModal = null;
+        let currentReviewGroups = [];
+        let currentPreviewPaper = null;
+        let previewGroupIndex = 0;
+        let previewGroupImages = [];
+        let previewGroupIntro = null;
+        let previewImageIndex = 0;
+        const dashboardPagination = {
+            page: 1,
+            pageSize: 50,
+            total: 0,
+            totalPages: 0,
+        };
         const SUPER_TYPES = ['cuprate', 'iron_based', 'nickel_based', 'hydride', 'carbon', 'organic', 'others'];
         const LEGACY_SUPER_TYPES = {
             'carbon_organic': 'carbon',
@@ -189,6 +311,562 @@
             if (!value) return 'others';
             const normalized = LEGACY_SUPER_TYPES[value] || value;
             return SUPER_TYPES.includes(normalized) ? normalized : 'others';
+        }
+
+        function escapeHtml(value) {
+            const div = document.createElement('div');
+            div.textContent = value ?? '';
+            return div.innerHTML;
+        }
+
+        function normalizeArticleType(value) {
+            if (value === 'e') return 'experimental';
+            if (value === 't') return 'theoretical';
+            return value || '';
+        }
+
+        function synthesizedLabel(value) {
+            const normalized = normalizeArticleType(value);
+            if (normalized === 'experimental') return '是';
+            if (normalized === 'theoretical') return '否';
+            return '-';
+        }
+
+        function formatDataValue(value, suffix = '') {
+            return value !== null && value !== undefined && value !== '' ? `${escapeHtml(value)}${suffix}` : '-';
+        }
+
+        function formatRangeValue(value, suffix = '') {
+            if (Array.isArray(value)) {
+                if (value.length === 0) return '-';
+                if (value.length === 1) return `${escapeHtml(value[0])}${suffix}`;
+                return `${escapeHtml(value[0])}–${escapeHtml(value[value.length - 1])}${suffix}`;
+            }
+            return formatDataValue(value, suffix);
+        }
+
+        function hasMeaningfulText(value) {
+            return typeof value === 'string' && value.trim() !== '';
+        }
+
+        function buildMathContentHtml(value) {
+            return escapeHtml(value || '').replace(/\r?\n/g, '<br>');
+        }
+
+        async function typesetMath(container) {
+            if (!container || !window.MathJax?.typesetPromise) {
+                return;
+            }
+            try {
+                await window.MathJax.typesetPromise([container]);
+            } catch (error) {
+                console.error('公式渲染失败:', error);
+            }
+        }
+
+        function renderImageGroupIntro(intro) {
+            if (!intro) return '';
+
+            const englishText = hasMeaningfulText(intro.text) ? intro.text.trim() : '';
+            const chineseText = hasMeaningfulText(intro.text_cn) ? intro.text_cn.trim() : '';
+
+            if (!englishText && !chineseText) {
+                return '';
+            }
+
+            return `
+                <div class="mt-3 border-top pt-3">
+                    ${englishText ? `
+                        <div class="mb-2">
+                            <div class="small text-muted math-content">${buildMathContentHtml(englishText)}</div>
+                        </div>
+                    ` : ''}
+                    ${chineseText ? `
+                        <div>
+                            <div class="small text-muted math-content">${buildMathContentHtml(chineseText)}</div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function openImagePreviewByGroup(groupIndex, startIndex) {
+            const group = Array.isArray(currentReviewGroups) ? currentReviewGroups[groupIndex] : null;
+            if (!group) {
+                return;
+            }
+            const images = Array.isArray(group.images) ? group.images : [];
+            openImagePreview(groupIndex, images, startIndex, group.intro || null);
+        }
+
+        function openImagePreview(groupIndex, images, startIndex, intro) {
+            const overlay = document.getElementById('imagePreviewOverlay');
+            if (!overlay || !Array.isArray(images) || images.length === 0) {
+                return;
+            }
+
+            previewGroupIndex = groupIndex;
+            previewGroupImages = images;
+            previewGroupIntro = intro || null;
+            previewImageIndex = Math.max(0, Math.min(startIndex, images.length - 1));
+            overlay.hidden = false;
+            document.body.style.overflow = 'hidden';
+            renderImagePreview();
+        }
+
+        function handlePreviewKeydown(event) {
+            const overlay = document.getElementById('imagePreviewOverlay');
+            if (!overlay || overlay.hidden) {
+                return;
+            }
+
+            if (event.key === 'ArrowLeft') {
+                event.preventDefault();
+                changePreviewImage(-1);
+                return;
+            }
+
+            if (event.key === 'ArrowRight') {
+                event.preventDefault();
+                changePreviewImage(1);
+                return;
+            }
+
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                closeImagePreview();
+            }
+        }
+
+        function closeImagePreview() {
+            const overlay = document.getElementById('imagePreviewOverlay');
+            if (!overlay) return;
+            overlay.hidden = true;
+            document.body.style.overflow = '';
+            currentPreviewPaper = null;
+            previewGroupIndex = 0;
+            previewGroupImages = [];
+            previewGroupIntro = null;
+            previewImageIndex = 0;
+        }
+
+        function handlePreviewOverlayClick(event) {
+            if (event.target?.id === 'imagePreviewOverlay') {
+                closeImagePreview();
+            }
+        }
+
+        function changePreviewImage(step) {
+            if (!Array.isArray(previewGroupImages) || previewGroupImages.length === 0) {
+                return;
+            }
+            const nextIndex = previewImageIndex + step;
+            if (nextIndex < 0) {
+                if (previewGroupIndex > 0) {
+                    const previousGroup = currentReviewGroups[previewGroupIndex - 1];
+                    const previousImages = Array.isArray(previousGroup?.images) ? previousGroup.images : [];
+                    if (previousImages.length > 0) {
+                        previewGroupIndex -= 1;
+                        previewGroupImages = previousImages;
+                        previewGroupIntro = previousGroup.intro || null;
+                        previewImageIndex = previousImages.length - 1;
+                        renderImagePreview();
+                    }
+                }
+                return;
+            }
+            if (nextIndex >= previewGroupImages.length) {
+                if (previewGroupIndex < currentReviewGroups.length - 1) {
+                    const nextGroup = currentReviewGroups[previewGroupIndex + 1];
+                    const nextImages = Array.isArray(nextGroup?.images) ? nextGroup.images : [];
+                    if (nextImages.length > 0) {
+                        previewGroupIndex += 1;
+                        previewGroupImages = nextImages;
+                        previewGroupIntro = nextGroup.intro || null;
+                        previewImageIndex = 0;
+                        renderImagePreview();
+                    }
+                }
+                return;
+            }
+            previewImageIndex = nextIndex;
+            renderImagePreview();
+        }
+
+        function changePreviewGroup(step) {
+            if (!Array.isArray(currentReviewGroups) || currentReviewGroups.length === 0) {
+                return;
+            }
+
+            let nextGroupIndex = previewGroupIndex + step;
+            while (nextGroupIndex >= 0 && nextGroupIndex < currentReviewGroups.length) {
+                const nextGroup = currentReviewGroups[nextGroupIndex];
+                const nextImages = Array.isArray(nextGroup?.images) ? nextGroup.images : [];
+                if (nextImages.length > 0) {
+                    previewGroupIndex = nextGroupIndex;
+                    previewGroupImages = nextImages;
+                    previewGroupIntro = nextGroup.intro || null;
+                    previewImageIndex = step > 0 ? 0 : nextImages.length - 1;
+                    renderImagePreview();
+                    return;
+                }
+                nextGroupIndex += step;
+            }
+        }
+
+        function renderPhysicalDataEditor(rows) {
+            const values = Array.isArray(rows) && rows.length > 0 ? rows : [{}];
+            return values.map((item, index) => {
+                const articleType = normalizeArticleType(item?.article_type) || document.getElementById('editArticleType')?.value || 'theoretical';
+                const pressureValue = Array.isArray(item?.tc_press) ? item.tc_press[0] : (Array.isArray(item?.pressure) ? item.pressure[0] : item?.tc_press ?? item?.pressure ?? '');
+                const tcValue = Array.isArray(item?.tc) ? item.tc[0] : (item?.tc ?? '');
+                return `
+                    <div class="edit-data-row card p-2 mb-2 bg-light" data-preview-row-index="${index}">
+                        <div class="row g-2">
+                            <div class="col-md-6 col-lg-2">
+                                <input type="text" class="form-control form-control-sm edit-formula" placeholder="化学式" value="${dataInputValue(item, 'chemical_formula')}">
+                            </div>
+                            <div class="col-md-6 col-lg-2">
+                                <input type="text" class="form-control form-control-sm edit-structure" placeholder="空间群" value="${dataInputValue(item, 'crystal_structure')}">
+                            </div>
+                            <div class="col-md-6 col-lg-2">
+                                <select class="form-select form-select-sm edit-article-type" title="是否实验合成">
+                                    <option value="experimental" ${articleType === 'experimental' ? 'selected' : ''}>实验合成：是</option>
+                                    <option value="theoretical" ${articleType === 'theoretical' ? 'selected' : ''}>实验合成：否</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 col-lg-1">
+                                <input type="number" step="any" class="form-control form-control-sm edit-pressure" placeholder="P (GPa)" value="${escapeHtml(pressureValue)}">
+                            </div>
+                            <div class="col-md-6 col-lg-1">
+                                <input type="number" step="any" class="form-control form-control-sm edit-tc" placeholder="Tc (K)" value="${escapeHtml(tcValue)}">
+                            </div>
+                            <div class="col-md-6 col-lg-1">
+                                <input type="number" step="any" class="form-control form-control-sm edit-lambda" placeholder="λ" value="${dataInputValue(item, 'lambda_val')}">
+                            </div>
+                            <div class="col-md-6 col-lg-1">
+                                <input type="number" step="any" class="form-control form-control-sm edit-omega" placeholder="ω" value="${dataInputValue(item, 'omega_log')}">
+                            </div>
+                            <div class="col-md-6 col-lg-1">
+                                <input type="number" step="any" class="form-control form-control-sm edit-nef" placeholder="N" value="${dataInputValue(item, 'n_ef')}">
+                            </div>
+                            <div class="col-12 col-lg-1">
+                                <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="removePreviewDataRow(this)">×</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function collectPhysicalDataFromRows(container) {
+            if (!container) {
+                return [];
+            }
+
+            const computeSFactor = (tcValue, pressureValue) => {
+                if (!Number.isFinite(tcValue) || !Number.isFinite(pressureValue)) return null;
+                return tcValue / Math.sqrt(1521 + Math.pow(pressureValue, 2));
+            };
+
+            const physicalData = [];
+            container.querySelectorAll('.edit-data-row').forEach(row => {
+                const formula = row.querySelector('.edit-formula')?.value.trim() || '';
+                const structure = row.querySelector('.edit-structure')?.value.trim() || '';
+                const pressure = nullableFloat(row.querySelector('.edit-pressure')?.value);
+                const tc = nullableFloat(row.querySelector('.edit-tc')?.value);
+                const lambdaVal = nullableFloat(row.querySelector('.edit-lambda')?.value);
+                const omegaLog = nullableFloat(row.querySelector('.edit-omega')?.value);
+                const nEf = nullableFloat(row.querySelector('.edit-nef')?.value);
+                const articleType = row.querySelector('.edit-article-type')?.value || 'theoretical';
+
+                if (formula || structure || pressure !== null || tc !== null || lambdaVal !== null || omegaLog !== null || nEf !== null) {
+                    physicalData.push({
+                        chemical_formula: formula || null,
+                        crystal_structure: structure || null,
+                        article_type: articleType,
+                        tc_press: pressure !== null ? [pressure] : null,
+                        tc: tc !== null ? [tc] : null,
+                        s_factor: computeSFactor(tc, pressure),
+                        lambda_val: lambdaVal,
+                        omega_log: omegaLog,
+                        n_ef: nEf
+                    });
+                }
+            });
+
+            return physicalData;
+        }
+
+        function syncPreviewDataToMainEditor() {
+            const previewDataEl = document.getElementById('imagePreviewData');
+            const mainContainer = document.getElementById('editDataPointsContainer');
+            if (!previewDataEl || !mainContainer) {
+                return;
+            }
+
+            const previewRows = previewDataEl.querySelectorAll('.edit-data-row');
+            if (previewRows.length === 0) {
+                return;
+            }
+
+            if (currentPreviewPaper) {
+                currentPreviewPaper.data = collectPhysicalDataFromRows(previewDataEl);
+            }
+
+            mainContainer.innerHTML = '';
+            previewRows.forEach(row => {
+                mainContainer.appendChild(row.cloneNode(true));
+            });
+        }
+
+        function removePreviewDataRow(button) {
+            const previewDataEl = document.getElementById('imagePreviewData');
+            if (!previewDataEl) {
+                return;
+            }
+            const rows = previewDataEl.querySelectorAll('.edit-data-row');
+            if (rows.length <= 1) {
+                alert('至少需要保留一组数据');
+                return;
+            }
+            button.closest('.edit-data-row')?.remove();
+            syncPreviewDataToMainEditor();
+        }
+
+        function renderImagePreview() {
+            const overlay = document.getElementById('imagePreviewOverlay');
+            const imageEl = document.getElementById('imagePreviewImg');
+            const captionEl = document.getElementById('imagePreviewCaption');
+            const introEl = document.getElementById('imagePreviewIntro');
+            const dataEl = document.getElementById('imagePreviewData');
+            const prevGroupBtn = document.getElementById('previewPrevGroupBtn');
+            const nextGroupBtn = document.getElementById('previewNextGroupBtn');
+            if (!overlay || !imageEl || !captionEl || !introEl || !dataEl || previewGroupImages.length === 0) {
+                return;
+            }
+
+            const currentImage = previewGroupImages[previewImageIndex];
+            imageEl.src = `/api/papers/images/${currentImage.id}`;
+            imageEl.alt = `图片 ${currentImage.order}`;
+            captionEl.textContent = `第 ${previewGroupIndex + 1} 组 · 图片 ${currentImage.order} / 第 ${previewImageIndex + 1} 张，共 ${previewGroupImages.length} 张`;
+            introEl.innerHTML = renderImageGroupIntro(previewGroupIntro);
+            dataEl.innerHTML = `
+                <div class="mb-2 d-flex justify-content-end">
+                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="addPreviewDataRow()">+ 添加一组数据</button>
+                </div>
+                <div id="previewDataRows">${renderPhysicalDataEditor(currentPreviewPaper?.data)}</div>
+            `;
+
+            const navButtons = overlay.querySelectorAll('.image-preview-nav');
+            if (navButtons.length === 2) {
+                navButtons[0].disabled = previewImageIndex === 0;
+                navButtons[1].disabled = previewImageIndex === previewGroupImages.length - 1;
+            }
+
+            if (prevGroupBtn) {
+                prevGroupBtn.disabled = previewGroupIndex === 0;
+            }
+            if (nextGroupBtn) {
+                nextGroupBtn.disabled = previewGroupIndex === currentReviewGroups.length - 1;
+            }
+
+            dataEl.querySelectorAll('input, select, textarea').forEach(field => {
+                field.addEventListener('input', syncPreviewDataToMainEditor);
+                field.addEventListener('change', syncPreviewDataToMainEditor);
+            });
+            syncPreviewDataToMainEditor();
+            typesetMath(introEl);
+        }
+
+        function addPreviewDataRow() {
+            const previewRows = document.getElementById('previewDataRows');
+            if (!previewRows) {
+                return;
+            }
+            const rowCount = previewRows.querySelectorAll('.edit-data-row').length;
+            previewRows.insertAdjacentHTML('beforeend', renderPhysicalDataEditor([{}]).replace('data-preview-row-index="0"', `data-preview-row-index="${rowCount}"`));
+            previewRows.querySelectorAll('input, select, textarea').forEach(field => {
+                field.addEventListener('input', syncPreviewDataToMainEditor);
+                field.addEventListener('change', syncPreviewDataToMainEditor);
+            });
+            syncPreviewDataToMainEditor();
+        }
+
+        function renderDashboardImageGroups(payload) {
+            const container = document.getElementById('editImageGroups');
+            if (!container) return;
+
+            const groups = Array.isArray(payload?.review_groups) ? payload.review_groups : [];
+            const warnings = Array.isArray(payload?.grouping_meta?.warnings) ? payload.grouping_meta.warnings : [];
+            currentReviewGroups = groups;
+
+            if (groups.length === 0) {
+                container.innerHTML = '<div class="text-muted small">暂无图片分组数据</div>';
+                return;
+            }
+
+            const warningHtml = warnings.length > 0
+                ? `<div class="alert alert-warning py-2 small mb-3">${warnings.map(item => escapeHtml(item)).join('<br>')}</div>`
+                : '';
+
+            container.innerHTML = warningHtml + groups.map((group, groupIndex) => {
+                const images = Array.isArray(group.images) ? group.images : [];
+                const intro = group.intro || null;
+                const imagesHtml = images.length > 0
+                    ? `<div class="d-flex flex-wrap gap-2">${images.map((img, index) => `
+                        <button type="button"
+                                class="btn p-0 border-0 bg-transparent text-decoration-none"
+                                onclick="openImagePreviewByGroup(${groupIndex}, ${index})"
+                                aria-label="放大查看图片 ${img.order}">
+                            <img src="/api/papers/images/${img.id}?thumbnail=true"
+                                 alt="图片 ${img.order}"
+                                 class="img-thumbnail"
+                                 style="width: 140px; height: 140px; object-fit: cover;">
+                            <div class="small text-center text-muted mt-1">图片 ${img.order}</div>
+                        </button>
+                    `).join('')}</div>`
+                    : '<div class="text-muted small">该组暂无图片</div>';
+
+                return `
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <div class="fw-semibold mb-2">第 ${group.group_index} 组</div>
+                            ${imagesHtml}
+                            ${renderImageGroupIntro(intro)}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            typesetMath(container);
+        }
+
+        async function loadDashboardImageGroups(paperId) {
+            const container = document.getElementById('editImageGroups');
+            if (container) {
+                container.innerHTML = '<div class="text-muted small">正在加载图片分组...</div>';
+            }
+
+            const response = await fetch(`/api/admin/papers/${paperId}/images`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.detail || '加载图片分组失败');
+            }
+            renderDashboardImageGroups(data);
+        }
+
+        function clearDashboardPagination() {
+            const summaryEl = document.getElementById('dashboardPaginationSummary');
+            const paginationEl = document.getElementById('dashboardPagination');
+            if (summaryEl) summaryEl.textContent = '';
+            if (paginationEl) {
+                paginationEl.style.display = 'none';
+                const list = paginationEl.querySelector('ul');
+                if (list) list.innerHTML = '';
+            }
+        }
+
+        function createPaginationItem(label, page, disabled = false, active = false) {
+            return `
+                <li class="page-item ${disabled ? 'disabled' : ''} ${active ? 'active' : ''}">
+                    <button class="page-link" type="button" ${disabled ? 'disabled' : ''} onclick="changeDashboardPage(${page})">${label}</button>
+                </li>
+            `;
+        }
+
+        function renderDashboardPagination(total) {
+            const summaryEl = document.getElementById('dashboardPaginationSummary');
+            const paginationEl = document.getElementById('dashboardPagination');
+            const listEl = paginationEl?.querySelector('ul');
+            if (!summaryEl || !paginationEl || !listEl) return;
+
+            dashboardPagination.total = total;
+            dashboardPagination.totalPages = total > 0 ? Math.ceil(total / dashboardPagination.pageSize) : 0;
+
+            if (total === 0 || dashboardPagination.totalPages <= 1) {
+                const start = total === 0 ? 0 : (dashboardPagination.page - 1) * dashboardPagination.pageSize + 1;
+                const end = Math.min(dashboardPagination.page * dashboardPagination.pageSize, total);
+                summaryEl.textContent = total === 0 ? '' : `第 ${start}–${end} 条，共 ${total} 条`;
+                paginationEl.style.display = 'none';
+                listEl.innerHTML = '';
+                return;
+            }
+
+            const start = (dashboardPagination.page - 1) * dashboardPagination.pageSize + 1;
+            const end = Math.min(dashboardPagination.page * dashboardPagination.pageSize, total);
+            summaryEl.textContent = `第 ${start}–${end} 条，共 ${total} 条`;
+
+            const pages = [];
+            pages.push(createPaginationItem('上一页', dashboardPagination.page - 1, dashboardPagination.page === 1));
+
+            const startPage = Math.max(1, dashboardPagination.page - 2);
+            const endPage = Math.min(dashboardPagination.totalPages, dashboardPagination.page + 2);
+
+            for (let page = startPage; page <= endPage; page += 1) {
+                pages.push(createPaginationItem(String(page), page, false, page === dashboardPagination.page));
+            }
+
+            pages.push(createPaginationItem('下一页', dashboardPagination.page + 1, dashboardPagination.page === dashboardPagination.totalPages));
+            listEl.innerHTML = pages.join('');
+            paginationEl.style.display = 'block';
+        }
+
+        function changeDashboardPage(page) {
+            if (page < 1 || page > dashboardPagination.totalPages || page === dashboardPagination.page) {
+                return;
+            }
+            dashboardPagination.page = page;
+            loadUnreviewedPapers();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function renderPhysicalDataTable(paper) {
+            const rows = Array.isArray(paper.data) && paper.data.length > 0 ? paper.data : [paper];
+            return `
+                <div class="table-responsive mt-2">
+                    <table class="table table-sm table-bordered align-middle mb-2">
+                        <thead class="table-light">
+                            <tr>
+                                <th>化学式</th>
+                                <th>空间群</th>
+                                <th>是否实验合成</th>
+                                <th>Tc</th>
+                                <th>P</th>
+                                <th>λ</th>
+                                <th>ω_log</th>
+                                <th>N(EF)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rows.map(item => `
+                                <tr>
+                                    <td>${formatDataValue(item.chemical_formula || paper.chemical_formula)}</td>
+                                    <td>${formatDataValue(item.crystal_structure || paper.crystal_structure)}</td>
+                                    <td>${synthesizedLabel(item.article_type || paper.article_type)}</td>
+                                    <td>${formatRangeValue(item.tc, ' K')}</td>
+                                    <td>${formatRangeValue(item.tc_press ?? item.pressure, ' GPa')}</td>
+                                    <td>${formatDataValue(item.lambda_val)}</td>
+                                    <td>${formatDataValue(item.omega_log)}</td>
+                                    <td>${formatDataValue(item.n_ef)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        function nullableFloat(value) {
+            return value === '' || value === null || value === undefined ? null : parseFloat(value);
+        }
+
+        function dataInputValue(data, field) {
+            return data && data[field] !== null && data[field] !== undefined ? escapeHtml(data[field]) : '';
         }
 
         // 检查登录状态
@@ -227,21 +905,23 @@
 
         // 加载未审核文献
         async function loadUnreviewedPapers() {
+            const offset = (dashboardPagination.page - 1) * dashboardPagination.pageSize;
             try {
-                const response = await fetch('/api/admin/papers/unreviewed?limit=100', {
+                const response = await fetch(`/api/admin/papers/unreviewed?limit=${dashboardPagination.pageSize}&offset=${offset}`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
                 });
 
+                const data = await response.json();
                 if (!response.ok) {
-                    throw new Error('加载失败');
+                    throw new Error(data.detail || '加载失败');
                 }
 
-                const data = await response.json();
-                renderPapers(data.papers, data.total);
+                renderPapers(Array.isArray(data.papers) ? data.papers : [], data.total || 0);
             } catch (error) {
                 console.error('加载文献失败:', error);
+                clearDashboardPagination();
                 document.getElementById('unreviewedPapers').innerHTML = `
                     <div class="alert alert-danger">加载失败: ${error.message}</div>
                 `;
@@ -259,24 +939,17 @@
                         <p class="mb-0">目前没有待审核的文献</p>
                     </div>
                 `;
+                clearDashboardPagination();
                 return;
             }
 
             let html = `<p class="text-muted">共 ${total} 篇待审核文献</p>`;
 
             papers.forEach(paper => {
-                // HTML转义函数，防止XSS和引号问题
-                const escapeHtml = (str) => {
-                    const div = document.createElement('div');
-                    div.textContent = str;
-                    return div.innerHTML;
-                };
-
                 const safeTitle = escapeHtml(paper.title);
                 const safeJournal = escapeHtml(paper.journal || '未知');
                 const safeContributor = escapeHtml(paper.contributor_name);
 
-                // 构建按钮组（根据用户角色显示不同按钮）
                 let buttons = `
                     <a href="https://doi.org/${paper.doi}" target="_blank" class="btn btn-sm btn-outline-primary">查看原文</a>
                     <button class="btn btn-sm btn-warning btn-edit" data-paper-id="${paper.id}">详情/编辑</button>
@@ -284,7 +957,6 @@
                     <button class="btn btn-sm btn-danger btn-reject" data-paper-id="${paper.id}" data-paper-title="${safeTitle}">拒绝</button>
                 `;
 
-                // 如果是超级管理员，显示删除按钮
                 if (currentUser && currentUser.is_superadmin) {
                     buttons += `<button class="btn btn-sm btn-danger btn-delete" data-paper-id="${paper.id}" data-paper-doi="${paper.doi}" data-paper-title="${safeTitle}">删除</button>`;
                 }
@@ -296,10 +968,10 @@
                             <p class="text-muted mb-2">
                                 <strong>DOI:</strong> ${paper.doi}<br>
                                 <strong>期刊:</strong> ${safeJournal} (${paper.year || '未知年份'})<br>
-                                <strong>Tc / P:</strong> ${paper.tc ? paper.tc + ' K' : '-'} / ${paper.pressure ? paper.pressure + ' GPa' : '-'}<br>
                                 <strong>贡献者:</strong> ${safeContributor}<br>
                                 <strong>提交时间:</strong> ${new Date(paper.created_at).toLocaleString('zh-CN')}
                             </p>
+                            ${renderPhysicalDataTable(paper)}
                             <div class="d-flex gap-2 flex-wrap">
                                 ${buttons}
                             </div>
@@ -309,8 +981,8 @@
             });
 
             container.innerHTML = html;
+            renderDashboardPagination(total);
 
-            // 绑定事件
             container.querySelectorAll('.btn-approve').forEach(btn => {
                 btn.addEventListener('click', function() {
                     const paperId = this.getAttribute('data-paper-id');
@@ -383,24 +1055,37 @@
             const container = document.getElementById('editDataPointsContainer');
             const row = document.createElement('div');
             row.className = 'edit-data-row card p-2 mb-2 bg-light';
+            const articleType = normalizeArticleType(data ? data.article_type : '') || document.getElementById('editArticleType').value || 'theoretical';
             row.innerHTML = `
                 <div class="row g-2">
-                    <div class="col-md-4 col-lg-2">
-                        <input type="number" step="any" class="form-control form-control-sm edit-pressure" placeholder="P (GPa)" value="${data ? data.pressure || '' : ''}">
+                    <div class="col-md-6 col-lg-2">
+                        <input type="text" class="form-control form-control-sm edit-formula" placeholder="化学式" value="${dataInputValue(data, 'chemical_formula')}">
                     </div>
-                    <div class="col-md-4 col-lg-2">
-                        <input type="number" step="any" class="form-control form-control-sm edit-tc" placeholder="Tc (K)" value="${data ? data.tc || '' : ''}">
+                    <div class="col-md-6 col-lg-2">
+                        <input type="text" class="form-control form-control-sm edit-structure" placeholder="空间群" value="${dataInputValue(data, 'crystal_structure')}">
                     </div>
-                    <div class="col-md-4 col-lg-2">
-                        <input type="number" step="any" class="form-control form-control-sm edit-lambda" placeholder="λ" value="${data ? data.lambda_val || '' : ''}">
+                    <div class="col-md-6 col-lg-2">
+                        <select class="form-select form-select-sm edit-article-type" title="是否实验合成">
+                            <option value="experimental" ${articleType === 'experimental' ? 'selected' : ''}>实验合成：是</option>
+                            <option value="theoretical" ${articleType === 'theoretical' ? 'selected' : ''}>实验合成：否</option>
+                        </select>
                     </div>
-                    <div class="col-md-4 col-lg-2">
-                        <input type="number" step="any" class="form-control form-control-sm edit-omega" placeholder="ω" value="${data ? data.omega_log || '' : ''}">
+                    <div class="col-md-6 col-lg-1">
+                        <input type="number" step="any" class="form-control form-control-sm edit-pressure" placeholder="P (GPa)" value="${dataInputValue(data, 'pressure')}">
                     </div>
-                    <div class="col-md-4 col-lg-2">
-                        <input type="number" step="any" class="form-control form-control-sm edit-nef" placeholder="N" value="${data ? data.n_ef || '' : ''}">
+                    <div class="col-md-6 col-lg-1">
+                        <input type="number" step="any" class="form-control form-control-sm edit-tc" placeholder="Tc (K)" value="${dataInputValue(data, 'tc')}">
                     </div>
-                    <div class="col-12 col-lg-2">
+                    <div class="col-md-6 col-lg-1">
+                        <input type="number" step="any" class="form-control form-control-sm edit-lambda" placeholder="λ" value="${dataInputValue(data, 'lambda_val')}">
+                    </div>
+                    <div class="col-md-6 col-lg-1">
+                        <input type="number" step="any" class="form-control form-control-sm edit-omega" placeholder="ω" value="${dataInputValue(data, 'omega_log')}">
+                    </div>
+                    <div class="col-md-6 col-lg-1">
+                        <input type="number" step="any" class="form-control form-control-sm edit-nef" placeholder="N" value="${dataInputValue(data, 'n_ef')}">
+                    </div>
+                    <div class="col-12 col-lg-1">
                         <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="removeEditDataRow(this)">×</button>
                     </div>
                 </div>
@@ -431,8 +1116,8 @@
                 }
 
                 const paper = await response.json();
+                currentPreviewPaper = paper;
 
-                // 填充表单
                 document.getElementById('editPaperId').value = paper.id;
                 document.getElementById('editDoi').value = paper.doi;
                 document.getElementById('editTitle').value = paper.title || '';
@@ -443,10 +1128,7 @@
                 document.getElementById('editArticleType').value = paper.article_type || 'experimental';
                 document.getElementById('editSuperconductorType').value = normalizeSuperconductorType(paper.superconductor_type);
                 document.getElementById('editReviewStatus').value = paper.review_status || 'unreviewed';
-                document.getElementById('editChemicalFormula').value = paper.chemical_formula || '';
-                document.getElementById('editCrystalStructure').value = paper.crystal_structure || '';
-                
-                // 填充物理数据
+
                 const dataContainer = document.getElementById('editDataPointsContainer');
                 dataContainer.innerHTML = '';
                 if (paper.data && paper.data.length > 0) {
@@ -454,12 +1136,14 @@
                 } else {
                     addEditDataRow();
                 }
+                syncPreviewDataToMainEditor();
 
                 document.getElementById('editContributorName').value = paper.contributor_name || '';
                 document.getElementById('editContributorAffiliation').value = paper.contributor_affiliation || '';
                 document.getElementById('editNotes').value = paper.notes || '';
 
-                // 显示模态框
+                await loadDashboardImageGroups(paperId);
+
                 if (!editModal) {
                     editModal = new bootstrap.Modal(document.getElementById('editPaperModal'));
                 }
@@ -476,27 +1160,7 @@
             const paperId = document.getElementById('editPaperId').value;
 
             // 收集物理数据
-            const physicalData = [];
-            const computeSFactor = (tcValue, pressureValue) => {
-                if (!Number.isFinite(tcValue) || !Number.isFinite(pressureValue)) return null;
-                return tcValue / Math.sqrt(1521 + Math.pow(pressureValue, 2));
-            };
-            document.querySelectorAll('.edit-data-row').forEach(row => {
-                const pressure = row.querySelector('.edit-pressure').value;
-                const tc = row.querySelector('.edit-tc').value;
-                if (pressure && tc) {
-                    const parsedPressure = parseFloat(pressure);
-                    const parsedTc = parseFloat(tc);
-                    physicalData.push({
-                        pressure: parsedPressure,
-                        tc: parsedTc,
-                        s_factor: computeSFactor(parsedTc, parsedPressure),
-                        lambda_val: row.querySelector('.edit-lambda').value ? parseFloat(row.querySelector('.edit-lambda').value) : null,
-                        omega_log: row.querySelector('.edit-omega').value ? parseFloat(row.querySelector('.edit-omega').value) : null,
-                        n_ef: row.querySelector('.edit-nef').value ? parseFloat(row.querySelector('.edit-nef').value) : null
-                    });
-                }
-            });
+            const physicalData = collectPhysicalDataFromRows(document.getElementById('editDataPointsContainer'));
 
             const updateData = {
                 title: document.getElementById('editTitle').value,
@@ -507,8 +1171,6 @@
                 article_type: document.getElementById('editArticleType').value,
                 superconductor_type: document.getElementById('editSuperconductorType').value,
                 review_status: document.getElementById('editReviewStatus').value,
-                chemical_formula: document.getElementById('editChemicalFormula').value,
-                crystal_structure: document.getElementById('editCrystalStructure').value,
                 physical_data: physicalData,
                 contributor_name: document.getElementById('editContributorName').value,
                 contributor_affiliation: document.getElementById('editContributorAffiliation').value,
@@ -582,6 +1244,8 @@
         }
 
         // 页面加载时初始化
+        document.addEventListener('keydown', handlePreviewKeydown);
+
         if (checkAuth()) {
             loadUnreviewedPapers();
         }

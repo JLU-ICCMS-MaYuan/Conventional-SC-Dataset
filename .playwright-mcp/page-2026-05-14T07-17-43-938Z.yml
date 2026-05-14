@@ -1,0 +1,426 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e3]:
+      - link "超导文献数据库" [ref=e4] [cursor=pointer]:
+        - /url: /
+      - button [ref=e5] [cursor=pointer]
+  - generic [ref=e7]:
+    - banner [ref=e8]:
+      - heading "超导文献数据库" [level=1] [ref=e9]
+      - paragraph [ref=e10]: 基于元素周期表的超导材料文献检索系统
+    - generic [ref=e14]:
+      - heading "已选元素： 未选择" [level=5] [ref=e15]:
+        - text: 已选元素：
+        - generic [ref=e16]: 未选择
+      - paragraph [ref=e17]: 点击元素进行选择，选中后再次点击可取消。选择完成后点击下方按钮或按Enter键进入化合物页面。
+      - generic [ref=e18]:
+        - generic [ref=e19]: 筛选条件
+        - group "元素筛选模式" [ref=e20]:
+          - radio "仅包含选择元素"
+          - generic [ref=e21] [cursor=pointer]: 仅包含选择元素
+          - radio "选择元素的组合" [checked]
+          - generic [ref=e22] [cursor=pointer]: 选择元素的组合
+          - radio "包含所选元素"
+          - generic [ref=e23] [cursor=pointer]: 包含所选元素
+      - button "进入化合物页面" [disabled]
+      - button "清除选择" [ref=e24] [cursor=pointer]
+      - button "快速上传" [ref=e26] [cursor=pointer]
+      - link "⚡ 超导预测实验" [ref=e27] [cursor=pointer]:
+        - /url: /tc-pre
+    - generic [ref=e31]:
+      - generic [ref=e32] [cursor=pointer]:
+        - generic [ref=e33]: "1"
+        - generic [ref=e34]: H
+      - generic [ref=e35] [cursor=pointer]:
+        - generic [ref=e36]: "2"
+        - generic [ref=e37]: He
+      - generic [ref=e38] [cursor=pointer]:
+        - generic [ref=e39]: "3"
+        - generic [ref=e40]: Li
+      - generic [ref=e41] [cursor=pointer]:
+        - generic [ref=e42]: "4"
+        - generic [ref=e43]: Be
+      - generic [ref=e44] [cursor=pointer]:
+        - generic [ref=e45]: "5"
+        - generic [ref=e46]: B
+      - generic [ref=e47] [cursor=pointer]:
+        - generic [ref=e48]: "6"
+        - generic [ref=e49]: C
+      - generic [ref=e50] [cursor=pointer]:
+        - generic [ref=e51]: "7"
+        - generic [ref=e52]: "N"
+      - generic [ref=e53] [cursor=pointer]:
+        - generic [ref=e54]: "8"
+        - generic [ref=e55]: O
+      - generic [ref=e56] [cursor=pointer]:
+        - generic [ref=e57]: "9"
+        - generic [ref=e58]: F
+      - generic [ref=e59] [cursor=pointer]:
+        - generic [ref=e60]: "10"
+        - generic [ref=e61]: Ne
+      - generic [ref=e62] [cursor=pointer]:
+        - generic [ref=e63]: "11"
+        - generic [ref=e64]: Na
+      - generic [ref=e65] [cursor=pointer]:
+        - generic [ref=e66]: "12"
+        - generic [ref=e67]: Mg
+      - generic [ref=e68] [cursor=pointer]:
+        - generic [ref=e69]: "13"
+        - generic [ref=e70]: Al
+      - generic [ref=e71] [cursor=pointer]:
+        - generic [ref=e72]: "14"
+        - generic [ref=e73]: Si
+      - generic [ref=e74] [cursor=pointer]:
+        - generic [ref=e75]: "15"
+        - generic [ref=e76]: P
+      - generic [ref=e77] [cursor=pointer]:
+        - generic [ref=e78]: "16"
+        - generic [ref=e79]: S
+      - generic [ref=e80] [cursor=pointer]:
+        - generic [ref=e81]: "17"
+        - generic [ref=e82]: Cl
+      - generic [ref=e83] [cursor=pointer]:
+        - generic [ref=e84]: "18"
+        - generic [ref=e85]: Ar
+      - generic [ref=e86] [cursor=pointer]:
+        - generic [ref=e87]: "19"
+        - generic [ref=e88]: K
+      - generic [ref=e89] [cursor=pointer]:
+        - generic [ref=e90]: "20"
+        - generic [ref=e91]: Ca
+      - generic [ref=e92] [cursor=pointer]:
+        - generic [ref=e93]: "21"
+        - generic [ref=e94]: Sc
+      - generic [ref=e95] [cursor=pointer]:
+        - generic [ref=e96]: "22"
+        - generic [ref=e97]: Ti
+      - generic [ref=e98] [cursor=pointer]:
+        - generic [ref=e99]: "23"
+        - generic [ref=e100]: V
+      - generic [ref=e101] [cursor=pointer]:
+        - generic [ref=e102]: "24"
+        - generic [ref=e103]: Cr
+      - generic [ref=e104] [cursor=pointer]:
+        - generic [ref=e105]: "25"
+        - generic [ref=e106]: Mn
+      - generic [ref=e107] [cursor=pointer]:
+        - generic [ref=e108]: "26"
+        - generic [ref=e109]: Fe
+      - generic [ref=e110] [cursor=pointer]:
+        - generic [ref=e111]: "27"
+        - generic [ref=e112]: Co
+      - generic [ref=e113] [cursor=pointer]:
+        - generic [ref=e114]: "28"
+        - generic [ref=e115]: Ni
+      - generic [ref=e116] [cursor=pointer]:
+        - generic [ref=e117]: "29"
+        - generic [ref=e118]: Cu
+      - generic [ref=e119] [cursor=pointer]:
+        - generic [ref=e120]: "30"
+        - generic [ref=e121]: Zn
+      - generic [ref=e122] [cursor=pointer]:
+        - generic [ref=e123]: "31"
+        - generic [ref=e124]: Ga
+      - generic [ref=e125] [cursor=pointer]:
+        - generic [ref=e126]: "32"
+        - generic [ref=e127]: Ge
+      - generic [ref=e128] [cursor=pointer]:
+        - generic [ref=e129]: "33"
+        - generic [ref=e130]: As
+      - generic [ref=e131] [cursor=pointer]:
+        - generic [ref=e132]: "34"
+        - generic [ref=e133]: Se
+      - generic [ref=e134] [cursor=pointer]:
+        - generic [ref=e135]: "35"
+        - generic [ref=e136]: Br
+      - generic [ref=e137] [cursor=pointer]:
+        - generic [ref=e138]: "36"
+        - generic [ref=e139]: Kr
+      - generic [ref=e140] [cursor=pointer]:
+        - generic [ref=e141]: "37"
+        - generic [ref=e142]: Rb
+      - generic [ref=e143] [cursor=pointer]:
+        - generic [ref=e144]: "38"
+        - generic [ref=e145]: Sr
+      - generic [ref=e146] [cursor=pointer]:
+        - generic [ref=e147]: "39"
+        - generic [ref=e148]: "Y"
+      - generic [ref=e149] [cursor=pointer]:
+        - generic [ref=e150]: "40"
+        - generic [ref=e151]: Zr
+      - generic [ref=e152] [cursor=pointer]:
+        - generic [ref=e153]: "41"
+        - generic [ref=e154]: Nb
+      - generic [ref=e155] [cursor=pointer]:
+        - generic [ref=e156]: "42"
+        - generic [ref=e157]: Mo
+      - generic [ref=e158] [cursor=pointer]:
+        - generic [ref=e159]: "43"
+        - generic [ref=e160]: Tc
+      - generic [ref=e161] [cursor=pointer]:
+        - generic [ref=e162]: "44"
+        - generic [ref=e163]: Ru
+      - generic [ref=e164] [cursor=pointer]:
+        - generic [ref=e165]: "45"
+        - generic [ref=e166]: Rh
+      - generic [ref=e167] [cursor=pointer]:
+        - generic [ref=e168]: "46"
+        - generic [ref=e169]: Pd
+      - generic [ref=e170] [cursor=pointer]:
+        - generic [ref=e171]: "47"
+        - generic [ref=e172]: Ag
+      - generic [ref=e173] [cursor=pointer]:
+        - generic [ref=e174]: "48"
+        - generic [ref=e175]: Cd
+      - generic [ref=e176] [cursor=pointer]:
+        - generic [ref=e177]: "49"
+        - generic [ref=e178]: In
+      - generic [ref=e179] [cursor=pointer]:
+        - generic [ref=e180]: "50"
+        - generic [ref=e181]: Sn
+      - generic [ref=e182] [cursor=pointer]:
+        - generic [ref=e183]: "51"
+        - generic [ref=e184]: Sb
+      - generic [ref=e185] [cursor=pointer]:
+        - generic [ref=e186]: "52"
+        - generic [ref=e187]: Te
+      - generic [ref=e188] [cursor=pointer]:
+        - generic [ref=e189]: "53"
+        - generic [ref=e190]: I
+      - generic [ref=e191] [cursor=pointer]:
+        - generic [ref=e192]: "54"
+        - generic [ref=e193]: Xe
+      - generic [ref=e194] [cursor=pointer]:
+        - generic [ref=e195]: "55"
+        - generic [ref=e196]: Cs
+      - generic [ref=e197] [cursor=pointer]:
+        - generic [ref=e198]: "56"
+        - generic [ref=e199]: Ba
+      - generic:
+        - generic: "57"
+        - generic: La-Lu
+      - generic [ref=e200] [cursor=pointer]:
+        - generic [ref=e201]: "72"
+        - generic [ref=e202]: Hf
+      - generic [ref=e203] [cursor=pointer]:
+        - generic [ref=e204]: "73"
+        - generic [ref=e205]: Ta
+      - generic [ref=e206] [cursor=pointer]:
+        - generic [ref=e207]: "74"
+        - generic [ref=e208]: W
+      - generic [ref=e209] [cursor=pointer]:
+        - generic [ref=e210]: "75"
+        - generic [ref=e211]: Re
+      - generic [ref=e212] [cursor=pointer]:
+        - generic [ref=e213]: "76"
+        - generic [ref=e214]: Os
+      - generic [ref=e215] [cursor=pointer]:
+        - generic [ref=e216]: "77"
+        - generic [ref=e217]: Ir
+      - generic [ref=e218] [cursor=pointer]:
+        - generic [ref=e219]: "78"
+        - generic [ref=e220]: Pt
+      - generic [ref=e221] [cursor=pointer]:
+        - generic [ref=e222]: "79"
+        - generic [ref=e223]: Au
+      - generic [ref=e224] [cursor=pointer]:
+        - generic [ref=e225]: "80"
+        - generic [ref=e226]: Hg
+      - generic [ref=e227] [cursor=pointer]:
+        - generic [ref=e228]: "81"
+        - generic [ref=e229]: Tl
+      - generic [ref=e230] [cursor=pointer]:
+        - generic [ref=e231]: "82"
+        - generic [ref=e232]: Pb
+      - generic [ref=e233] [cursor=pointer]:
+        - generic [ref=e234]: "83"
+        - generic [ref=e235]: Bi
+      - generic:
+        - generic: "84"
+        - generic: Po
+      - generic:
+        - generic: "85"
+        - generic: At
+      - generic:
+        - generic: "86"
+        - generic: Rn
+      - generic:
+        - generic: "87"
+        - generic: Fr
+      - generic:
+        - generic: "88"
+        - generic: Ra
+      - generic:
+        - generic: "89"
+        - generic: Ac-Lr
+      - generic:
+        - generic: "104"
+        - generic: Rf
+      - generic:
+        - generic: "105"
+        - generic: Db
+      - generic:
+        - generic: "106"
+        - generic: Sg
+      - generic:
+        - generic: "107"
+        - generic: Bh
+      - generic:
+        - generic: "108"
+        - generic: Hs
+      - generic:
+        - generic: "109"
+        - generic: Mt
+      - generic:
+        - generic: "110"
+        - generic: Ds
+      - generic:
+        - generic: "111"
+        - generic: Rg
+      - generic:
+        - generic: "112"
+        - generic: Cn
+      - generic:
+        - generic: "113"
+        - generic: Nh
+      - generic:
+        - generic: "114"
+        - generic: Fl
+      - generic:
+        - generic: "115"
+        - generic: Mc
+      - generic:
+        - generic: "116"
+        - generic: Lv
+      - generic:
+        - generic: "117"
+        - generic: Ts
+      - generic:
+        - generic: "118"
+        - generic: Og
+      - generic [ref=e236] [cursor=pointer]:
+        - generic [ref=e237]: "57"
+        - generic [ref=e238]: La
+      - generic [ref=e239] [cursor=pointer]:
+        - generic [ref=e240]: "58"
+        - generic [ref=e241]: Ce
+      - generic [ref=e242] [cursor=pointer]:
+        - generic [ref=e243]: "59"
+        - generic [ref=e244]: Pr
+      - generic [ref=e245] [cursor=pointer]:
+        - generic [ref=e246]: "60"
+        - generic [ref=e247]: Nd
+      - generic [ref=e248] [cursor=pointer]:
+        - generic [ref=e249]: "61"
+        - generic [ref=e250]: Pm
+      - generic [ref=e251] [cursor=pointer]:
+        - generic [ref=e252]: "62"
+        - generic [ref=e253]: Sm
+      - generic [ref=e254] [cursor=pointer]:
+        - generic [ref=e255]: "63"
+        - generic [ref=e256]: Eu
+      - generic [ref=e257] [cursor=pointer]:
+        - generic [ref=e258]: "64"
+        - generic [ref=e259]: Gd
+      - generic [ref=e260] [cursor=pointer]:
+        - generic [ref=e261]: "65"
+        - generic [ref=e262]: Tb
+      - generic [ref=e263] [cursor=pointer]:
+        - generic [ref=e264]: "66"
+        - generic [ref=e265]: Dy
+      - generic [ref=e266] [cursor=pointer]:
+        - generic [ref=e267]: "67"
+        - generic [ref=e268]: Ho
+      - generic [ref=e269] [cursor=pointer]:
+        - generic [ref=e270]: "68"
+        - generic [ref=e271]: Er
+      - generic [ref=e272] [cursor=pointer]:
+        - generic [ref=e273]: "69"
+        - generic [ref=e274]: Tm
+      - generic [ref=e275] [cursor=pointer]:
+        - generic [ref=e276]: "70"
+        - generic [ref=e277]: Yb
+      - generic [ref=e278] [cursor=pointer]:
+        - generic [ref=e279]: "71"
+        - generic [ref=e280]: Lu
+      - generic [ref=e281] [cursor=pointer]:
+        - generic [ref=e282]: "89"
+        - generic [ref=e283]: Ac
+      - generic [ref=e284] [cursor=pointer]:
+        - generic [ref=e285]: "90"
+        - generic [ref=e286]: Th
+      - generic [ref=e287] [cursor=pointer]:
+        - generic [ref=e288]: "91"
+        - generic [ref=e289]: Pa
+      - generic [ref=e290] [cursor=pointer]:
+        - generic [ref=e291]: "92"
+        - generic [ref=e292]: U
+      - generic [ref=e293] [cursor=pointer]:
+        - generic [ref=e294]: "93"
+        - generic [ref=e295]: Np
+      - generic [ref=e296] [cursor=pointer]:
+        - generic [ref=e297]: "94"
+        - generic [ref=e298]: Pu
+      - generic:
+        - generic: "95"
+        - generic: Am
+      - generic:
+        - generic: "96"
+        - generic: Cm
+      - generic:
+        - generic: "97"
+        - generic: Bk
+      - generic:
+        - generic: "98"
+        - generic: Cf
+      - generic:
+        - generic: "99"
+        - generic: Es
+      - generic:
+        - generic: "100"
+        - generic: Fm
+      - generic:
+        - generic: "101"
+        - generic: Md
+      - generic:
+        - generic: "102"
+        - generic: "No"
+      - generic:
+        - generic: "103"
+        - generic: Lr
+    - generic [ref=e299]:
+      - heading "超导临界温度 (Tc) 历史演变" [level=6] [ref=e303]
+      - heading "数据库实时 P-Tc 分布" [level=6] [ref=e310]
+      - heading "贡献者排行 (Top 20)" [level=6] [ref=e317]
+    - generic [ref=e321]:
+      - img "Kamerlingh Onnes" [ref=e323]
+      - img "John Bardeen" [ref=e325]
+      - img "Leon Cooper" [ref=e327]
+      - img "John Robert Schrieffer" [ref=e329]
+      - img "Ivar Giaever" [ref=e331]
+      - img "Brian Josephson" [ref=e333]
+      - img "Leo Esaki" [ref=e335]
+      - img "Georg Bednorz" [ref=e337]
+      - img "Karl Müller" [ref=e339]
+      - img "Alexei Abrikosov" [ref=e341]
+      - img "Vitaly Ginzburg" [ref=e343]
+      - img "Anthony James Leggett" [ref=e345]
+    - generic [ref=e349]:
+      - heading "使用说明" [level=5] [ref=e350]
+      - list [ref=e351]:
+        - listitem [ref=e352]: 选择一个或多个元素，系统将显示含有这些元素的超导体文献
+        - listitem [ref=e353]: 选择多个元素时，显示同时包含所有选中元素的化合物文献
+        - listitem [ref=e354]: 如果元素组合暂无文献，系统会提示您重新选择
+        - listitem [ref=e355]: 支持键盘Enter键快捷跳转
+    - generic [ref=e358]:
+      - paragraph [ref=e359]: 开发者：吉林大学物理学院-物质模拟方法与软件教育部重点实验室 马原
+      - paragraph [ref=e360]: 吉林大学物理学院-物质模拟方法与软件教育部重点实验室 郭强
+      - paragraph [ref=e361]: 吉林大学物理学院-物质模拟方法与软件教育部重点实验室 刘寒雨
+      - paragraph [ref=e362]:
+        - text: 邮箱：
+        - link "mayuan@calypso.org.cn" [ref=e363] [cursor=pointer]:
+          - /url: mailto:mayuan@calypso.org.cn
+      - paragraph
+      - link "guoqiang42@mails.jlu.edu.cn" [ref=e364] [cursor=pointer]:
+        - /url: mailto:guoqiang42@mails.jlu.edu.cn
+      - paragraph

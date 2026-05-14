@@ -222,7 +222,7 @@ function updateSelectedDisplay() {
     const btn = document.getElementById('enter-compound-btn');
 
     if (selectedElements.size === 0) {
-        display.textContent = '未选择';
+        display.textContent = I18N.t('index.none_selected');
         display.className = 'badge bg-secondary';
         btn.disabled = true;
     } else {
@@ -308,7 +308,7 @@ function clearSelection() {
 function triggerFastUpload() {
     const auth = window.authState ? window.authState.get() : null;
     if (!auth || !auth.token) {
-        if (confirm('只有注册用户可以批量上传文献。是否立即前往登录？')) {
+        if (confirm(I18N.t('index.login_to_upload'))) {
             window.location.href = '/login';
         }
         return;
@@ -375,3 +375,6 @@ async function handleFastUpload(input) {
         originalBtn.innerHTML = originalHtml;
     }
 }
+
+// 语言切换时更新已选元素显示
+document.addEventListener('langChange', updateSelectedDisplay);

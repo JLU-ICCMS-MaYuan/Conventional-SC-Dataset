@@ -42,7 +42,7 @@ class CompoundResponse(BaseModel):
     id: int
     element_symbols: str
     element_list: List[str]
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -51,6 +51,8 @@ class CompoundResponse(BaseModel):
 class CompoundSearchRequest(BaseModel):
     elements: List[str] = Field(..., description="选择的元素符号列表")
     mode: str = Field("combination", description="筛选模式: only, combination, contains")
+    limit: int = Field(50, ge=1, le=200, description="返回数量限制")
+    offset: int = Field(0, ge=0, description="偏移量")
 
     @validator('elements')
     def validate_elements(cls, v):
@@ -74,6 +76,44 @@ class CompoundSearchResult(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class CompoundSearchPaginationResponse(BaseModel):
+    items: List[CompoundSearchResult]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+    has_prev: bool
+    has_next: bool
+
+
+class PaperModeSearchRequest(BaseModel):
+    elements: List[str] = Field(..., description="选择的元素符号列表")
+    mode: str = Field("combination", description="筛选模式: only, combination, contains")
+    keyword: Optional[str] = Field(None, description="关键词（标题、摘要、作者、化学式）")
+    year_min: Optional[int] = Field(None, description="最小年份")
+    year_max: Optional[int] = Field(None, description="最大年份")
+    journal: Optional[str] = Field(None, description="期刊名称")
+    crystal_structure: Optional[str] = Field(None, description="晶体结构类型")
+    review_status: Optional[str] = Field(None, description="审核状态")
+    sort_by: Optional[str] = Field("year", description="排序字段：created_at, year")
+    sort_order: Optional[str] = Field("desc", description="排序顺序：asc, desc")
+    limit: int = Field(50, ge=1, le=200, description="返回数量限制")
+    offset: int = Field(0, ge=0, description="偏移量")
+
+    @validator('elements')
+    def validate_mode_search_elements(cls, v):
+        if not v:
+            raise ValueError("至少需要选择一个元素")
+        return sorted(set(v))
+
+    @validator('mode')
+    def validate_mode_search_mode(cls, v):
+        allowed = {'only', 'combination', 'contains'}
+        if v not in allowed:
+            raise ValueError(f"筛选模式必须是: {', '.join(allowed)}")
+        return v
 
 
 # ============= 文献相关 =============
@@ -127,12 +167,18 @@ class PaperCreate(BaseModel):
 
 class PaperData(BaseModel):
     # 数据字段
-    pressure: Optional[float] = Field(None, description="压强 (GPa)")
-    tc: Optional[float] = Field(None, description="超导温度 Tc (K)")
+    tc: Optional[List[float]] = Field(None, description="超导温度 Tc (K)，单值或区间")
+    tc_press: Optional[List[float]] = Field(None, description="压强 (GPa)，单值或区间")
     lambda_val: Optional[float] = Field(None, description="λ (lambda)")
     omega_log: Optional[float] = Field(None, description="ω_log")
     n_ef: Optional[float] = Field(None, description="N(E_F)")
     s_factor: Optional[float] = Field(None, description="s 因子")
+    article_type: Optional[str] = Field(None, description="文章类型")
+    superconductor_type: Optional[str] = Field(None, description="超导体类型")
+    chemical_formula: Optional[str] = Field(None, description="化学式")
+    crystal_structure: Optional[str] = Field(None, description="晶体结构")
+    sample_name: Optional[str] = Field(None, description="样品名")
+    data_source_note: Optional[str] = Field(None, description="数据来源说明")
     class Config:
         from_attributes = True # 这让 Pydantic 能处理 SQLAlchemy 对象
 
@@ -140,9 +186,9 @@ class PaperResponse(BaseModel):
     """文献响应模型"""
     data: List[PaperData] = Field([], validation_alias="physical_parameters")
     id: int
-    compound_id: int
+    compound_id: Optional[int] = None
     doi: str
-    title: str
+    title: Optional[str] = None
     authors: Optional[str] = None
     journal: Optional[str] = None
     volume: Optional[str] = None
@@ -151,12 +197,12 @@ class PaperResponse(BaseModel):
     abstract: Optional[str] = None
     citation_aps: Optional[str] = None
     citation_bibtex: Optional[str] = None
-    article_type: str
-    superconductor_type: str
+    article_type: Optional[str] = None
+    superconductor_type: Optional[str] = None
     chemical_formula: Optional[str] = None
     crystal_structure: Optional[str] = None
-    contributor_name: str
-    contributor_affiliation: str
+    contributor_name: Optional[str] = None
+    contributor_affiliation: Optional[str] = None
     notes: Optional[str] = None
     show_in_chart: bool = True
 
@@ -168,6 +214,9 @@ class PaperResponse(BaseModel):
     reviewed_by: Optional[int] = None
     reviewed_at: Optional[datetime] = None
     reviewer_name: Optional[str] = None  # 审核人姓名（需要从关联查询获取）
+    compound_symbols: Optional[str] = None
+    sample_name: Optional[str] = None
+    data_source_note: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -177,6 +226,17 @@ class PaperResponse(BaseModel):
 class PaperDetail(PaperResponse):
     """文献详情模型（包含截图）"""
     element_symbols: str
+
+
+class PaperPaginationResponse(BaseModel):
+    """文献分页响应模型"""
+    items: List[PaperResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+    has_prev: bool
+    has_next: bool
 
 
 # ============= 截图相关 =============
@@ -203,7 +263,7 @@ class PaperSearchParams(BaseModel):
     journal: Optional[str] = Field(None, description="期刊名称")
     crystal_structure: Optional[str] = Field(None, description="晶体结构类型")
     review_status: Optional[str] = Field(None, description="审核状态：unreviewed, approved, rejected, modifying, admin_only")
-    sort_by: Optional[str] = Field("created_at", description="排序字段：created_at, year")
+    sort_by: Optional[str] = Field("year", description="排序字段：created_at, year")
     sort_order: Optional[str] = Field("desc", description="排序顺序：asc, desc")
     limit: Optional[int] = Field(30, ge=1, le=30, description="返回数量限制")
     offset: Optional[int] = Field(0, ge=0, description="偏移量")

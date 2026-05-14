@@ -21,7 +21,7 @@ function initUserNavbar() {
 
 function renderLoggedInNav(container, user) {
     const isAdmin = Boolean(user.is_admin);
-    const dashboardLink = isAdmin ? `<li><a class="dropdown-item" href="/admin/dashboard">管理面板</a></li>` : '';
+    const dashboardLink = isAdmin ? `<li><a class="dropdown-item" href="/admin/dashboard">${I18N.t('admin.dashboard')}</a></li>` : '';
 
     container.innerHTML = `
         <div class="dropdown">
@@ -30,7 +30,7 @@ function renderLoggedInNav(container, user) {
             </button>
             <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="userDropdown">
                 ${dashboardLink}
-                <li><a class="dropdown-item text-danger" href="#" onclick="handleLogout()">退出登录</a></li>
+                <li><a class="dropdown-item text-danger" href="#" onclick="handleLogout()">${I18N.t('common.logout')}</a></li>
             </ul>
         </div>
     `;
@@ -39,8 +39,8 @@ function renderLoggedInNav(container, user) {
 function renderLoggedOutNav(container) {
     container.innerHTML = `
         <div class="btn-group">
-            <a href="/login" class="btn btn-outline-light">登录</a>
-            <a href="/register" class="btn btn-light">注册</a>
+            <a href="/login" class="btn btn-outline-light">${I18N.t('login.submit')}</a>
+            <a href="/register" class="btn btn-light">${I18N.t('register.title')}</a>
         </div>
     `;
 }
@@ -51,9 +51,11 @@ function handleLogout() {
     } else {
         localStorage.clear();
     }
-    alert('已退出登录');
+    alert(I18N.t('auth.logged_out'));
     window.location.reload();
 }
+
+document.addEventListener('langChange', initUserNavbar);
 
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', initUserNavbar);

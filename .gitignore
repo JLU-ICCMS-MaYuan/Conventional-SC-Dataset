@@ -23,9 +23,6 @@ wheels/
 .installed.cfg
 *.egg
 
-# 数据库
-*.sqlite
-*.sqlite3
 
 # IDE
 .vscode/
@@ -46,6 +43,17 @@ wheels/
 Thumbs.db
 
 # 临时文件
+bak
 tmp/
 temp/
 *.tmp
+
+#AI
+AGENTS.md
+CLI_GUIDE.md
+INSTALL.md
+CLAUDE.md
+
+#数据库
+hydride_literature_images.db
+data/alexandria/
