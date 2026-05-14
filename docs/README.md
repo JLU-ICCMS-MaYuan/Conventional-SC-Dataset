@@ -19,6 +19,7 @@
 ## 文档结构
 
 - [business-overview.md](/home/mayuan/code/Conventional-SC-Dataset/docs/business-overview.md)：业务总览、角色分工、模块关系、页面与接口入口
+- [current-state-and-gaps.md](/home/mayuan/code/Conventional-SC-Dataset/docs/current-state-and-gaps.md)：系统现状、已实现能力、未实现能力、数据库承接差距
 - [business-search-and-discovery.md](/home/mayuan/code/Conventional-SC-Dataset/docs/business-search-and-discovery.md)：元素选择、组合模式、组合页浏览、筛选、导出
 - [business-paper-ingestion.md](/home/mayuan/code/Conventional-SC-Dataset/docs/business-paper-ingestion.md)：单篇上传、批量上传、物理参数、截图、导入导出
 - [business-auth-and-review.md](/home/mayuan/code/Conventional-SC-Dataset/docs/business-auth-and-review.md)：注册登录、邮箱验证、管理员审批、文献审核、全局管理
@@ -28,6 +29,7 @@
 
 ## 快速定位
 
+- 如果你要快速判断某个产品设想是否已经落地，先看 `current-state-and-gaps.md`
 - 如果你要理解用户如何从首页进入某个化合物体系，先看 `business-search-and-discovery.md`
 - 如果你要理解文献如何进入数据库，先看 `business-paper-ingestion.md`
 - 如果你要理解管理员体系和审核流，先看 `business-auth-and-review.md`
