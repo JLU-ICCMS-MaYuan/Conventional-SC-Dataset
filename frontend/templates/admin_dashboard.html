@@ -91,32 +91,33 @@
     <!-- 导航栏 -->
     <nav class="navbar navbar-expand-lg navbar-dark navbar-custom sticky-top">
         <div class="container-fluid">
-            <a class="navbar-brand" href="/">超导文献数据库</a>
+            <a class="navbar-brand" href="/" data-i18n="nav.title">超导文献数据库</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link active" href="/admin/dashboard">审核文献</a>
+                        <a class="nav-link active" href="/admin/dashboard" data-i18n="admin.review_papers">审核文献</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/admin/papers">全局管理</a>
+                        <a class="nav-link" href="/admin/papers" data-i18n="admin.global_management">全局管理</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/admin/superadmin">超级管理员</a>
+                        <a class="nav-link" href="/admin/superadmin" data-i18n="admin.superadmin">超级管理员</a>
                     </li>
                 </ul>
                 <div class="d-flex align-items-center text-white">
-                    <span class="me-3">欢迎，<span id="userName"></span></span>
-                    <button class="btn btn-outline-light btn-sm" onclick="logout()">退出</button>
+                    <span class="me-3"><span data-i18n="common.welcome">欢迎，</span><span id="userName"></span></span>
+                    <button class="btn btn-outline-light btn-sm me-2" onclick="logout()" data-i18n="common.logout">退出</button>
+                    <button class="btn btn-outline-light btn-sm" onclick="I18N.toggle()" data-i18n="common.language">中/EN</button>
                 </div>
             </div>
         </div>
     </nav>
 
     <div class="container mt-4">
-        <h2>待审核文献列表</h2>
+        <h2 data-i18n="admin.pending_review">待审核文献列表</h2>
 
         <div id="unreviewedPapers" class="mt-4">
             <div class="text-center py-5">
@@ -138,7 +139,7 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">编辑文献信息</h5>
+                    <h5 class="modal-title" data-i18n="admin.edit_paper">编辑文献信息</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
@@ -146,46 +147,46 @@
                         <input type="hidden" id="editPaperId">
 
                         <div class="mb-3">
-                            <label class="form-label">DOI <small class="text-muted">(只读)</small></label>
+                            <label class="form-label" data-i18n="admin.doi_readonly">DOI (只读)</label>
                             <input type="text" class="form-control" id="editDoi" readonly>
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label">标题 <span class="text-danger">*</span></label>
+                            <label class="form-label" data-i18n="admin.title">标题 <span class="text-danger">*</span></label>
                             <input type="text" class="form-control" id="editTitle" required>
                         </div>
 
                         <div class="row">
                             <div class="col-md-6 mb-3">
-                                <label class="form-label">期刊</label>
+                                <label class="form-label" data-i18n="admin.journal">期刊</label>
                                 <input type="text" class="form-control" id="editJournal">
                             </div>
                             <div class="col-md-3 mb-3">
-                                <label class="form-label">年份</label>
+                                <label class="form-label" data-i18n="admin.year">年份</label>
                                 <input type="number" class="form-control" id="editYear" min="1900" max="2100">
                             </div>
                             <div class="col-md-3 mb-3">
-                                <label class="form-label">卷号</label>
+                                <label class="form-label" data-i18n="admin.volume">卷号</label>
                                 <input type="text" class="form-control" id="editVolume">
                             </div>
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label">作者</label>
+                            <label class="form-label" data-i18n="admin.authors">作者</label>
                             <textarea class="form-control" id="editAuthors" rows="2"></textarea>
-                            <small class="text-muted">JSON格式，如：["张三", "李四"]</small>
+                            <small class="text-muted" data-i18n="admin.authors_hint">JSON格式，如：["张三", "李四"]</small>
                         </div>
 
                         <div class="row">
                             <div class="col-md-6 mb-3">
-                                <label class="form-label">文章类型</label>
+                                <label class="form-label" data-i18n="admin.article_type">文章类型</label>
                                 <select class="form-select" id="editArticleType">
                                     <option value="theoretical">理论</option>
                                     <option value="experimental">实验</option>
                                 </select>
                             </div>
                             <div class="col-md-6 mb-3">
-                                <label class="form-label">超导体类型</label>
+                                <label class="form-label" data-i18n="admin.superconductor_type">超导体类型</label>
                                 <select class="form-select" id="editSuperconductorType">
                                     <option value="cuprate">铜基</option>
                                     <option value="iron_based">铁基</option>
@@ -198,9 +199,8 @@
                             </div>
                         </div>
 
-                        <!-- 审核状态编辑 (由于是审核页面，可能需要在这里也能改状态) -->
                         <div class="mb-3">
-                            <label class="form-label">审核状态</label>
+                            <label class="form-label" data-i18n="admin.review_status">审核状态</label>
                             <select class="form-select" id="editReviewStatus">
                                 <option value="unreviewed">⏳ 未审核</option>
                                 <option value="approved">✅ 已通过</option>
@@ -211,40 +211,39 @@
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label">化合物与物理数据 <span class="text-danger">*</span></label>
+                            <label class="form-label" data-i18n="admin.compound_physical_data">化合物与物理数据 <span class="text-danger">*</span></label>
                             <div id="editDataPointsContainer">
-                                <!-- 动态数据行 -->
                             </div>
-                            <button type="button" class="btn btn-outline-primary btn-sm mt-1" onclick="addEditDataRow()">+ 添加一组数据</button>
+                            <button type="button" class="btn btn-outline-primary btn-sm mt-1" onclick="addEditDataRow()" data-i18n="admin.add_data_row">+ 添加一组数据</button>
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label">图片分组与介绍</label>
+                            <label class="form-label" data-i18n="admin.image_groups_intro">图片分组与介绍</label>
                             <div id="editImageGroups" class="border rounded p-3 bg-light-subtle">
-                                <div class="text-muted small">打开文献后加载图片分组...</div>
+                                <div class="text-muted small" data-i18n="admin.loading_images">打开文献后加载图片分组...</div>
                             </div>
                         </div>
 
                         <div class="row">
                             <div class="col-md-6 mb-3">
-                                <label class="form-label">贡献者</label>
+                                <label class="form-label" data-i18n="admin.contributor">贡献者</label>
                                 <input type="text" class="form-control" id="editContributorName">
                             </div>
                             <div class="col-md-6 mb-3">
-                                <label class="form-label">贡献者单位</label>
+                                <label class="form-label" data-i18n="admin.contributor_affiliation">贡献者单位</label>
                                 <input type="text" class="form-control" id="editContributorAffiliation">
                             </div>
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label">备注</label>
+                            <label class="form-label" data-i18n="admin.notes">备注</label>
                             <textarea class="form-control" id="editNotes" rows="3"></textarea>
                         </div>
                     </form>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                    <button type="button" class="btn btn-primary" onclick="savePaperEdits()">保存修改</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-i18n="common.cancel">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="savePaperEdits()" data-i18n="common.save">保存修改</button>
                 </div>
             </div>
         </div>
@@ -256,11 +255,11 @@
                 <button type="button" class="btn-close image-preview-close" aria-label="关闭" onclick="closeImagePreview()"></button>
             </div>
             <div class="image-preview-stage">
-                <button type="button" class="btn btn-outline-secondary image-preview-nav" onclick="changePreviewImage(-1)">上一张</button>
+                <button type="button" class="btn btn-outline-secondary image-preview-nav" onclick="changePreviewImage(-1)" data-i18n="common.prev">上一张</button>
                 <figure class="image-preview-figure mb-0">
-                    <img id="imagePreviewImg" src="" alt="预览图片">
+                    <img id="imagePreviewImg" src="" alt="Preview">
                 </figure>
-                <button type="button" class="btn btn-outline-secondary image-preview-nav" onclick="changePreviewImage(1)">下一张</button>
+                <button type="button" class="btn btn-outline-secondary image-preview-nav" onclick="changePreviewImage(1)" data-i18n="common.next">下一张</button>
             </div>
             <div class="image-preview-meta">
                 <div id="imagePreviewCaption" class="image-preview-caption small"></div>
@@ -269,8 +268,8 @@
                     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
                         <div class="fw-semibold">化合物与物理数据</div>
                         <div class="d-flex gap-2">
-                            <button type="button" id="previewPrevGroupBtn" class="btn btn-outline-secondary btn-sm" onclick="changePreviewGroup(-1)">上一组</button>
-                            <button type="button" id="previewNextGroupBtn" class="btn btn-outline-secondary btn-sm" onclick="changePreviewGroup(1)">下一组</button>
+                            <button type="button" id="previewPrevGroupBtn" class="btn btn-outline-secondary btn-sm" onclick="changePreviewGroup(-1)" data-i18n="common.prev_group">上一组</button>
+                            <button type="button" id="previewNextGroupBtn" class="btn btn-outline-secondary btn-sm" onclick="changePreviewGroup(1)" data-i18n="common.next_group">下一组</button>
                         </div>
                     </div>
                     <div id="imagePreviewData"></div>
@@ -280,6 +279,7 @@
     </div>
 
     <script src="/static/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/i18n.js"></script>
     <script src="/static/js/auth_state.js"></script>
     <script>
         let token = '';

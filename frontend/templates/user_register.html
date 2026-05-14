@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>用户注册 - 超导文献数据库</title>
+    <title data-i18n="register.user_title">用户注册 - 超导文献数据库</title>
     <link href="/static/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
@@ -13,64 +13,65 @@
             <div class="col-md-6">
                 <div class="card shadow">
                     <div class="card-body p-5">
-                        <h2 class="text-center mb-4">📝 用户注册</h2>
+                        <h2 class="text-center mb-4" data-i18n="register.user_title">📝 用户注册</h2>
 
-                        <!-- 第一步：填写信息 -->
                         <div id="step1">
                             <form id="registerForm">
                                 <div class="mb-3">
-                                    <label for="realName" class="form-label">真实姓名 / 昵称</label>
-                                    <input type="text" class="form-control" id="realName" required placeholder="用于文献贡献者展示">
+                                    <label for="realName" class="form-label" data-i18n="register.real_name">真实姓名 / 昵称</label>
+                                    <input type="text" class="form-control" id="realName" required data-i18n-placeholder="register.real_name_placeholder" placeholder="用于文献贡献者展示">
                                 </div>
 
                                 <div class="mb-3">
-                                    <label for="email" class="form-label">邮箱</label>
+                                    <label for="email" class="form-label" data-i18n="login.email">邮箱</label>
                                     <input type="email" class="form-control" id="email" required placeholder="用于登录和找回密码">
                                 </div>
 
                                 <div class="mb-3">
-                                    <label for="password" class="form-label">设置密码</label>
+                                    <label for="password" class="form-label" data-i18n="register.password">设置密码</label>
                                     <input type="password" class="form-control" id="password" required minlength="6">
                                 </div>
 
                                 <div class="mb-3">
-                                    <label for="confirmPassword" class="form-label">确认密码</label>
+                                    <label for="confirmPassword" class="form-label" data-i18n="register.password_confirm">确认密码</label>
                                     <input type="password" class="form-control" id="confirmPassword" required>
                                 </div>
 
                                 <div class="d-grid gap-2 mb-3">
-                                    <button type="submit" class="btn btn-primary btn-lg">发送验证码</button>
+                                    <button type="submit" class="btn btn-primary btn-lg" data-i18n="register.send_code">发送验证码</button>
                                 </div>
                             </form>
                         </div>
 
-                        <!-- 第二步：验证邮箱 -->
                         <div id="step2" style="display: none;">
-                            <div class="alert alert-info">
+                            <div class="alert alert-info" id="codeSentMsg">
                                 验证码已发送到 <strong id="displayEmail"></strong>，请查收。
                             </div>
                             <form id="verifyForm">
                                 <div class="mb-3">
-                                    <label for="code" class="form-label">6位验证码</label>
+                                    <label for="code" class="form-label" data-i18n="register.code_input_label">6位验证码</label>
                                     <input type="text" class="form-control text-center fs-2" id="code" maxlength="6" pattern="\d{6}" required>
                                 </div>
                                 <div class="d-grid gap-2 mb-3">
-                                    <button type="submit" class="btn btn-success btn-lg">完成注册</button>
+                                    <button type="submit" class="btn btn-success btn-lg" data-i18n="register.complete_registration">完成注册</button>
                                 </div>
                                 <div class="text-center">
-                                    <button type="button" class="btn btn-link" onclick="location.reload()">重新填写信息</button>
+                                    <button type="button" class="btn btn-link" onclick="location.reload()" data-i18n="register.reenter_info">重新填写信息</button>
                                 </div>
                             </form>
                         </div>
 
                         <div class="text-center">
-                            <a href="/login" class="text-decoration-none">已有账号？立即登录</a>
+                            <a href="/login" class="text-decoration-none" data-i18n="register.has_account">已有账号？立即登录</a>
                         </div>
 
                         <hr>
 
                         <div class="text-center">
-                            <a href="/" class="btn btn-link">返回首页</a>
+                            <a href="/" class="btn btn-link" data-i18n="common.back_home">返回首页</a>
+                        </div>
+                        <div class="text-center mt-2">
+                            <button class="btn btn-outline-secondary btn-sm" onclick="I18N.toggle()" data-i18n="common.language">中/EN</button>
                         </div>
                     </div>
                 </div>
@@ -79,10 +80,10 @@
     </div>
 
     <script src="/static/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/i18n.js"></script>
     <script>
         let userEmail = '';
 
-        // 步骤1：提交注册信息
         document.getElementById('registerForm').addEventListener('submit', async function(e) {
             e.preventDefault();
 
@@ -92,7 +93,7 @@
             const confirmPassword = document.getElementById('confirmPassword').value;
 
             if (password !== confirmPassword) {
-                alert('两次输入的密码不一致');
+                alert(I18N.t('register.password_mismatch_short'));
                 return;
             }
 
@@ -101,15 +102,8 @@
             try {
                 const response = await fetch('/api/auth/register', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        email,
-                        password,
-                        real_name,
-                        is_admin: false // 普通用户
-                    })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password, real_name, is_admin: false })
                 });
 
                 const data = await response.json();
@@ -119,43 +113,44 @@
                     document.getElementById('step2').style.display = 'block';
                     document.getElementById('displayEmail').textContent = email;
                 } else {
-                    alert('注册错误: ' + (data.detail || '未知错误'));
+                    alert('Registration error: ' + (data.detail || 'Unknown error'));
                 }
             } catch (error) {
-                console.error('注册错误:', error);
-                alert('注册失败，请检查网络连接');
+                console.error('Register error:', error);
+                alert('Registration failed. Please check your network.');
             }
         });
 
-        // 步骤2：验证验证码
         document.getElementById('verifyForm').addEventListener('submit', async function(e) {
             e.preventDefault();
-
             const code = document.getElementById('code').value;
 
             try {
                 const response = await fetch('/api/auth/verify-email', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        email: userEmail,
-                        code: code
-                    })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: userEmail, code: code })
                 });
 
                 const data = await response.json();
 
                 if (response.ok) {
-                    alert('注册成功！');
+                    alert(I18N.t('register.success'));
                     window.location.href = '/login';
                 } else {
-                    alert('验证失败: ' + (data.detail || '未知错误'));
+                    alert('Verification failed: ' + (data.detail || 'Unknown error'));
                 }
             } catch (error) {
-                console.error('验证错误:', error);
-                alert('验证失败，请检查网络连接');
+                console.error('Verify error:', error);
+                alert('Verification failed. Please check your network.');
+            }
+        });
+
+        // Update code sent message when language changes
+        document.addEventListener('langChange', function() {
+            const displayEmail = document.getElementById('displayEmail');
+            if (displayEmail && displayEmail.textContent) {
+                document.getElementById('codeSentMsg').innerHTML = I18N.t('register.code_sent_to', { email: displayEmail.textContent });
             }
         });
     </script>

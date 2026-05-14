@@ -576,9 +576,9 @@ def export_papers(
 
 @router.get("/stats/chart-data")
 def get_chart_data(db: Session = Depends(get_db)):
-    """获取用于图表展示的 P-Tc 数据点"""
+    """获取用于图表展示的 P-Tc 数据点（仅 show_in_chart=True 的文献）"""
     result = []
-    rows = db.query(PaperData).join(Paper).all()
+    rows = db.query(PaperData).join(Paper).filter(Paper.show_in_chart == True).all()
     for data in rows:
         x = data.pressure_value
         y = data.tc_value

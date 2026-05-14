@@ -40,9 +40,9 @@ function getSelectedElementsFromPath() {
 
 function getModeDescription(mode = viewMode) {
     const map = {
-        only: '模式：仅显示当前组合',
-        combination: '模式：显示所有子组合（已存在组合）',
-        contains: '模式：显示包含所选元素的组合'
+        only: I18N.t('compound.mode_desc_only'),
+        combination: I18N.t('compound.mode_desc_combination'),
+        contains: I18N.t('compound.mode_desc_contains')
     };
     return map[mode] || map.only;
 }
@@ -80,12 +80,12 @@ function formatRangeCell(values, unit = '') {
 function renderPhysicalDataTable(dataRows) {
     const completeRows = (dataRows || []).filter(d => Array.isArray(d.tc) && d.tc.length > 0 && Array.isArray(d.tc_press) && d.tc_press.length > 0);
     if (completeRows.length === 0) {
-        return '<span class="text-muted">无完整的物理参数数据</span>';
+        return `<span class="text-muted">${I18N.t('compound.no_physical_data')}</span>`;
     }
 
     const synthesizedText = (d) => {
-        if (d.article_type === 'experimental' || d.article_type === 'e') return '是';
-        if (d.article_type === 'theoretical' || d.article_type === 't') return '否';
+        if (d.article_type === 'experimental' || d.article_type === 'e') return I18N.t('common.yes');
+        if (d.article_type === 'theoretical' || d.article_type === 't') return I18N.t('common.no');
         return 'null';
     };
 
@@ -107,11 +107,11 @@ function renderPhysicalDataTable(dataRows) {
             <table class="table table-sm table-bordered align-middle mb-0">
                 <thead class="table-light">
                     <tr>
-                        <th>化学式</th>
-                        <th>空间群</th>
-                        <th>是否实验合成</th>
-                        <th>超导温度</th>
-                        <th>超导压强</th>
+                        <th>${I18N.t('compound.chemical_formula')}</th>
+                        <th>${I18N.t('compound.crystal_structure')}</th>
+                        <th>${I18N.t('compound.is_experimental')}</th>
+                        <th>${I18N.t('compound.superconducting_temp')}</th>
+                        <th>${I18N.t('compound.superconducting_pressure')}</th>
                         <th>λ</th>
                         <th>ω_log</th>
                         <th>N(E_F)</th>
@@ -170,14 +170,14 @@ async function loadCompoundInfo() {
         const response = await fetch(`/api/compounds/${elementSymbols}`);
         if (response.ok) {
             const data = await response.json();
-            document.getElementById('compound-title').textContent = `${data.element_symbols} 系统超导体`;
+            document.getElementById('compound-title').textContent = `${data.element_symbols} ${I18N.t('compound.system_sc')}`;
             if (viewMode === 'only') {
                 updateModeSubtitle(`当前组合共收录 ${data.paper_count} 篇文献`);
             } else {
                 updateModeSubtitle('正在汇总相关组合文献…');
             }
         } else {
-            document.getElementById('compound-title').textContent = '元素组合不存在';
+            document.getElementById('compound-title').textContent = I18N.t('compound.combination_not_found');
         }
     } catch (error) {
         console.error('加载元素组合信息失败:', error);
@@ -310,7 +310,7 @@ async function loadAlexandriaMaterials(container) {
         // 更新标题显示数据库名和数量
         const subtitleEl = document.getElementById('compound-subtitle');
         if (subtitleEl) {
-            subtitleEl.innerHTML = `Alexandria 电声耦合数据库 · ${viewMode === 'only' ? '精确匹配' : viewMode === 'contains' ? '包含元素' : '子集'} · ${data.total} 个材料`;
+            subtitleEl.innerHTML = `${I18N.t('compound.alexandria_title')} · ${I18N.t(viewMode === 'only' ? 'index.mode_only' : viewMode === 'contains' ? 'index.mode_contains' : 'index.mode_combination')} · ${data.total} ${I18N.t('compound.material_count')}`;
         }
 
         // 渲染分页
@@ -332,8 +332,8 @@ function renderAlexandriaCard(item) {
     const bgStr = item.band_gap != null ? `${item.band_gap.toFixed(3)} eV` : '—';
     const dosStr = item.dos_ef != null ? item.dos_ef.toFixed(3) : '—';
     const stabilityBadge = item.imag
-        ? '<span class="badge bg-warning">可能不稳定（虚声子）</span>'
-        : '<span class="badge bg-success">动力学稳定</span>';
+        ? `<span class="badge bg-warning">${I18N.t('compound.unstable')}</span>`
+        : `<span class="badge bg-success">${I18N.t('compound.stable')}</span>`;
 
     return `
         <div class="card mb-3">
@@ -390,7 +390,7 @@ function renderAlexandriaPagination(data) {
     const start = (page - 1) * pageSize + 1;
     const end = Math.min(start + (data.items ? data.items.length : 0) - 1, total);
     summaryEl.style.display = 'block';
-    summaryEl.textContent = `第 ${start}-${end} 个材料，共 ${total} 个`;
+    summaryEl.textContent = I18N.t('compound.page_material_info', { start, end, total });
 
     if (totalPages <= 1) {
         paginationEl.innerHTML = '';
@@ -403,11 +403,11 @@ function renderAlexandriaPagination(data) {
         <nav aria-label="分页导航">
             <ul class="pagination justify-content-center flex-wrap mb-0">
                 <li class="page-item ${data.has_prev ? '' : 'disabled'}">
-                    <button class="page-link" type="button" onclick="changeAlexandriaPage(${page - 1})" ${data.has_prev ? '' : 'disabled'}>上一页</button>
+                    <button class="page-link" type="button" onclick="changeAlexandriaPage(${page - 1})" ${data.has_prev ? '' : 'disabled'}>${I18N.t('compound.prev_page')}</button>
                 </li>
                 ${renderAlexandriaPageNumbers(page, totalPages)}
                 <li class="page-item ${data.has_next ? '' : 'disabled'}">
-                    <button class="page-link" type="button" onclick="changeAlexandriaPage(${page + 1})" ${data.has_next ? '' : 'disabled'}>下一页</button>
+                    <button class="page-link" type="button" onclick="changeAlexandriaPage(${page + 1})" ${data.has_next ? '' : 'disabled'}>${I18N.t('compound.next_page')}</button>
                 </li>
             </ul>
         </nav>
@@ -514,7 +514,7 @@ async function loadHTSC2025Materials(container) {
 
         const subtitleEl = document.getElementById('compound-subtitle');
         if (subtitleEl) {
-            subtitleEl.innerHTML = `HTSC-2025 常压超导 · ${viewMode === 'only' ? '精确匹配' : viewMode === 'contains' ? '包含元素' : '子集'} · ${data.total} 个材料`;
+            subtitleEl.innerHTML = `${I18N.t('compound.htsc2025_title')} · ${I18N.t(viewMode === 'only' ? 'index.mode_only' : viewMode === 'contains' ? 'index.mode_contains' : 'index.mode_combination')} · ${data.total} ${I18N.t('compound.material_count')}`;
         }
 
         renderHTSC2025Pagination(data);
@@ -545,7 +545,7 @@ function renderHTSC2025Card(item) {
                 </div>
                 <div class="mt-2">
                     <button class="btn btn-outline-primary btn-sm" onclick="toggleCIFDetail('${item.name}')">
-                        查看 CIF 结构
+                        ${I18N.t('compound.view_cif')}
                     </button>
                     <div id="cif-detail-${item.name.replace(/[^a-zA-Z0-9-]/g, '_')}" class="mt-2" style="display: none;">
                         <pre class="bg-light p-3 rounded small" style="max-height: 400px; overflow-y: auto;"></pre>
@@ -572,7 +572,7 @@ function renderHTSC2025Pagination(data) {
     const start = (page - 1) * pageSize + 1;
     const end = Math.min(start + (data.items ? data.items.length : 0) - 1, total);
     summaryEl.style.display = 'block';
-    summaryEl.textContent = `第 ${start}-${end} 个材料，共 ${total} 个`;
+    summaryEl.textContent = I18N.t('compound.page_material_info', { start, end, total });
 
     if (totalPages <= 1) { paginationEl.innerHTML = ''; paginationEl.style.display = 'none'; return; }
 
@@ -581,10 +581,10 @@ function renderHTSC2025Pagination(data) {
         <nav aria-label="分页导航">
             <ul class="pagination justify-content-center flex-wrap mb-0">
                 <li class="page-item ${data.has_prev ? '' : 'disabled'}">
-                    <button class="page-link" type="button" onclick="changePage('htsc2025', ${page - 1})" ${data.has_prev ? '' : 'disabled'}>上一页</button>
+                    <button class="page-link" type="button" onclick="changePage('htsc2025', ${page - 1})" ${data.has_prev ? '' : 'disabled'}>${I18N.t('compound.prev_page')}</button>
                 </li>
                 <li class="page-item ${data.has_next ? '' : 'disabled'}">
-                    <button class="page-link" type="button" onclick="changePage('htsc2025', ${page + 1})" ${data.has_next ? '' : 'disabled'}>下一页</button>
+                    <button class="page-link" type="button" onclick="changePage('htsc2025', ${page + 1})" ${data.has_next ? '' : 'disabled'}>${I18N.t('compound.next_page')}</button>
                 </li>
             </ul>
         </nav>
@@ -721,11 +721,11 @@ function renderPagination(payload, mode = 'paper') {
         <nav aria-label="分页导航">
             <ul class="pagination justify-content-center flex-wrap mb-0">
                 <li class="page-item ${payload.has_prev ? '' : 'disabled'}">
-                    <button class="page-link" type="button" onclick="changePage('${mode}', ${pagination.page - 1})" ${payload.has_prev ? '' : 'disabled'}>上一页</button>
+                    <button class="page-link" type="button" onclick="changePage('${mode}', ${pagination.page - 1})" ${payload.has_prev ? '' : 'disabled'}>${I18N.t('compound.prev_page')}</button>
                 </li>
                 ${renderPageNumberItems(pagination.page, pagination.totalPages, mode)}
                 <li class="page-item ${payload.has_next ? '' : 'disabled'}">
-                    <button class="page-link" type="button" onclick="changePage('${mode}', ${pagination.page + 1})" ${payload.has_next ? '' : 'disabled'}>下一页</button>
+                    <button class="page-link" type="button" onclick="changePage('${mode}', ${pagination.page + 1})" ${payload.has_next ? '' : 'disabled'}>${I18N.t('compound.next_page')}</button>
                 </li>
             </ul>
         </nav>
@@ -830,13 +830,13 @@ function renderCombinationSection(section) {
     const papers = section.papers || [];
     const title = combo.element_symbols;
     const elementsText = combo.element_list.join(' · ');
-    const countBadge = `<span class="badge bg-secondary ms-2">${papers.length} 篇</span>`;
+    const countBadge = `<span class="badge bg-secondary ms-2">${papers.length} ${I18N.t('index.chart_papers')}</span>`;
 
     let content = '';
     if (section.error) {
         content = `<div class="alert alert-danger">加载失败：${section.error}</div>`;
     } else if (papers.length === 0) {
-        content = renderEmptyState(`组合 ${title} 暂无符合条件的文献`);
+        content = renderEmptyState(`${I18N.t('compound.system_sc')} ${title} ${I18N.t('compound.no_papers')}`);
     } else {
         content = papers.map(paper => renderPaperCard(paper)).join('');
     }
@@ -856,9 +856,9 @@ function renderCombinationSection(section) {
 
 function renderEmptyState(customText) {
     const statusMap = {
-        'approved': '已通过',
-        'unreviewed': '未审核',
-        'rejected': '已拒绝'
+        'approved': I18N.t('compound.review_status_approved'),
+        'unreviewed': I18N.t('compound.review_status_unreviewed'),
+        'rejected': I18N.t('compound.review_status_rejected')
     };
     const statusText = statusMap[currentReviewStatus] || '';
     const message = customText || `这个元素组合还没有${statusText}文献记录${currentReviewStatus === 'all' ? '，<strong>成为第一个贡献者吧！</strong>' : ''}`;
@@ -1205,19 +1205,27 @@ function addDataRow() {
     newRow.className = 'data-row card p-3 mb-2 bg-light';
     newRow.innerHTML = `
         <div class="row g-2">
-            <div class="col-md-3">
-                <label class="small">压强 (GPa) *</label>
-                <input type="number" step="any" class="form-control form-control-sm pressure-val" required placeholder="0.0">
-            </div>
-            <div class="col-md-3">
-                <label class="small">Tc (K) *</label>
-                <input type="number" step="any" class="form-control form-control-sm tc-val" required placeholder="0.0">
+            <div class="col-md-2">
+                <label class="small">${I18N.t('compound.chemical_formula')}</label>
+                <input type="text" class="form-control form-control-sm formula-val" placeholder="e.g. YBa₂Cu₃O₇">
             </div>
             <div class="col-md-2">
+                <label class="small">${I18N.t('compound.crystal_structure')}</label>
+                <input type="text" class="form-control form-control-sm structure-val" list="structure-datalist" placeholder="e.g. Perovskite" autocomplete="off">
+            </div>
+            <div class="col-md-2">
+                <label class="small">${I18N.t('compound.pressure_gpa')}</label>
+                <input type="number" step="any" class="form-control form-control-sm pressure-val" required placeholder="0.0">
+            </div>
+            <div class="col-md-2">
+                <label class="small">${I18N.t('compound.tc_k')}</label>
+                <input type="number" step="any" class="form-control form-control-sm tc-val" required placeholder="0.0">
+            </div>
+            <div class="col-md-1">
                 <label class="small">λ</label>
                 <input type="number" step="any" class="form-control form-control-sm lambda-val" placeholder="λ">
             </div>
-            <div class="col-md-2">
+            <div class="col-md-1">
                 <label class="small">ω_log</label>
                 <input type="number" step="any" class="form-control form-control-sm omega-val" placeholder="ω">
             </div>
@@ -1295,9 +1303,11 @@ async function submitPaper() {
     dataRows.forEach((row, index) => {
         const pressureInput = row.querySelector('.pressure-val');
         const tcInput = row.querySelector('.tc-val');
-        
+
         const pressure = pressureInput.value;
         const tc = tcInput.value;
+        const formula = row.querySelector('.formula-val').value.trim();
+        const structure = row.querySelector('.structure-val').value.trim();
         const lambda_val = row.querySelector('.lambda-val').value;
         const omega_log = row.querySelector('.omega-val').value;
         const n_ef = row.querySelector('.nef-val').value;
@@ -1308,6 +1318,8 @@ async function submitPaper() {
         }
 
         physicalData.push({
+            chemical_formula: formula || null,
+            crystal_structure: structure || null,
             tc_press: [parseFloat(pressure)],
             tc: [parseFloat(tc)],
             s_factor: calculateSFactor(tc, pressure),
@@ -1334,12 +1346,6 @@ async function submitPaper() {
     formData.append('article_type', articleType.value);
     formData.append('superconductor_type', superconductorType);
     formData.append('physical_data', JSON.stringify(physicalData));
-
-    const formula = document.getElementById('formula-input').value.trim();
-    if (formula) formData.append('chemical_formula', formula);
-
-    const structure = document.getElementById('structure-input').value.trim();
-    if (structure) formData.append('crystal_structure', structure);
 
     const contributorName = document.getElementById('contributor-name-input').value.trim();
     if (contributorName) formData.append('contributor_name', contributorName);
@@ -1390,25 +1396,36 @@ async function submitPaper() {
             document.getElementById('data-points-container').innerHTML = `
                 <div class="data-row card p-3 mb-2 bg-light">
                     <div class="row g-2">
-                        <div class="col-md-3">
-                            <label class="small">压强 (GPa) *</label>
-                            <input type="number" step="any" class="form-control form-control-sm pressure-val" required placeholder="0.0">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="small">Tc (K) *</label>
-                            <input type="number" step="any" class="form-control form-control-sm tc-val" required placeholder="0.0">
+                        <div class="col-md-2">
+                            <label class="small">${I18N.t('compound.chemical_formula')}</label>
+                            <input type="text" class="form-control form-control-sm formula-val" placeholder="e.g. YBa₂Cu₃O₇">
                         </div>
                         <div class="col-md-2">
+                            <label class="small">${I18N.t('compound.crystal_structure')}</label>
+                            <input type="text" class="form-control form-control-sm structure-val" list="structure-datalist" placeholder="e.g. Perovskite" autocomplete="off">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="small">${I18N.t('compound.pressure_gpa')}</label>
+                            <input type="number" step="any" class="form-control form-control-sm pressure-val" required placeholder="0.0">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="small">${I18N.t('compound.tc_k')}</label>
+                            <input type="number" step="any" class="form-control form-control-sm tc-val" required placeholder="0.0">
+                        </div>
+                        <div class="col-md-1">
                             <label class="small">λ</label>
                             <input type="number" step="any" class="form-control form-control-sm lambda-val" placeholder="λ">
                         </div>
-                        <div class="col-md-2">
+                        <div class="col-md-1">
                             <label class="small">ω_log</label>
                             <input type="number" step="any" class="form-control form-control-sm omega-val" placeholder="ω">
                         </div>
-                        <div class="col-md-2">
+                        <div class="col-md-1">
                             <label class="small">N(Ef)</label>
                             <input type="number" step="any" class="form-control form-control-sm nef-val" placeholder="N">
+                        </div>
+                        <div class="col-md-1 d-flex align-items-end">
+                            <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="removeDataRow(this)">×</button>
                         </div>
                     </div>
                 </div>
@@ -1499,3 +1516,9 @@ function downloadFile(content, fileName, contentType) {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 }
+
+// 语言切换时重新加载数据以更新动态文本
+document.addEventListener('langChange', () => {
+    loadCompoundInfo();
+    loadPapers();
+});

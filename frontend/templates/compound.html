@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>元素组合 - 超导文献数据库</title>
+    <title data-i18n="compound.page_title">元素组合 - 超导文献数据库</title>
     <link href="/static/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
@@ -11,7 +11,7 @@
     <!-- 导航栏 -->
     <nav class="navbar navbar-expand-lg navbar-dark navbar-custom shadow-sm sticky-top">
         <div class="container-fluid">
-            <a class="navbar-brand fw-bold" href="/">超导文献数据库</a>
+            <a class="navbar-brand fw-bold" href="/" data-i18n="nav.title">超导文献数据库</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
@@ -24,6 +24,7 @@
                         <span class="visually-hidden">Loading...</span>
                     </div>
                 </div>
+                <button class="btn btn-outline-light btn-sm ms-2" onclick="I18N.toggle()" data-i18n="common.language">中/EN</button>
             </div>
         </div>
     </nav>
@@ -34,8 +35,8 @@
             <h1 id="compound-title" class="display-4 fw-bold text-dark">加载中...</h1>
             <p class="lead text-dark" id="compound-subtitle">超导体文献数据库</p>
             <div class="d-flex justify-content-center gap-2 mt-3">
-                <button onclick="window.location.href='/'" class="btn btn-outline-primary">返回元素周期表</button>
-                <button class="btn btn-success" id="open-upload-btn">上传文献</button>
+                <button onclick="window.location.href='/'" class="btn btn-outline-primary" data-i18n="compound.back_to_table">返回元素周期表</button>
+                <button class="btn btn-success" id="open-upload-btn" data-i18n="compound.upload_paper">上传文献</button>
             </div>
         </div>
     </div>
@@ -46,27 +47,27 @@
             <div class="card-body">
                 <div class="row align-items-center">
                     <div class="col-auto">
-                        <h6 class="card-subtitle text-muted small mb-1">审核状态筛选</h6>
+                        <h6 class="card-subtitle text-muted small mb-1" data-i18n="compound.review_filter">审核状态筛选</h6>
                         <div class="btn-group" role="group">
                             <input type="radio" class="btn-check" name="review-status" id="status-all" value="all" checked>
-                            <label class="btn btn-outline-primary" for="status-all" onclick="filterByReviewStatus('all')">全部</label>
+                            <label class="btn btn-outline-primary" for="status-all" onclick="filterByReviewStatus('all')" data-i18n="compound.all">全部</label>
 
                             <input type="radio" class="btn-check" name="review-status" id="status-approved" value="approved">
-                            <label class="btn btn-outline-success" for="status-approved" onclick="filterByReviewStatus('approved')">✅ 已通过</label>
+                            <label class="btn btn-outline-success" for="status-approved" onclick="filterByReviewStatus('approved')" data-i18n="compound.approved">✅ 已通过</label>
 
                             <input type="radio" class="btn-check" name="review-status" id="status-unreviewed" value="unreviewed">
-                            <label class="btn btn-outline-warning" for="status-unreviewed" onclick="filterByReviewStatus('unreviewed')">⏳ 未审核</label>
+                            <label class="btn btn-outline-warning" for="status-unreviewed" onclick="filterByReviewStatus('unreviewed')" data-i18n="compound.unreviewed">⏳ 未审核</label>
 
                             <input type="radio" class="btn-check" name="review-status" id="status-rejected" value="rejected">
-                            <label class="btn btn-outline-danger" for="status-rejected" onclick="filterByReviewStatus('rejected')">❌ 已拒绝</label>
+                            <label class="btn btn-outline-danger" for="status-rejected" onclick="filterByReviewStatus('rejected')" data-i18n="compound.rejected">❌ 已拒绝</label>
                         </div>
                     </div>
                     <div class="col-auto">
-                        <h6 class="card-subtitle text-muted small mb-1">数据库</h6>
+                        <h6 class="card-subtitle text-muted small mb-1" data-i18n="compound.database">数据库</h6>
                         <select class="form-select" id="db-select" onchange="onDatabaseChange()" style="width: auto;">
-                            <option value="local">本地数据库</option>
-                            <option value="alexandria">Alexandria 电声耦合</option>
-                            <option value="htsc2025">HTSC-2025 常压超导</option>
+                            <option value="local" data-i18n="compound.local_db">本地数据库</option>
+                            <option value="alexandria" data-i18n="compound.alexandria_db">Alexandria 电声耦合</option>
+                            <option value="htsc2025" data-i18n="compound.htsc2025_db">HTSC-2025 常压超导</option>
                         </select>
                     </div>
                 </div>
@@ -78,37 +79,37 @@
             <div class="card-body">
                 <div class="row g-3">
                     <div class="col-md-4">
-                        <input type="text" class="form-control" id="keyword-input" placeholder="搜索关键词（标题、作者、化学式）">
+                        <input type="text" class="form-control" id="keyword-input" data-i18n-placeholder="compound.search_keyword" placeholder="搜索关键词（标题、作者、化学式）">
                     </div>
                     <div class="col-md-2">
-                        <input type="number" class="form-control" id="year-min-input" placeholder="最小年份">
+                        <input type="number" class="form-control" id="year-min-input" data-i18n-placeholder="compound.year_min" placeholder="最小年份">
                     </div>
                     <div class="col-md-2">
-                        <input type="number" class="form-control" id="year-max-input" placeholder="最大年份">
+                        <input type="number" class="form-control" id="year-max-input" data-i18n-placeholder="compound.year_max" placeholder="最大年份">
                     </div>
                     <!-- Alexandria 专属筛选 -->
                     <div class="col-md-2 alexandria-filter" style="display: none;">
-                        <input type="number" step="0.01" class="form-control" id="min-tc-input" placeholder="最低 Tc (K)">
+                        <input type="number" step="0.01" class="form-control" id="min-tc-input" data-i18n-placeholder="compound.min_tc" placeholder="最低 Tc (K)">
                     </div>
                     <div class="col-md-1 alexandria-filter" style="display: none;">
                         <div class="form-check mt-2">
                             <input type="checkbox" class="form-check-input" id="stable-only-input">
-                            <label class="form-check-label small" for="stable-only-input">仅稳定</label>
+                            <label class="form-check-label small" for="stable-only-input" data-i18n="compound.stable_only">仅稳定</label>
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="d-flex gap-2">
-                            <button class="btn btn-primary flex-grow-1" onclick="searchPapers()">搜索</button>
-                            <button class="btn btn-outline-secondary" type="button" onclick="resetSearch()">重置</button>
+                            <button class="btn btn-primary flex-grow-1" onclick="searchPapers()" data-i18n="compound.search">搜索</button>
+                            <button class="btn btn-outline-secondary" type="button" onclick="resetSearch()" data-i18n="compound.reset">重置</button>
 
                             <!-- 批量导出下拉菜单 -->
                             <div class="dropdown" id="export-dropdown">
-                                <button class="btn btn-outline-primary dropdown-toggle" type="button" id="exportDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                <button class="btn btn-outline-primary dropdown-toggle" type="button" id="exportDropdown" data-bs-toggle="dropdown" aria-expanded="false" data-i18n="compound.batch_export">
                                     <i class="bi bi-download"></i> 批量导出
                                 </button>
                                 <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="exportDropdown">
-                                    <li><a class="dropdown-item" href="#" onclick="exportAllDisplayedPapers('ris'); return false;">导出为 RIS (.ris)</a></li>
-                                    <li><a class="dropdown-item" href="#" onclick="exportAllDisplayedPapers('json'); return false;">导出为 JSON (.json)</a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="exportAllDisplayedPapers('ris'); return false;" data-i18n="compound.export_ris">导出为 RIS (.ris)</a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="exportAllDisplayedPapers('json'); return false;" data-i18n="compound.export_json">导出为 JSON (.json)</a></li>
                                 </ul>
                             </div>
                         </div>
@@ -121,9 +122,9 @@
         <div id="papers-container">
             <div class="text-center py-5">
                 <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">加载中...</span>
+                    <span class="visually-hidden" data-i18n="common.loading">加载中...</span>
                 </div>
-                <p class="mt-3">正在加载文献...</p>
+                <p class="mt-3" data-i18n="compound.loading_papers">正在加载文献...</p>
             </div>
         </div>
         <div id="papers-summary" class="mt-3 text-muted small"></div>
@@ -135,39 +136,38 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">上传文献</h5>
+                    <h5 class="modal-title" data-i18n="compound.upload_paper">上传文献</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <form id="uploadForm">
                         <div class="mb-3">
-                            <label class="form-label">DOI <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="doi-input" required placeholder="例如: 10.1038/nature12345">
+                            <label class="form-label" data-i18n="compound.upload_doi">DOI <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="doi-input" required placeholder="e.g. 10.1038/nature12345">
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label">文章类型 <span class="text-danger">*</span></label>
+                            <label class="form-label" data-i18n="compound.upload_article_type">文章类型 <span class="text-danger">*</span></label>
                             <div>
                                 <div class="form-check form-check-inline">
                                     <input class="form-check-input" type="radio" name="article-type" id="article-experimental" value="experimental" required>
-                                    <label class="form-check-label" for="article-experimental">
+                                    <label class="form-check-label" for="article-experimental" data-i18n="compound.article_experiment">
                                         🔬 实验文章（理论+实验也归此类）
                                     </label>
                                 </div>
                                 <div class="form-check form-check-inline">
                                     <input class="form-check-input" type="radio" name="article-type" id="article-theoretical" value="theoretical">
-                                    <label class="form-check-label" for="article-theoretical">
+                                    <label class="form-check-label" for="article-theoretical" data-i18n="compound.article_theory">
                                         ⚛️ 理论文章
                                     </label>
                                 </div>
                             </div>
-                            <small class="text-muted">提示：如果文章既有理论又有实验，请选择"实验文章"</small>
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label">超导体类型 <span class="text-danger">*</span></label>
+                            <label class="form-label" data-i18n="compound.upload_sc_type">超导体类型 <span class="text-danger">*</span></label>
                             <select class="form-select" id="superconductor-type-input" required>
-                                <option value="">请选择超导体类型</option>
+                                <option value="">--</option>
                                 <option value="cuprate">🔴 铜基</option>
                                 <option value="iron_based">🟤 铁基</option>
                                 <option value="nickel_based">🟠 镍基</option>
@@ -179,79 +179,74 @@
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label">化学式</label>
-                            <input type="text" class="form-control" id="formula-input" placeholder="例如: YBa₂Cu₃O₇">
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">晶体结构类型</label>
-                            <input type="text" class="form-control" id="structure-input" list="structure-datalist" placeholder="例如: 钙钛矿型" autocomplete="off">
-                            <datalist id="structure-datalist">
-                                <!-- 动态加载已有的晶体结构类型 -->
-                            </datalist>
-                            <small class="text-muted">💡 输入时会显示已有的晶体结构类型，也可以填写新的类型</small>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">物理数据 (压强/Tc/λ等) <span class="text-danger">*</span></label>
+                            <label class="form-label" data-i18n="compound.physical_data">物理数据 (化学式/晶体结构/压强/Tc/λ等) <span class="text-danger">*</span></label>
                             <div id="data-points-container">
-                                <!-- 动态数据行 -->
                                 <div class="data-row card p-3 mb-2 bg-light">
                                     <div class="row g-2">
-                                        <div class="col-md-3">
-                                            <label class="small">压强 (GPa) *</label>
-                                            <input type="number" step="any" class="form-control form-control-sm pressure-val" required placeholder="0.0">
-                                        </div>
-                                        <div class="col-md-3">
-                                            <label class="small">Tc (K) *</label>
-                                            <input type="number" step="any" class="form-control form-control-sm tc-val" required placeholder="0.0">
+                                        <div class="col-md-2">
+                                            <label class="small" data-i18n="compound.chemical_formula">化学式</label>
+                                            <input type="text" class="form-control form-control-sm formula-val" placeholder="e.g. YBa₂Cu₃O₇">
                                         </div>
                                         <div class="col-md-2">
+                                            <label class="small" data-i18n="compound.crystal_structure">晶体结构</label>
+                                            <input type="text" class="form-control form-control-sm structure-val" list="structure-datalist" placeholder="e.g. Perovskite" autocomplete="off">
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label class="small" data-i18n="compound.pressure_gpa">压强 (GPa) *</label>
+                                            <input type="number" step="any" class="form-control form-control-sm pressure-val" required placeholder="0.0">
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label class="small" data-i18n="compound.tc_k">Tc (K) *</label>
+                                            <input type="number" step="any" class="form-control form-control-sm tc-val" required placeholder="0.0">
+                                        </div>
+                                        <div class="col-md-1">
                                             <label class="small">λ</label>
                                             <input type="number" step="any" class="form-control form-control-sm lambda-val" placeholder="λ">
                                         </div>
-                                        <div class="col-md-2">
+                                        <div class="col-md-1">
                                             <label class="small">ω_log</label>
                                             <input type="number" step="any" class="form-control form-control-sm omega-val" placeholder="ω">
                                         </div>
-                                        <div class="col-md-2">
+                                        <div class="col-md-1">
                                             <label class="small">N(Ef)</label>
                                             <input type="number" step="any" class="form-control form-control-sm nef-val" placeholder="N">
+                                        </div>
+                                        <div class="col-md-1 d-flex align-items-end">
+                                            <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="removeDataRow(this)">×</button>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            <button type="button" class="btn btn-outline-primary btn-sm mt-1" onclick="addDataRow()">+ 添加一组数据</button>
+                            <datalist id="structure-datalist">
+                            </datalist>
+                            <button type="button" class="btn btn-outline-primary btn-sm mt-1" onclick="addDataRow()" data-i18n="compound.add_data_row">+ 添加一组数据</button>
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label">贡献者姓名</label>
-
-
-                            <input type="text" class="form-control" id="contributor-name-input" placeholder="默认: 匿名贡献者">
+                            <label class="form-label" data-i18n="compound.contributor_name">贡献者姓名</label>
+                            <input type="text" class="form-control" id="contributor-name-input" placeholder="Anonymous">
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label">贡献者单位</label>
-                            <input type="text" class="form-control" id="contributor-affiliation-input" placeholder="默认: 未提供单位">
+                            <label class="form-label" data-i18n="compound.contributor_affiliation">贡献者单位</label>
+                            <input type="text" class="form-control" id="contributor-affiliation-input" placeholder="N/A">
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label">文献截图 (0-5张)</label>
+                            <label class="form-label" data-i18n="compound.images">文献截图 (0-5张)</label>
                             <input type="file" class="form-control" id="images-input" multiple accept="image/*">
-                            <small class="text-muted">请上传文献截图，优先上传化合物结构图</small>
                             <div id="image-preview" class="image-preview-container mt-2"></div>
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label">备注</label>
+                            <label class="form-label" data-i18n="compound.notes">备注</label>
                             <textarea class="form-control" id="notes-input" rows="2"></textarea>
                         </div>
                     </form>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                    <button type="button" class="btn btn-primary" onclick="submitPaper()">提交</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-i18n="compound.cancel">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="submitPaper()" data-i18n="compound.submit">提交</button>
                 </div>
             </div>
         </div>
@@ -262,17 +257,18 @@
         <div class="modal-dialog modal-xl">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">查看图片</h5>
+                    <h5 class="modal-title" data-i18n="common.view_image">查看图片</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body text-center">
-                    <img id="modal-image" class="img-fluid" alt="文献截图">
+                    <img id="modal-image" class="img-fluid" alt="Screenshot">
                 </div>
             </div>
         </div>
     </div>
 
     <script src="/static/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/i18n.js"></script>
     <script src="/static/js/auth_state.js"></script>
     <script src="/static/js/auth_helper.js"></script>
     <script src="/static/js/compound_page.js?v=20260430-6"></script>
