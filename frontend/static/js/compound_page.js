@@ -5,6 +5,7 @@ let selectedFiles = [];
 let currentReviewStatus = 'all'; // 当前选择的审核状态筛选
 let currentDatabase = 'local'; // 'local' 或 'alexandria'
 const paperCache = new Map();
+const alexDetailCache = {};
 const urlParams = new URLSearchParams(window.location.search);
 let viewMode = urlParams.get('mode') || 'only';
 const ONLY_MODE_PAGE_SIZE = 50;
@@ -138,6 +139,10 @@ document.addEventListener('DOMContentLoaded', function() {
     loadPapers();
     loadCrystalStructures();
 
+    // 初始化数据库描述
+    const descEl = document.getElementById('db-desc');
+    if (descEl) descEl.textContent = I18N.t('compound.local_db_desc');
+
     // 设置图片上传预览
     document.getElementById('images-input').addEventListener('change', handleImageSelection);
 
@@ -167,7 +172,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // 加载元素组合信息
 async function loadCompoundInfo() {
     try {
-        const response = await fetch(`/api/compounds/${elementSymbols}`);
+        const response = await fetch(`/api${getApiBase()}/compounds/${elementSymbols}`);
         if (response.ok) {
             const data = await response.json();
             document.getElementById('compound-title').textContent = `${data.element_symbols} ${I18N.t('compound.system_sc')}`;
@@ -223,16 +228,25 @@ async function loadPapers(searchParams = null) {
 // 数据库切换
 function onDatabaseChange() {
     currentDatabase = document.getElementById('db-select').value;
-    const isLocal = currentDatabase === 'local';
+    const isLocalOrAi = currentDatabase === 'local' || currentDatabase === 'ai';
+    const showReviewFilter = currentDatabase === 'local';
 
-    // 显示/隐藏对应筛选控件
-    document.querySelectorAll('.alexandria-filter').forEach(el => el.style.display = isLocal ? 'none' : '');
-    document.getElementById('export-dropdown').style.display = isLocal ? '' : 'none';
+    // 显示/隐藏 Alexandria/HTSC 专属筛选控件
+    document.querySelectorAll('.alexandria-filter').forEach(el => el.style.display = isLocalOrAi ? 'none' : '');
+    // 批量导出：本地和AI数据库可用
+    document.getElementById('export-dropdown').style.display = isLocalOrAi ? '' : 'none';
 
     // 审核状态筛选只对本地数据库有效
     const reviewGroup = document.querySelector('.btn-group[role="group"]');
     if (reviewGroup) {
-        reviewGroup.closest('.col-auto').style.display = isLocal ? '' : 'none';
+        reviewGroup.closest('.col-auto').style.display = showReviewFilter ? '' : 'none';
+    }
+
+    // 更新数据库描述
+    const descEl = document.getElementById('db-desc');
+    if (descEl) {
+        const descKey = `compound.${currentDatabase}_db_desc`;
+        descEl.textContent = I18N.t(descKey);
     }
 
     resetCurrentPage();
@@ -248,6 +262,10 @@ function filterByReviewStatus(status) {
 
 function getActivePaginationState() {
     return viewMode === 'only' ? onlyModePagination : multiModePagination;
+}
+
+function getApiBase() {
+    return currentDatabase === 'ai' ? '/ai' : '';
 }
 
 function resetCurrentPage() {
@@ -360,6 +378,9 @@ function renderAlexandriaCard(item) {
                     <button class="btn btn-outline-primary btn-sm" onclick="toggleAlexandriaDetail('${item.mat_id}')">
                         查看原始数据
                     </button>
+                    <a class="btn btn-outline-secondary btn-sm ms-1" href="/api/alexandria/material/${item.mat_id}/download" download>
+                        下载完整数据
+                    </a>
                     <div id="alex-detail-${item.mat_id}" class="mt-2" style="display: none;">
                         <div class="text-center text-muted small py-2">
                             <div class="spinner-border spinner-border-sm"></div> 加载中...
@@ -443,7 +464,9 @@ function toggleAlexandriaDetail(matId) {
 
     if (detailEl.style.display === 'none') {
         detailEl.style.display = 'block';
-        // 查询原始数据
+        if (alexDetailCache[matId]) {
+            return;
+        }
         fetch(`/api/alexandria/material/${matId}`)
             .then(r => r.json())
             .then(data => {
@@ -465,6 +488,7 @@ function toggleAlexandriaDetail(matId) {
                     </div>
                 `;
                 detailEl.innerHTML = html;
+                alexDetailCache[matId] = true;
             })
             .catch(err => {
                 detailEl.innerHTML = `<div class="text-danger small">加载失败: ${err.message}</div>`;
@@ -655,7 +679,7 @@ function groupPapersByCompound(papers) {
 }
 
 async function fetchPapersForCombination(symbols, queryString) {
-    const url = queryString ? `/api/papers/compound/${symbols}?${queryString}` : `/api/papers/compound/${symbols}`;
+    const url = queryString ? `/api${getApiBase()}/papers/compound/${symbols}?${queryString}` : `/api${getApiBase()}/papers/compound/${symbols}`;
     const response = await fetch(url);
     const data = await response.json();
     if (!response.ok) {
@@ -793,7 +817,7 @@ async function fetchPapersByMode(mode) {
         sort_order: 'desc',
     };
 
-    const response = await fetch('/api/papers/search-by-mode', {
+    const response = await fetch(`/api${getApiBase()}/papers/search-by-mode`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -983,9 +1007,9 @@ function renderPaperCard(paper) {
                         <!-- 右侧：第一张大图（点击展开后才加载） -->
                         ${paper.image_count > 0 ? `
                         <div class="col-md-4">
-                            <img data-src="/api/papers/${paper.id}/images/1"
+                            <img data-src="/api${getApiBase()}/papers/${paper.id}/images/1"
                                  class="img-fluid paper-main-image lazy-image"
-                                 onclick="viewImage('/api/papers/${paper.id}/images/1')"
+                                 onclick="viewImage('/api${getApiBase()}/papers/${paper.id}/images/1')"
                                  alt="主图"
                                  style="cursor: pointer; border-radius: 8px; max-height: 400px; width: 100%; object-fit: contain; border: 2px solid #dee2e6;">
                         </div>
@@ -1038,9 +1062,9 @@ function renderOtherImages(paperId, count) {
 
     let html = '';
     for (let i = 2; i <= count; i++) {
-        html += `<img data-src="/api/papers/${paperId}/images/${i}?thumbnail=true"
+        html += `<img data-src="/api${getApiBase()}/papers/${paperId}/images/${i}?thumbnail=true"
                       class="paper-image-thumbnail lazy-image"
-                      onclick="viewImage('/api/papers/${paperId}/images/${i}')"
+                      onclick="viewImage('/api${getApiBase()}/papers/${paperId}/images/${i}')"
                       alt="截图${i}">`;
     }
     return html;
@@ -1053,9 +1077,9 @@ function renderImagePlaceholders(paperId, count) {
     let html = '';
     for (let i = 1; i <= count; i++) {
         // 注意：实际应该从API获取图片ID，这里简化处理
-        html += `<img src="/api/papers/${paperId}/images/${i}?thumbnail=true"
+        html += `<img src="/api${getApiBase()}/papers/${paperId}/images/${i}?thumbnail=true"
                       class="paper-image-thumbnail"
-                      onclick="viewImage('/api/papers/${paperId}/images/${i}')"
+                      onclick="viewImage('/api${getApiBase()}/papers/${paperId}/images/${i}')"
                       alt="截图${i}">`;
     }
     return html;
@@ -1254,7 +1278,7 @@ function removeDataRow(button) {
 // 加载晶体结构类型列表（用于自动补全）
 async function loadCrystalStructures() {
     try {
-        const response = await fetch('/api/papers/crystal-structures');
+        const response = await fetch(`/api${getApiBase()}/papers/crystal-structures`);
         if (response.ok) {
             const structures = await response.json();
             const datalist = document.getElementById('structure-datalist');
@@ -1492,7 +1516,7 @@ async function exportAllDisplayedPapers(format) {
                 exportData.paper_images.push({
                     paper_id: p.id,
                     image_order: i,
-                    url: `${window.location.origin}/api/papers/${p.id}/images/${i}`
+                    url: `${window.location.origin}/api${getApiBase()}/papers/${p.id}/images/${i}`
                 });
             }
         });
@@ -1521,4 +1545,6 @@ function downloadFile(content, fileName, contentType) {
 document.addEventListener('langChange', () => {
     loadCompoundInfo();
     loadPapers();
+    const descEl = document.getElementById('db-desc');
+    if (descEl) descEl.textContent = I18N.t(`compound.${currentDatabase}_db_desc`);
 });
