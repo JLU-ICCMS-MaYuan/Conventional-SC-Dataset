@@ -16,13 +16,29 @@ ALEXANDRIA_DIR = os.path.join(
 DB_PATH = os.path.join(ALEXANDRIA_DIR, "alexandria.db")
 
 
+# 只读连接缓存（线程安全，WAL 模式支持并发读）
+_read_conn: Optional[sqlite3.Connection] = None
+
+
 def get_conn() -> sqlite3.Connection:
+    """获取写入连接（用于导入）"""
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA journal_mode=OFF")        # 批量导入禁用 WAL
     conn.execute("PRAGMA synchronous=OFF")          # 关闭同步写入
     conn.execute("PRAGMA cache_size=-8000000")      # 8GB 缓存
     conn.execute("PRAGMA temp_store=MEMORY")
     return conn
+
+
+def get_read_conn() -> sqlite3.Connection:
+    """获取只读连接（用于 API 查询，缓存复用）"""
+    global _read_conn
+    if _read_conn is None:
+        _read_conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        _read_conn.execute("PRAGMA journal_mode=WAL")     # WAL 模式支持并发读
+        _read_conn.execute("PRAGMA cache_size=-200000")    # 200MB 缓存
+        _read_conn.execute("PRAGMA temp_store=MEMORY")
+    return _read_conn
 
 
 def create_tables(conn: sqlite3.Connection):
@@ -237,10 +253,9 @@ def query_by_elements(elements: List[str], mode: str = "contains",
                       min_tc: float = None, stable_only: bool = False,
                       limit: int = 50, offset: int = 0) -> Dict:
     """按元素查询材料"""
-    conn = get_conn()
+    conn = get_read_conn()
     elements = sorted(set(elements))
     if not elements:
-        conn.close()
         return {"items": [], "total": 0}
 
     # 检查 element_idx 是否就绪
@@ -283,7 +298,6 @@ def query_by_elements(elements: List[str], mode: str = "contains",
             """
             sub_params = elements + [n, n]
         else:
-            conn.close()
             return {"items": [], "total": 0}
     else:
         # 降级：扫描 elements 列
@@ -348,7 +362,6 @@ def query_by_elements(elements: List[str], mode: str = "contains",
         })
 
     conn.execute("DROP TABLE IF EXISTS _q")
-    conn.close()
     return {
         "items": items,
         "total": total,

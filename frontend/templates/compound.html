@@ -66,9 +66,11 @@
                         <h6 class="card-subtitle text-muted small mb-1" data-i18n="compound.database">数据库</h6>
                         <select class="form-select" id="db-select" onchange="onDatabaseChange()" style="width: auto;">
                             <option value="local" data-i18n="compound.local_db">本地数据库</option>
+                            <option value="ai" data-i18n="compound.ai_db">AI筛选</option>
                             <option value="alexandria" data-i18n="compound.alexandria_db">Alexandria 电声耦合</option>
                             <option value="htsc2025" data-i18n="compound.htsc2025_db">HTSC-2025 常压超导</option>
                         </select>
+                        <small class="text-muted ms-2" id="db-desc" style="max-width: 400px; display: inline-block; vertical-align: middle;"></small>
                     </div>
                 </div>
             </div>
