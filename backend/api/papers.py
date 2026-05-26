@@ -73,6 +73,7 @@ async def create_paper(
     contributor_affiliation: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
     images: List[UploadFile] = File(default=[]),
+    structure_files: List[UploadFile] = File(default=[]),
     db: Session = Depends(get_db),
     image_db: Session = Depends(get_image_db),
     current_user: Annotated[schemas.User, Depends(get_current_user)] = None
@@ -201,6 +202,20 @@ async def create_paper(
         item.setdefault("chemical_formula", chemical_formula)
         item.setdefault("crystal_structure", crystal_structure)
     crud.create_paper_data(db=db, paper_id=paper.id, data_list=data_list, compound_id=compound.id)
+
+    # 保存结构文件（按索引匹配 paper_data 行）
+    structure_files_to_process = [f for f in structure_files if f.filename]
+    if structure_files_to_process:
+        paper_data_rows = db.query(PaperData).filter(
+            PaperData.paper_id == paper.id
+        ).order_by(PaperData.sequence_in_paper).all()
+        for idx, sf in enumerate(structure_files_to_process):
+            if idx >= len(paper_data_rows):
+                break
+            sf_data = await sf.read()
+            paper_data_rows[idx].structure_file_name = sf.filename
+            paper_data_rows[idx].structure_file_data = sf_data
+        db.commit()
 
     # 9. 处理并保存截图
     for idx, image_file in enumerate(images_to_process, start=1):

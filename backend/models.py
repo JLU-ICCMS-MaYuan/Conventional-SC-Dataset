@@ -133,6 +133,8 @@ class PaperData(Base):
     omega_log = Column(Float)
     n_ef = Column(Float)
     s_factor = Column(Float)
+    structure_file_name = Column(Text)
+    structure_file_data = Column(BLOB)
     sample_name = Column(Text)
     data_source_note = Column(Text)
     sequence_in_paper = Column(Integer)

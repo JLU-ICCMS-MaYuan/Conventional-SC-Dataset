@@ -193,11 +193,11 @@
                                             <label class="small" data-i18n="compound.crystal_structure">晶体结构</label>
                                             <input type="text" class="form-control form-control-sm structure-val" list="structure-datalist" placeholder="e.g. Perovskite" autocomplete="off">
                                         </div>
-                                        <div class="col-md-2">
+                                        <div class="col-md-1">
                                             <label class="small" data-i18n="compound.pressure_gpa">压强 (GPa) *</label>
                                             <input type="number" step="any" class="form-control form-control-sm pressure-val" required placeholder="0.0">
                                         </div>
-                                        <div class="col-md-2">
+                                        <div class="col-md-1">
                                             <label class="small" data-i18n="compound.tc_k">Tc (K) *</label>
                                             <input type="number" step="any" class="form-control form-control-sm tc-val" required placeholder="0.0">
                                         </div>
@@ -212,6 +212,10 @@
                                         <div class="col-md-1">
                                             <label class="small">N(Ef)</label>
                                             <input type="number" step="any" class="form-control form-control-sm nef-val" placeholder="N">
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label class="small" data-i18n="compound.structure_file">结构文件</label>
+                                            <input type="file" class="form-control form-control-sm structure-file-val" accept=".cif,.cif,.poscar,.vasp,.xsf">
                                         </div>
                                         <div class="col-md-1 d-flex align-items-end">
                                             <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="removeDataRow(this)">×</button>
@@ -269,10 +273,11 @@
         </div>
     </div>
 
+    <script src="https://3Dmol.csb.pitt.edu/build/3Dmol-min.js"></script>
     <script src="/static/js/bootstrap.bundle.min.js"></script>
     <script src="/static/js/i18n.js"></script>
     <script src="/static/js/auth_state.js"></script>
     <script src="/static/js/auth_helper.js"></script>
-    <script src="/static/js/compound_page.js?v=20260430-6"></script>
+    <script src="/static/js/compound_page.js?v=20260430-8"></script>
 </body>
 </html>

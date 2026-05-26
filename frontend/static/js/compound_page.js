@@ -6,6 +6,43 @@ let currentReviewStatus = 'all'; // 当前选择的审核状态筛选
 let currentDatabase = 'local'; // 'local' 或 'alexandria'
 const paperCache = new Map();
 const alexDetailCache = {};
+const cifDetailCache = {};
+
+// Jmol 元素颜色（用于 3Dmol 图例）
+const _JMOL_COLORS = {
+    H:'#ffffff', He:'#d9ffff', Li:'#cc80ff', Be:'#c2ff00', B:'#ffb5b5',
+    C:'#909090', N:'#3050f8', O:'#ff0d0d', F:'#90e050', Ne:'#b3e3f5',
+    Na:'#ab5cf2', Mg:'#8aff00', Al:'#bfa6a6', Si:'#f0c8a0', P:'#ff8000',
+    S:'#ffff30', Cl:'#1ff01f', Ar:'#80d1e3', K:'#8f40d4', Ca:'#3dff00',
+    Sc:'#e6e6e6', Ti:'#bfc2c7', V:'#a6a6ab', Cr:'#8a99c7', Mn:'#9c7ac7',
+    Fe:'#e06633', Co:'#f090a0', Ni:'#50d050', Cu:'#c88033', Zn:'#7d80b0',
+    Ga:'#c28f8f', Ge:'#668f8f', As:'#bd80e3', Se:'#ffa100', Br:'#a62929',
+    Kr:'#5cb8d1', Rb:'#702eb0', Sr:'#00ff00', Y:'#94ffff', Zr:'#94e0e0',
+    Nb:'#73c2c2', Mo:'#54b5b5', Tc:'#3b9e9e', Ru:'#248f8f', Rh:'#0a7d8c',
+    Pd:'#006985', Ag:'#c0c0c0', Cd:'#ffd98f', In:'#a67573', Sn:'#668080',
+    Sb:'#9e63bf', Te:'#d47a00', I:'#940094', Xe:'#429eb0', Cs:'#57178f',
+    Ba:'#00c900', La:'#70d4ff', Ce:'#ffffc7', Pr:'#d9ffc7', Nd:'#c7ffc7',
+    Pm:'#a3ffc7', Sm:'#8fffc7', Eu:'#61ffc7', Gd:'#45ffc7', Tb:'#30ffc7',
+    Dy:'#1fffc7', Ho:'#00ff9c', Er:'#00e675', Tm:'#00d452', Yb:'#00bf38',
+    Lu:'#00ab24', Hf:'#4dc2ff', Ta:'#4da6ff', W:'#2194d6', Re:'#267dab',
+    Os:'#266696', Ir:'#175487', Pt:'#d0d0e0', Au:'#ffd123', Hg:'#b8b8d0',
+    Tl:'#a6544d', Pb:'#575961', Bi:'#9e4fb5', Po:'#ab5c00', At:'#754f45',
+    Rn:'#428296', Fr:'#420066', Ra:'#007d00', Ac:'#70abfa', Th:'#00baff',
+    Pa:'#00a1ff', U:'#008fff', Np:'#0080ff', Pu:'#006bff', Am:'#545cf2',
+    Cm:'#785ce3', Bk:'#8a4fe3', Cf:'#a136d4', Es:'#b31fd4', Fm:'#b31fba',
+    Md:'#b30da6', No:'#bd0d87', Lr:'#c70066',
+};
+
+function _addLegend(containerEl, elements) {
+    if (!containerEl || !elements || !elements.length) return;
+    var leg = document.createElement('div');
+    leg.style.cssText = 'position:absolute;bottom:4px;left:4px;background:rgba(255,255,255,0.9);padding:2px 8px;border-radius:4px;font-size:11px;line-height:1.5;z-index:5;display:flex;flex-wrap:wrap;gap:0 8px;';
+    leg.innerHTML = elements.map(function(el) {
+        var color = _JMOL_COLORS[el] || '#888';
+        return '<span style="display:inline-flex;align-items:center;gap:3px;"><span style="width:10px;height:10px;border-radius:50%;background:' + color + ';flex-shrink:0;"></span>' + el + '</span>';
+    }).join('');
+    containerEl.appendChild(leg);
+}
 const urlParams = new URLSearchParams(window.location.search);
 let viewMode = urlParams.get('mode') || 'only';
 const ONLY_MODE_PAGE_SIZE = 50;
@@ -130,6 +167,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const pathParts = window.location.pathname.split('/');
     elementSymbols = pathParts[pathParts.length - 1];
 
+    // 从 URL 恢复数据库选择
+    const dbParam = urlParams.get('db');
+    if (dbParam && ['local', 'ai', 'alexandria', 'htsc2025'].includes(dbParam)) {
+        currentDatabase = dbParam;
+        const select = document.getElementById('db-select');
+        if (select) select.value = dbParam;
+    }
+
     // 初始化模态框
     uploadModal = new bootstrap.Modal(document.getElementById('uploadModal'));
     imageModal = new bootstrap.Modal(document.getElementById('imageModal'));
@@ -141,7 +186,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 初始化数据库描述
     const descEl = document.getElementById('db-desc');
-    if (descEl) descEl.textContent = I18N.t('compound.local_db_desc');
+    if (descEl) {
+        const descKey = `compound.${currentDatabase}_db_desc`;
+        descEl.textContent = I18N.t(descKey);
+    }
+
+    // 根据数据库选择调整筛选控件可见性
+    const isLocalOrAi = currentDatabase === 'local' || currentDatabase === 'ai';
+    document.querySelectorAll('.alexandria-filter').forEach(el => el.style.display = isLocalOrAi ? 'none' : '');
+    document.getElementById('export-dropdown').style.display = isLocalOrAi ? '' : 'none';
+    const reviewGroup = document.querySelector('.btn-group[role="group"]');
+    if (reviewGroup) {
+        reviewGroup.closest('.col-auto').style.display = (currentDatabase === 'local') ? '' : 'none';
+    }
 
     // 设置图片上传预览
     document.getElementById('images-input').addEventListener('change', handleImageSelection);
@@ -171,6 +228,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // 加载元素组合信息
 async function loadCompoundInfo() {
+    if (!elementSymbols) return;
     try {
         const response = await fetch(`/api${getApiBase()}/compounds/${elementSymbols}`);
         if (response.ok) {
@@ -228,6 +286,10 @@ async function loadPapers(searchParams = null) {
 // 数据库切换
 function onDatabaseChange() {
     currentDatabase = document.getElementById('db-select').value;
+    // 将数据库选择持久化到 URL
+    const url = new URL(window.location);
+    url.searchParams.set('db', currentDatabase);
+    window.history.replaceState(null, '', url);
     const isLocalOrAi = currentDatabase === 'local' || currentDatabase === 'ai';
     const showReviewFilter = currentDatabase === 'local';
 
@@ -471,6 +533,37 @@ function toggleAlexandriaDetail(matId) {
             .then(r => r.json())
             .then(data => {
                 const tc = data.tc || {};
+                let structHtml = '';
+                let cifData = null;
+                const st = data.structure;
+                if (st && st.lattice && st.sites) {
+                    const ibravNames = {1:'立方P',2:'立方I',3:'立方F',4:'六方',5:'三方R',6:'四方P',7:'四方I',8:'正交P',9:'正交C',10:'正交C',11:'正交C',12:'单斜P',13:'单斜C',14:'三斜'};
+                    const ibravName = ibravNames[st.ibrav] || `ibrav=${st.ibrav}`;
+                    const lat = st.lattice.map(v => v.map(x => x.toFixed(6)).join(' ')).join('<br>');
+                    const siteRows = st.sites.map(s => {
+                        const x = s[1] != null ? Number(s[1]).toFixed(6) : '0';
+                        const y = s[2] != null ? Number(s[2]).toFixed(6) : '0';
+                        const z = s[3] != null ? Number(s[3]).toFixed(6) : '0';
+                        return `<tr><td>${s[0]}</td><td>${x}</td><td>${y}</td><td>${z}</td></tr>`;
+                    }).join('');
+                    if (st.cif) cifData = st.cif;
+                    structHtml = `
+                        <hr class="my-2">
+                        <div class="row">
+                            <div class="col-md-7">
+                                <div id="struct-viewer-${matId}" style="position:relative;width:100%;height:380px;border:1px solid #dee2e6;border-radius:4px;"></div>
+                            </div>
+                            <div class="col-md-5 small">
+                                <strong>Bravais:</strong> ${ibravName}<br>
+                                <strong>a:</strong> ${st.celldm[0].toFixed(4)} bohr<br>
+                                <strong>原子坐标:</strong>
+                                <table class="table table-sm table-borderless mb-0 mt-1" style="line-height:1.2;font-size:0.8rem;">
+                                    <thead><tr><th>元素</th><th>x</th><th>y</th><th>z</th></tr></thead>
+                                    <tbody>${siteRows}</tbody>
+                                </table>
+                            </div>
+                        </div>`;
+                }
                 const html = `
                     <div class="bg-light p-3 rounded small">
                         <div class="row">
@@ -485,10 +578,28 @@ function toggleAlexandriaDetail(matId) {
                                 <strong>能量:</strong> ${data.energy_total != null ? data.energy_total.toFixed(4) + ' eV' : '—'}<br>
                             </div>
                         </div>
+                        ${structHtml}
                     </div>
                 `;
                 detailEl.innerHTML = html;
                 alexDetailCache[matId] = true;
+                if (cifData && typeof $3Dmol !== 'undefined') {
+                    const uniqEls = st && st.sites ? [...new Set(st.sites.map(s => s[0]))] : [];
+                    setTimeout(() => {
+                        const vEl = document.getElementById(`struct-viewer-${matId}`);
+                        if (!vEl) return;
+                        const viewer = $3Dmol.createViewer(vEl, {defaultcolors: $3Dmol.elementColors.Jmol});
+                        viewer.addModel(cifData, 'cif');
+                        viewer.setStyle({}, {
+                            stick: {radius: 0.12, colorscheme: 'Jmol'},
+                            sphere: {scale: 0.3, colorscheme: 'Jmol'},
+                        });
+                        viewer.addUnitCell({line: {color: '#888', width: 2}});
+                        viewer.zoomTo();
+                        viewer.render();
+                        _addLegend(vEl, uniqEls);
+                    }, 100);
+                }
             })
             .catch(err => {
                 detailEl.innerHTML = `<div class="text-danger small">加载失败: ${err.message}</div>`;
@@ -571,8 +682,15 @@ function renderHTSC2025Card(item) {
                     <button class="btn btn-outline-primary btn-sm" onclick="toggleCIFDetail('${item.name}')">
                         ${I18N.t('compound.view_cif')}
                     </button>
-                    <div id="cif-detail-${item.name.replace(/[^a-zA-Z0-9-]/g, '_')}" class="mt-2" style="display: none;">
-                        <pre class="bg-light p-3 rounded small" style="max-height: 400px; overflow-y: auto;"></pre>
+                    <div id="cif-detail-${item.name.replace(/[^a-zA-Z0-9-]/g, '_')}" class="mt-2" style="display: none;" data-elements="${item.elements.join(',')}">
+                        <div class="row">
+                            <div class="col-md-7">
+                                <div id="struct-viewer-htsc-${item.name.replace(/[^a-zA-Z0-9-]/g, '_')}" style="position:relative;width:100%;height:380px;border:1px solid #dee2e6;border-radius:4px;"></div>
+                            </div>
+                            <div class="col-md-5">
+                                <pre class="bg-light p-2 rounded small mb-0" style="max-height: 380px; overflow-y: auto; font-size: 0.7rem;"></pre>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -622,11 +740,31 @@ function toggleCIFDetail(name) {
 
     if (detailEl.style.display === 'none') {
         detailEl.style.display = 'block';
+        if (cifDetailCache[name]) return;
         fetch(`/api/htsc2025/detail/${encodeURIComponent(name)}`)
             .then(r => r.json())
             .then(data => {
+                const cif = data.cif || '';
                 const pre = detailEl.querySelector('pre');
-                if (pre) pre.textContent = data.cif || '(无 CIF 数据)';
+                if (pre) pre.textContent = cif || '(无 CIF 数据)';
+                const uniqEls = (detailEl.dataset.elements || '').split(',').filter(Boolean);
+                if (cif && typeof $3Dmol !== 'undefined') {
+                    setTimeout(() => {
+                        const vEl = document.getElementById(`struct-viewer-htsc-${safeId}`);
+                        if (!vEl) return;
+                        const viewer = $3Dmol.createViewer(vEl, {defaultcolors: $3Dmol.elementColors.Jmol});
+                        viewer.addModel(cif, 'cif');
+                        viewer.setStyle({}, {
+                            stick: {radius: 0.12, colorscheme: 'Jmol'},
+                            sphere: {scale: 0.3, colorscheme: 'Jmol'},
+                        });
+                        viewer.addUnitCell({line: {color: '#888', width: 2}});
+                        viewer.zoomTo();
+                        viewer.render();
+                        _addLegend(vEl, uniqEls);
+                    }, 100);
+                }
+                cifDetailCache[name] = true;
             })
             .catch(err => {
                 detailEl.innerHTML = `<div class="text-danger small">加载失败: ${err.message}</div>`;
@@ -803,6 +941,7 @@ async function renderMultipleCombinations(container, queryString) {
 
 async function fetchPapersByMode(mode) {
     const elements = getSelectedElementsFromPath();
+    if (!elements.length) return { items: [], total: 0, page: 1, page_size: 50, total_pages: 0, has_prev: false, has_next: false };
     const pagination = multiModePagination;
     const body = {
         elements,
@@ -831,6 +970,7 @@ async function fetchPapersByMode(mode) {
 
 async function fetchCombinationList(mode) {
     const elements = getSelectedElementsFromPath();
+    if (!elements.length) return { items: [], total: 0 };
     const pagination = multiModePagination;
     const response = await fetch('/api/compounds/search', {
         method: 'POST',
@@ -1237,11 +1377,11 @@ function addDataRow() {
                 <label class="small">${I18N.t('compound.crystal_structure')}</label>
                 <input type="text" class="form-control form-control-sm structure-val" list="structure-datalist" placeholder="e.g. Perovskite" autocomplete="off">
             </div>
-            <div class="col-md-2">
+            <div class="col-md-1">
                 <label class="small">${I18N.t('compound.pressure_gpa')}</label>
                 <input type="number" step="any" class="form-control form-control-sm pressure-val" required placeholder="0.0">
             </div>
-            <div class="col-md-2">
+            <div class="col-md-1">
                 <label class="small">${I18N.t('compound.tc_k')}</label>
                 <input type="number" step="any" class="form-control form-control-sm tc-val" required placeholder="0.0">
             </div>
@@ -1256,6 +1396,10 @@ function addDataRow() {
             <div class="col-md-1">
                 <label class="small">N(Ef)</label>
                 <input type="number" step="any" class="form-control form-control-sm nef-val" placeholder="N">
+            </div>
+            <div class="col-md-2">
+                <label class="small">${I18N.t('compound.structure_file')}</label>
+                <input type="file" class="form-control form-control-sm structure-file-val" accept=".cif,.cif,.poscar,.vasp,.xsf">
             </div>
             <div class="col-md-1 d-flex align-items-end">
                 <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="removeDataRow(this)">×</button>
@@ -1383,6 +1527,14 @@ async function submitPaper() {
     // 添加图片
     selectedFiles.forEach(file => {
         formData.append('images', file);
+    });
+
+    // 添加结构文件
+    dataRows.forEach((row) => {
+        const fileInput = row.querySelector('.structure-file-val');
+        if (fileInput && fileInput.files && fileInput.files[0]) {
+            formData.append('structure_files', fileInput.files[0]);
+        }
     });
 
     // 获取提交按钮

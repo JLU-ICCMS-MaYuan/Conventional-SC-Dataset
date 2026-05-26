@@ -1,6 +1,6 @@
-"""   """
+"""
 邮箱服务模块 - SMTP 发送验证码
-"""   """   """   """
+"""
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -11,40 +11,36 @@ from typing import Optional
 class EmailService:
     """邮箱服务类"""
 
-          def __init__(自我):def __init__(自我):def __init__(self):
-        # 从环境变量读取SMTP配置
-        self.smtp_server = os.getenv("SMTP_SERVER", "smtp.163.com")  # 默认163邮箱
-        self.smtp_port = int(os.getenv("SMTP_PORT", "465"))  # SSL端口
+    def __init__(self):
+        self.smtp_server = os.getenv("SMTP_SERVER", "smtp.163.com")
+        self.smtp_port = int(os.getenv("SMTP_PORT", "465"))
         self.smtp_username = os.getenv("SMTP_USERNAME", "")
-        self.smtp_password = os.getenv("SMTP_PASSWORD", "")自我。sender_email = os.getenv（"SMTP_SENDER_EMAIL", self.smtp_username）  # 163邮箱需要使用授权码
-        self.sender_email = os.getenv("SMTP_SENDER_EMAIL", self.smtp_username)自我。sender_email = os.getenv（"SMTP_SENDER_EMAIL", self.smtp_username）
+        self.smtp_password = os.getenv("SMTP_PASSWORD", "")
+        self.sender_email = os.getenv("SMTP_SENDER_EMAIL", self.smtp_username)
 
-    def send_verification_code(self, to_email: str, code: str, real_name: str) -> bool:Def send_verification_code(self, to_email: str, code: str, real_name: str) ->；
+    def send_verification_code(self, to_email: str, code: str, real_name: str) -> bool:
         """
         发送验证码邮件
 
         Args:
             to_email: 收件人邮箱
             code: 验证码
-            real_name: 用户真实姓名自我。sender_email = os.getenv（"SMTP_SENDER_EMAIL", self.smtp_username）
+            real_name: 用户真实姓名
 
         Returns:
             bool: 发送成功返回True，失败返回False
         """
-        if not self.smtp_username or   或 not self.smtp_password:
+        if not self.smtp_username or not self.smtp_password:
             print("警告：SMTP配置未设置，无法发送邮件")
-            # 开发环境：打印验证码到控制台
             print(f"【开发模式】验证码: {code} (发送给 {to_email})")
             return True
 
-        try:   试一试:
-            # 创建邮件内容
+        try:
             message = MIMEMultipart("alternative")
             message["Subject"] = "超导文献数据库 - 邮箱验证码"
             message["From"] = self.sender_email
             message["To"] = to_email
 
-            # HTML邮件内容
             html = f"""
             <html>
               <body style="font-family: Arial, sans-serif; padding: 20px; background-color: #f5f5f5;">
@@ -65,7 +61,6 @@ class EmailService:
             </html>
             """
 
-            # 纯文本备用内容
             text = f"""
             超导文献数据库 - 邮箱验证
 
@@ -79,19 +74,17 @@ class EmailService:
             如果您没有申请注册，请忽略此邮件。
             """
 
-            # 添加邮件内容
             part1 = MIMEText(text, "plain", "utf-8")
             part2 = MIMEText(html, "html", "utf-8")
             message.attach(part1)
             message.attach(part2)
 
-            # 发送邮件
             if self.smtp_port == 465:
                 server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port)
             else:
                 server = smtplib.SMTP(self.smtp_server, self.smtp_port)
                 server.starttls()
-            
+
             with server:
                 server.login(self.smtp_username, self.smtp_password)
                 server.sendmail(self.sender_email, to_email, message.as_string())
@@ -101,9 +94,8 @@ class EmailService:
 
         except Exception as e:
             print(f"发送邮件失败: {str(e)}")
-            # 开发环境：降级到控制台输出
             print(f"【降级模式】验证码: {code} (发送给 {to_email})")
-            return True  # 开发环境返回True，生产环境应返回False
+            return True
 
     def send_approval_notification(self, to_email: str, real_name: str, approved: bool) -> bool:
         """
@@ -132,7 +124,7 @@ class EmailService:
                 <html>
                   <body style="font-family: Arial, sans-serif; padding: 20px; background-color: #f5f5f5;">
                     <div style="max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 10px;">
-                      <h2 style="color: #28a745;">🎉 恭喜！用户申请已通过</h2>
+                      <h2 style="color: #28a745;">恭喜！用户申请已通过</h2>
                       <p>尊敬的 <strong>{real_name}</strong>，您好！</p>
                       <p>您的用户申请已通过审批，现在您可以登录系统并开始审核文献了。</p>
                       <p>感谢您为超导文献数据库做出的贡献！</p>
@@ -162,7 +154,7 @@ class EmailService:
             else:
                 server = smtplib.SMTP(self.smtp_server, self.smtp_port)
                 server.starttls()
-            
+
             with server:
                 server.login(self.smtp_username, self.smtp_password)
                 server.sendmail(self.sender_email, to_email, message.as_string())
@@ -171,8 +163,7 @@ class EmailService:
 
         except Exception as e:
             print(f"发送审批通知失败: {str(e)}")
-            return True  # 开发环境返回True
+            return True
 
 
-# 全局邮件服务实例
 email_service = EmailService()
