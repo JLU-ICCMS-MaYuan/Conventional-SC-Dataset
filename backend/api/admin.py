@@ -1,19 +1,27 @@
 """
 管理员管理与文献审核 API
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from datetime import datetime
 from typing import List, Optional
 import json
-from backend.database import get_db, get_image_db
+from backend.database import get_db, get_image_db, get_ai_db, get_ai_image_db
 from backend.models import User, Paper, PaperData
 from backend import crud
 from backend.security import get_current_superadmin, get_current_admin
 from backend.email_service import email_service
 
 router = APIRouter(prefix="/api/admin", tags=["管理员"])
+
+
+def _resolve_admin_db(database: str):
+    """根据 database 参数返回 (db_session, image_db_session)"""
+    from backend.database import MetadataSessionLocal, ImageSessionLocal, AIMetadataSessionLocal, AIImageSessionLocal
+    if database == 'ai':
+        return AIMetadataSessionLocal(), AIImageSessionLocal()
+    return MetadataSessionLocal(), ImageSessionLocal()
 
 SUPERCONDUCTOR_TYPES = {"cuprate", "iron_based", "nickel_based", "hydride", "carbon", "organic", "others"}
 LEGACY_SUPERCONDUCTOR_MAP = {
@@ -340,7 +348,7 @@ async def get_all_admins(
 async def review_paper(
     paper_id: int,
     request: ReviewPaperRequest,
-    db: Session = Depends(get_db),
+    database: str = Query('local'),
     current_user: User = Depends(get_current_admin)
 ):
     """
@@ -353,69 +361,77 @@ async def review_paper(
     - unreviewed: 未审核
     - admin_only: 仅管理员可见
     """
-    paper = db.query(Paper).filter(Paper.id == paper_id).first()
+    db, image_db = _resolve_admin_db(database)
+    try:
+        paper = db.query(Paper).filter(Paper.id == paper_id).first()
 
-    if not paper:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="文献不存在"
-        )
+        if not paper:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="文献不存在"
+            )
 
-    valid_statuses = ["approved", "rejected", "modifying", "unreviewed", "admin_only"]
-    if request.status not in valid_statuses:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"无效的状态。必须是以下之一: {', '.join(valid_statuses)}"
-        )
+        valid_statuses = ["approved", "rejected", "modifying", "unreviewed", "admin_only"]
+        if request.status not in valid_statuses:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"无效的状态。必须是以下之一: {', '.join(valid_statuses)}"
+            )
 
-    # 更新审核信息
-    paper.review_status = request.status
-    paper.review_comment = request.comment
-    
-    if request.status == "unreviewed":
-        paper.reviewed_by = None
-        paper.reviewed_at = None
-    else:
-        paper.reviewed_by = current_user.id
-        paper.reviewed_at = datetime.utcnow()
-        
-    db.commit()
+        # 更新审核信息
+        paper.review_status = request.status
+        paper.review_comment = request.comment
 
-    return {
-        "message": f"文献审核状态已更新为: {request.status}",
-        "paper_id": paper.id,
-        "doi": paper.doi,
-        "status": paper.review_status,
-        "reviewer": current_user.real_name if paper.reviewed_by else None,
-        "reviewed_at": paper.reviewed_at.isoformat() if paper.reviewed_at else None
-    }
+        if request.status == "unreviewed":
+            paper.reviewed_by = None
+            paper.reviewed_at = None
+        else:
+            paper.reviewed_by = current_user.id
+            paper.reviewed_at = datetime.utcnow()
+
+        db.commit()
+
+        return {
+            "message": f"文献审核状态已更新为: {request.status}",
+            "paper_id": paper.id,
+            "doi": paper.doi,
+            "status": paper.review_status,
+            "reviewer": current_user.real_name if paper.reviewed_by else None,
+            "reviewed_at": paper.reviewed_at.isoformat() if paper.reviewed_at else None
+        }
+    finally:
+        db.close()
+        image_db.close()
 
 
 @router.get("/papers/unreviewed", summary="获取未审核文献列表")
 async def get_unreviewed_papers(
     limit: int = 50,
     offset: int = 0,
-    db: Session = Depends(get_db),
-    image_db: Session = Depends(get_image_db),
+    database: str = Query('local'),
     current_user: User = Depends(get_current_admin)
 ):
     """
     获取所有未审核的文献（分页）
-
-    管理员可以使用此接口查看待审核文献
+    支持 database=ai 查询 AI 筛选数据库
     """
-    papers = db.query(Paper).filter(
-        Paper.review_status == "unreviewed"
-    ).order_by(Paper.created_at.desc()).offset(offset).limit(limit).all()
+    db, image_db = _resolve_admin_db(database)
+    try:
+        papers = db.query(Paper).filter(
+            Paper.review_status == "unreviewed"
+        ).order_by(Paper.created_at.desc()).offset(offset).limit(limit).all()
 
-    total = db.query(Paper).filter(Paper.review_status == "unreviewed").count()
+        total = db.query(Paper).filter(Paper.review_status == "unreviewed").count()
 
-    return {
-        "total": total,
-        "offset": offset,
-        "limit": limit,
-        "papers": [admin_paper_summary(db, image_db, paper) for paper in papers]
-    }
+        return {
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+            "papers": [admin_paper_summary(db, image_db, paper) for paper in papers]
+        }
+    finally:
+        db.close()
+        image_db.close()
 
 
 @router.get("/my-reviews", summary="获取我审核的文献列表")
@@ -470,250 +486,253 @@ class UpdatePaperRequest(BaseModel):
 
 @router.get("/papers/all", summary="获取所有文献（支持多维度筛选）")
 async def get_all_papers(
-    review_status: Optional[str] = None,  # unreviewed, approved, rejected, modifying
-    article_type: Optional[str] = None,  # theoretical, experimental
-    superconductor_type: Optional[str] = None,  # cuprate, iron_based, nickel_based, hydride, carbon, organic, others
+    review_status: Optional[str] = None,
+    article_type: Optional[str] = None,
+    superconductor_type: Optional[str] = None,
     show_in_chart: Optional[bool] = None,
     year_min: Optional[int] = None,
     year_max: Optional[int] = None,
-    keyword: Optional[str] = None,  # 搜索标题、DOI、化学式
+    keyword: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
-    db: Session = Depends(get_db),
-    image_db: Session = Depends(get_image_db),
+    database: str = Query('local'),
     current_user: User = Depends(get_current_admin)
 ):
     """
     获取所有文献列表（不限元素组合）
-
-    支持多维度筛选：
-    - review_status: 审核状态
-    - article_type: 文章类型
-    - superconductor_type: 超导体类型
-    - year_min/year_max: 年份范围
-    - keyword: 关键词搜索（标题、DOI、化学式）
+    支持 database=ai 查询 AI 筛选数据库
     """
-    query = db.query(Paper)
+    db, image_db = _resolve_admin_db(database)
+    try:
+        query = db.query(Paper)
 
-    # 审核状态筛选
-    if review_status:
-        query = query.filter(Paper.review_status == review_status)
+        # 审核状态筛选
+        if review_status:
+            query = query.filter(Paper.review_status == review_status)
 
-    joined_data = False
+        joined_data = False
 
-    # 文章类型筛选
-    if article_type:
-        query = query.join(PaperData)
-        joined_data = True
-        query = query.filter(PaperData.article_type == crud.to_storage_article_type(article_type))
-
-    # 超导体类型筛选
-    normalized_super_type = to_storage_superconductor_type_value(superconductor_type) if superconductor_type else None
-
-    if normalized_super_type:
-        if not joined_data:
+        # 文章类型筛选
+        if article_type:
             query = query.join(PaperData)
             joined_data = True
-        query = query.filter(PaperData.superconductor_type == normalized_super_type)
+            query = query.filter(PaperData.article_type == crud.to_storage_article_type(article_type))
 
-    # 年份范围筛选
-    if year_min:
-        query = query.filter(Paper.year >= year_min)
-    if year_max:
-        query = query.filter(Paper.year <= year_max)
+        # 超导体类型筛选
+        normalized_super_type = to_storage_superconductor_type_value(superconductor_type) if superconductor_type else None
 
-    # 图表显示筛选
-    if show_in_chart is not None:
-        query = query.filter(Paper.show_in_chart == show_in_chart)
+        if normalized_super_type:
+            if not joined_data:
+                query = query.join(PaperData)
+                joined_data = True
+            query = query.filter(PaperData.superconductor_type == normalized_super_type)
 
-    # 关键词搜索
-    if keyword:
-        search_pattern = f"%{keyword}%"
-        if not joined_data:
-            query = query.outerjoin(PaperData)
-            joined_data = True
-        query = query.filter(
-            (Paper.title.like(search_pattern)) |
-            (Paper.doi.like(search_pattern)) |
-            (PaperData.chemical_formula.like(search_pattern))
-        )
+        # 年份范围筛选
+        if year_min:
+            query = query.filter(Paper.year >= year_min)
+        if year_max:
+            query = query.filter(Paper.year <= year_max)
 
-    # 获取总数
-    query = query.distinct()
-    total = query.count()
+        # 图表显示筛选
+        if show_in_chart is not None:
+            query = query.filter(Paper.show_in_chart == show_in_chart)
 
-    # 分页查询
-    papers = query.order_by(Paper.created_at.desc()).offset(offset).limit(limit).all()
+        # 关键词搜索
+        if keyword:
+            search_pattern = f"%{keyword}%"
+            if not joined_data:
+                query = query.outerjoin(PaperData)
+                joined_data = True
+            query = query.filter(
+                (Paper.title.like(search_pattern)) |
+                (Paper.doi.like(search_pattern)) |
+                (PaperData.chemical_formula.like(search_pattern))
+            )
 
-    return {
-        "total": total,
-        "offset": offset,
-        "limit": limit,
-        "papers": [admin_paper_summary(db, image_db, paper) for paper in papers]
-    }
+        # 获取总数
+        query = query.distinct()
+        total = query.count()
+
+        # 分页查询
+        papers = query.order_by(Paper.created_at.desc()).offset(offset).limit(limit).all()
+
+        return {
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+            "papers": [admin_paper_summary(db, image_db, paper) for paper in papers]
+        }
+    finally:
+        db.close()
+        image_db.close()
 
 
 @router.get("/papers/{paper_id}", summary="获取文献详细信息")
 async def get_paper_detail(
     paper_id: int,
-    db: Session = Depends(get_db),
-    image_db: Session = Depends(get_image_db),
+    database: str = Query('local'),
     current_user: User = Depends(get_current_admin)
 ):
     """
     获取文献的完整信息（用于编辑表单）
-
-    所有管理员都可以访问
+    支持 database=ai 查询 AI 筛选数据库
     """
-    paper = db.query(Paper).filter(Paper.id == paper_id).first()
+    db, image_db = _resolve_admin_db(database)
+    try:
+        paper = db.query(Paper).filter(Paper.id == paper_id).first()
 
-    if not paper:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="文献不存在"
-        )
+        if not paper:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="文献不存在"
+            )
 
-    data = crud.paper_to_response(db, paper, image_db=image_db)
-    data.update({
-        "created_at": paper.created_at.isoformat() if paper.created_at else None,
-        "show_in_chart": paper.show_in_chart,
-    })
-    return data
+        data = crud.paper_to_response(db, paper, image_db=image_db)
+        data.update({
+            "created_at": paper.created_at.isoformat() if paper.created_at else None,
+            "show_in_chart": paper.show_in_chart,
+        })
+        return data
+    finally:
+        db.close()
+        image_db.close()
 
 
 @router.put("/papers/{paper_id}", summary="编辑文献信息")
 async def update_paper(
     paper_id: int,
     request: UpdatePaperRequest,
-    db: Session = Depends(get_db),
+    database: str = Query('local'),
     current_user: User = Depends(get_current_admin)
 ):
     """
     编辑文献信息
-
-    所有管理员都可以编辑
-    只更新提供的字段，未提供的字段保持不变
+    支持 database=ai 编辑 AI 筛选数据库中的文献
     """
-    paper = db.query(Paper).filter(Paper.id == paper_id).first()
+    db, image_db = _resolve_admin_db(database)
+    try:
+        paper = db.query(Paper).filter(Paper.id == paper_id).first()
 
-    if not paper:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="文献不存在"
+        if not paper:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="文献不存在"
+            )
+
+        # 验证文章类型
+        if request.article_type and request.article_type not in ["theoretical", "experimental"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="文章类型必须是 theoretical 或 experimental"
+            )
+
+        normalized_super_type = None
+        if request.superconductor_type:
+            normalized_super_type = to_storage_superconductor_type_value(request.superconductor_type)
+
+        # 验证审核状态
+        if request.review_status and request.review_status not in [
+            "approved", "rejected", "modifying", "unreviewed", "admin_only"
+        ]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="无效的审核状态"
+            )
+
+        # 验证年份范围
+        if request.year and (request.year < 1900 or request.year > 2100):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="年份必须在 1900-2100 之间"
+            )
+
+        # 更新字段（只更新非None的字段）
+        update_data = request.dict(exclude_unset=True)
+        has_physical_data_update = "physical_data" in update_data
+
+        # 特殊处理物理数据
+        if has_physical_data_update:
+            new_data = update_data.pop("physical_data")
+            if new_data is not None:
+                from backend.models import PaperData
+                db.query(PaperData).filter(PaperData.paper_id == paper_id).delete()
+                db.flush()
+                for item in new_data:
+                    formula = item.get("chemical_formula") or request.chemical_formula
+                    compound = crud.get_or_create_compound(db, [], formula) if formula else None
+                    tc_range = crud.normalize_numeric_range(item.get("tc"))
+                    pressure_range = crud.normalize_numeric_range(item.get("tc_press"))
+                    item_article_type = item.get("article_type") or request.article_type
+                    item_super_type = (
+                        to_storage_superconductor_type_value(item.get("superconductor_type"))
+                        if item.get("superconductor_type")
+                        else normalized_super_type
+                    )
+                    db_data = PaperData(
+                        paper_id=paper_id,
+                        compound_id=compound.id if compound else item.get("compound_id"),
+                        article_type=crud.to_storage_article_type(item_article_type),
+                        superconductor_type=item_super_type,
+                        chemical_formula=formula,
+                        crystal_structure=item.get("crystal_structure") or request.crystal_structure,
+                        tc=crud.range_to_json(tc_range),
+                        tc_press=crud.range_to_json(pressure_range),
+                        lambda_val=item.get("lambda_val"),
+                        omega_log=item.get("omega_log"),
+                        n_ef=item.get("n_ef"),
+                        s_factor=item.get("s_factor") if item.get("s_factor") is not None else crud.compute_s_factor_from_ranges(
+                            pressure_range, tc_range
+                        ),
+                        sample_name=item.get("sample_name"),
+                        data_source_note=item.get("data_source_note"),
+                    )
+                    db.add(db_data)
+
+        paper_fields = {
+            "title", "authors", "journal", "volume", "pages", "year", "abstract",
+            "contributor_name", "contributor_affiliation", "notes",
+            "show_in_chart", "review_status",
+        }
+        for field, value in update_data.items():
+            if field in paper_fields and value is not None:
+                setattr(paper, field, value)
+
+        data_fields_changed = any(
+            getattr(request, name) is not None
+            for name in ("article_type", "superconductor_type", "chemical_formula", "crystal_structure")
         )
+        if data_fields_changed and not has_physical_data_update:
+            for item in paper.physical_parameters:
+                if request.article_type is not None:
+                    item.article_type = crud.to_storage_article_type(request.article_type)
+                if normalized_super_type is not None:
+                    item.superconductor_type = normalized_super_type
+                if request.chemical_formula is not None:
+                    item.chemical_formula = request.chemical_formula
+                    compound = crud.get_or_create_compound(db, [], request.chemical_formula)
+                    item.compound_id = compound.id if compound else item.compound_id
+                if request.crystal_structure is not None:
+                    item.crystal_structure = request.crystal_structure
 
-    # 验证文章类型
-    if request.article_type and request.article_type not in ["theoretical", "experimental"]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="文章类型必须是 theoretical 或 experimental"
-        )
+        db.commit()
+        db.refresh(paper)
 
-    normalized_super_type = None
-    if request.superconductor_type:
-        normalized_super_type = to_storage_superconductor_type_value(request.superconductor_type)
-
-    # 验证审核状态
-    if request.review_status and request.review_status not in [
-        "approved", "rejected", "modifying", "unreviewed", "admin_only"
-    ]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="无效的审核状态"
-        )
-
-    # 验证年份范围
-    if request.year and (request.year < 1900 or request.year > 2100):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="年份必须在 1900-2100 之间"
-        )
-
-    # 更新字段（只更新非None的字段）
-    update_data = request.dict(exclude_unset=True)
-    has_physical_data_update = "physical_data" in update_data
-    
-    # 特殊处理物理数据
-    if has_physical_data_update:
-        new_data = update_data.pop("physical_data")
-        if new_data is not None:
-            from backend.models import PaperData
-            db.query(PaperData).filter(PaperData.paper_id == paper_id).delete()
-            db.flush()
-            for item in new_data:
-                formula = item.get("chemical_formula") or request.chemical_formula
-                compound = crud.get_or_create_compound(db, [], formula) if formula else None
-                tc_range = crud.normalize_numeric_range(item.get("tc"))
-                pressure_range = crud.normalize_numeric_range(item.get("tc_press"))
-                item_article_type = item.get("article_type") or request.article_type
-                item_super_type = (
-                    to_storage_superconductor_type_value(item.get("superconductor_type"))
-                    if item.get("superconductor_type")
-                    else normalized_super_type
-                )
-                db_data = PaperData(
-                    paper_id=paper_id,
-                    compound_id=compound.id if compound else item.get("compound_id"),
-                    article_type=crud.to_storage_article_type(item_article_type),
-                    superconductor_type=item_super_type,
-                    chemical_formula=formula,
-                    crystal_structure=item.get("crystal_structure") or request.crystal_structure,
-                    tc=crud.range_to_json(tc_range),
-                    tc_press=crud.range_to_json(pressure_range),
-                    lambda_val=item.get("lambda_val"),
-                    omega_log=item.get("omega_log"),
-                    n_ef=item.get("n_ef"),
-                    s_factor=item.get("s_factor") if item.get("s_factor") is not None else crud.compute_s_factor_from_ranges(
-                        pressure_range, tc_range
-                    ),
-                    sample_name=item.get("sample_name"),
-                    data_source_note=item.get("data_source_note"),
-                )
-                db.add(db_data)
-
-    paper_fields = {
-        "title", "authors", "journal", "volume", "pages", "year", "abstract",
-        "contributor_name", "contributor_affiliation", "notes",
-        "show_in_chart", "review_status",
-    }
-    for field, value in update_data.items():
-        if field in paper_fields and value is not None:
-            setattr(paper, field, value)
-
-    data_fields_changed = any(
-        getattr(request, name) is not None
-        for name in ("article_type", "superconductor_type", "chemical_formula", "crystal_structure")
-    )
-    if data_fields_changed and not has_physical_data_update:
-        for item in paper.physical_parameters:
-            if request.article_type is not None:
-                item.article_type = crud.to_storage_article_type(request.article_type)
-            if normalized_super_type is not None:
-                item.superconductor_type = normalized_super_type
-            if request.chemical_formula is not None:
-                item.chemical_formula = request.chemical_formula
-                compound = crud.get_or_create_compound(db, [], request.chemical_formula)
-                item.compound_id = compound.id if compound else item.compound_id
-            if request.crystal_structure is not None:
-                item.crystal_structure = request.crystal_structure
-
-    db.commit()
-    db.refresh(paper)
-
-    return {
-        "message": "文献信息已更新",
-        "paper_id": paper.id,
-        "doi": paper.doi,
-        "title": paper.title,
-        "updated_by": current_user.real_name
-    }
+        return {
+            "message": "文献信息已更新",
+            "paper_id": paper.id,
+            "doi": paper.doi,
+            "title": paper.title,
+            "updated_by": current_user.real_name
+        }
+    finally:
+        db.close()
+        image_db.close()
 
 
 @router.delete("/papers/{paper_id}", summary="删除文献（仅超级管理员）")
 async def delete_paper(
     paper_id: int,
-    db: Session = Depends(get_db),
-    image_db: Session = Depends(get_image_db),
+    database: str = Query('local'),
     current_user: User = Depends(get_current_superadmin)
 ):
     """
@@ -722,34 +741,39 @@ async def delete_paper(
     仅超级管理员可以操作
     会级联删除所有文献截图
     """
-    paper = db.query(Paper).filter(Paper.id == paper_id).first()
+    db, image_db = _resolve_admin_db(database)
+    try:
+        paper = db.query(Paper).filter(Paper.id == paper_id).first()
 
-    if not paper:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="文献不存在"
-        )
+        if not paper:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="文献不存在"
+            )
 
-    # 记录删除的文献信息（用于日志）
-    image_count = crud.get_paper_image_count(image_db, paper.id)
-    deleted_info = {
-        "paper_id": paper.id,
-        "doi": paper.doi,
-        "title": paper.title,
-        "compound": crud.paper_to_response(db, paper, image_db=image_db).get("compound_symbols"),
-        "images_count": image_count,
-        "deleted_by": current_user.real_name,
-        "deleted_at": datetime.utcnow().isoformat()
-    }
+        # 记录删除的文献信息（用于日志）
+        image_count = crud.get_paper_image_count(image_db, paper.id)
+        deleted_info = {
+            "paper_id": paper.id,
+            "doi": paper.doi,
+            "title": paper.title,
+            "compound": crud.paper_to_response(db, paper, image_db=image_db).get("compound_symbols"),
+            "images_count": image_count,
+            "deleted_by": current_user.real_name,
+            "deleted_at": datetime.utcnow().isoformat()
+        }
 
-    crud.delete_all_paper_images(image_db, paper.id)
-    db.delete(paper)
-    db.commit()
+        crud.delete_all_paper_images(image_db, paper.id)
+        db.delete(paper)
+        db.commit()
 
-    return {
-        "message": f"文献《{deleted_info['title']}》已删除",
-        "deleted_info": deleted_info
-    }
+        return {
+            "message": f"文献《{deleted_info['title']}》已删除",
+            "deleted_info": deleted_info
+        }
+    finally:
+        db.close()
+        image_db.close()
 
 
 # ========== 批量操作功能 ==========
@@ -763,7 +787,7 @@ class BatchReviewRequest(BaseModel):
 @router.post("/papers/batch-review", summary="批量审核文献")
 async def batch_review_papers(
     request: BatchReviewRequest,
-    db: Session = Depends(get_db),
+    database: str = Query('local'),
     current_user: User = Depends(get_current_admin)
 ):
     """
@@ -771,83 +795,92 @@ async def batch_review_papers(
 
     所有管理员都可以操作
     """
-    if not request.paper_ids:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="未提供文献ID列表"
-        )
+    db, image_db = _resolve_admin_db(database)
+    try:
+        if not request.paper_ids:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="未提供文献ID列表"
+            )
 
-    # 查询所有指定的文献
-    papers = db.query(Paper).filter(Paper.id.in_(request.paper_ids)).all()
+        # 查询所有指定的文献
+        papers = db.query(Paper).filter(Paper.id.in_(request.paper_ids)).all()
 
-    if not papers:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="未找到指定的文献"
-        )
+        if not papers:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="未找到指定的文献"
+            )
 
-    # 批量标记
-    reviewed_count = 0
-    for paper in papers:
-        paper.review_status = request.status
-        if request.status == "unreviewed":
-            paper.reviewed_by = None
-            paper.reviewed_at = None
-        else:
-            paper.reviewed_by = current_user.id
-            paper.reviewed_at = datetime.utcnow()
-        reviewed_count += 1
+        # 批量标记
+        reviewed_count = 0
+        for paper in papers:
+            paper.review_status = request.status
+            if request.status == "unreviewed":
+                paper.reviewed_by = None
+                paper.reviewed_at = None
+            else:
+                paper.reviewed_by = current_user.id
+                paper.reviewed_at = datetime.utcnow()
+            reviewed_count += 1
 
-    db.commit()
+        db.commit()
 
-    return {
-        "message": f"批量更新完成，已将 {reviewed_count} 篇文献设为 {request.status}",
-        "reviewed_count": reviewed_count,
-        "total_requested": len(request.paper_ids)
-    }
+        return {
+            "message": f"批量更新完成，已将 {reviewed_count} 篇文献设为 {request.status}",
+            "reviewed_count": reviewed_count,
+            "total_requested": len(request.paper_ids)
+        }
+    finally:
+        db.close()
+        image_db.close()
 
 
 @router.post("/papers/batch-chart-visibility", summary="批量设置图表显示（仅超级管理员）")
 async def batch_chart_visibility(
     request: ChartVisibilityRequest,
-    db: Session = Depends(get_db),
+    database: str = Query('local'),
     current_user: User = Depends(get_current_superadmin)
 ):
     """
     批量更新文献是否显示在图表中
     """
-    if not request.paper_ids:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="未提供文献ID列表"
-        )
+    db, image_db = _resolve_admin_db(database)
+    try:
+        if not request.paper_ids:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="未提供文献ID列表"
+            )
 
-    papers = db.query(Paper).filter(Paper.id.in_(request.paper_ids)).all()
+        papers = db.query(Paper).filter(Paper.id.in_(request.paper_ids)).all()
 
-    if not papers:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="未找到指定的文献"
-        )
+        if not papers:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="未找到指定的文献"
+            )
 
-    for paper in papers:
-        paper.show_in_chart = request.show
+        for paper in papers:
+            paper.show_in_chart = request.show
 
-    db.commit()
+        db.commit()
 
-    visibility_text = "显示" if request.show else "隐藏"
-    return {
-        "message": f"已将 {len(papers)} 篇文献设置为 {visibility_text}",
-        "updated_count": len(papers),
-        "show": request.show
-    }
+        visibility_text = "显示" if request.show else "隐藏"
+        return {
+            "message": f"已将 {len(papers)} 篇文献设置为 {visibility_text}",
+            "updated_count": len(papers),
+            "show": request.show
+        }
+    finally:
+        db.close()
+        image_db.close()
 
 
 @router.post("/papers/batch-delete", summary="批量删除文献（仅超级管理员）")
 async def batch_delete_papers(
     request: BatchReviewRequest,
-    db: Session = Depends(get_db),
-    image_db: Session = Depends(get_image_db),
+    database: str = Query('local'),
     current_user: User = Depends(get_current_superadmin)
 ):
     """
@@ -855,41 +888,46 @@ async def batch_delete_papers(
 
     仅超级管理员可以操作
     """
-    if not request.paper_ids:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="未提供文献ID列表"
-        )
+    db, image_db = _resolve_admin_db(database)
+    try:
+        if not request.paper_ids:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="未提供文献ID列表"
+            )
 
-    # 查询所有指定的文献
-    papers = db.query(Paper).filter(Paper.id.in_(request.paper_ids)).all()
+        # 查询所有指定的文献
+        papers = db.query(Paper).filter(Paper.id.in_(request.paper_ids)).all()
 
-    if not papers:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="未找到指定的文献"
-        )
+        if not papers:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="未找到指定的文献"
+            )
 
-    # 记录删除信息
-    deleted_papers = []
-    for paper in papers:
-        deleted_papers.append({
-            "paper_id": paper.id,
-            "doi": paper.doi,
-            "title": paper.title
-        })
-        crud.delete_all_paper_images(image_db, paper.id)
-        db.delete(paper)
+        # 记录删除信息
+        deleted_papers = []
+        for paper in papers:
+            deleted_papers.append({
+                "paper_id": paper.id,
+                "doi": paper.doi,
+                "title": paper.title
+            })
+            crud.delete_all_paper_images(image_db, paper.id)
+            db.delete(paper)
 
-    db.commit()
+        db.commit()
 
-    return {
-        "message": f"批量删除完成",
-        "deleted_count": len(deleted_papers),
-        "deleted_papers": deleted_papers,
-        "deleted_by": current_user.real_name,
-        "deleted_at": datetime.utcnow().isoformat()
-    }
+        return {
+            "message": f"批量删除完成",
+            "deleted_count": len(deleted_papers),
+            "deleted_papers": deleted_papers,
+            "deleted_by": current_user.real_name,
+            "deleted_at": datetime.utcnow().isoformat()
+        }
+    finally:
+        db.close()
+        image_db.close()
 
 
 # ========== 图片管理功能 ==========
@@ -901,8 +939,7 @@ from backend.utils.image_processor import process_image
 @router.get("/papers/{paper_id}/images", summary="获取文献的所有图片")
 async def get_paper_images(
     paper_id: int,
-    db: Session = Depends(get_db),
-    image_db: Session = Depends(get_image_db),
+    database: str = Query('local'),
     current_user: User = Depends(get_current_admin)
 ):
     """
@@ -910,24 +947,28 @@ async def get_paper_images(
 
     返回平铺图片列表以及按组整理的审核视图数据
     """
-    paper = db.query(Paper).filter(Paper.id == paper_id).first()
+    db, image_db = _resolve_admin_db(database)
+    try:
+        paper = db.query(Paper).filter(Paper.id == paper_id).first()
 
-    if not paper:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="文献不存在"
-        )
+        if not paper:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="文献不存在"
+            )
 
-    rows = crud.get_paper_images(image_db, paper_id)
-    return crud.build_paper_image_review_groups(paper, rows)
+        rows = crud.get_paper_images(image_db, paper_id)
+        return crud.build_paper_image_review_groups(paper, rows)
+    finally:
+        db.close()
+        image_db.close()
 
 
 @router.delete("/papers/{paper_id}/images/{image_id}", summary="删除文献截图")
 async def delete_paper_image(
     paper_id: int,
     image_id: int,
-    db: Session = Depends(get_db),
-    image_db: Session = Depends(get_image_db),
+    database: str = Query('local'),
     current_user: User = Depends(get_current_admin)
 ):
     """
@@ -935,43 +976,48 @@ async def delete_paper_image(
 
     管理员可以操作
     """
-    image = None
-    selected_order = None
-    if image_id >= 100:
-        row_id, selected_order = divmod(image_id, 100)
-        image = image_db.query(PaperImage).filter(
-            PaperImage.id == row_id,
-            PaperImage.paper_id == paper_id
-        ).first()
-    else:
-        image = image_db.query(PaperImage).filter(
-            PaperImage.id == image_id,
-            PaperImage.paper_id == paper_id
-        ).first()
+    db, image_db = _resolve_admin_db(database)
+    try:
+        image = None
+        selected_order = None
+        if image_id >= 100:
+            row_id, selected_order = divmod(image_id, 100)
+            image = image_db.query(PaperImage).filter(
+                PaperImage.id == row_id,
+                PaperImage.paper_id == paper_id
+            ).first()
+        else:
+            image = image_db.query(PaperImage).filter(
+                PaperImage.id == image_id,
+                PaperImage.paper_id == paper_id
+            ).first()
 
-    if not image:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="图片不存在"
-        )
+        if not image:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="图片不存在"
+            )
 
-    paper = db.query(Paper).filter(Paper.id == paper_id).first()
-    image_count = crud.get_paper_image_count(image_db, paper_id)
-    if image_count <= 1:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="至少需要保留一张图片"
-        )
+        paper = db.query(Paper).filter(Paper.id == paper_id).first()
+        image_count = crud.get_paper_image_count(image_db, paper_id)
+        if image_count <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="至少需要保留一张图片"
+            )
 
-    if selected_order:
-        setattr(image, f"fig{selected_order}", None)
-    else:
-        image_db.delete(image)
+        if selected_order:
+            setattr(image, f"fig{selected_order}", None)
+        else:
+            image_db.delete(image)
 
-    image_db.commit()
+        image_db.commit()
 
-    return {
-        "message": "图片已删除",
-        "deleted_image_id": image_id,
-        "remaining_images": image_count - 1
-    }
+        return {
+            "message": "图片已删除",
+            "deleted_image_id": image_id,
+            "remaining_images": image_count - 1
+        }
+    finally:
+        db.close()
+        image_db.close()

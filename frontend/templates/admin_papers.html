@@ -120,6 +120,13 @@
                     <label class="form-label">关键词搜索</label>
                     <input type="text" class="form-control" id="filterKeyword" placeholder="搜索标题、DOI、化学式...">
                 </div>
+                <div class="col-md-3">
+                    <label class="form-label" data-i18n="compound.database">数据库</label>
+                    <select class="form-select" id="filterDatabase" onchange="loadPapers()">
+                        <option value="local" data-i18n="compound.local_db">本地数据库</option>
+                        <option value="ai" data-i18n="compound.ai_db">AI筛选</option>
+                    </select>
+                </div>
                 <div class="col-md-3 d-flex align-items-end">
                     <button class="btn btn-primary w-100" onclick="loadPapers()">应用筛选</button>
                 </div>

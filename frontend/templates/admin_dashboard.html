@@ -117,7 +117,16 @@
     </nav>
 
     <div class="container mt-4">
-        <h2 data-i18n="admin.pending_review">待审核文献列表</h2>
+        <div class="d-flex align-items-center justify-content-between mb-3">
+            <h2 class="mb-0" data-i18n="admin.pending_review">待审核文献列表</h2>
+            <div class="d-flex align-items-center gap-2">
+                <label class="text-muted small" data-i18n="compound.database">数据库</label>
+                <select class="form-select form-select-sm" id="reviewDbSelect" onchange="onReviewDbChange()" style="width: auto;">
+                    <option value="local" data-i18n="compound.local_db">本地数据库</option>
+                    <option value="ai" data-i18n="compound.ai_db">AI筛选</option>
+                </select>
+            </div>
+        </div>
 
         <div id="unreviewedPapers" class="mt-4">
             <div class="text-center py-5">
@@ -297,6 +306,13 @@
             total: 0,
             totalPages: 0,
         };
+        let currentDatabase = 'local';
+
+        function onReviewDbChange() {
+            currentDatabase = document.getElementById('reviewDbSelect').value;
+            dashboardPagination.page = 1;
+            loadUnreviewedPapers();
+        }
         const SUPER_TYPES = ['cuprate', 'iron_based', 'nickel_based', 'hydride', 'carbon', 'organic', 'others'];
         const LEGACY_SUPER_TYPES = {
             'carbon_organic': 'carbon',
@@ -647,7 +663,7 @@
             }
 
             const currentImage = previewGroupImages[previewImageIndex];
-            imageEl.src = `/api/papers/images/${currentImage.id}`;
+            imageEl.src = `/api/papers/images/${currentImage.id}?database=${currentDatabase}`;
             imageEl.alt = `图片 ${currentImage.order}`;
             captionEl.textContent = `第 ${previewGroupIndex + 1} 组 · 图片 ${currentImage.order} / 第 ${previewImageIndex + 1} 张，共 ${previewGroupImages.length} 张`;
             introEl.innerHTML = renderImageGroupIntro(previewGroupIntro);
@@ -719,7 +735,7 @@
                                 class="btn p-0 border-0 bg-transparent text-decoration-none"
                                 onclick="openImagePreviewByGroup(${groupIndex}, ${index})"
                                 aria-label="放大查看图片 ${img.order}">
-                            <img src="/api/papers/images/${img.id}?thumbnail=true"
+                            <img src="/api/papers/images/${img.id}?thumbnail=true&database=${currentDatabase}"
                                  alt="图片 ${img.order}"
                                  class="img-thumbnail"
                                  style="width: 140px; height: 140px; object-fit: cover;">
@@ -748,7 +764,7 @@
                 container.innerHTML = '<div class="text-muted small">正在加载图片分组...</div>';
             }
 
-            const response = await fetch(`/api/admin/papers/${paperId}/images`, {
+            const response = await fetch(`/api/admin/papers/${paperId}/images?database=${currentDatabase}`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -907,7 +923,7 @@
         async function loadUnreviewedPapers() {
             const offset = (dashboardPagination.page - 1) * dashboardPagination.pageSize;
             try {
-                const response = await fetch(`/api/admin/papers/unreviewed?limit=${dashboardPagination.pageSize}&offset=${offset}`, {
+                const response = await fetch(`/api/admin/papers/unreviewed?limit=${dashboardPagination.pageSize}&offset=${offset}&database=${currentDatabase}`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
@@ -1024,7 +1040,7 @@
             }
 
             try {
-                const response = await fetch(`/api/admin/papers/${paperId}/review`, {
+                const response = await fetch(`/api/admin/papers/${paperId}/review?database=${currentDatabase}`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -1105,7 +1121,7 @@
         // 打开编辑模态框
         async function openEditModal(paperId) {
             try {
-                const response = await fetch(`/api/admin/papers/${paperId}`, {
+                const response = await fetch(`/api/admin/papers/${paperId}?database=${currentDatabase}`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
@@ -1178,7 +1194,7 @@
             };
 
             try {
-                const response = await fetch(`/api/admin/papers/${paperId}`, {
+                const response = await fetch(`/api/admin/papers/${paperId}?database=${currentDatabase}`, {
                     method: 'PUT',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -1222,7 +1238,7 @@
             }
 
             try {
-                const response = await fetch(`/api/admin/papers/${paperId}`, {
+                const response = await fetch(`/api/admin/papers/${paperId}?database=${currentDatabase}`, {
                     method: 'DELETE',
                     headers: {
                         'Authorization': `Bearer ${token}`

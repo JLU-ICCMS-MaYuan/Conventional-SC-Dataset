@@ -17,6 +17,11 @@ const LEGACY_SUPER_TYPES = {
     'unknown': 'others'
 };
 
+function getSelectedDatabase() {
+    const el = document.getElementById('filterDatabase');
+    return el ? el.value : 'local';
+}
+
 function normalizeSuperconductorType(value) {
     if (!value) return 'others';
     const normalized = LEGACY_SUPER_TYPES[value] || value;
@@ -188,7 +193,7 @@ async function loadPapers(page = 0) {
     }
 
     try {
-        const response = await fetch(`/api/admin/papers/all?${queryParams}`, {
+        const response = await fetch(`/api/admin/papers/all?${queryParams}&database=${getSelectedDatabase()}`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
@@ -479,7 +484,7 @@ async function batchReview() {
     }
 
     try {
-        const response = await fetch('/api/admin/papers/batch-review', {
+        const response = await fetch(`/api/admin/papers/batch-review?database=${getSelectedDatabase()}`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -518,7 +523,7 @@ async function batchChartVisibility(show) {
     }
 
     try {
-        const response = await fetch('/api/admin/papers/batch-chart-visibility', {
+        const response = await fetch(`/api/admin/papers/batch-chart-visibility?database=${getSelectedDatabase()}`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -567,7 +572,7 @@ async function batchDelete() {
     }
 
     try {
-        const response = await fetch('/api/admin/papers/batch-delete', {
+        const response = await fetch(`/api/admin/papers/batch-delete?database=${getSelectedDatabase()}`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -651,7 +656,7 @@ function removeEditDataRow(button) {
 async function openEditModal(paperId) {
     console.log('Opening edit modal for paper:', paperId);
     try {
-        const response = await fetch(`/api/admin/papers/${paperId}`, {
+        const response = await fetch(`/api/admin/papers/${paperId}?database=${getSelectedDatabase()}`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
@@ -753,7 +758,7 @@ async function submitReviewAction() {
     const comment = commentEl.value;
 
     try {
-        const response = await fetch(`/api/admin/papers/${paperId}/review`, {
+        const response = await fetch(`/api/admin/papers/${paperId}/review?database=${getSelectedDatabase()}`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -844,7 +849,7 @@ async function savePaperEdits() {
     };
 
     try {
-        const response = await fetch(`/api/admin/papers/${paperId}`, {
+        const response = await fetch(`/api/admin/papers/${paperId}?database=${getSelectedDatabase()}`, {
             method: 'PUT',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -872,7 +877,7 @@ async function savePaperEdits() {
 
 async function loadPaperImages(paperId) {
     try {
-        const response = await fetch(`/api/admin/papers/${paperId}/images`, {
+        const response = await fetch(`/api/admin/papers/${paperId}/images?database=${getSelectedDatabase()}`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
@@ -907,7 +912,7 @@ function renderImagesList(paperId, images) {
         html += `
             <div class="col-md-4 mb-3">
                 <div class="card">
-                    <img src="/api/papers/images/${img.id}?thumbnail=true" class="card-img-top" alt="截图${img.order}">
+                    <img src="/api/papers/images/${img.id}?thumbnail=true&database=${getSelectedDatabase()}" class="card-img-top" alt="截图${img.order}">
                     <div class="card-body">
                         <h6 class="card-title">图片 ${img.order}</h6>
                         <p class="card-text">
@@ -934,7 +939,7 @@ async function deleteImage(paperId, imageId) {
     }
 
     try {
-        const response = await fetch(`/api/admin/papers/${paperId}/images/${imageId}`, {
+        const response = await fetch(`/api/admin/papers/${paperId}/images/${imageId}?database=${getSelectedDatabase()}`, {
             method: 'DELETE',
             headers: {
                 'Authorization': `Bearer ${token}`
@@ -974,7 +979,7 @@ async function deleteSinglePaper(paperId, paperDoi, paperTitle) {
     }
 
     try {
-        const response = await fetch(`/api/admin/papers/${paperId}`, {
+        const response = await fetch(`/api/admin/papers/${paperId}?database=${getSelectedDatabase()}`, {
             method: 'DELETE',
             headers: {
                 'Authorization': `Bearer ${token}`

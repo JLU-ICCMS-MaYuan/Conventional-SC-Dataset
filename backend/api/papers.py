@@ -1,7 +1,7 @@
 """
 文献相关API
 """
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Response
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, Response
 from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional, Annotated
@@ -516,6 +516,7 @@ def get_paper_image(
 def get_image_by_id(
     image_id: int,
     thumbnail: bool = False,
+    database: str = Query('local'),
     image_db: Session = Depends(get_image_db)
 ):
     """
@@ -524,7 +525,19 @@ def get_image_by_id(
     Args:
         image_id: 图片ID
         thumbnail: 是否返回缩略图
+        database: 数据库类型 (local/ai)
     """
+    if database == 'ai':
+        from backend.database import AIImageSessionLocal
+        ai_image_db = AIImageSessionLocal()
+        try:
+            return _serve_image_by_id(ai_image_db, image_id, thumbnail)
+        finally:
+            ai_image_db.close()
+    return _serve_image_by_id(image_db, image_id, thumbnail)
+
+
+def _serve_image_by_id(image_db: Session, image_id: int, thumbnail: bool):
     image = crud.get_image_by_id(image_db, image_id)
     if not image:
         raise HTTPException(status_code=404, detail="图片不存在")
@@ -542,7 +555,6 @@ def get_image_by_id(
     if not image_data:
         raise HTTPException(status_code=404, detail="图片不存在")
 
-    # 返回图片
     return StreamingResponse(
         BytesIO(image_data),
         media_type="image/jpeg"
