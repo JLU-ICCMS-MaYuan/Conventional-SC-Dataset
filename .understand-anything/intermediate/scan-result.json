@@ -8,264 +8,6 @@
       "fileCategory": "docs"
     },
     {
-      "path": "articles/artifact_check.md",
-      "language": "markdown",
-      "sizeLines": 18,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/citation_quality_audit.md",
-      "language": "markdown",
-      "sizeLines": 14,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/citation_support_bank.md",
-      "language": "markdown",
-      "sizeLines": 184,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/claim_register.md",
-      "language": "markdown",
-      "sizeLines": 14,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/comments_response.md",
-      "language": "markdown",
-      "sizeLines": 24,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/confirmed_motivation.md",
-      "language": "markdown",
-      "sizeLines": 13,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/evidence_bank.md",
-      "language": "markdown",
-      "sizeLines": 17,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/exemplar_learning_dossier.md",
-      "language": "markdown",
-      "sizeLines": 35,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/figure_asset_map.md",
-      "language": "markdown",
-      "sizeLines": 13,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/final_artifact_manifest.md",
-      "language": "markdown",
-      "sizeLines": 51,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/final_paper/main_zh.tex",
-      "language": "tex",
-      "sizeLines": 287,
-      "fileCategory": "code"
-    },
-    {
-      "path": "articles/final_paper/main.tex",
-      "language": "tex",
-      "sizeLines": 287,
-      "fileCategory": "code"
-    },
-    {
-      "path": "articles/integrity_audit.md",
-      "language": "markdown",
-      "sizeLines": 40,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/latex_guard.md",
-      "language": "markdown",
-      "sizeLines": 10,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/latex_report.md",
-      "language": "markdown",
-      "sizeLines": 43,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/logic_transfer_audit.md",
-      "language": "markdown",
-      "sizeLines": 52,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/material_inventory.md",
-      "language": "markdown",
-      "sizeLines": 26,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/motivation_options_after_research.md",
-      "language": "markdown",
-      "sizeLines": 30,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/paper_spine_config.json",
-      "language": "json",
-      "sizeLines": 26,
-      "fileCategory": "config"
-    },
-    {
-      "path": "articles/paper_spine_config.md",
-      "language": "markdown",
-      "sizeLines": 23,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/reference_materials/source_index.md",
-      "language": "markdown",
-      "sizeLines": 50,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/research_dossier.md",
-      "language": "markdown",
-      "sizeLines": 62,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/review_outputs_only/clarity_review_output.md",
-      "language": "markdown",
-      "sizeLines": 39,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/review_outputs_only/contribution_review_output.md",
-      "language": "markdown",
-      "sizeLines": 59,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/review_outputs_only/methods_review_output.md",
-      "language": "markdown",
-      "sizeLines": 52,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/review_outputs_validate/clarity_reviewer.md",
-      "language": "markdown",
-      "sizeLines": 39,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/review_outputs_validate/contribution_reviewer.md",
-      "language": "markdown",
-      "sizeLines": 59,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/review_outputs_validate/methods_reviewer.md",
-      "language": "markdown",
-      "sizeLines": 52,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/review_prompts/clarity_review_output.md",
-      "language": "markdown",
-      "sizeLines": 39,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/review_prompts/clarity_reviewer.md",
-      "language": "markdown",
-      "sizeLines": 105,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/review_prompts/contribution_review_output.md",
-      "language": "markdown",
-      "sizeLines": 59,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/review_prompts/contribution_reviewer.md",
-      "language": "markdown",
-      "sizeLines": 105,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/review_prompts/dispatch.md",
-      "language": "markdown",
-      "sizeLines": 15,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/review_prompts/methods_review_output.md",
-      "language": "markdown",
-      "sizeLines": 52,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/review_prompts/methods_reviewer.md",
-      "language": "markdown",
-      "sizeLines": 105,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/section_blueprints.md",
-      "language": "markdown",
-      "sizeLines": 61,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/sota_gap_map.md",
-      "language": "markdown",
-      "sizeLines": 18,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/source_inventory.json",
-      "language": "json",
-      "sizeLines": 135,
-      "fileCategory": "config"
-    },
-    {
-      "path": "articles/source_inventory.md",
-      "language": "markdown",
-      "sizeLines": 26,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/source_map.md",
-      "language": "markdown",
-      "sizeLines": 13,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/structured_review.md",
-      "language": "markdown",
-      "sizeLines": 51,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/style_profile.md",
-      "language": "markdown",
-      "sizeLines": 39,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "articles/writing_rationale_matrix.md",
-      "language": "markdown",
-      "sizeLines": 24,
-      "fileCategory": "docs"
-    },
-    {
       "path": "backend/__init__.py",
       "language": "python",
       "sizeLines": 0,
@@ -347,18 +89,6 @@
       "path": "backend/create_superadmin.py",
       "language": "python",
       "sizeLines": 135,
-      "fileCategory": "code"
-    },
-    {
-      "path": "backend/crud.py",
-      "language": "python",
-      "sizeLines": 742,
-      "fileCategory": "code"
-    },
-    {
-      "path": "backend/crud.py",
-      "language": "python",
-      "sizeLines": 742,
       "fileCategory": "code"
     },
     {
@@ -488,72 +218,6 @@
       "fileCategory": "code"
     },
     {
-      "path": "docs/article-draft.md",
-      "language": "markdown",
-      "sizeLines": 293,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "docs/business-auth-and-review.md",
-      "language": "markdown",
-      "sizeLines": 102,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "docs/business-overview.md",
-      "language": "markdown",
-      "sizeLines": 100,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "docs/business-paper-ingestion.md",
-      "language": "markdown",
-      "sizeLines": 93,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "docs/business-search-and-discovery.md",
-      "language": "markdown",
-      "sizeLines": 97,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "docs/business-visualization-and-tc-predict.md",
-      "language": "markdown",
-      "sizeLines": 82,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "docs/current-state-and-gaps.md",
-      "language": "markdown",
-      "sizeLines": 242,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "docs/operations-cli-and-maintenance.md",
-      "language": "markdown",
-      "sizeLines": 134,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "docs/operations-installation-and-deployment.md",
-      "language": "markdown",
-      "sizeLines": 129,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "docs/README.md",
-      "language": "markdown",
-      "sizeLines": 54,
-      "fileCategory": "docs"
-    },
-    {
-      "path": "docs/TC_PREDICTION_MODULE_ANALYSIS.md",
-      "language": "markdown",
-      "sizeLines": 618,
-      "fileCategory": "docs"
-    },
-    {
       "path": "frontend/static/css/style.css",
       "language": "css",
       "sizeLines": 368,
@@ -638,18 +302,6 @@
       "fileCategory": "markup"
     },
     {
-      "path": "frontend/templates/index.html",
-      "language": "html",
-      "sizeLines": 673,
-      "fileCategory": "markup"
-    },
-    {
-      "path": "frontend/templates/index.html",
-      "language": "html",
-      "sizeLines": 673,
-      "fileCategory": "markup"
-    },
-    {
       "path": "frontend/templates/login.html",
       "language": "html",
       "sizeLines": 133,
@@ -710,27 +362,26 @@
       "fileCategory": "script"
     }
   ],
-  "totalFiles": 118,
-  "filteredByIgnore": 31,
+  "totalFiles": 60,
+  "filteredByIgnore": 108,
   "estimatedComplexity": "moderate",
   "stats": {
-    "filesScanned": 118,
+    "filesScanned": 60,
     "byCategory": {
-      "docs": 53,
-      "code": 46,
-      "config": 3,
-      "markup": 12,
+      "docs": 3,
+      "code": 42,
+      "config": 1,
+      "markup": 10,
       "infra": 1,
       "script": 3
     },
     "byLanguage": {
-      "markdown": 52,
-      "tex": 2,
-      "json": 3,
-      "python": 36,
+      "markdown": 2,
+      "python": 34,
+      "json": 1,
       "css": 1,
       "javascript": 8,
-      "html": 11,
+      "html": 9,
       "procfile": 1,
       "txt": 1,
       "shell": 3

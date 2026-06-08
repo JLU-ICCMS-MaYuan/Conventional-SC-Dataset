@@ -1,0 +1,42 @@
+{
+  "projectRoot": "/home/mayuan/code/Conventional-SC-Dataset",
+  "batchFiles": [
+    {
+      "path": "AGENTS.md",
+      "language": "markdown",
+      "sizeLines": 74,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "Procfile",
+      "language": "procfile",
+      "sizeLines": 1,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "README.md",
+      "language": "markdown",
+      "sizeLines": 25,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "requirements.txt",
+      "language": "txt",
+      "sizeLines": 30,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "start.sh",
+      "language": "shell",
+      "sizeLines": 29,
+      "fileCategory": "script"
+    }
+  ],
+  "batchImportData": {
+    "AGENTS.md": [],
+    "Procfile": [],
+    "README.md": [],
+    "requirements.txt": [],
+    "start.sh": []
+  }
+}

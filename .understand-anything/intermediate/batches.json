@@ -1,11 +1,9 @@
 {
   "schemaVersion": 1,
-  "algorithm": "count-fallback",
-  "totalFiles": 118,
-  "totalBatches": 13,
+  "algorithm": "louvain",
+  "totalFiles": 60,
+  "totalBatches": 4,
   "exportsByPath": {
-    "articles/final_paper/main_zh.tex": [],
-    "articles/final_paper/main.tex": [],
     "backend/__init__.py": [],
     "backend/alexandria_db.py": [
       "_build_index",
@@ -372,346 +370,6 @@
       "batchIndex": 1,
       "files": [
         {
-          "path": "articles/final_paper/main.tex",
-          "language": "tex",
-          "sizeLines": 287,
-          "fileCategory": "code"
-        },
-        {
-          "path": "articles/final_paper/main_zh.tex",
-          "language": "tex",
-          "sizeLines": 287,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/__init__.py",
-          "language": "python",
-          "sizeLines": 0,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/alexandria_db.py",
-          "language": "python",
-          "sizeLines": 192,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/alexandria_import.py",
-          "language": "python",
-          "sizeLines": 402,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/api/__init__.py",
-          "language": "python",
-          "sizeLines": 0,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/api/admin.py",
-          "language": "python",
-          "sizeLines": 1023,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/api/ai_papers.py",
-          "language": "python",
-          "sizeLines": 179,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/api/alexandria.py",
-          "language": "python",
-          "sizeLines": 284,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/api/auth_routes.py",
-          "language": "python",
-          "sizeLines": 231,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/api/compounds.py",
-          "language": "python",
-          "sizeLines": 119,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/api/elements.py",
-          "language": "python",
-          "sizeLines": 34,
-          "fileCategory": "code"
-        }
-      ],
-      "batchImportData": {
-        "articles/final_paper/main.tex": [],
-        "articles/final_paper/main_zh.tex": [],
-        "backend/__init__.py": [],
-        "backend/alexandria_db.py": [],
-        "backend/alexandria_import.py": [],
-        "backend/api/__init__.py": [],
-        "backend/api/admin.py": [],
-        "backend/api/ai_papers.py": [],
-        "backend/api/alexandria.py": [],
-        "backend/api/auth_routes.py": [],
-        "backend/api/compounds.py": [],
-        "backend/api/elements.py": []
-      },
-      "neighborMap": {}
-    },
-    {
-      "batchIndex": 2,
-      "files": [
-        {
-          "path": "backend/import_reviewed_xlsx.py",
-          "language": "python",
-          "sizeLines": 316,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/init_db.py",
-          "language": "python",
-          "sizeLines": 231,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/main.py",
-          "language": "python",
-          "sizeLines": 226,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/merge_csv.py",
-          "language": "python",
-          "sizeLines": 260,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/migrate_ids.py",
-          "language": "python",
-          "sizeLines": 43,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/migrations/__init__.py",
-          "language": "python",
-          "sizeLines": 3,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/models.py",
-          "language": "python",
-          "sizeLines": 250,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/schemas.py",
-          "language": "python",
-          "sizeLines": 323,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/security.py",
-          "language": "python",
-          "sizeLines": 122,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/utils/__init__.py",
-          "language": "python",
-          "sizeLines": 0,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/utils/citation.py",
-          "language": "python",
-          "sizeLines": 353,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/utils/doi_resolver.py",
-          "language": "python",
-          "sizeLines": 160,
-          "fileCategory": "code"
-        }
-      ],
-      "batchImportData": {
-        "backend/import_reviewed_xlsx.py": [],
-        "backend/init_db.py": [],
-        "backend/main.py": [],
-        "backend/merge_csv.py": [],
-        "backend/migrate_ids.py": [],
-        "backend/migrations/__init__.py": [],
-        "backend/models.py": [],
-        "backend/schemas.py": [],
-        "backend/security.py": [],
-        "backend/utils/__init__.py": [],
-        "backend/utils/citation.py": [],
-        "backend/utils/doi_resolver.py": []
-      },
-      "neighborMap": {}
-    },
-    {
-      "batchIndex": 3,
-      "files": [
-        {
-          "path": "backend/api/htsc2025.py",
-          "language": "python",
-          "sizeLines": 137,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/api/papers.py",
-          "language": "python",
-          "sizeLines": 624,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/api/tc_predict.py",
-          "language": "python",
-          "sizeLines": 156,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/create_superadmin.py",
-          "language": "python",
-          "sizeLines": 135,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/crud.py",
-          "language": "python",
-          "sizeLines": 742,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/database.py",
-          "language": "python",
-          "sizeLines": 135,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/email_service.py",
-          "language": "python",
-          "sizeLines": 169,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/export_data.py",
-          "language": "python",
-          "sizeLines": 163,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/fix_imported_authors_json.py",
-          "language": "python",
-          "sizeLines": 53,
-          "fileCategory": "code"
-        },
-        {
-          "path": "backend/import_data.py",
-          "language": "python",
-          "sizeLines": 228,
-          "fileCategory": "code"
-        }
-      ],
-      "batchImportData": {
-        "backend/api/htsc2025.py": [],
-        "backend/api/papers.py": [],
-        "backend/api/tc_predict.py": [],
-        "backend/create_superadmin.py": [],
-        "backend/crud.py": [],
-        "backend/database.py": [],
-        "backend/email_service.py": [],
-        "backend/export_data.py": [],
-        "backend/fix_imported_authors_json.py": [],
-        "backend/import_data.py": []
-      },
-      "neighborMap": {}
-    },
-    {
-      "batchIndex": 4,
-      "files": [
-        {
-          "path": "backend/utils/image_processor.py",
-          "language": "python",
-          "sizeLines": 185,
-          "fileCategory": "code"
-        },
-        {
-          "path": "data/import_papers_to_sqlite.py",
-          "language": "python",
-          "sizeLines": 1203,
-          "fileCategory": "code"
-        },
-        {
-          "path": "frontend/static/js/admin_papers.js",
-          "language": "javascript",
-          "sizeLines": 1007,
-          "fileCategory": "code"
-        },
-        {
-          "path": "frontend/static/js/auth_helper.js",
-          "language": "javascript",
-          "sizeLines": 61,
-          "fileCategory": "code"
-        },
-        {
-          "path": "frontend/static/js/auth_state.js",
-          "language": "javascript",
-          "sizeLines": 50,
-          "fileCategory": "code"
-        },
-        {
-          "path": "frontend/static/js/chart.js",
-          "language": "javascript",
-          "sizeLines": 14,
-          "fileCategory": "code"
-        },
-        {
-          "path": "frontend/static/js/compound_page.js",
-          "language": "javascript",
-          "sizeLines": 1842,
-          "fileCategory": "code"
-        },
-        {
-          "path": "frontend/static/js/i18n.js",
-          "language": "javascript",
-          "sizeLines": 372,
-          "fileCategory": "code"
-        },
-        {
-          "path": "frontend/static/js/periodic_table.js",
-          "language": "javascript",
-          "sizeLines": 380,
-          "fileCategory": "code"
-        },
-        {
-          "path": "frontend/static/js/tc_pre.js",
-          "language": "javascript",
-          "sizeLines": 70,
-          "fileCategory": "code"
-        }
-      ],
-      "batchImportData": {
-        "backend/utils/image_processor.py": [],
-        "data/import_papers_to_sqlite.py": [],
-        "frontend/static/js/admin_papers.js": [],
-        "frontend/static/js/auth_helper.js": [],
-        "frontend/static/js/auth_state.js": [],
-        "frontend/static/js/chart.js": [],
-        "frontend/static/js/compound_page.js": [],
-        "frontend/static/js/i18n.js": [],
-        "frontend/static/js/periodic_table.js": [],
-        "frontend/static/js/tc_pre.js": []
-      },
-      "neighborMap": {}
-    },
-    {
-      "batchIndex": 5,
-      "files": [
-        {
           "path": "AGENTS.md",
           "language": "markdown",
           "sizeLines": 74,
@@ -752,412 +410,7 @@
       "neighborMap": {}
     },
     {
-      "batchIndex": 6,
-      "files": [
-        {
-          "path": "articles/artifact_check.md",
-          "language": "markdown",
-          "sizeLines": 18,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/citation_quality_audit.md",
-          "language": "markdown",
-          "sizeLines": 14,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/citation_support_bank.md",
-          "language": "markdown",
-          "sizeLines": 184,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/claim_register.md",
-          "language": "markdown",
-          "sizeLines": 14,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/comments_response.md",
-          "language": "markdown",
-          "sizeLines": 24,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/confirmed_motivation.md",
-          "language": "markdown",
-          "sizeLines": 13,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/evidence_bank.md",
-          "language": "markdown",
-          "sizeLines": 17,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/exemplar_learning_dossier.md",
-          "language": "markdown",
-          "sizeLines": 35,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/figure_asset_map.md",
-          "language": "markdown",
-          "sizeLines": 13,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/final_artifact_manifest.md",
-          "language": "markdown",
-          "sizeLines": 51,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/integrity_audit.md",
-          "language": "markdown",
-          "sizeLines": 40,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/latex_guard.md",
-          "language": "markdown",
-          "sizeLines": 10,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/latex_report.md",
-          "language": "markdown",
-          "sizeLines": 43,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/logic_transfer_audit.md",
-          "language": "markdown",
-          "sizeLines": 52,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/material_inventory.md",
-          "language": "markdown",
-          "sizeLines": 26,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/motivation_options_after_research.md",
-          "language": "markdown",
-          "sizeLines": 30,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/paper_spine_config.json",
-          "language": "json",
-          "sizeLines": 26,
-          "fileCategory": "config"
-        },
-        {
-          "path": "articles/paper_spine_config.md",
-          "language": "markdown",
-          "sizeLines": 23,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/research_dossier.md",
-          "language": "markdown",
-          "sizeLines": 62,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/section_blueprints.md",
-          "language": "markdown",
-          "sizeLines": 61,
-          "fileCategory": "docs"
-        }
-      ],
-      "batchImportData": {
-        "articles/artifact_check.md": [],
-        "articles/citation_quality_audit.md": [],
-        "articles/citation_support_bank.md": [],
-        "articles/claim_register.md": [],
-        "articles/comments_response.md": [],
-        "articles/confirmed_motivation.md": [],
-        "articles/evidence_bank.md": [],
-        "articles/exemplar_learning_dossier.md": [],
-        "articles/figure_asset_map.md": [],
-        "articles/final_artifact_manifest.md": [],
-        "articles/integrity_audit.md": [],
-        "articles/latex_guard.md": [],
-        "articles/latex_report.md": [],
-        "articles/logic_transfer_audit.md": [],
-        "articles/material_inventory.md": [],
-        "articles/motivation_options_after_research.md": [],
-        "articles/paper_spine_config.json": [],
-        "articles/paper_spine_config.md": [],
-        "articles/research_dossier.md": [],
-        "articles/section_blueprints.md": []
-      },
-      "neighborMap": {}
-    },
-    {
-      "batchIndex": 7,
-      "files": [
-        {
-          "path": "articles/sota_gap_map.md",
-          "language": "markdown",
-          "sizeLines": 18,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/source_inventory.json",
-          "language": "json",
-          "sizeLines": 135,
-          "fileCategory": "config"
-        },
-        {
-          "path": "articles/source_inventory.md",
-          "language": "markdown",
-          "sizeLines": 26,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/source_map.md",
-          "language": "markdown",
-          "sizeLines": 13,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/structured_review.md",
-          "language": "markdown",
-          "sizeLines": 51,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/style_profile.md",
-          "language": "markdown",
-          "sizeLines": 39,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/writing_rationale_matrix.md",
-          "language": "markdown",
-          "sizeLines": 24,
-          "fileCategory": "docs"
-        }
-      ],
-      "batchImportData": {
-        "articles/sota_gap_map.md": [],
-        "articles/source_inventory.json": [],
-        "articles/source_inventory.md": [],
-        "articles/source_map.md": [],
-        "articles/structured_review.md": [],
-        "articles/style_profile.md": [],
-        "articles/writing_rationale_matrix.md": []
-      },
-      "neighborMap": {}
-    },
-    {
-      "batchIndex": 8,
-      "files": [
-        {
-          "path": "articles/review_outputs_only/clarity_review_output.md",
-          "language": "markdown",
-          "sizeLines": 39,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/review_outputs_only/contribution_review_output.md",
-          "language": "markdown",
-          "sizeLines": 59,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/review_outputs_only/methods_review_output.md",
-          "language": "markdown",
-          "sizeLines": 52,
-          "fileCategory": "docs"
-        }
-      ],
-      "batchImportData": {
-        "articles/review_outputs_only/clarity_review_output.md": [],
-        "articles/review_outputs_only/contribution_review_output.md": [],
-        "articles/review_outputs_only/methods_review_output.md": []
-      },
-      "neighborMap": {}
-    },
-    {
-      "batchIndex": 9,
-      "files": [
-        {
-          "path": "articles/review_outputs_validate/clarity_reviewer.md",
-          "language": "markdown",
-          "sizeLines": 39,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/review_outputs_validate/contribution_reviewer.md",
-          "language": "markdown",
-          "sizeLines": 59,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/review_outputs_validate/methods_reviewer.md",
-          "language": "markdown",
-          "sizeLines": 52,
-          "fileCategory": "docs"
-        }
-      ],
-      "batchImportData": {
-        "articles/review_outputs_validate/clarity_reviewer.md": [],
-        "articles/review_outputs_validate/contribution_reviewer.md": [],
-        "articles/review_outputs_validate/methods_reviewer.md": []
-      },
-      "neighborMap": {}
-    },
-    {
-      "batchIndex": 10,
-      "files": [
-        {
-          "path": "articles/review_prompts/clarity_review_output.md",
-          "language": "markdown",
-          "sizeLines": 39,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/review_prompts/clarity_reviewer.md",
-          "language": "markdown",
-          "sizeLines": 105,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/review_prompts/contribution_review_output.md",
-          "language": "markdown",
-          "sizeLines": 59,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/review_prompts/contribution_reviewer.md",
-          "language": "markdown",
-          "sizeLines": 105,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/review_prompts/dispatch.md",
-          "language": "markdown",
-          "sizeLines": 15,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/review_prompts/methods_review_output.md",
-          "language": "markdown",
-          "sizeLines": 52,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "articles/review_prompts/methods_reviewer.md",
-          "language": "markdown",
-          "sizeLines": 105,
-          "fileCategory": "docs"
-        }
-      ],
-      "batchImportData": {
-        "articles/review_prompts/clarity_review_output.md": [],
-        "articles/review_prompts/clarity_reviewer.md": [],
-        "articles/review_prompts/contribution_review_output.md": [],
-        "articles/review_prompts/contribution_reviewer.md": [],
-        "articles/review_prompts/dispatch.md": [],
-        "articles/review_prompts/methods_review_output.md": [],
-        "articles/review_prompts/methods_reviewer.md": []
-      },
-      "neighborMap": {}
-    },
-    {
-      "batchIndex": 11,
-      "files": [
-        {
-          "path": "docs/README.md",
-          "language": "markdown",
-          "sizeLines": 54,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "docs/TC_PREDICTION_MODULE_ANALYSIS.md",
-          "language": "markdown",
-          "sizeLines": 618,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "docs/article-draft.md",
-          "language": "markdown",
-          "sizeLines": 293,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "docs/business-auth-and-review.md",
-          "language": "markdown",
-          "sizeLines": 102,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "docs/business-overview.md",
-          "language": "markdown",
-          "sizeLines": 100,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "docs/business-paper-ingestion.md",
-          "language": "markdown",
-          "sizeLines": 93,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "docs/business-search-and-discovery.md",
-          "language": "markdown",
-          "sizeLines": 97,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "docs/business-visualization-and-tc-predict.md",
-          "language": "markdown",
-          "sizeLines": 82,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "docs/current-state-and-gaps.md",
-          "language": "markdown",
-          "sizeLines": 242,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "docs/operations-cli-and-maintenance.md",
-          "language": "markdown",
-          "sizeLines": 134,
-          "fileCategory": "docs"
-        },
-        {
-          "path": "docs/operations-installation-and-deployment.md",
-          "language": "markdown",
-          "sizeLines": 129,
-          "fileCategory": "docs"
-        }
-      ],
-      "batchImportData": {
-        "docs/README.md": [],
-        "docs/TC_PREDICTION_MODULE_ANALYSIS.md": [],
-        "docs/article-draft.md": [],
-        "docs/business-auth-and-review.md": [],
-        "docs/business-overview.md": [],
-        "docs/business-paper-ingestion.md": [],
-        "docs/business-search-and-discovery.md": [],
-        "docs/business-visualization-and-tc-predict.md": [],
-        "docs/current-state-and-gaps.md": [],
-        "docs/operations-cli-and-maintenance.md": [],
-        "docs/operations-installation-and-deployment.md": []
-      },
-      "neighborMap": {}
-    },
-    {
-      "batchIndex": 12,
+      "batchIndex": 2,
       "files": [
         {
           "path": "frontend/templates/admin_dashboard.html",
@@ -1228,13 +481,238 @@
       "neighborMap": {}
     },
     {
-      "batchIndex": 13,
+      "batchIndex": 3,
       "files": [
         {
-          "path": "articles/reference_materials/source_index.md",
-          "language": "markdown",
-          "sizeLines": 50,
-          "fileCategory": "docs"
+          "path": "backend/__init__.py",
+          "language": "python",
+          "sizeLines": 0,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/alexandria_db.py",
+          "language": "python",
+          "sizeLines": 192,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/alexandria_import.py",
+          "language": "python",
+          "sizeLines": 402,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/api/__init__.py",
+          "language": "python",
+          "sizeLines": 0,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/api/admin.py",
+          "language": "python",
+          "sizeLines": 1023,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/api/ai_papers.py",
+          "language": "python",
+          "sizeLines": 179,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/api/alexandria.py",
+          "language": "python",
+          "sizeLines": 284,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/api/auth_routes.py",
+          "language": "python",
+          "sizeLines": 231,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/api/compounds.py",
+          "language": "python",
+          "sizeLines": 119,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/api/elements.py",
+          "language": "python",
+          "sizeLines": 34,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/api/htsc2025.py",
+          "language": "python",
+          "sizeLines": 137,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/api/papers.py",
+          "language": "python",
+          "sizeLines": 624,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/api/tc_predict.py",
+          "language": "python",
+          "sizeLines": 156,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/create_superadmin.py",
+          "language": "python",
+          "sizeLines": 135,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/crud.py",
+          "language": "python",
+          "sizeLines": 742,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/database.py",
+          "language": "python",
+          "sizeLines": 135,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/email_service.py",
+          "language": "python",
+          "sizeLines": 169,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/export_data.py",
+          "language": "python",
+          "sizeLines": 163,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/fix_imported_authors_json.py",
+          "language": "python",
+          "sizeLines": 53,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/import_data.py",
+          "language": "python",
+          "sizeLines": 228,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/import_reviewed_xlsx.py",
+          "language": "python",
+          "sizeLines": 316,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/init_db.py",
+          "language": "python",
+          "sizeLines": 231,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/main.py",
+          "language": "python",
+          "sizeLines": 226,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/merge_csv.py",
+          "language": "python",
+          "sizeLines": 260,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/migrate_ids.py",
+          "language": "python",
+          "sizeLines": 43,
+          "fileCategory": "code"
+        }
+      ],
+      "batchImportData": {
+        "backend/__init__.py": [],
+        "backend/alexandria_db.py": [],
+        "backend/alexandria_import.py": [],
+        "backend/api/__init__.py": [],
+        "backend/api/admin.py": [],
+        "backend/api/ai_papers.py": [],
+        "backend/api/alexandria.py": [],
+        "backend/api/auth_routes.py": [],
+        "backend/api/compounds.py": [],
+        "backend/api/elements.py": [],
+        "backend/api/htsc2025.py": [],
+        "backend/api/papers.py": [],
+        "backend/api/tc_predict.py": [],
+        "backend/create_superadmin.py": [],
+        "backend/crud.py": [],
+        "backend/database.py": [],
+        "backend/email_service.py": [],
+        "backend/export_data.py": [],
+        "backend/fix_imported_authors_json.py": [],
+        "backend/import_data.py": [],
+        "backend/import_reviewed_xlsx.py": [],
+        "backend/init_db.py": [],
+        "backend/main.py": [],
+        "backend/merge_csv.py": [],
+        "backend/migrate_ids.py": []
+      },
+      "neighborMap": {}
+    },
+    {
+      "batchIndex": 4,
+      "files": [
+        {
+          "path": "backend/migrations/__init__.py",
+          "language": "python",
+          "sizeLines": 3,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/models.py",
+          "language": "python",
+          "sizeLines": 250,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/schemas.py",
+          "language": "python",
+          "sizeLines": 323,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/security.py",
+          "language": "python",
+          "sizeLines": 122,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/utils/__init__.py",
+          "language": "python",
+          "sizeLines": 0,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/utils/citation.py",
+          "language": "python",
+          "sizeLines": 353,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/utils/doi_resolver.py",
+          "language": "python",
+          "sizeLines": 160,
+          "fileCategory": "code"
+        },
+        {
+          "path": "backend/utils/image_processor.py",
+          "language": "python",
+          "sizeLines": 185,
+          "fileCategory": "code"
         },
         {
           "path": "backups/data_export_20260112_110119.json",
@@ -1243,10 +721,64 @@
           "fileCategory": "config"
         },
         {
+          "path": "data/import_papers_to_sqlite.py",
+          "language": "python",
+          "sizeLines": 1203,
+          "fileCategory": "code"
+        },
+        {
           "path": "frontend/static/css/style.css",
           "language": "css",
           "sizeLines": 368,
           "fileCategory": "markup"
+        },
+        {
+          "path": "frontend/static/js/admin_papers.js",
+          "language": "javascript",
+          "sizeLines": 1007,
+          "fileCategory": "code"
+        },
+        {
+          "path": "frontend/static/js/auth_helper.js",
+          "language": "javascript",
+          "sizeLines": 61,
+          "fileCategory": "code"
+        },
+        {
+          "path": "frontend/static/js/auth_state.js",
+          "language": "javascript",
+          "sizeLines": 50,
+          "fileCategory": "code"
+        },
+        {
+          "path": "frontend/static/js/chart.js",
+          "language": "javascript",
+          "sizeLines": 14,
+          "fileCategory": "code"
+        },
+        {
+          "path": "frontend/static/js/compound_page.js",
+          "language": "javascript",
+          "sizeLines": 1842,
+          "fileCategory": "code"
+        },
+        {
+          "path": "frontend/static/js/i18n.js",
+          "language": "javascript",
+          "sizeLines": 372,
+          "fileCategory": "code"
+        },
+        {
+          "path": "frontend/static/js/periodic_table.js",
+          "language": "javascript",
+          "sizeLines": 380,
+          "fileCategory": "code"
+        },
+        {
+          "path": "frontend/static/js/tc_pre.js",
+          "language": "javascript",
+          "sizeLines": 70,
+          "fileCategory": "code"
         },
         {
           "path": "scripts/autobackup.sh",
@@ -1262,9 +794,25 @@
         }
       ],
       "batchImportData": {
-        "articles/reference_materials/source_index.md": [],
+        "backend/migrations/__init__.py": [],
+        "backend/models.py": [],
+        "backend/schemas.py": [],
+        "backend/security.py": [],
+        "backend/utils/__init__.py": [],
+        "backend/utils/citation.py": [],
+        "backend/utils/doi_resolver.py": [],
+        "backend/utils/image_processor.py": [],
         "backups/data_export_20260112_110119.json": [],
+        "data/import_papers_to_sqlite.py": [],
         "frontend/static/css/style.css": [],
+        "frontend/static/js/admin_papers.js": [],
+        "frontend/static/js/auth_helper.js": [],
+        "frontend/static/js/auth_state.js": [],
+        "frontend/static/js/chart.js": [],
+        "frontend/static/js/compound_page.js": [],
+        "frontend/static/js/i18n.js": [],
+        "frontend/static/js/periodic_table.js": [],
+        "frontend/static/js/tc_pre.js": [],
         "scripts/autobackup.sh": [],
         "scripts/remote_backup.sh": []
       },

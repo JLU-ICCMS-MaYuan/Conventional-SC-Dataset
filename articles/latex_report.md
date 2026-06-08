@@ -25,6 +25,7 @@ These typography notes do not block compilation, but they can be polished before
 
 The final LaTeX source includes targeted revisions after structured review:
 
+- Polished the user-provided Chinese abstract to foreground structured superconducting data, traceability, and data-infrastructure scope.
 - Added a clearer boundary for the AI-screened database.
 - Added explicit local / AI-screened / HTSC-2025 / Alexandria data-source modes after synchronizing `mayuan` with `origin/master`.
 - Updated repository statistics to 15,572 counted lines, 68 backend routes, nine page templates, and 140 bundled HTSC-2025 fixture records.

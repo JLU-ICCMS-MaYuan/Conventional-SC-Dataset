@@ -12,7 +12,7 @@
 | user_motivation | To be confirmed after local research and citation review. |
 | official_urls | none |
 | special_requirements | Resource/database/software-system paper; local evidence first; bounded claims; introduction must position against materials, structure, and superconductivity databases. |
-| word_output | none |
+| word_output | docx |
 | translation_package | none |
 | reference_mode | local_first |
 | reference_paths | articles/raw; docs; articles |

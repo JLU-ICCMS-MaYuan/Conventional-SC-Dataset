@@ -1,119 +1,47 @@
-# Conventional-SC-Dataset 接口框架说明
+# Conventional-SC-Dataset 接口框架结构说明
 
-- 生成时间：2026-06-08T03:11:26.507562+00:00
-- 分析文件数：118
-- 后端路由数：68
-- 图谱节点/边：290 / 523
+生成时间：2026-06-08T07:22:08.337Z
+
+分析范围：已跳过 `articles/` 与 `docs/`，并从图谱输出中删除这两部分的历史分析节点；保留根目录 `README.md` 与 `AGENTS.md` 作为项目入口说明。
 
 ## 架构分层
 
-- **后端 API 层**：FastAPI 路由、认证、文献、化合物、管理、Alexandria、HTSC-2025、AI筛选与Tc预测接口。（11 个文件节点）
-- **后端领域与数据层**：SQLAlchemy 模型、CRUD、数据库连接、导入导出、DOI/图片/引用等工具。（24 个文件节点）
-- **前端交互层**：HTML 模板、CSS 和 JavaScript 页面逻辑，承载周期表、组合页、多数据源浏览和管理页面。（20 个文件节点）
-- **运维与计算脚本层**：启动、初始化、导入、备份和Tc预测辅助脚本。（4 个文件节点）
-- **文档与论文层**：项目文档、业务说明和 PaperSpine 论文产物。（56 个文件节点）
-- **配置与轻量数据层**：Git、环境、依赖、示例数据和小型JSON fixture。（2 个文件节点）
+- 后端 API 层：FastAPI 应用入口与业务路由，承接页面、认证、文献、组合、管理、外部数据集和 Tc 预测接口。
+  - 节点数：128
+- 数据模型与访问层：SQLAlchemy 模型、数据库会话、CRUD、数据导入导出和数据库初始化脚本。
+  - 节点数：134
+- 认证与安全层：密码散列、JWT、邮箱验证码、管理员账号创建和身份状态维护。
+  - 节点数：34
+- 前端页面与交互层：HTML 模板、CSS 样式和浏览器端脚本，负责检索、上传、审核、图表和 Tc 预测交互。
+  - 节点数：128
+- 运维与部署层：启动脚本、Procfile、依赖清单、备份脚本和数据导入辅助入口。
+  - 节点数：54
+- 其他项目结构：未归入主要业务层但仍属于代码库结构的文件。
+  - 节点数：17
 
 ## 接口模块
 
-### `backend/api/admin.py`
-- `GET /all-admins` -> `get_all_admins`
-- `GET /all-users` -> `get_all_users`
-- `POST /approve-user` -> `approve_user`
-- `GET /my-reviews` -> `get_my_reviewed_papers`
-- `GET /papers/all` -> `get_all_papers`
-- `POST /papers/batch-chart-visibility` -> `batch_chart_visibility`
-- `POST /papers/batch-delete` -> `batch_delete_papers`
-- `POST /papers/batch-review` -> `batch_review_papers`
-- `GET /papers/unreviewed` -> `get_unreviewed_papers`
-- `DELETE /papers/{paper_id}` -> `delete_paper`
-- `GET /papers/{paper_id}` -> `get_paper_detail`
-- `PUT /papers/{paper_id}` -> `update_paper`
-- `GET /papers/{paper_id}/images` -> `get_paper_images`
-- `DELETE /papers/{paper_id}/images/{image_id}` -> `delete_paper_image`
-- `POST /papers/{paper_id}/review` -> `review_paper`
-- `GET /pending-approvals` -> `get_pending_approvals`
-- `DELETE /users/{user_id}` -> `delete_user`
-- `PUT /users/{user_id}/permissions` -> `update_user_permissions`
-- `GET /users/{user_id}/submitted-papers` -> `get_user_submitted_papers`
+- 认证接口（backend/api/auth_routes.py）：注册、登录、验证码、管理员申请和会话身份能力。
+- 文献接口（backend/api/papers.py）：文献查询、上传、批量导入、审核状态与统计能力。
+- 元素组合接口（backend/api/compounds.py）：元素组合标准化、组合检索和相关体系查询。
+- 元素接口（backend/api/elements.py）：元素周期表和元素元数据查询。
+- 管理接口（backend/api/admin.py）：管理员审批、文献审核、编辑和图表展示控制。
+- Alexandria接口（backend/api/alexandria.py）：Alexandria 结构数据检索和详情查看。
+- HTSC-2025接口（backend/api/htsc2025.py）：HTSC-2025 数据集检索、详情与统计接口。
+- AI筛选接口（backend/api/ai_papers.py）：AI 文献筛选数据查询和统计能力。
+- Tc预测接口（backend/api/tc_predict.py）：结构文件和 PDOS 文件上传后的 Tc 预测实验接口。
 
-### `backend/api/ai_papers.py`
-- `GET /compounds/{element_symbols}` -> `get_ai_compound_info`
-- `GET /papers/compound/{element_symbols}` -> `get_ai_papers_by_compound`
-- `GET /papers/crystal-structures` -> `get_ai_crystal_structures`
-- `POST /papers/search-by-mode` -> `search_ai_papers_by_mode`
-- `GET /papers/{paper_id}/images/{image_order}` -> `get_ai_paper_image`
+## 主要业务流
 
-### `backend/api/alexandria.py`
-- `GET /elements` -> `list_alexandria_elements`
-- `GET /material/{mat_id}` -> `get_alexandria_material`
-- `GET /material/{mat_id}/cif` -> `get_alexandria_cif`
-- `GET /material/{mat_id}/download` -> `download_alexandria_material`
-- `POST /search` -> `search_alexandria`
-- `GET /stats` -> `alexandria_stats`
+1. 元素组合检索：前端周期表选择元素，调用组合/元素接口，后端标准化元素组合并返回匹配体系。
+2. 文献浏览与上传：组合页根据元素体系加载文献列表，登录用户可提交 DOI、物性数据与截图。
+3. 认证与审核：认证接口处理用户注册登录，管理员接口处理管理员审批、文献审核和展示控制。
+4. 统计可视化：首页图表脚本调用文献统计接口，按数据库状态展示趋势、分布和贡献者信息。
+5. Tc 预测实验：预测页面上传结构文件与 PDOS 文件，后端预测接口执行实验流程，不写入主数据库。
 
-### `backend/api/auth_routes.py`
-- `POST /login` -> `login`
-- `GET /me` -> `get_me`
-- `POST /register` -> `register_step1`
-- `POST /verify-email` -> `register_step2`
+## 数据关系
 
-### `backend/api/compounds.py`
-- `POST /check` -> `check_compound_exists`
-- `POST /search` -> `search_compounds`
-- `GET /{element_symbols}` -> `get_compound_info`
-
-### `backend/api/elements.py`
-- `GET /` -> `get_all_elements`
-- `GET /{symbol}` -> `get_element_by_symbol`
-
-### `backend/api/htsc2025.py`
-- `GET /detail/{name}` -> `htsc2025_detail`
-- `POST /search` -> `search_htsc2025`
-- `GET /stats` -> `htsc2025_stats`
-
-### `backend/api/papers.py`
-- `POST /` -> `create_paper`
-- `POST /batch-upload` -> `batch_upload_papers`
-- `GET /batch-upload-example` -> `get_batch_upload_example`
-- `GET /compound/{element_symbols}` -> `get_papers_by_compound`
-- `GET /crystal-structures` -> `get_crystal_structures`
-- `POST /export` -> `export_papers`
-- `GET /images/{image_id}` -> `get_image_by_id`
-- `POST /search-by-mode` -> `search_papers_by_mode`
-- `GET /stats/chart-data` -> `get_chart_data`
-- `GET /stats/user-ranking` -> `get_user_ranking`
-- `GET /{paper_id}` -> `get_paper_detail`
-- `GET /{paper_id}/images/{image_order}` -> `get_paper_image`
-
-### `backend/api/tc_predict.py`
-- `POST /` -> `predict_tc`
-
-### `backend/main.py`
-- `GET /` -> `read_root`
-- `GET /admin/dashboard` -> `admin_dashboard_page`
-- `GET /admin/login` -> `admin_login_page`
-- `GET /admin/my-reviews` -> `admin_my_reviews_page`
-- `GET /admin/papers` -> `admin_papers_page`
-- `GET /admin/register` -> `admin_register_page`
-- `GET /admin/superadmin` -> `superadmin_dashboard_page`
-- `GET /compound/{element_symbols}` -> `compound_page`
-- `GET /health` -> `health_check`
-- `GET /login` -> `user_login_page`
-- `GET /periodic-table` -> `periodic_table_page`
-- `GET /register` -> `user_register_page`
-- `GET /tc-pre` -> `tc_prediction_page`
-
-## 合并 origin/master 后的关键结构变化
-
-- 组合页数据源从单一本地文献库扩展为 `local`、`ai`、`alexandria`、`htsc2025` 多模式。
-- `backend/api/papers.py` 和 `backend/api/ai_papers.py` 通过 `get_papers_by_compounds_count` 返回分页总数，前端可稳定显示 page/total/has_next。
-- `backend/api/alexandria.py` 提供 EPC 材料搜索、详情下载和 CIF 导出；其真实数据依赖 `backend/alexandria_import.py` 生成本地 SQLite。
-- `backend/api/htsc2025.py` 读取 `data/htsc2025.json`，为常压高温超导候选提供搜索、统计和详情接口。
-- 前端 `frontend/static/js/compound_page.js` 统一承接本地论文、AI筛选论文、Alexandria、HTSC-2025 和测试数据的渲染分支。
-
-## 建议的接口框架边界
-
-- 保持本地文献库和 AI 筛选库的响应模型一致，但在 UI 和论文中明确来源差异。
-- Alexandria/HTSC-2025 属于外部或计算数据适配器，不应写入主文献审核流。
-- Tc 预测模块保持实验工具边界，输出不直接进入 reviewed paper records。
+- `backend/models.py` 是数据结构中心，承载用户、角色、文献、元素组合、物理数据和审核记录。
+- `backend/schemas.py` 定义接口请求/响应契约。
+- `backend/crud.py` 是多数业务接口与数据库之间的访问边界。
+- `backend/database.py` 管理数据库连接和 Session 生命周期。

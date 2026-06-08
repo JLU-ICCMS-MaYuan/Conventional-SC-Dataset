@@ -14,7 +14,7 @@
     "Keep claims bounded to implemented platform features, local data files, and cited literature.",
     "Discuss materials databases, structure databases, and superconductivity-specific databases in the introduction."
   ],
-  "word_output": "none",
+  "word_output": "docx",
   "translation_package": "none",
   "reference_mode": "local_first",
   "reference_paths": [

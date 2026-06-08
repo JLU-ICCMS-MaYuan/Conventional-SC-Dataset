@@ -1,0 +1,79 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 9,
+  "filesSkipped": [],
+  "results": [
+    {
+      "path": "frontend/templates/admin_dashboard.html",
+      "language": "html",
+      "fileCategory": "markup",
+      "totalLines": 1270,
+      "nonEmptyLines": 1131,
+      "metrics": {}
+    },
+    {
+      "path": "frontend/templates/admin_papers.html",
+      "language": "html",
+      "fileCategory": "markup",
+      "totalLines": 335,
+      "nonEmptyLines": 317,
+      "metrics": {}
+    },
+    {
+      "path": "frontend/templates/admin_register.html",
+      "language": "html",
+      "fileCategory": "markup",
+      "totalLines": 167,
+      "nonEmptyLines": 143,
+      "metrics": {}
+    },
+    {
+      "path": "frontend/templates/compound.html",
+      "language": "html",
+      "fileCategory": "markup",
+      "totalLines": 284,
+      "nonEmptyLines": 265,
+      "metrics": {}
+    },
+    {
+      "path": "frontend/templates/index.html",
+      "language": "html",
+      "fileCategory": "markup",
+      "totalLines": 673,
+      "nonEmptyLines": 632,
+      "metrics": {}
+    },
+    {
+      "path": "frontend/templates/login.html",
+      "language": "html",
+      "fileCategory": "markup",
+      "totalLines": 133,
+      "nonEmptyLines": 119,
+      "metrics": {}
+    },
+    {
+      "path": "frontend/templates/superadmin_dashboard.html",
+      "language": "html",
+      "fileCategory": "markup",
+      "totalLines": 532,
+      "nonEmptyLines": 483,
+      "metrics": {}
+    },
+    {
+      "path": "frontend/templates/tc_pre.html",
+      "language": "html",
+      "fileCategory": "markup",
+      "totalLines": 80,
+      "nonEmptyLines": 78,
+      "metrics": {}
+    },
+    {
+      "path": "frontend/templates/user_register.html",
+      "language": "html",
+      "fileCategory": "markup",
+      "totalLines": 158,
+      "nonEmptyLines": 136,
+      "metrics": {}
+    }
+  ]
+}

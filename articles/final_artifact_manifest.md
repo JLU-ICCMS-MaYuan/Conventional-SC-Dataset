@@ -8,8 +8,10 @@
 | Final English PDF | `articles/final_paper/main.pdf` | Created |
 | Final Chinese LaTeX source | `articles/final_paper/main_zh.tex` | Created and compiled |
 | Final Chinese PDF | `articles/final_paper/main_zh.pdf` | Created |
+| Final Chinese Word document | `articles/final_paper/main_zh.docx` | Created |
 | Figures directory | `articles/final_paper/figures/` | Created; no approved figure assets copied |
 | LaTeX report | `articles/latex_report.md` | Created |
+| Word report | `articles/word_report.md` | Created |
 
 ## PaperSpine Planning and Evidence Artifacts
 
@@ -47,5 +49,5 @@
 
 | Artifact | Status |
 |---|---|
-| Word output | Not requested; `word_output` is `none` |
+| Word output | Requested for Chinese manuscript only; `articles/final_paper/main_zh.docx` created |
 | Chinese translation package | Not requested; `translation_package` is `none` |
