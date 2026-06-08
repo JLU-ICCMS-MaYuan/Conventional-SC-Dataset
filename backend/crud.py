@@ -1,19 +1,65 @@
 """
-数据库CRUD操作
+数据库CRUD与新旧前端兼容转换。
 """
-from sqlalchemy.orm import Session
-from sqlalchemy import or_, and_, func
-from typing import List, Optional
-import math
 import json
+import math
+import re
+from typing import Any, List, Optional
+
+from sqlalchemy import func, or_
+from sqlalchemy.orm import Query, Session
+
 from backend import models, schemas
 
 
+ARTICLE_TYPE_TO_LONG = {"e": "experimental", "t": "theoretical"}
+ARTICLE_TYPE_TO_SHORT = {"experimental": "e", "theoretical": "t"}
+SC_TYPE_TO_LONG = {
+    "c": "cuprate",
+    "i": "iron_based",
+    "n": "nickel_based",
+    "h": "hydride",
+    "cb": "carbon",
+    "or": "organic",
+    "ot": "others",
+}
+SC_TYPE_TO_SHORT = {v: k for k, v in SC_TYPE_TO_LONG.items()}
+SC_TYPE_TO_SHORT.update({
+    "carbon_organic": "cb",
+    "conventional": "ot",
+    "other_conventional": "ot",
+    "unconventional": "ot",
+    "other_unconventional": "ot",
+    "unknown": "ot",
+})
+
+
+def normalize_article_type(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    return ARTICLE_TYPE_TO_LONG.get(value, value)
+
+
+def to_storage_article_type(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    return ARTICLE_TYPE_TO_SHORT.get(value, value)
+
+
+def normalize_superconductor_type(value: Optional[str]) -> str:
+    if not value:
+        return "others"
+    return SC_TYPE_TO_LONG.get(value, value if value in SC_TYPE_TO_SHORT else "others")
+
+
+def to_storage_superconductor_type(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    return SC_TYPE_TO_SHORT.get(value, value)
+
+
 def compute_s_factor(pressure: Optional[float], tc: Optional[float]) -> Optional[float]:
-    """
-    根据压强与 Tc 计算 s_factor
-    公式: s = tc / sqrt(1521 + pressure^2)
-    """
+    """根据压强与 Tc 计算 s_factor: s = tc / sqrt(1521 + pressure^2)。"""
     if pressure is None or tc is None:
         return None
     try:
@@ -23,77 +69,115 @@ def compute_s_factor(pressure: Optional[float], tc: Optional[float]) -> Optional
         return None
 
     denominator = math.sqrt(1521 + pressure_val ** 2)
-    if denominator == 0:
+    return None if denominator == 0 else tc_val / denominator
+
+
+def safe_json_loads(value, default):
+    if value is None:
+        return default
+    try:
+        return json.loads(value)
+    except Exception:
+        return default
+
+
+def parse_formula_counts(formula: Optional[str]) -> dict[str, int]:
+    if not formula:
+        return {}
+    out: dict[str, int] = {}
+    for sym, num in re.findall(r"([A-Z][a-z]?)(\d*)", formula):
+        out[sym] = out.get(sym, 0) + (int(num) if num else 1)
+    return out
+
+
+def normalize_numeric_range(value) -> Optional[list[float]]:
+    if value is None:
         return None
-    return tc_val / denominator
+    if not isinstance(value, list):
+        raise ValueError("区间字段必须是数组")
+
+    cleaned = []
+    for item in value:
+        if item is None:
+            continue
+        try:
+            cleaned.append(float(item))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("区间字段必须只包含数字") from exc
+
+    if not cleaned:
+        return None
+    if len(cleaned) > 2:
+        raise ValueError("区间字段最多只能包含两个数值")
+    if len(cleaned) == 2 and cleaned[0] > cleaned[1]:
+        cleaned.sort()
+    return cleaned
 
 
-# ============= 元素相关操作 =============
+def representative_value(values: Optional[list[float]]) -> Optional[float]:
+    if not values:
+        return None
+    if len(values) == 1:
+        return values[0]
+    return sum(values[:2]) / min(len(values), 2)
+
+
+def range_to_json(value) -> Optional[str]:
+    normalized = normalize_numeric_range(value)
+    return json.dumps(normalized, ensure_ascii=False) if normalized is not None else None
+
+
+def compute_s_factor_from_ranges(pressure_range, tc_range) -> Optional[float]:
+    return compute_s_factor(representative_value(pressure_range), representative_value(tc_range))
+
 
 def get_all_elements(db: Session) -> List[models.Element]:
-    """获取所有元素"""
     return db.query(models.Element).order_by(models.Element.atomic_number).all()
 
 
 def get_element_by_symbol(db: Session, symbol: str) -> Optional[models.Element]:
-    """根据元素符号获取元素"""
     return db.query(models.Element).filter(models.Element.symbol == symbol).first()
 
 
 def get_elements_by_symbols(db: Session, symbols: List[str]) -> List[models.Element]:
-    """根据元素符号列表获取多个元素"""
     return db.query(models.Element).filter(models.Element.symbol.in_(symbols)).all()
 
 
-# ============= 元素组合相关操作 =============
+def get_compound_element_list(compound: models.Compound) -> List[str]:
+    values = safe_json_loads(compound.element_list, [])
+    return values if isinstance(values, list) else []
 
-def get_or_create_compound(db: Session, element_symbols: List[str]) -> models.Compound:
-    """
-    获取或创建元素组合
-    强制执行标准化：仅保留有效元素符号并排序
-    """
-    # 获取有效元素集合
-    valid_elements = {e.symbol for e in db.query(models.Element).all()}
-    
-    # 过滤并去重排序
-    sorted_symbols = sorted(set(s for s in element_symbols if s in valid_elements))
-    compound_key = "-".join(sorted_symbols)
 
-    if not sorted_symbols:
-        # 如果没有有效元素，返回 None
+def get_compound_key(compound: models.Compound) -> str:
+    values = get_compound_element_list(compound)
+    return "-".join(values) if values else (compound.chemical_formula or "")
+
+
+def get_or_create_compound(db: Session, element_symbols: List[str], chemical_formula: Optional[str] = None) -> Optional[models.Compound]:
+    """按化学式创建新结构 compound；没有化学式时用元素组合兼容上传流程。"""
+    formula = chemical_formula or "".join(element_symbols)
+    formula = formula.strip() if formula else None
+    if not formula:
         return None
 
-    # 查找是否已存在
-    compound = db.query(models.Compound).filter(
-        models.Compound.element_symbols == compound_key
-    ).first()
-
+    compound = db.query(models.Compound).filter(models.Compound.chemical_formula == formula).first()
     if compound:
-        needs_update = False
-        if not getattr(compound, "element_list", None):
-            compound.element_list = json.dumps(sorted_symbols)
-            needs_update = True
-        
-        if not getattr(compound, "element_id_list", None) or compound.element_id_list == "[]":
-            elements = get_elements_by_symbols(db, sorted_symbols)
-            element_ids = sorted([e.id for e in elements])
-            compound.element_id_list = json.dumps(element_ids)
-            needs_update = True
-            
-        if needs_update:
-            db.commit()
-            db.refresh(compound)
         return compound
 
-    # 获取元素对象和ID
-    elements = get_elements_by_symbols(db, sorted_symbols)
-    element_ids = sorted([e.id for e in elements])
+    counts = parse_formula_counts(formula)
+    elements = sorted(counts) if counts else sorted(set(element_symbols))
+    element_rows = get_elements_by_symbols(db, elements)
+    element_id_map = {e.symbol: e.id for e in element_rows}
+    composition = []
+    for symbol in elements:
+        composition.extend([symbol, counts.get(symbol, 1)])
 
-    # 创建新的元素组合
     compound = models.Compound(
-        element_symbols=compound_key,
-        element_list=json.dumps(sorted_symbols),
-        element_id_list=json.dumps(element_ids)
+        chemical_formula=formula,
+        element_list=json.dumps(elements, ensure_ascii=False),
+        composition=json.dumps(composition, ensure_ascii=False),
+        element_id_list=json.dumps([element_id_map[s] for s in elements if s in element_id_map], ensure_ascii=False),
+        element_ratio=json.dumps(composition, ensure_ascii=False),
     )
     db.add(compound)
     db.commit()
@@ -101,83 +185,99 @@ def get_or_create_compound(db: Session, element_symbols: List[str]) -> models.Co
     return compound
 
 
+def get_compounds_by_symbols(db: Session, element_symbols: List[str], exact: bool = True) -> List[models.Compound]:
+    selection = set(element_symbols)
+    out = []
+    for compound in db.query(models.Compound).all():
+        symbols = set(get_compound_element_list(compound))
+        if not symbols:
+            continue
+        if (symbols == selection) if exact else selection.issubset(symbols):
+            out.append(compound)
+    return out
+
+
 def get_compound_by_symbols(db: Session, element_symbols: List[str]) -> Optional[models.Compound]:
-    """根据元素符号获取元素组合（包含标准化逻辑）"""
-    valid_elements = {e.symbol for e in db.query(models.Element).all()}
-    sorted_symbols = sorted(set(s for s in element_symbols if s in valid_elements))
-    if not sorted_symbols:
-        return None
-    compound_key = "-".join(sorted_symbols)
-    return db.query(models.Compound).filter(
-        models.Compound.element_symbols == compound_key
-    ).first()
+    matches = get_compounds_by_symbols(db, element_symbols, exact=True)
+    return matches[0] if matches else None
 
 
-def search_compounds_by_elements(db: Session, element_symbols: List[str], mode: str) -> List[dict]:
-    """按照选择模式筛选元素组合（优化版：使用 ID 列表对比）"""
-    allowed_modes = {'only', 'combination', 'contains'}
-    mode = mode if mode in allowed_modes else 'combination'
-    
-    # 1. 将输入的符号转换为 ID 集合
-    elements = get_elements_by_symbols(db, element_symbols)
-    selection_ids = set(e.id for e in elements)
-    if not selection_ids:
-        return []
+def search_compounds_by_elements(db: Session, element_symbols: List[str], mode: str, limit: Optional[int] = None, offset: int = 0) -> dict:
+    allowed_modes = {"only", "combination", "contains"}
+    mode = mode if mode in allowed_modes else "combination"
+    selection = set(element_symbols)
+    grouped: dict[str, dict] = {}
 
-    compounds = db.query(models.Compound).all()
-    matched: List[dict] = []
-
-    for compound in compounds:
-        # 2. 获取该化合物的 ID 集合
-        try:
-            if compound.element_id_list and compound.element_id_list != "[]":
-                comp_ids = set(json.loads(compound.element_id_list))
-            else:
-                # 兼容性处理：如果 ID 列表还没迁移，退回到解析符号
-                raw_symbols = json.loads(compound.element_list) if compound.element_list.startswith('[') else compound.element_symbols.split("-")
-                comp_ids = set(e.id for e in get_elements_by_symbols(db, raw_symbols))
-        except Exception:
+    for compound in db.query(models.Compound).all():
+        element_list = get_compound_element_list(compound)
+        symbols = set(element_list)
+        if not symbols:
+            continue
+        if mode == "only":
+            ok = symbols == selection
+        elif mode == "combination":
+            ok = symbols.issubset(selection)
+        else:
+            ok = selection.issubset(symbols)
+        if not ok:
             continue
 
-        if not comp_ids:
-            continue
-
-        # 3. 核心匹配逻辑
-        match = False
-        if mode == 'only':
-            match = comp_ids == selection_ids
-        elif mode == 'combination':
-            # 模式：组合（即该化合物包含的元素是用户选择的子集）
-            match = comp_ids.issubset(selection_ids)
-        else:  # contains
-            # 模式：包含（即用户选择的元素是该化合物包含元素的子集）
-            match = selection_ids.issubset(comp_ids)
-
-        if match:
-            paper_count = get_compound_papers_count(db, compound.id)
-            matched.append({
+        key = get_compound_key(compound)
+        if key not in grouped:
+            grouped[key] = {
                 "id": compound.id,
-                "element_symbols": compound.element_symbols,
-                "element_list": json.loads(compound.element_list) if compound.element_list.startswith('[') else compound.element_symbols.split("-"),
-                "paper_count": paper_count
-            })
+                "element_symbols": key,
+                "element_list": element_list,
+                "paper_count": 0,
+            }
+        grouped[key]["paper_count"] += get_compound_papers_count(db, compound.id)
 
+    matched = list(grouped.values())
     matched.sort(key=lambda item: (len(item["element_list"]), item["element_symbols"]))
-    return matched
+
+    total = len(matched)
+    page_size = limit if limit is not None else total
+    page_items = matched[offset: offset + limit] if limit is not None else matched
+    page = (offset // page_size) + 1 if page_size else 1
+    total_pages = (total + page_size - 1) // page_size if page_size and total > 0 else 0
+
+    return {
+        "items": page_items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+        "has_prev": offset > 0,
+        "has_next": offset + page_size < total if page_size else False,
+    }
+
+
+def get_matching_compound_ids(db: Session, element_symbols: List[str], mode: str) -> List[int]:
+    allowed_modes = {"only", "combination", "contains"}
+    mode = mode if mode in allowed_modes else "combination"
+    selection = set(element_symbols)
+    matched_ids: List[int] = []
+
+    for compound in db.query(models.Compound).all():
+        element_list = get_compound_element_list(compound)
+        symbols = set(element_list)
+        if not symbols:
+            continue
+        if mode == "only":
+            ok = symbols == selection
+        elif mode == "combination":
+            ok = symbols.issubset(selection)
+        else:
+            ok = selection.issubset(symbols)
+        if ok:
+            matched_ids.append(compound.id)
+
+    return matched_ids
 
 
 def check_compound_has_papers(db: Session, element_symbols: List[str]) -> bool:
-    """检查元素组合是否有文献"""
-    compound = get_compound_by_symbols(db, element_symbols)
-    if not compound:
-        return False
-    paper_count = db.query(models.Paper).filter(
-        models.Paper.compound_id == compound.id
-    ).count()
-    return paper_count > 0
+    return any(get_compound_papers_count(db, c.id) > 0 for c in get_compounds_by_symbols(db, element_symbols, exact=True))
 
-
-# ============= 文献相关操作 =============
 
 def create_paper(
     db: Session,
@@ -192,349 +292,451 @@ def create_paper(
     pages: Optional[str] = None,
     year: Optional[int] = None,
     abstract: Optional[str] = None,
-    citation_aps: Optional[str] = None,
-    citation_bibtex: Optional[str] = None,
     chemical_formula: Optional[str] = None,
     crystal_structure: Optional[str] = None,
-    contributor_name: str = "匿名贡献者",
-    contributor_affiliation: str = "未提供单位",
-    notes: Optional[str] = None,
-    show_in_chart: bool = False
+    **_,
 ) -> models.Paper:
-    """创建文献记录"""
     paper = models.Paper(
-        compound_id=compound_id,
         doi=doi,
         title=title,
-        article_type=article_type,
-        superconductor_type=superconductor_type,
         authors=authors,
         journal=journal,
         volume=volume,
         pages=pages,
         year=year,
         abstract=abstract,
-        citation_aps=citation_aps,
-        citation_bibtex=citation_bibtex,
-        chemical_formula=chemical_formula,
-        crystal_structure=crystal_structure,
-        contributor_name=contributor_name,
-        contributor_affiliation=contributor_affiliation,
-        notes=notes,
-        show_in_chart=show_in_chart
     )
     db.add(paper)
+    db.flush()
+    db_data = models.PaperData(
+        paper_id=paper.id,
+        compound_id=compound_id,
+        article_type=to_storage_article_type(article_type),
+        superconductor_type=to_storage_superconductor_type(superconductor_type),
+        chemical_formula=chemical_formula,
+        crystal_structure=crystal_structure,
+        sequence_in_paper=1,
+    )
+    db.add(db_data)
     db.commit()
     db.refresh(paper)
     return paper
 
 
-def create_paper_data(
-    db: Session,
-    paper_id: int,
-    data_list: List[dict]
-) -> List[models.PaperData]:
-    """为指定文献创建多组物理数据记录"""
+def create_paper_data(db: Session, paper_id: int, data_list: List[dict], compound_id: Optional[int] = None) -> List[models.PaperData]:
     db_data_list = []
-    for item in data_list:
-        pressure_val = item.get("pressure")
-        tc_val = item.get("tc")
+    for idx, item in enumerate(data_list, start=1):
+        pressure_range = normalize_numeric_range(item.get("tc_press"))
+        tc_range = normalize_numeric_range(item.get("tc"))
         s_factor_val = item.get("s_factor")
         if s_factor_val is None:
-            s_factor_val = compute_s_factor(pressure_val, tc_val)
-
+            s_factor_val = compute_s_factor_from_ranges(pressure_range, tc_range)
         db_data = models.PaperData(
             paper_id=paper_id,
-            pressure=pressure_val,
-            tc=tc_val,
+            compound_id=compound_id or item.get("compound_id"),
+            article_type=to_storage_article_type(item.get("article_type")),
+            superconductor_type=to_storage_superconductor_type(item.get("superconductor_type")),
+            chemical_formula=item.get("chemical_formula"),
+            crystal_structure=item.get("crystal_structure"),
+            tc=range_to_json(tc_range),
+            tc_press=range_to_json(pressure_range),
             lambda_val=item.get("lambda_val"),
             omega_log=item.get("omega_log"),
             n_ef=item.get("n_ef"),
-            s_factor=s_factor_val
+            s_factor=s_factor_val,
+            sample_name=item.get("sample_name"),
+            data_source_note=item.get("data_source_note"),
+            sequence_in_paper=idx,
         )
         db.add(db_data)
         db_data_list.append(db_data)
-
     db.commit()
     return db_data_list
 
 
 def check_paper_exists(db: Session, compound_id: int, doi: str) -> bool:
-    """检查文献是否已存在于该元素组合中"""
-    paper = db.query(models.Paper).filter(
-        and_(
-            models.Paper.compound_id == compound_id,
-            models.Paper.doi == doi
-        )
-    ).first()
-    return paper is not None
+    return db.query(models.Paper).join(models.PaperData).filter(
+        models.Paper.doi == doi,
+        models.PaperData.compound_id == compound_id,
+    ).first() is not None
 
 
-def get_papers_by_compound_query(
-    db: Session,
-    compound_id: int,
-    search_params: Optional[schemas.PaperSearchParams] = None,
-    is_admin: bool = False
-):
-    """构建元素组合文献查询（支持搜索和筛选）"""
-    query = db.query(models.Paper).filter(models.Paper.compound_id == compound_id)
-
-    # 权限过滤：普通用户不能看到仅管理员可见的文献
-    if not is_admin:
-        query = query.filter(models.Paper.review_status != "admin_only")
-
-    if search_params:
-        # 关键词搜索
-        if search_params.keyword:
-            keyword = f"%{search_params.keyword}%"
-            query = query.filter(
-                or_(
-                    models.Paper.title.like(keyword),
-                    models.Paper.abstract.like(keyword),
-                    models.Paper.authors.like(keyword),
-                    models.Paper.chemical_formula.like(keyword)
-                )
-            )
-
-        # 年份筛选
-        if search_params.year_min:
-            query = query.filter(models.Paper.year >= search_params.year_min)
-        if search_params.year_max:
-            query = query.filter(models.Paper.year <= search_params.year_max)
-
-        # 期刊筛选
-        if search_params.journal:
-            query = query.filter(models.Paper.journal.like(f"%{search_params.journal}%"))
-
-        # 晶体结构筛选
-        if search_params.crystal_structure:
-            query = query.filter(
-                models.Paper.crystal_structure.like(f"%{search_params.crystal_structure}%")
-            )
-
-        # 审核状态筛选
-        if search_params.review_status:
-            query = query.filter(models.Paper.review_status == search_params.review_status)
-
+def _build_papers_query(db: Session, compound_ids: List[int], search_params: Optional[schemas.PaperSearchParams] = None) -> Query:
+    query = db.query(models.Paper).join(models.PaperData).filter(models.PaperData.compound_id.in_(compound_ids)).distinct()
+    if not search_params:
+        return query
+    if search_params.keyword:
+        keyword = f"%{search_params.keyword}%"
+        query = query.filter(or_(
+            models.Paper.title.like(keyword),
+            models.Paper.abstract.like(keyword),
+            models.Paper.authors.like(keyword),
+            models.PaperData.chemical_formula.like(keyword),
+        ))
+    if search_params.year_min:
+        query = query.filter(models.Paper.year >= search_params.year_min)
+    if search_params.year_max:
+        query = query.filter(models.Paper.year <= search_params.year_max)
+    if search_params.journal:
+        query = query.filter(models.Paper.journal.like(f"%{search_params.journal}%"))
+    if search_params.crystal_structure:
+        query = query.filter(models.PaperData.crystal_structure.like(f"%{search_params.crystal_structure}%"))
+    if search_params.review_status:
+        query = query.filter(models.Paper.review_status == search_params.review_status)
     return query
 
 
-def get_papers_by_compound_ids_query(
-    db: Session,
-    compound_ids: List[int],
-    search_params: Optional[schemas.PaperSearchParams] = None,
-    is_admin: bool = False
-):
-    """构建多个元素组合的文献聚合查询（支持搜索和筛选）"""
-    query = db.query(models.Paper).filter(models.Paper.compound_id.in_(compound_ids))
+def _apply_papers_sorting(query: Query, search_params: Optional[schemas.PaperSearchParams] = None) -> Query:
+    sort_by = search_params.sort_by if search_params and search_params.sort_by else "year"
+    sort_order = (search_params.sort_order if search_params and search_params.sort_order else "desc").lower()
+    is_asc = sort_order == "asc"
 
-    if not is_admin:
-        query = query.filter(models.Paper.review_status != "admin_only")
-
-    if search_params:
-        if search_params.keyword:
-            keyword = f"%{search_params.keyword}%"
-            query = query.filter(
-                or_(
-                    models.Paper.title.like(keyword),
-                    models.Paper.abstract.like(keyword),
-                    models.Paper.authors.like(keyword),
-                    models.Paper.chemical_formula.like(keyword)
-                )
-            )
-
-        if search_params.year_min:
-            query = query.filter(models.Paper.year >= search_params.year_min)
-        if search_params.year_max:
-            query = query.filter(models.Paper.year <= search_params.year_max)
-
-        if search_params.journal:
-            query = query.filter(models.Paper.journal.like(f"%{search_params.journal}%"))
-
-        if search_params.crystal_structure:
-            query = query.filter(
-                models.Paper.crystal_structure.like(f"%{search_params.crystal_structure}%")
-            )
-
-        if search_params.review_status:
-            query = query.filter(models.Paper.review_status == search_params.review_status)
-
-    return query
-
-
-def get_papers_by_compound(
-    db: Session,
-    compound_id: int,
-    search_params: Optional[schemas.PaperSearchParams] = None,
-    is_admin: bool = False
-) -> List[models.Paper]:
-    """获取元素组合的文献列表（支持搜索和筛选）"""
-    query = get_papers_by_compound_query(db, compound_id, search_params, is_admin)
-
-    if search_params:
-        # 排序
-        if search_params.sort_by == "year":
-            if search_params.sort_order == "asc":
-                query = query.order_by(models.Paper.year.asc())
-            else:
-                query = query.order_by(models.Paper.year.desc())
-        else:  # 默认按创建时间排序
-            if search_params.sort_order == "asc":
-                query = query.order_by(models.Paper.created_at.asc())
-            else:
-                query = query.order_by(models.Paper.created_at.desc())
-
-        # 分页
-        query = query.offset(search_params.offset).limit(search_params.limit)
+    if sort_by == "created_at":
+        primary = models.Paper.created_at.asc().nullslast() if is_asc else models.Paper.created_at.desc().nullslast()
     else:
-        # 默认按创建时间倒序
-        query = query.order_by(models.Paper.created_at.desc())
+        primary = models.Paper.year.asc().nullslast() if is_asc else models.Paper.year.desc().nullslast()
 
+    secondary = models.Paper.id.asc() if is_asc else models.Paper.id.desc()
+    return query.order_by(primary, secondary)
+
+
+def get_papers_by_compound(db: Session, compound_id: int, search_params: Optional[schemas.PaperSearchParams] = None, is_admin: bool = False) -> List[models.Paper]:
+    query = _build_papers_query(db, [compound_id], search_params)
+    query = _apply_papers_sorting(query, search_params)
+    if search_params:
+        query = query.offset(search_params.offset).limit(search_params.limit)
     return query.all()
 
 
-def count_papers_by_compound(
-    db: Session,
-    compound_id: int,
-    search_params: Optional[schemas.PaperSearchParams] = None,
-    is_admin: bool = False
-) -> int:
-    """统计元素组合在当前筛选条件下的文献总数"""
-    query = get_papers_by_compound_query(db, compound_id, search_params, is_admin)
-    return query.count()
-
-
-def get_papers_by_compound_ids(
-    db: Session,
-    compound_ids: List[int],
-    search_params: Optional[schemas.PaperSearchParams] = None,
-    is_admin: bool = False
-) -> List[models.Paper]:
-    """获取多个元素组合的聚合文献列表（支持搜索和筛选）"""
+def get_papers_by_compounds(db: Session, compound_ids: List[int], search_params: Optional[schemas.PaperSearchParams] = None) -> List[models.Paper]:
     if not compound_ids:
         return []
-
-    query = get_papers_by_compound_ids_query(db, compound_ids, search_params, is_admin)
-
+    query = _build_papers_query(db, compound_ids, search_params)
+    query = _apply_papers_sorting(query, search_params)
     if search_params:
-        if search_params.sort_by == "year":
-            if search_params.sort_order == "asc":
-                query = query.order_by(models.Paper.year.asc(), models.Paper.created_at.desc())
-            else:
-                query = query.order_by(models.Paper.year.desc(), models.Paper.created_at.desc())
-        else:
-            if search_params.sort_order == "asc":
-                query = query.order_by(models.Paper.created_at.asc())
-            else:
-                query = query.order_by(models.Paper.created_at.desc())
-
         query = query.offset(search_params.offset).limit(search_params.limit)
-    else:
-        query = query.order_by(models.Paper.created_at.desc())
-
     return query.all()
 
 
-def count_papers_by_compound_ids(
-    db: Session,
-    compound_ids: List[int],
-    search_params: Optional[schemas.PaperSearchParams] = None,
-    is_admin: bool = False
-) -> int:
-    """统计多个元素组合在当前筛选条件下的文献总数"""
+def get_papers_by_compounds_count(db: Session, compound_ids: List[int], search_params: Optional[schemas.PaperSearchParams] = None) -> int:
     if not compound_ids:
         return 0
-    query = get_papers_by_compound_ids_query(db, compound_ids, search_params, is_admin)
-    return query.count()
+    query = _build_papers_query(db, compound_ids, search_params)
+    return query.with_entities(func.count(func.distinct(models.Paper.id))).scalar() or 0
 
 
 def get_paper_by_id(db: Session, paper_id: int) -> Optional[models.Paper]:
-    """根据ID获取文献"""
     return db.query(models.Paper).filter(models.Paper.id == paper_id).first()
 
 
 def get_papers_by_ids(db: Session, paper_ids: List[int]) -> List[models.Paper]:
-    """根据ID列表获取多篇文献"""
     return db.query(models.Paper).filter(models.Paper.id.in_(paper_ids)).all()
 
 
-# ============= 截图相关操作 =============
-
-def create_paper_image(
-    db: Session,
-    paper_id: int,
-    image_data: bytes,
-    thumbnail_data: bytes,
-    image_order: int,
-    file_size: int
-) -> models.PaperImage:
-    """创建文献截图"""
+def create_paper_image(image_db: Session, paper_id: int, image_data: bytes, thumbnail_data: bytes, image_order: int, file_size: int) -> models.PaperImage:
     image = models.PaperImage(
         paper_id=paper_id,
         image_data=image_data,
         thumbnail_data=thumbnail_data,
         image_order=image_order,
-        file_size=file_size
+        file_size=file_size,
     )
-    db.add(image)
-    db.commit()
-    db.refresh(image)
+    image_db.add(image)
+    image_db.commit()
+    image_db.refresh(image)
     return image
 
 
-def get_paper_images(db: Session, paper_id: int) -> List[models.PaperImage]:
-    """获取文献的所有截图"""
-    return db.query(models.PaperImage).filter(
-        models.PaperImage.paper_id == paper_id
-    ).order_by(models.PaperImage.image_order).all()
+def get_paper_images(image_db: Session, paper_id: int) -> List[models.PaperImage]:
+    return image_db.query(models.PaperImage).filter(models.PaperImage.paper_id == paper_id).all()
 
 
-def get_image_by_id(db: Session, image_id: int) -> Optional[models.PaperImage]:
-    """根据ID获取截图"""
-    return db.query(models.PaperImage).filter(models.PaperImage.id == image_id).first()
+def flatten_paper_images(rows: List[models.PaperImage]) -> List[dict[str, Any]]:
+    images: List[dict[str, Any]] = []
+    for row in rows:
+        created_at = row.created_at.isoformat() if hasattr(row.created_at, "isoformat") else row.created_at
+        if row.image_data:
+            images.append({
+                "id": row.id,
+                "order": row.image_order or 1,
+                "file_size": row.file_size or len(row.image_data),
+                "created_at": created_at,
+            })
+        for order in range(1, 41):
+            blob = getattr(row, f"fig{order}", None)
+            if blob:
+                images.append({
+                    "id": row.id * 100 + order,
+                    "order": order,
+                    "file_size": len(blob),
+                    "created_at": created_at,
+                })
+    images.sort(key=lambda item: item["order"])
+    return images
 
 
-def get_image_by_order(db: Session, paper_id: int, image_order: int) -> Optional[models.PaperImage]:
-    """根据文献ID和图片顺序获取截图"""
-    return db.query(models.PaperImage).filter(
-        and_(
-            models.PaperImage.paper_id == paper_id,
-            models.PaperImage.image_order == image_order
-        )
+def _normalize_text_groups(raw_value: Optional[str]) -> List[Optional[str]]:
+    parsed = safe_json_loads(raw_value, [])
+    if isinstance(parsed, list):
+        out: List[Optional[str]] = []
+        for item in parsed:
+            if item is None:
+                out.append(None)
+            elif isinstance(item, str):
+                text = item.strip()
+                out.append(text or None)
+            else:
+                out.append(str(item))
+        return out
+    if isinstance(parsed, str):
+        text = parsed.strip()
+        return [text] if text else []
+    return []
+
+
+def _normalize_fig_group_sizes(rows: List[models.PaperImage], total_images: int) -> tuple[List[int], list[str], str]:
+    warnings: list[str] = []
+    for row in rows:
+        parsed = safe_json_loads(row.figs, None)
+        if parsed is None:
+            continue
+        if isinstance(parsed, str):
+            parsed = safe_json_loads(parsed, None)
+        if not isinstance(parsed, list):
+            warnings.append("figs is not a list; fallback grouping applied")
+            return [], warnings, "fallback"
+        sizes: List[int] = []
+        invalid = False
+        for item in parsed:
+            if item in (None, ""):
+                continue
+            try:
+                size = int(item)
+            except (TypeError, ValueError):
+                invalid = True
+                break
+            if size <= 0:
+                invalid = True
+                break
+            sizes.append(size)
+        if invalid or not sizes:
+            warnings.append("figs contains invalid group sizes; fallback grouping applied")
+            return [], warnings, "fallback"
+        if sum(sizes) != total_images:
+            warnings.append(f"figs image count {sum(sizes)} does not match actual image count {total_images}")
+        return sizes, warnings, "figs"
+    return [], warnings, "fallback"
+
+
+def _balanced_group_sizes(total_images: int, group_count: int) -> List[int]:
+    if total_images <= 0 or group_count <= 0:
+        return []
+    base = total_images // group_count
+    remainder = total_images % group_count
+    sizes: List[int] = []
+    for index in range(group_count):
+        size = base + (1 if index < remainder else 0)
+        if size > 0:
+            sizes.append(size)
+    return sizes
+
+
+def build_paper_image_review_groups(paper: models.Paper, rows: List[models.PaperImage]) -> dict[str, Any]:
+    images = flatten_paper_images(rows)
+    texts = _normalize_text_groups(getattr(paper, "imagetxts", None))
+    texts_cn = _normalize_text_groups(getattr(paper, "imagetxts_cn", None))
+    warnings: list[str] = []
+
+    fig_sizes, fig_warnings, source = _normalize_fig_group_sizes(rows, len(images))
+    warnings.extend(fig_warnings)
+
+    if fig_sizes:
+        group_sizes = fig_sizes
+    elif texts:
+        group_sizes = _balanced_group_sizes(len(images), len(texts))
+        source = "balanced_fallback"
+    elif len(images) > 0:
+        group_sizes = [len(images)]
+        source = "single_group_fallback"
+    else:
+        group_sizes = []
+        source = "empty"
+
+    if len(texts) < len(group_sizes):
+        warnings.append(f"intro count {len(texts)} is less than group count {len(group_sizes)}")
+    elif len(texts) > len(group_sizes) and group_sizes:
+        warnings.append(f"intro count {len(texts)} exceeds group count {len(group_sizes)}")
+
+    review_groups: List[dict[str, Any]] = []
+    cursor = 0
+    for index, group_size in enumerate(group_sizes, start=1):
+        if cursor >= len(images):
+            break
+        if group_size <= 0:
+            continue
+        group_images = images[cursor: cursor + group_size]
+        cursor += group_size
+        review_groups.append({
+            "group_index": index,
+            "images": group_images,
+            "intro": {
+                "text": texts[index - 1] if index - 1 < len(texts) else None,
+                "text_cn": texts_cn[index - 1] if index - 1 < len(texts_cn) else None,
+            },
+        })
+
+    if cursor < len(images):
+        warnings.append(f"{len(images) - cursor} images were not covered by grouping and were appended to a trailing group")
+        review_groups.append({
+            "group_index": len(review_groups) + 1,
+            "images": images[cursor:],
+            "intro": {
+                "text": texts[len(review_groups)] if len(review_groups) < len(texts) else None,
+                "text_cn": texts_cn[len(review_groups)] if len(review_groups) < len(texts_cn) else None,
+            },
+        })
+
+    return {
+        "paper_id": paper.id,
+        "total_images": len(images),
+        "images": images,
+        "review_groups": review_groups,
+        "grouping_meta": {
+            "grouping_source": source,
+            "warnings": warnings,
+        },
+    }
+
+
+def get_image_by_id(image_db: Session, image_id: int) -> Optional[models.PaperImage]:
+    if image_id >= 100:
+        row_id, order = divmod(image_id, 100)
+        row = image_db.query(models.PaperImage).filter(models.PaperImage.id == row_id).first()
+        if row and 1 <= order <= 40 and getattr(row, f"fig{order}", None):
+            setattr(row, "_selected_fig_order", order)
+            return row
+        return None
+    return image_db.query(models.PaperImage).filter(models.PaperImage.id == image_id).first()
+
+
+def get_image_by_order(image_db: Session, paper_id: int, image_order: int) -> Optional[models.PaperImage]:
+    row = image_db.query(models.PaperImage).filter(models.PaperImage.paper_id == paper_id).first()
+    if not row:
+        return None
+    if getattr(row, f"fig{image_order}", None):
+        setattr(row, "_selected_fig_order", image_order)
+        return row
+    direct_row = image_db.query(models.PaperImage).filter(
+        models.PaperImage.paper_id == paper_id,
+        models.PaperImage.image_order == image_order,
     ).first()
+    if direct_row:
+        return direct_row
+    return None
 
 
-def get_paper_image_count(db: Session, paper_id: int) -> int:
-    """获取文献的截图数量"""
-    return db.query(models.PaperImage).filter(models.PaperImage.paper_id == paper_id).count()
+def get_paper_image_count(image_db: Session, paper_id: int) -> int:
+    rows = get_paper_images(image_db, paper_id)
+    return len(flatten_paper_images(rows))
 
 
-# ============= 统计相关操作 =============
+def delete_all_paper_images(image_db: Session, paper_id: int) -> int:
+    rows = get_paper_images(image_db, paper_id)
+    deleted_count = get_paper_image_count(image_db, paper_id)
+    for row in rows:
+        image_db.delete(row)
+    image_db.commit()
+    return deleted_count
+
 
 def get_total_papers_count(db: Session) -> int:
-    """获取文献总数"""
     return db.query(models.Paper).count()
 
 
 def get_total_compounds_count(db: Session) -> int:
-    """获取元素组合总数"""
     return db.query(models.Compound).count()
 
 
 def get_compound_papers_count(db: Session, compound_id: int) -> int:
-    """获取元素组合的文献数量"""
-    return db.query(models.Paper).filter(models.Paper.compound_id == compound_id).count()
+    return db.query(models.Paper.id).join(models.PaperData).filter(models.PaperData.compound_id == compound_id).distinct().count()
 
-
-# ============= 辅助功能 =============
 
 def get_all_crystal_structures(db: Session) -> List[str]:
-    """获取所有已存在的晶体结构类型（去重）"""
-    results = db.query(models.Paper.crystal_structure).filter(
-        models.Paper.crystal_structure.isnot(None),
-        models.Paper.crystal_structure != ''
+    results = db.query(models.PaperData.crystal_structure).filter(
+        models.PaperData.crystal_structure.isnot(None),
+        models.PaperData.crystal_structure != "",
     ).distinct().all()
+    return sorted([r[0] for r in results if r[0]])
 
-    # 提取字符串并排序
-    structures = [r[0] for r in results if r[0]]
-    return sorted(structures)
+
+def paper_to_response(db: Session, paper: models.Paper, compound_id: Optional[int] = None, image_db: Optional[Session] = None) -> dict:
+    points = paper.physical_parameters
+    if compound_id is not None:
+        points = [p for p in points if p.compound_id == compound_id]
+    first = points[0] if points else None
+    compound = first.compound if first and first.compound else None
+    formula = first.chemical_formula if first else None
+    structure = first.crystal_structure if first else None
+    article_type = normalize_article_type(first.article_type) if first else None
+    sc_type = normalize_superconductor_type(first.superconductor_type if first else None)
+    image_count = get_paper_image_count(image_db, paper.id) if image_db is not None else 0
+
+    return {
+        "id": paper.id,
+        "compound_id": compound.id if compound else None,
+        "doi": paper.doi or "",
+        "title": paper.title or "",
+        "authors": authors_to_json(paper.authors),
+        "journal": paper.journal,
+        "volume": paper.volume,
+        "pages": paper.pages,
+        "year": paper.year,
+        "abstract": paper.abstract,
+        "citation_aps": None,
+        "citation_bibtex": None,
+        "article_type": article_type,
+        "superconductor_type": sc_type,
+        "chemical_formula": formula or (compound.chemical_formula if compound else None),
+        "crystal_structure": structure,
+        "contributor_name": paper.contributor_name,
+        "contributor_affiliation": paper.contributor_affiliation,
+        "notes": paper.notes or (first.data_source_note if first else None),
+        "show_in_chart": bool(paper.show_in_chart),
+        "created_at": paper.created_at,
+        "image_count": image_count,
+        "review_status": paper.review_status or "unreviewed",
+        "review_comment": paper.review_comment,
+        "reviewed_by": paper.reviewed_by,
+        "reviewed_at": paper.reviewed_at,
+        "reviewer_name": paper.reviewer.real_name if paper.reviewer else None,
+        "compound_symbols": get_compound_key(compound) if compound else None,
+        "sample_name": first.sample_name if first else None,
+        "data_source_note": first.data_source_note if first else None,
+        "data": [
+            {
+                "tc": d.tc_range,
+                "tc_press": d.pressure_range,
+                "lambda_val": d.lambda_val,
+                "omega_log": d.omega_log,
+                "n_ef": d.n_ef,
+                "s_factor": d.s_factor,
+                "article_type": normalize_article_type(d.article_type),
+                "superconductor_type": normalize_superconductor_type(d.superconductor_type),
+                "chemical_formula": d.chemical_formula,
+                "crystal_structure": d.crystal_structure,
+                "sample_name": d.sample_name,
+                "data_source_note": d.data_source_note,
+            }
+            for d in points
+        ],
+    }
+
+
+def authors_to_json(authors: Optional[str]) -> str:
+    if not authors:
+        return "[]"
+    stripped = authors.strip()
+    if stripped.startswith("["):
+        return stripped
+    parts = [p.strip() for p in re.split(r";|, and | and ", stripped) if p.strip()]
+    return json.dumps(parts or [stripped], ensure_ascii=False)

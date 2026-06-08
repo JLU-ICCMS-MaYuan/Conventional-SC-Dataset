@@ -1,0 +1,36 @@
+SYSTEM = opt
+
+#Initialize 
+ISTART = 0
+ICHARG = 2
+SYMPREC = 1e-3
+NELM = 300
+#Electronic degrees 
+ENCUT = 600
+PREC = Accurate
+EDIFF = 1e-6
+
+#Finer optimization 
+#EDIFFG = 1e-4
+EDIFFG = -0.02
+
+#iron:1 0.2 non-iron:0 0.05###################
+ISMEAR = 1 ; SIGMA = 0.2
+
+#Ionic parameters
+IBRION = 2
+NSW = 500
+ISIF = 3
+POTIM = 0.1
+
+#K points and pressure
+KSPACING = 0.25
+PSTRESS = 2000
+
+#File to write
+LCHARG=F
+LWAVE=F
+
+#Make it faster
+NPAR = 4
+

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>超导文献数据库 - 元素周期表</title>
+    <title data-i18n="index.page_title">超导文献数据库 - 元素周期表</title>
     <link href="/static/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
@@ -11,22 +11,23 @@
     <!-- 导航栏 -->
     <nav class="navbar navbar-expand-lg navbar-dark navbar-custom shadow-sm sticky-top">
         <div class="container-fluid">
-            <a class="navbar-brand fw-bold" href="/">超导文献数据库</a>
+            <a class="navbar-brand fw-bold" href="/" data-i18n="nav.title">超导文献数据库</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="/tc-pre">Tc 预测 (实验)</a>
+                        <a class="nav-link" href="/tc-pre" data-i18n="tcpre.title">Tc 预测 (实验)</a>
                     </li>
                 </ul>
-                <div class="d-flex align-items-center" id="user-nav">
+                <div class="d-flex align-items-center gap-2" id="user-nav">
                     <!-- 登录/注册按钮将由 JS 动态生成 -->
                     <div class="spinner-border spinner-border-sm text-light" role="status">
                         <span class="visually-hidden">Loading...</span>
                     </div>
                 </div>
+                <button class="btn btn-outline-light btn-sm ms-2" onclick="I18N.toggle()" data-i18n="common.language" title="Switch Language">中/EN</button>
             </div>
         </div>
     </nav>
@@ -34,44 +35,46 @@
     <div class="container-fluid">
         <!-- 头部 -->
         <header class="py-4 text-center">
-            <h1 class="display-4 fw-bold text-dark">超导文献数据库</h1>
-            <p class="lead text-dark">基于元素周期表的超导材料文献检索系统</p>
+            <h1 class="display-4 fw-bold text-dark" data-i18n="index.title">超导文献数据库</h1>
+            <p class="lead text-dark" data-i18n="index.subtitle">基于元素周期表的超导材料文献检索系统</p>
         </header>
+
+
 
         <!-- 选择提示区域 -->
         <div class="row mb-4">
             <div class="col-md-12">
                 <div class="card">
                     <div class="card-body">
-                        <h5>已选元素：<span id="selected-elements" class="badge bg-primary">未选择</span></h5>
-                        <p class="text-muted mb-2">点击元素进行选择，选中后再次点击可取消。选择完成后点击下方按钮或按Enter键进入化合物页面。</p>
+                        <h5><span data-i18n="index.selected_elements">已选元素：</span><span id="selected-elements" class="badge bg-primary">未选择</span></h5>
+                        <p class="text-muted mb-2" data-i18n="index.select_hint">点击元素进行选择，选中后再次点击可取消。选择完成后点击下方按钮或按Enter键进入化合物页面。</p>
                         <div class="mb-3">
-                            <label class="form-label text-muted">筛选条件</label>
+                            <label class="form-label text-muted" data-i18n="index.filter_label">筛选条件</label>
                             <div class="btn-group w-100" role="group" aria-label="元素筛选模式">
                                 <input type="radio" class="btn-check" name="selection-mode" id="mode-only" value="only">
-                                <label class="btn btn-outline-primary" for="mode-only">仅包含选择元素</label>
+                                <label class="btn btn-outline-primary" for="mode-only" data-i18n="index.mode_only">仅包含选择元素</label>
 
                                 <input type="radio" class="btn-check" name="selection-mode" id="mode-combination" value="combination" checked>
-                                <label class="btn btn-outline-primary" for="mode-combination">选择元素的组合</label>
+                                <label class="btn btn-outline-primary" for="mode-combination" data-i18n="index.mode_combination">选择元素的组合</label>
 
                                 <input type="radio" class="btn-check" name="selection-mode" id="mode-contains" value="contains">
-                                <label class="btn btn-outline-primary" for="mode-contains">包含所选元素</label>
+                                <label class="btn btn-outline-primary" for="mode-contains" data-i18n="index.mode_contains">包含所选元素</label>
                             </div>
                         </div>
-                        <button id="enter-compound-btn" class="btn btn-success" disabled>进入化合物页面</button>
-                        <button id="clear-selection-btn" class="btn btn-secondary">清除选择</button>
-                        
+                        <button id="enter-compound-btn" class="btn btn-success" disabled data-i18n="index.show_compounds">进入化合物页面</button>
+                        <button id="clear-selection-btn" class="btn btn-secondary" data-i18n="index.clear_selection">清除选择</button>
+
                         <!-- 快速上传下拉菜单 -->
                         <div class="dropdown d-inline-block ms-1">
-                            <button class="btn btn-outline-info dropdown-toggle" type="button" id="fastUploadDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                            <button class="btn btn-outline-info dropdown-toggle" type="button" id="fastUploadDropdown" data-bs-toggle="dropdown" aria-expanded="false" data-i18n="index.fast_upload">
                                 <i class="bi bi-cloud-upload"></i> 快速上传
                             </button>
                             <ul class="dropdown-menu shadow" aria-labelledby="fastUploadDropdown">
-                                <li><a class="dropdown-item" href="#" onclick="triggerFastUpload(); return false;">🚀 快速上传 (xlsx, csv, txt)</a></li>
-                                <li><a class="dropdown-item" href="#" onclick="downloadFastUploadExample(); return false;">📄 快速上传示例 (.xlsx)</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="triggerFastUpload(); return false;" data-i18n="index.fast_upload_action">🚀 快速上传 (xlsx, csv, txt)</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="downloadFastUploadExample(); return false;" data-i18n="index.fast_upload_example">📄 快速上传示例 (.xlsx)</a></li>
                             </ul>
                         </div>
-                        <a class="btn btn-outline-warning ms-1" href="/tc-pre">⚡ 超导预测实验</a>
+                        <a class="btn btn-outline-warning ms-1" href="/tc-pre" data-i18n="index.tc_predict_lab">⚡ 超导预测实验</a>
                         <input type="file" id="fast-upload-input" style="display: none;" accept=".xlsx,.csv,.txt" onchange="handleFastUpload(this)">
                     </div>
                 </div>
@@ -87,15 +90,13 @@
             </div>
         </div>
 
-        
-
         <!-- 数据统计展示区域 -->
         <div class="row mt-4 mb-4">
             <!-- 历史趋势图 (基于 Book1.xls) -->
             <div class="col-12 mb-4">
                 <div class="card shadow-sm">
                     <div class="card-header bg-light py-2">
-                        <h6 class="card-title mb-0 fw-bold">超导临界温度 (Tc) 历史演变</h6>
+                        <h6 class="card-title mb-0 fw-bold" data-i18n="index.chart_tc_history">超导临界温度 (Tc) 历史演变</h6>
                     </div>
                     <div class="card-body p-2">
                         <div class="ratio" style="--bs-aspect-ratio: 50%;">
@@ -108,7 +109,7 @@
             <div class="col-12 mb-4">
                 <div class="card shadow-sm">
                     <div class="card-header bg-light py-2">
-                        <h6 class="card-title mb-0 fw-bold">数据库实时 P-Tc 分布</h6>
+                        <h6 class="card-title mb-0 fw-bold" data-i18n="index.chart_tc_pressure">数据库实时 P-Tc 分布</h6>
                     </div>
                     <div class="card-body p-2">
                         <div class="ratio" style="--bs-aspect-ratio: 50%;">
@@ -121,7 +122,7 @@
             <div class="col-12">
                 <div class="card shadow-sm">
                     <div class="card-header bg-light py-2">
-                        <h6 class="card-title mb-0 fw-bold">贡献者排行 (Top 20)</h6>
+                        <h6 class="card-title mb-0 fw-bold" data-i18n="index.chart_contributor_ranking">贡献者排行 (Top 20)</h6>
                     </div>
                     <div class="card-body p-2">
                         <div style="height: 500px;">
@@ -132,6 +133,7 @@
             </div>
         </div>
 
+        <!-- 亮点图片展示 (诺贝尔奖得主) -->
         <div class="image-grid-nobel mb-4">
             <div class="grid-item"><img src="/static/img/nobel/Kamerlingh_portret.jpg" title="Heike Kamerlingh Onnes" alt="Kamerlingh Onnes"></div>
             <div class="grid-item"><img src="/static/img/nobel/Bardeen.jpg" title="John Bardeen" alt="John Bardeen"></div>
@@ -153,12 +155,12 @@
             <div class="col-md-12">
                 <div class="card">
                     <div class="card-body">
-                        <h5>使用说明</h5>
+                        <h5 data-i18n="index.usage_guide">使用说明</h5>
                         <ul>
-                            <li>选择一个或多个元素，系统将显示含有这些元素的超导体文献</li>
-                            <li>选择多个元素时，显示<strong>同时包含所有选中元素</strong>的化合物文献</li>
-                            <li>如果元素组合暂无文献，系统会提示您重新选择</li>
-                            <li>支持键盘Enter键快捷跳转</li>
+                            <li data-i18n="index.usage_item_1">选择一个或多个元素，系统将显示含有这些元素的超导体文献</li>
+                            <li data-i18n="index.usage_item_2">选择多个元素时，显示<strong>同时包含所有选中元素</strong>的化合物文献</li>
+                            <li data-i18n="index.usage_item_3">如果元素组合暂无文献，系统会提示您重新选择</li>
+                            <li data-i18n="index.usage_item_4">支持键盘Enter键快捷跳转</li>
                         </ul>
                     </div>
                 </div>
@@ -194,6 +196,7 @@
     </div>
 
     <script src="/static/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/i18n.js"></script>
     <script src="/static/js/chart.js" defer></script>
     <script src="/static/js/auth_state.js"></script>
     <script src="/static/js/auth_helper.js"></script>
@@ -240,7 +243,7 @@
                     data: {
                         datasets: [
                             {
-                                label: '实验数据',
+                                label: I18N.t('index.legend_experiment'),
                                 data: [],
                                 borderColor: '#fff',
                                 borderWidth: 1,
@@ -249,7 +252,7 @@
                                 order: 0
                             },
                             {
-                                label: '理论预测',
+                                label: I18N.t('index.legend_theory'),
                                 data: [],
                                 borderColor: '#fff',
                                 borderWidth: 1,
@@ -275,12 +278,12 @@
                             x: {
                                 type: 'linear',
                                 position: 'bottom',
-                                title: { display: true, text: '年份' },
+                                title: { display: true, text: I18N.t('index.chart_year') },
                                 min: 1900,
                                 max: 2040
                             },
                             y: {
-                                title: { display: true, text: '临界温度 Tc (K)' },
+                                title: { display: true, text: I18N.t('index.chart_tc') },
                                 beginAtZero: true,
                                 max: 400
                             }
@@ -299,7 +302,7 @@
                                             if (item.text.startsWith('Legend: ')) {
                                                 item.text = item.text.replace('Legend: ', '');
                                             }
-                                            if (item.text === '实验数据' || item.text === '理论预测') {
+                                            if (item.text === I18N.t('index.legend_experiment') || item.text === I18N.t('index.legend_theory')) {
                                                 item.fillStyle = '#6c757d';
                                                 item.strokeStyle = '#6c757d';
                                             }
@@ -336,7 +339,7 @@
                                 ctx.font = '10px Arial';
                                 ctx.fillText(text, left + 5, yPos - 5);
                             };
-                            drawLine(77, 'rgba(255, 0, 0, 0.5)', '77 K (Liquid N2)');
+                            drawLine(77, 'rgba(255, 0, 0, 0.5)', '77 K (Liquid N₂)');
                             drawLine(300, 'rgba(0, 0, 0, 0.3)', '300 K (Room Temp)');
                             ctx.restore();
                         },
@@ -393,7 +396,7 @@
                             { label: 's=10', data: generateSLine(10), borderColor: 'rgba(0,0,0,0.1)', borderWidth: 0, borderDash: [5, 5], showLine: true, pointRadius: 0, fill: 'origin', backgroundColor: '#02304d', order: 10 },
 
                             {
-                                label: '实验数据',
+                                label: I18N.t('index.legend_experiment'),
                                 data: [],
                                 borderColor: '#fff',
                                 borderWidth: 1,
@@ -401,7 +404,7 @@
                                 pointStyle: shapes.experimental,
                             },
                             {
-                                label: '理论预测',
+                                label: I18N.t('index.legend_theory'),
                                 data: [],
                                 borderColor: '#fff',
                                 borderWidth: 1,
@@ -426,12 +429,12 @@
                             x: {
                                 type: 'linear',
                                 position: 'bottom',
-                                title: { display: true, text: '压强 (GPa)' },
+                                title: { display: true, text: I18N.t('index.chart_pressure') },
                                 min: -0.01,
                                 max: 300
                             },
                             y: {
-                                title: { display: true, text: '临界温度 Tc (K)' },
+                                title: { display: true, text: I18N.t('index.chart_tc') },
                                 min: 0,
                                 max: 350
                             }
@@ -453,14 +456,14 @@
                                                 if (item.text.startsWith('Legend: ')) {
                                                     item.text = item.text.replace('Legend: ', '');
                                                 }
-                                                if (item.text === '实验数据' || item.text === '理论预测') {
+                                                if (item.text === I18N.t('index.legend_experiment') || item.text === I18N.t('index.legend_theory')) {
                                                     item.fillStyle = '#6c757d';
                                                     item.strokeStyle = '#6c757d';
                                                 }
                                                 return item;
                                             });
                                     }
-                                } 
+                                }
                             },
                             tooltip: {
                                 callbacks: {
@@ -575,12 +578,12 @@
                     data: {
                         labels: Array(20).fill(''), // 预留20个位置
                         datasets: [{
-                            label: '提交文献数',
+                            label: I18N.t('index.chart_papers_submitted'),
                             data: Array(20).fill(null),
                             backgroundColor: 'rgba(54, 162, 235, 0.6)',
                             borderColor: 'rgba(54, 162, 235, 1)',
                             borderWidth: 1,
-                            barThickness: 15 // 固定柱子宽度更美观
+                            barThickness: 15
                         }]
                     },
                     options: {
@@ -590,7 +593,7 @@
                         scales: {
                             x: {
                                 beginAtZero: true,
-                                title: { display: true, text: '文献提交数量' },
+                                title: { display: true, text: I18N.t('index.chart_papers_count_label') },
                                 ticks: { stepSize: 1 }
                             },
                             y: {
@@ -607,7 +610,7 @@
                                 callbacks: {
                                     label: function(context) {
                                         if (context.raw === null) return null;
-                                        return ` 提交了 ${context.raw} 篇文献`;
+                                        return I18N.t('index.chart_submitted_papers', { count: context.raw });
                                     }
                                 }
                             }
@@ -643,8 +646,33 @@
                         rankingChart.update();
                     })
                     .catch(err => console.error('加载排行榜失败:', err));
+
+                // 语言切换时更新图表标签
+                document.addEventListener('langChange', function() {
+                    // 更新静态图表
+                    staticChart.options.scales.x.title.text = I18N.t('index.chart_year');
+                    staticChart.options.scales.y.title.text = I18N.t('index.chart_tc');
+                    staticChart.data.datasets[0].label = I18N.t('index.legend_experiment');
+                    staticChart.data.datasets[1].label = I18N.t('index.legend_theory');
+                    staticChart.update();
+
+                    // 更新动态图表
+                    dynamicChart.options.scales.x.title.text = I18N.t('index.chart_pressure');
+                    dynamicChart.options.scales.y.title.text = I18N.t('index.chart_tc');
+                    dynamicChart.data.datasets[10].label = I18N.t('index.legend_experiment');
+                    dynamicChart.data.datasets[11].label = I18N.t('index.legend_theory');
+                    dynamicChart.update();
+
+                    // 更新排行榜图表
+                    rankingChart.options.scales.x.title.text = I18N.t('index.chart_papers_count_label');
+                    rankingChart.data.datasets[0].label = I18N.t('index.chart_papers_submitted');
+                    rankingChart.update();
+                });
             }, 300);
         });
     </script>
+
+
+
 </body>
 </html>
