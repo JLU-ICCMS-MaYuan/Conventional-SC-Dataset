@@ -1,0 +1,880 @@
+{
+  "scriptCompleted": true,
+  "files": [
+    {
+      "path": ".codex",
+      "language": "unknown",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".playwright-mcp/page-2026-05-14T07-17-43-938Z.yml",
+      "language": "yaml",
+      "sizeLines": 425,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".spec-workflow/templates/design-template.md",
+      "language": "markdown",
+      "sizeLines": 96,
+      "fileCategory": "docs"
+    },
+    {
+      "path": ".spec-workflow/templates/product-template.md",
+      "language": "markdown",
+      "sizeLines": 51,
+      "fileCategory": "docs"
+    },
+    {
+      "path": ".spec-workflow/templates/requirements-template.md",
+      "language": "markdown",
+      "sizeLines": 50,
+      "fileCategory": "docs"
+    },
+    {
+      "path": ".spec-workflow/templates/structure-template.md",
+      "language": "markdown",
+      "sizeLines": 145,
+      "fileCategory": "docs"
+    },
+    {
+      "path": ".spec-workflow/templates/tasks-template.md",
+      "language": "markdown",
+      "sizeLines": 139,
+      "fileCategory": "docs"
+    },
+    {
+      "path": ".spec-workflow/templates/tech-template.md",
+      "language": "markdown",
+      "sizeLines": 99,
+      "fileCategory": "docs"
+    },
+    {
+      "path": ".spec-workflow/user-templates/README.md",
+      "language": "markdown",
+      "sizeLines": 64,
+      "fileCategory": "docs"
+    },
+    {
+      "path": ".understand-anything/domain-graph.json",
+      "language": "json",
+      "sizeLines": 2474,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/intermediate/domain-analysis.json",
+      "language": "json",
+      "sizeLines": 2474,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".understand-anything/intermediate/domain-context.json",
+      "language": "json",
+      "sizeLines": 1251,
+      "fileCategory": "config"
+    },
+    {
+      "path": "1",
+      "language": "unknown",
+      "sizeLines": 78,
+      "fileCategory": "code"
+    },
+    {
+      "path": "AGENTS.md",
+      "language": "markdown",
+      "sizeLines": 74,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/mypaper/comments.md",
+      "language": "markdown",
+      "sizeLines": 18,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/mypaper/conventional_sc_dataset_manuscript.tex",
+      "language": "tex",
+      "sizeLines": 259,
+      "fileCategory": "code"
+    },
+    {
+      "path": "articles/paper_rewriting_output/artifact_check.md",
+      "language": "markdown",
+      "sizeLines": 18,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/citation_quality_audit.md",
+      "language": "markdown",
+      "sizeLines": 14,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/citation_support_bank.md",
+      "language": "markdown",
+      "sizeLines": 184,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/claim_register.md",
+      "language": "markdown",
+      "sizeLines": 14,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/confirmed_motivation.md",
+      "language": "markdown",
+      "sizeLines": 13,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/evidence_bank.md",
+      "language": "markdown",
+      "sizeLines": 17,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/exemplar_learning_dossier.md",
+      "language": "markdown",
+      "sizeLines": 35,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/figure_asset_map.md",
+      "language": "markdown",
+      "sizeLines": 13,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/final_artifact_manifest.md",
+      "language": "markdown",
+      "sizeLines": 49,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/final_paper/main.tex",
+      "language": "tex",
+      "sizeLines": 280,
+      "fileCategory": "code"
+    },
+    {
+      "path": "articles/paper_rewriting_output/final_paper/paper.aux",
+      "language": "aux",
+      "sizeLines": 79,
+      "fileCategory": "code"
+    },
+    {
+      "path": "articles/paper_rewriting_output/final_paper/paper.fdb_latexmk",
+      "language": "fdb_latexmk",
+      "sizeLines": 93,
+      "fileCategory": "code"
+    },
+    {
+      "path": "articles/paper_rewriting_output/final_paper/paper.fls",
+      "language": "fls",
+      "sizeLines": 153,
+      "fileCategory": "code"
+    },
+    {
+      "path": "articles/paper_rewriting_output/final_paper/paper.out",
+      "language": "out",
+      "sizeLines": 16,
+      "fileCategory": "code"
+    },
+    {
+      "path": "articles/paper_rewriting_output/integrity_audit.md",
+      "language": "markdown",
+      "sizeLines": 40,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/latex_guard.md",
+      "language": "markdown",
+      "sizeLines": 10,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/latex_report.md",
+      "language": "markdown",
+      "sizeLines": 39,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/logic_transfer_audit.md",
+      "language": "markdown",
+      "sizeLines": 52,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/material_inventory.md",
+      "language": "markdown",
+      "sizeLines": 26,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/motivation_options_after_research.md",
+      "language": "markdown",
+      "sizeLines": 30,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/paper_spine_config.json",
+      "language": "json",
+      "sizeLines": 26,
+      "fileCategory": "config"
+    },
+    {
+      "path": "articles/paper_rewriting_output/paper_spine_config.md",
+      "language": "markdown",
+      "sizeLines": 23,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/reference_materials/source_index.md",
+      "language": "markdown",
+      "sizeLines": 50,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/research_dossier.md",
+      "language": "markdown",
+      "sizeLines": 62,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/review_outputs_only/clarity_review_output.md",
+      "language": "markdown",
+      "sizeLines": 39,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/review_outputs_only/contribution_review_output.md",
+      "language": "markdown",
+      "sizeLines": 59,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/review_outputs_only/methods_review_output.md",
+      "language": "markdown",
+      "sizeLines": 52,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/review_outputs_validate/clarity_reviewer.md",
+      "language": "markdown",
+      "sizeLines": 39,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/review_outputs_validate/contribution_reviewer.md",
+      "language": "markdown",
+      "sizeLines": 59,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/review_outputs_validate/methods_reviewer.md",
+      "language": "markdown",
+      "sizeLines": 52,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/review_prompts/clarity_review_output.md",
+      "language": "markdown",
+      "sizeLines": 39,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/review_prompts/clarity_reviewer.md",
+      "language": "markdown",
+      "sizeLines": 105,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/review_prompts/contribution_review_output.md",
+      "language": "markdown",
+      "sizeLines": 59,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/review_prompts/contribution_reviewer.md",
+      "language": "markdown",
+      "sizeLines": 105,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/review_prompts/dispatch.md",
+      "language": "markdown",
+      "sizeLines": 15,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/review_prompts/methods_review_output.md",
+      "language": "markdown",
+      "sizeLines": 52,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/review_prompts/methods_reviewer.md",
+      "language": "markdown",
+      "sizeLines": 105,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/section_blueprints.md",
+      "language": "markdown",
+      "sizeLines": 61,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/sota_gap_map.md",
+      "language": "markdown",
+      "sizeLines": 18,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/source_inventory.json",
+      "language": "json",
+      "sizeLines": 135,
+      "fileCategory": "config"
+    },
+    {
+      "path": "articles/paper_rewriting_output/source_inventory.md",
+      "language": "markdown",
+      "sizeLines": 26,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/source_map.md",
+      "language": "markdown",
+      "sizeLines": 13,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/structured_review.md",
+      "language": "markdown",
+      "sizeLines": 51,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/style_profile.md",
+      "language": "markdown",
+      "sizeLines": 39,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/paper_rewriting_output/writing_rationale_matrix.md",
+      "language": "markdown",
+      "sizeLines": 24,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/raw/2026 HPCSD.pdf:Zone.Identifier",
+      "language": "identifier",
+      "sizeLines": 3,
+      "fileCategory": "code"
+    },
+    {
+      "path": "articles/raw/literature-shortlist.md",
+      "language": "markdown",
+      "sizeLines": 75,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "articles/raw/OpenClaw橙皮书_extracted.txt",
+      "language": "txt",
+      "sizeLines": 6032,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "backend/__init__.py",
+      "language": "python",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/alexandria_db.py",
+      "language": "python",
+      "sizeLines": 192,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/alexandria_import.py",
+      "language": "python",
+      "sizeLines": 385,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/api/__init__.py",
+      "language": "python",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/api/admin.py",
+      "language": "python",
+      "sizeLines": 977,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/api/ai_papers.py",
+      "language": "python",
+      "sizeLines": 179,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/api/alexandria.py",
+      "language": "python",
+      "sizeLines": 128,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/api/auth_routes.py",
+      "language": "python",
+      "sizeLines": 231,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/api/compounds.py",
+      "language": "python",
+      "sizeLines": 119,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/api/elements.py",
+      "language": "python",
+      "sizeLines": 34,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/api/htsc2025.py",
+      "language": "python",
+      "sizeLines": 137,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/api/papers.py",
+      "language": "python",
+      "sizeLines": 641,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/api/tc_predict.py",
+      "language": "python",
+      "sizeLines": 156,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/create_superadmin.py",
+      "language": "python",
+      "sizeLines": 135,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/crud.py",
+      "language": "python",
+      "sizeLines": 735,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/database.py",
+      "language": "python",
+      "sizeLines": 135,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/email_service.py",
+      "language": "python",
+      "sizeLines": 178,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/export_data.py",
+      "language": "python",
+      "sizeLines": 163,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/fix_imported_authors_json.py",
+      "language": "python",
+      "sizeLines": 53,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/import_data.py",
+      "language": "python",
+      "sizeLines": 228,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/import_reviewed_xlsx.py",
+      "language": "python",
+      "sizeLines": 316,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/init_db.py",
+      "language": "python",
+      "sizeLines": 231,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/main.py",
+      "language": "python",
+      "sizeLines": 226,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/merge_csv.py",
+      "language": "python",
+      "sizeLines": 260,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/migrate_ids.py",
+      "language": "python",
+      "sizeLines": 43,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/migrations/__init__.py",
+      "language": "python",
+      "sizeLines": 3,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/models.py",
+      "language": "python",
+      "sizeLines": 248,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/schemas.py",
+      "language": "python",
+      "sizeLines": 323,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/security.py",
+      "language": "python",
+      "sizeLines": 122,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/utils/__init__.py",
+      "language": "python",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/utils/citation.py",
+      "language": "python",
+      "sizeLines": 353,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/utils/doi_resolver.py",
+      "language": "python",
+      "sizeLines": 160,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/utils/image_processor.py",
+      "language": "python",
+      "sizeLines": 185,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backups/data_export_20260112_110119.json",
+      "language": "json",
+      "sizeLines": 1167,
+      "fileCategory": "config"
+    },
+    {
+      "path": "data/batch_import_example.xlsx",
+      "language": "xlsx",
+      "sizeLines": 21,
+      "fileCategory": "code"
+    },
+    {
+      "path": "data/data_export.json",
+      "language": "json",
+      "sizeLines": 998,
+      "fileCategory": "config"
+    },
+    {
+      "path": "data/htsc2025.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": "data/hydride_literature_ai.db",
+      "language": "db",
+      "sizeLines": 2567,
+      "fileCategory": "code"
+    },
+    {
+      "path": "data/hydride_literature_images.db",
+      "language": "db",
+      "sizeLines": 53,
+      "fileCategory": "code"
+    },
+    {
+      "path": "data/hydride_literature.db",
+      "language": "db",
+      "sizeLines": 116,
+      "fileCategory": "code"
+    },
+    {
+      "path": "data/import_papers_to_sqlite.py",
+      "language": "python",
+      "sizeLines": 1203,
+      "fileCategory": "code"
+    },
+    {
+      "path": "docs/article-draft.md",
+      "language": "markdown",
+      "sizeLines": 293,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/business-auth-and-review.md",
+      "language": "markdown",
+      "sizeLines": 102,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/business-overview.md",
+      "language": "markdown",
+      "sizeLines": 100,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/business-paper-ingestion.md",
+      "language": "markdown",
+      "sizeLines": 93,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/business-search-and-discovery.md",
+      "language": "markdown",
+      "sizeLines": 97,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/business-visualization-and-tc-predict.md",
+      "language": "markdown",
+      "sizeLines": 82,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/current-state-and-gaps.md",
+      "language": "markdown",
+      "sizeLines": 242,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/operations-cli-and-maintenance.md",
+      "language": "markdown",
+      "sizeLines": 134,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/operations-installation-and-deployment.md",
+      "language": "markdown",
+      "sizeLines": 129,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/README.md",
+      "language": "markdown",
+      "sizeLines": 54,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/TC_PREDICTION_MODULE_ANALYSIS.md",
+      "language": "markdown",
+      "sizeLines": 618,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "frontend/static/css/style.css",
+      "language": "css",
+      "sizeLines": 368,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "frontend/static/js/admin_papers.js",
+      "language": "javascript",
+      "sizeLines": 1002,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/static/js/auth_helper.js",
+      "language": "javascript",
+      "sizeLines": 61,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/static/js/auth_state.js",
+      "language": "javascript",
+      "sizeLines": 50,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/static/js/chart.js",
+      "language": "javascript",
+      "sizeLines": 14,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/static/js/compound_page.js",
+      "language": "javascript",
+      "sizeLines": 1554,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/static/js/i18n.js",
+      "language": "javascript",
+      "sizeLines": 367,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/static/js/periodic_table.js",
+      "language": "javascript",
+      "sizeLines": 380,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/static/js/tc_pre.js",
+      "language": "javascript",
+      "sizeLines": 70,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/templates/admin_dashboard.html",
+      "language": "html",
+      "sizeLines": 1254,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "frontend/templates/admin_papers.html",
+      "language": "html",
+      "sizeLines": 328,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "frontend/templates/admin_register.html",
+      "language": "html",
+      "sizeLines": 167,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "frontend/templates/compound.html",
+      "language": "html",
+      "sizeLines": 278,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "frontend/templates/index.html",
+      "language": "html",
+      "sizeLines": 674,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "frontend/templates/login.html",
+      "language": "html",
+      "sizeLines": 133,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "frontend/templates/superadmin_dashboard.html",
+      "language": "html",
+      "sizeLines": 532,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "frontend/templates/tc_pre.html",
+      "language": "html",
+      "sizeLines": 80,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "frontend/templates/user_register.html",
+      "language": "html",
+      "sizeLines": 158,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "Procfile",
+      "language": "procfile",
+      "sizeLines": 1,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "README.md",
+      "language": "markdown",
+      "sizeLines": 25,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "requirements.txt",
+      "language": "txt",
+      "sizeLines": 30,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "scripts/autobackup.sh",
+      "language": "shell",
+      "sizeLines": 120,
+      "fileCategory": "script"
+    },
+    {
+      "path": "scripts/remote_backup.sh",
+      "language": "shell",
+      "sizeLines": 167,
+      "fileCategory": "script"
+    },
+    {
+      "path": "start.sh",
+      "language": "shell",
+      "sizeLines": 29,
+      "fileCategory": "script"
+    }
+  ],
+  "totalFiles": 140,
+  "filteredByIgnore": 0,
+  "estimatedComplexity": "moderate",
+  "stats": {
+    "filesScanned": 140,
+    "byCategory": {
+      "code": 55,
+      "config": 9,
+      "docs": 62,
+      "markup": 10,
+      "infra": 1,
+      "script": 3
+    },
+    "byLanguage": {
+      "unknown": 2,
+      "yaml": 1,
+      "markdown": 60,
+      "json": 8,
+      "tex": 2,
+      "aux": 1,
+      "fdb_latexmk": 1,
+      "fls": 1,
+      "out": 1,
+      "identifier": 1,
+      "txt": 2,
+      "python": 34,
+      "xlsx": 1,
+      "db": 3,
+      "css": 1,
+      "javascript": 8,
+      "html": 9,
+      "procfile": 1,
+      "shell": 3
+    }
+  }
+}

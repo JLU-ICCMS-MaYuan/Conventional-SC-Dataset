@@ -1,0 +1,6091 @@
+{
+  "version": "1.0.0",
+  "project": {
+    "name": "Conventional-SC-Dataset",
+    "languages": [
+      "CSS",
+      "Excel",
+      "HTML",
+      "JSON",
+      "JavaScript",
+      "LaTeX",
+      "Markdown",
+      "Procfile",
+      "Python",
+      "SQLite",
+      "Shell",
+      "YAML",
+      "aux",
+      "fdb_latexmk",
+      "fls",
+      "identifier",
+      "out",
+      "txt",
+      "unknown"
+    ],
+    "frameworks": [
+      "FastAPI",
+      "SQLAlchemy",
+      "SQLite",
+      "Pydantic",
+      "Bootstrap"
+    ],
+    "description": "基于元素周期表的超导文献收集、检索、上传、审核、图表展示和预测实验平台；本图谱聚焦 HTTP 接口框架、数据接口和前端消费关系。",
+    "analyzedAt": "2026-06-08T02:30:07.096913+00:00",
+    "gitCommitHash": "af94f068959a902459f0540bfd91db2d72105bc3"
+  },
+  "nodes": [
+    {
+      "id": "file:.codex",
+      "type": "file",
+      "name": ".codex",
+      "filePath": ".codex",
+      "summary": "code 类文件，语言/格式为 unknown。",
+      "tags": [
+        "code",
+        "unknown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 unknown。"
+    },
+    {
+      "id": "config:.playwright-mcp/page-2026-05-14T07-17-43-938Z.yml",
+      "type": "config",
+      "name": ".playwright-mcp/page-2026-05-14T07-17-43-938Z.yml",
+      "filePath": ".playwright-mcp/page-2026-05-14T07-17-43-938Z.yml",
+      "summary": "config 类文件，语言/格式为 YAML。",
+      "tags": [
+        "config",
+        "yaml"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "该文件在接口框架中属于 config 层，格式为 YAML。"
+    },
+    {
+      "id": "document:.spec-workflow/templates/design-template.md",
+      "type": "document",
+      "name": ".spec-workflow/templates/design-template.md",
+      "filePath": ".spec-workflow/templates/design-template.md",
+      "summary": "docs 类文件，语言/格式为 Markdown。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:.spec-workflow/templates/product-template.md",
+      "type": "document",
+      "name": ".spec-workflow/templates/product-template.md",
+      "filePath": ".spec-workflow/templates/product-template.md",
+      "summary": "docs 类文件，语言/格式为 Markdown。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:.spec-workflow/templates/requirements-template.md",
+      "type": "document",
+      "name": ".spec-workflow/templates/requirements-template.md",
+      "filePath": ".spec-workflow/templates/requirements-template.md",
+      "summary": "docs 类文件，语言/格式为 Markdown。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:.spec-workflow/templates/structure-template.md",
+      "type": "document",
+      "name": ".spec-workflow/templates/structure-template.md",
+      "filePath": ".spec-workflow/templates/structure-template.md",
+      "summary": "docs 类文件，语言/格式为 Markdown。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:.spec-workflow/templates/tasks-template.md",
+      "type": "document",
+      "name": ".spec-workflow/templates/tasks-template.md",
+      "filePath": ".spec-workflow/templates/tasks-template.md",
+      "summary": "docs 类文件，语言/格式为 Markdown。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:.spec-workflow/templates/tech-template.md",
+      "type": "document",
+      "name": ".spec-workflow/templates/tech-template.md",
+      "filePath": ".spec-workflow/templates/tech-template.md",
+      "summary": "docs 类文件，语言/格式为 Markdown。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:.spec-workflow/user-templates/README.md",
+      "type": "document",
+      "name": ".spec-workflow/user-templates/README.md",
+      "filePath": ".spec-workflow/user-templates/README.md",
+      "summary": "docs 类文件，语言/格式为 Markdown。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "config:.understand-anything/domain-graph.json",
+      "type": "config",
+      "name": ".understand-anything/domain-graph.json",
+      "filePath": ".understand-anything/domain-graph.json",
+      "summary": "config 类文件，语言/格式为 JSON。",
+      "tags": [
+        "config",
+        "json"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "该文件在接口框架中属于 config 层，格式为 JSON。"
+    },
+    {
+      "id": "config:.understand-anything/intermediate/domain-analysis.json",
+      "type": "config",
+      "name": ".understand-anything/intermediate/domain-analysis.json",
+      "filePath": ".understand-anything/intermediate/domain-analysis.json",
+      "summary": "config 类文件，语言/格式为 JSON。",
+      "tags": [
+        "config",
+        "json"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "该文件在接口框架中属于 config 层，格式为 JSON。"
+    },
+    {
+      "id": "config:.understand-anything/intermediate/domain-context.json",
+      "type": "config",
+      "name": ".understand-anything/intermediate/domain-context.json",
+      "filePath": ".understand-anything/intermediate/domain-context.json",
+      "summary": "config 类文件，语言/格式为 JSON。",
+      "tags": [
+        "config",
+        "json"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "该文件在接口框架中属于 config 层，格式为 JSON。"
+    },
+    {
+      "id": "file:1",
+      "type": "file",
+      "name": "1",
+      "filePath": "1",
+      "summary": "code 类文件，语言/格式为 unknown。",
+      "tags": [
+        "code",
+        "unknown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 unknown。"
+    },
+    {
+      "id": "document:AGENTS.md",
+      "type": "document",
+      "name": "AGENTS.md",
+      "filePath": "AGENTS.md",
+      "summary": "docs 类文件，语言/格式为 Markdown。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/mypaper/comments.md",
+      "type": "document",
+      "name": "articles/mypaper/comments.md",
+      "filePath": "articles/mypaper/comments.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "file:articles/mypaper/conventional_sc_dataset_manuscript.tex",
+      "type": "file",
+      "name": "articles/mypaper/conventional_sc_dataset_manuscript.tex",
+      "filePath": "articles/mypaper/conventional_sc_dataset_manuscript.tex",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "code",
+        "tex"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 LaTeX。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/artifact_check.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/artifact_check.md",
+      "filePath": "articles/paper_rewriting_output/artifact_check.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/citation_quality_audit.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/citation_quality_audit.md",
+      "filePath": "articles/paper_rewriting_output/citation_quality_audit.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/citation_support_bank.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/citation_support_bank.md",
+      "filePath": "articles/paper_rewriting_output/citation_support_bank.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/claim_register.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/claim_register.md",
+      "filePath": "articles/paper_rewriting_output/claim_register.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/confirmed_motivation.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/confirmed_motivation.md",
+      "filePath": "articles/paper_rewriting_output/confirmed_motivation.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/evidence_bank.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/evidence_bank.md",
+      "filePath": "articles/paper_rewriting_output/evidence_bank.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/exemplar_learning_dossier.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/exemplar_learning_dossier.md",
+      "filePath": "articles/paper_rewriting_output/exemplar_learning_dossier.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/figure_asset_map.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/figure_asset_map.md",
+      "filePath": "articles/paper_rewriting_output/figure_asset_map.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/final_artifact_manifest.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/final_artifact_manifest.md",
+      "filePath": "articles/paper_rewriting_output/final_artifact_manifest.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "file:articles/paper_rewriting_output/final_paper/main.tex",
+      "type": "file",
+      "name": "articles/paper_rewriting_output/final_paper/main.tex",
+      "filePath": "articles/paper_rewriting_output/final_paper/main.tex",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "code",
+        "tex"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 LaTeX。"
+    },
+    {
+      "id": "file:articles/paper_rewriting_output/final_paper/paper.aux",
+      "type": "file",
+      "name": "articles/paper_rewriting_output/final_paper/paper.aux",
+      "filePath": "articles/paper_rewriting_output/final_paper/paper.aux",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "aux",
+        "code"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 aux。"
+    },
+    {
+      "id": "file:articles/paper_rewriting_output/final_paper/paper.fdb_latexmk",
+      "type": "file",
+      "name": "articles/paper_rewriting_output/final_paper/paper.fdb_latexmk",
+      "filePath": "articles/paper_rewriting_output/final_paper/paper.fdb_latexmk",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "code",
+        "fdb_latexmk"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 fdb_latexmk。"
+    },
+    {
+      "id": "file:articles/paper_rewriting_output/final_paper/paper.fls",
+      "type": "file",
+      "name": "articles/paper_rewriting_output/final_paper/paper.fls",
+      "filePath": "articles/paper_rewriting_output/final_paper/paper.fls",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "code",
+        "fls"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 fls。"
+    },
+    {
+      "id": "file:articles/paper_rewriting_output/final_paper/paper.out",
+      "type": "file",
+      "name": "articles/paper_rewriting_output/final_paper/paper.out",
+      "filePath": "articles/paper_rewriting_output/final_paper/paper.out",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "code",
+        "out"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 out。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/integrity_audit.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/integrity_audit.md",
+      "filePath": "articles/paper_rewriting_output/integrity_audit.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/latex_guard.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/latex_guard.md",
+      "filePath": "articles/paper_rewriting_output/latex_guard.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/latex_report.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/latex_report.md",
+      "filePath": "articles/paper_rewriting_output/latex_report.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/logic_transfer_audit.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/logic_transfer_audit.md",
+      "filePath": "articles/paper_rewriting_output/logic_transfer_audit.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/material_inventory.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/material_inventory.md",
+      "filePath": "articles/paper_rewriting_output/material_inventory.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/motivation_options_after_research.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/motivation_options_after_research.md",
+      "filePath": "articles/paper_rewriting_output/motivation_options_after_research.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "config:articles/paper_rewriting_output/paper_spine_config.json",
+      "type": "config",
+      "name": "articles/paper_rewriting_output/paper_spine_config.json",
+      "filePath": "articles/paper_rewriting_output/paper_spine_config.json",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "config",
+        "json"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 config 层，格式为 JSON。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/paper_spine_config.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/paper_spine_config.md",
+      "filePath": "articles/paper_rewriting_output/paper_spine_config.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/reference_materials/source_index.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/reference_materials/source_index.md",
+      "filePath": "articles/paper_rewriting_output/reference_materials/source_index.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/research_dossier.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/research_dossier.md",
+      "filePath": "articles/paper_rewriting_output/research_dossier.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/review_outputs_only/clarity_review_output.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/review_outputs_only/clarity_review_output.md",
+      "filePath": "articles/paper_rewriting_output/review_outputs_only/clarity_review_output.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/review_outputs_only/contribution_review_output.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/review_outputs_only/contribution_review_output.md",
+      "filePath": "articles/paper_rewriting_output/review_outputs_only/contribution_review_output.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/review_outputs_only/methods_review_output.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/review_outputs_only/methods_review_output.md",
+      "filePath": "articles/paper_rewriting_output/review_outputs_only/methods_review_output.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/review_outputs_validate/clarity_reviewer.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/review_outputs_validate/clarity_reviewer.md",
+      "filePath": "articles/paper_rewriting_output/review_outputs_validate/clarity_reviewer.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/review_outputs_validate/contribution_reviewer.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/review_outputs_validate/contribution_reviewer.md",
+      "filePath": "articles/paper_rewriting_output/review_outputs_validate/contribution_reviewer.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/review_outputs_validate/methods_reviewer.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/review_outputs_validate/methods_reviewer.md",
+      "filePath": "articles/paper_rewriting_output/review_outputs_validate/methods_reviewer.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/review_prompts/clarity_review_output.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/review_prompts/clarity_review_output.md",
+      "filePath": "articles/paper_rewriting_output/review_prompts/clarity_review_output.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/review_prompts/clarity_reviewer.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/review_prompts/clarity_reviewer.md",
+      "filePath": "articles/paper_rewriting_output/review_prompts/clarity_reviewer.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/review_prompts/contribution_review_output.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/review_prompts/contribution_review_output.md",
+      "filePath": "articles/paper_rewriting_output/review_prompts/contribution_review_output.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/review_prompts/contribution_reviewer.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/review_prompts/contribution_reviewer.md",
+      "filePath": "articles/paper_rewriting_output/review_prompts/contribution_reviewer.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/review_prompts/dispatch.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/review_prompts/dispatch.md",
+      "filePath": "articles/paper_rewriting_output/review_prompts/dispatch.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/review_prompts/methods_review_output.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/review_prompts/methods_review_output.md",
+      "filePath": "articles/paper_rewriting_output/review_prompts/methods_review_output.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/review_prompts/methods_reviewer.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/review_prompts/methods_reviewer.md",
+      "filePath": "articles/paper_rewriting_output/review_prompts/methods_reviewer.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/section_blueprints.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/section_blueprints.md",
+      "filePath": "articles/paper_rewriting_output/section_blueprints.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/sota_gap_map.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/sota_gap_map.md",
+      "filePath": "articles/paper_rewriting_output/sota_gap_map.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "config:articles/paper_rewriting_output/source_inventory.json",
+      "type": "config",
+      "name": "articles/paper_rewriting_output/source_inventory.json",
+      "filePath": "articles/paper_rewriting_output/source_inventory.json",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "config",
+        "json"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 config 层，格式为 JSON。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/source_inventory.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/source_inventory.md",
+      "filePath": "articles/paper_rewriting_output/source_inventory.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/source_map.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/source_map.md",
+      "filePath": "articles/paper_rewriting_output/source_map.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/structured_review.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/structured_review.md",
+      "filePath": "articles/paper_rewriting_output/structured_review.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/style_profile.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/style_profile.md",
+      "filePath": "articles/paper_rewriting_output/style_profile.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/paper_rewriting_output/writing_rationale_matrix.md",
+      "type": "document",
+      "name": "articles/paper_rewriting_output/writing_rationale_matrix.md",
+      "filePath": "articles/paper_rewriting_output/writing_rationale_matrix.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "file:articles/raw/2026 HPCSD.pdf:Zone.Identifier",
+      "type": "file",
+      "name": "articles/raw/2026 HPCSD.pdf:Zone.Identifier",
+      "filePath": "articles/raw/2026 HPCSD.pdf:Zone.Identifier",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "code",
+        "identifier"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 identifier。"
+    },
+    {
+      "id": "document:articles/raw/literature-shortlist.md",
+      "type": "document",
+      "name": "articles/raw/literature-shortlist.md",
+      "filePath": "articles/raw/literature-shortlist.md",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:articles/raw/OpenClaw橙皮书_extracted.txt",
+      "type": "document",
+      "name": "articles/raw/OpenClaw橙皮书_extracted.txt",
+      "filePath": "articles/raw/OpenClaw橙皮书_extracted.txt",
+      "summary": "论文、原始材料或 PaperSpine 产物归档，用于学术写作和资料沉淀。",
+      "tags": [
+        "docs",
+        "txt"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 txt。"
+    },
+    {
+      "id": "file:backend/__init__.py",
+      "type": "file",
+      "name": "backend/__init__.py",
+      "filePath": "backend/__init__.py",
+      "summary": "code 类文件，语言/格式为 Python。",
+      "tags": [
+        "backend",
+        "code",
+        "python"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/alexandria_db.py",
+      "type": "file",
+      "name": "backend/alexandria_db.py",
+      "filePath": "backend/alexandria_db.py",
+      "summary": "code 类文件，语言/格式为 Python。",
+      "tags": [
+        "backend",
+        "code",
+        "python"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/alexandria_import.py",
+      "type": "file",
+      "name": "backend/alexandria_import.py",
+      "filePath": "backend/alexandria_import.py",
+      "summary": "code 类文件，语言/格式为 Python。",
+      "tags": [
+        "backend",
+        "code",
+        "python"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/api/__init__.py",
+      "type": "file",
+      "name": "backend/api/__init__.py",
+      "filePath": "backend/api/__init__.py",
+      "summary": "FastAPI API 路由模块，暴露业务接口并编排认证、CRUD、数据处理和响应模型。",
+      "tags": [
+        "api",
+        "backend",
+        "code",
+        "python",
+        "router"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/api/admin.py",
+      "type": "file",
+      "name": "backend/api/admin.py",
+      "filePath": "backend/api/admin.py",
+      "summary": "FastAPI API 路由模块，暴露业务接口并编排认证、CRUD、数据处理和响应模型。",
+      "tags": [
+        "api",
+        "backend",
+        "code",
+        "python",
+        "router"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/api/ai_papers.py",
+      "type": "file",
+      "name": "backend/api/ai_papers.py",
+      "filePath": "backend/api/ai_papers.py",
+      "summary": "FastAPI API 路由模块，暴露业务接口并编排认证、CRUD、数据处理和响应模型。",
+      "tags": [
+        "api",
+        "backend",
+        "code",
+        "python",
+        "router"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/api/alexandria.py",
+      "type": "file",
+      "name": "backend/api/alexandria.py",
+      "filePath": "backend/api/alexandria.py",
+      "summary": "FastAPI API 路由模块，暴露业务接口并编排认证、CRUD、数据处理和响应模型。",
+      "tags": [
+        "api",
+        "backend",
+        "code",
+        "python",
+        "router"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/api/auth_routes.py",
+      "type": "file",
+      "name": "backend/api/auth_routes.py",
+      "filePath": "backend/api/auth_routes.py",
+      "summary": "FastAPI API 路由模块，暴露业务接口并编排认证、CRUD、数据处理和响应模型。",
+      "tags": [
+        "api",
+        "backend",
+        "code",
+        "python",
+        "router"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/api/compounds.py",
+      "type": "file",
+      "name": "backend/api/compounds.py",
+      "filePath": "backend/api/compounds.py",
+      "summary": "FastAPI API 路由模块，暴露业务接口并编排认证、CRUD、数据处理和响应模型。",
+      "tags": [
+        "api",
+        "backend",
+        "code",
+        "python",
+        "router"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/api/elements.py",
+      "type": "file",
+      "name": "backend/api/elements.py",
+      "filePath": "backend/api/elements.py",
+      "summary": "FastAPI API 路由模块，暴露业务接口并编排认证、CRUD、数据处理和响应模型。",
+      "tags": [
+        "api",
+        "backend",
+        "code",
+        "python",
+        "router"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/api/htsc2025.py",
+      "type": "file",
+      "name": "backend/api/htsc2025.py",
+      "filePath": "backend/api/htsc2025.py",
+      "summary": "FastAPI API 路由模块，暴露业务接口并编排认证、CRUD、数据处理和响应模型。",
+      "tags": [
+        "api",
+        "backend",
+        "code",
+        "python",
+        "router"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/api/papers.py",
+      "type": "file",
+      "name": "backend/api/papers.py",
+      "filePath": "backend/api/papers.py",
+      "summary": "FastAPI API 路由模块，暴露业务接口并编排认证、CRUD、数据处理和响应模型。",
+      "tags": [
+        "api",
+        "backend",
+        "code",
+        "python",
+        "router"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/api/tc_predict.py",
+      "type": "file",
+      "name": "backend/api/tc_predict.py",
+      "filePath": "backend/api/tc_predict.py",
+      "summary": "FastAPI API 路由模块，暴露业务接口并编排认证、CRUD、数据处理和响应模型。",
+      "tags": [
+        "api",
+        "backend",
+        "code",
+        "python",
+        "router"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/create_superadmin.py",
+      "type": "file",
+      "name": "backend/create_superadmin.py",
+      "filePath": "backend/create_superadmin.py",
+      "summary": "code 类文件，语言/格式为 Python。",
+      "tags": [
+        "backend",
+        "code",
+        "python"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/crud.py",
+      "type": "file",
+      "name": "backend/crud.py",
+      "filePath": "backend/crud.py",
+      "summary": "数据库查询、创建、转换和序列化辅助层，连接 API 路由与 ORM 模型。",
+      "tags": [
+        "backend",
+        "code",
+        "python"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/database.py",
+      "type": "file",
+      "name": "backend/database.py",
+      "filePath": "backend/database.py",
+      "summary": "数据库引擎与 Session 工厂配置，负责主元数据库、图片库、AI 元数据库和 AI 图片库的路径选择与依赖注入。",
+      "tags": [
+        "backend",
+        "code",
+        "python"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/email_service.py",
+      "type": "file",
+      "name": "backend/email_service.py",
+      "filePath": "backend/email_service.py",
+      "summary": "code 类文件，语言/格式为 Python。",
+      "tags": [
+        "backend",
+        "code",
+        "python"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/export_data.py",
+      "type": "file",
+      "name": "backend/export_data.py",
+      "filePath": "backend/export_data.py",
+      "summary": "code 类文件，语言/格式为 Python。",
+      "tags": [
+        "backend",
+        "code",
+        "python"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/fix_imported_authors_json.py",
+      "type": "file",
+      "name": "backend/fix_imported_authors_json.py",
+      "filePath": "backend/fix_imported_authors_json.py",
+      "summary": "code 类文件，语言/格式为 Python。",
+      "tags": [
+        "backend",
+        "code",
+        "python"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/import_data.py",
+      "type": "file",
+      "name": "backend/import_data.py",
+      "filePath": "backend/import_data.py",
+      "summary": "code 类文件，语言/格式为 Python。",
+      "tags": [
+        "backend",
+        "code",
+        "python"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/import_reviewed_xlsx.py",
+      "type": "file",
+      "name": "backend/import_reviewed_xlsx.py",
+      "filePath": "backend/import_reviewed_xlsx.py",
+      "summary": "code 类文件，语言/格式为 Python。",
+      "tags": [
+        "backend",
+        "code",
+        "python"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/init_db.py",
+      "type": "file",
+      "name": "backend/init_db.py",
+      "filePath": "backend/init_db.py",
+      "summary": "code 类文件，语言/格式为 Python。",
+      "tags": [
+        "backend",
+        "code",
+        "python"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/main.py",
+      "type": "file",
+      "name": "backend/main.py",
+      "filePath": "backend/main.py",
+      "summary": "FastAPI 应用入口，注册后端路由、静态文件、页面路由和启动时数据库初始化逻辑。",
+      "tags": [
+        "backend",
+        "code",
+        "python"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/merge_csv.py",
+      "type": "file",
+      "name": "backend/merge_csv.py",
+      "filePath": "backend/merge_csv.py",
+      "summary": "code 类文件，语言/格式为 Python。",
+      "tags": [
+        "backend",
+        "code",
+        "python"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/migrate_ids.py",
+      "type": "file",
+      "name": "backend/migrate_ids.py",
+      "filePath": "backend/migrate_ids.py",
+      "summary": "code 类文件，语言/格式为 Python。",
+      "tags": [
+        "backend",
+        "code",
+        "python"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/migrations/__init__.py",
+      "type": "file",
+      "name": "backend/migrations/__init__.py",
+      "filePath": "backend/migrations/__init__.py",
+      "summary": "code 类文件，语言/格式为 Python。",
+      "tags": [
+        "backend",
+        "code",
+        "python"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/models.py",
+      "type": "file",
+      "name": "backend/models.py",
+      "filePath": "backend/models.py",
+      "summary": "SQLAlchemy ORM 模型定义，描述元素、化合物、用户、文献、物理数据和图片表结构。",
+      "tags": [
+        "backend",
+        "code",
+        "python"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/schemas.py",
+      "type": "file",
+      "name": "backend/schemas.py",
+      "filePath": "backend/schemas.py",
+      "summary": "Pydantic 请求与响应模型定义，约束元素、化合物、文献、分页、导出和预测接口的数据形状。",
+      "tags": [
+        "backend",
+        "code",
+        "python"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/security.py",
+      "type": "file",
+      "name": "backend/security.py",
+      "filePath": "backend/security.py",
+      "summary": "认证安全模块，负责密码哈希、JWT 生成解析、验证码和当前用户依赖。",
+      "tags": [
+        "backend",
+        "code",
+        "python"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/utils/__init__.py",
+      "type": "file",
+      "name": "backend/utils/__init__.py",
+      "filePath": "backend/utils/__init__.py",
+      "summary": "code 类文件，语言/格式为 Python。",
+      "tags": [
+        "backend",
+        "code",
+        "python"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/utils/citation.py",
+      "type": "file",
+      "name": "backend/utils/citation.py",
+      "filePath": "backend/utils/citation.py",
+      "summary": "code 类文件，语言/格式为 Python。",
+      "tags": [
+        "backend",
+        "code",
+        "python"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/utils/doi_resolver.py",
+      "type": "file",
+      "name": "backend/utils/doi_resolver.py",
+      "filePath": "backend/utils/doi_resolver.py",
+      "summary": "code 类文件，语言/格式为 Python。",
+      "tags": [
+        "backend",
+        "code",
+        "python"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "file:backend/utils/image_processor.py",
+      "type": "file",
+      "name": "backend/utils/image_processor.py",
+      "filePath": "backend/utils/image_processor.py",
+      "summary": "code 类文件，语言/格式为 Python。",
+      "tags": [
+        "backend",
+        "code",
+        "python"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "config:backups/data_export_20260112_110119.json",
+      "type": "config",
+      "name": "backups/data_export_20260112_110119.json",
+      "filePath": "backups/data_export_20260112_110119.json",
+      "summary": "config 类文件，语言/格式为 JSON。",
+      "tags": [
+        "config",
+        "json"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "该文件在接口框架中属于 config 层，格式为 JSON。"
+    },
+    {
+      "id": "file:data/batch_import_example.xlsx",
+      "type": "file",
+      "name": "data/batch_import_example.xlsx",
+      "filePath": "data/batch_import_example.xlsx",
+      "summary": "本地数据文件或 SQLite 数据库，承载文献、图片、示例表格和外部数据集。",
+      "tags": [
+        "code",
+        "xlsx"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Excel。"
+    },
+    {
+      "id": "config:data/data_export.json",
+      "type": "config",
+      "name": "data/data_export.json",
+      "filePath": "data/data_export.json",
+      "summary": "本地数据文件或 SQLite 数据库，承载文献、图片、示例表格和外部数据集。",
+      "tags": [
+        "config",
+        "json"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "该文件在接口框架中属于 config 层，格式为 JSON。"
+    },
+    {
+      "id": "config:data/htsc2025.json",
+      "type": "config",
+      "name": "data/htsc2025.json",
+      "filePath": "data/htsc2025.json",
+      "summary": "本地数据文件或 SQLite 数据库，承载文献、图片、示例表格和外部数据集。",
+      "tags": [
+        "config",
+        "json"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 config 层，格式为 JSON。"
+    },
+    {
+      "id": "file:data/hydride_literature_ai.db",
+      "type": "file",
+      "name": "data/hydride_literature_ai.db",
+      "filePath": "data/hydride_literature_ai.db",
+      "summary": "本地数据文件或 SQLite 数据库，承载文献、图片、示例表格和外部数据集。",
+      "tags": [
+        "code",
+        "db"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 SQLite。"
+    },
+    {
+      "id": "file:data/hydride_literature_images.db",
+      "type": "file",
+      "name": "data/hydride_literature_images.db",
+      "filePath": "data/hydride_literature_images.db",
+      "summary": "本地数据文件或 SQLite 数据库，承载文献、图片、示例表格和外部数据集。",
+      "tags": [
+        "code",
+        "db"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 SQLite。"
+    },
+    {
+      "id": "file:data/hydride_literature.db",
+      "type": "file",
+      "name": "data/hydride_literature.db",
+      "filePath": "data/hydride_literature.db",
+      "summary": "本地数据文件或 SQLite 数据库，承载文献、图片、示例表格和外部数据集。",
+      "tags": [
+        "code",
+        "db"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 SQLite。"
+    },
+    {
+      "id": "file:data/import_papers_to_sqlite.py",
+      "type": "file",
+      "name": "data/import_papers_to_sqlite.py",
+      "filePath": "data/import_papers_to_sqlite.py",
+      "summary": "本地数据文件或 SQLite 数据库，承载文献、图片、示例表格和外部数据集。",
+      "tags": [
+        "code",
+        "python"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 Python。"
+    },
+    {
+      "id": "document:docs/article-draft.md",
+      "type": "document",
+      "name": "docs/article-draft.md",
+      "filePath": "docs/article-draft.md",
+      "summary": "项目业务、运维或模块说明文档，描述当前代码真实行为和维护入口。",
+      "tags": [
+        "docs",
+        "documentation",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:docs/business-auth-and-review.md",
+      "type": "document",
+      "name": "docs/business-auth-and-review.md",
+      "filePath": "docs/business-auth-and-review.md",
+      "summary": "项目业务、运维或模块说明文档，描述当前代码真实行为和维护入口。",
+      "tags": [
+        "docs",
+        "documentation",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:docs/business-overview.md",
+      "type": "document",
+      "name": "docs/business-overview.md",
+      "filePath": "docs/business-overview.md",
+      "summary": "项目业务、运维或模块说明文档，描述当前代码真实行为和维护入口。",
+      "tags": [
+        "docs",
+        "documentation",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:docs/business-paper-ingestion.md",
+      "type": "document",
+      "name": "docs/business-paper-ingestion.md",
+      "filePath": "docs/business-paper-ingestion.md",
+      "summary": "项目业务、运维或模块说明文档，描述当前代码真实行为和维护入口。",
+      "tags": [
+        "docs",
+        "documentation",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:docs/business-search-and-discovery.md",
+      "type": "document",
+      "name": "docs/business-search-and-discovery.md",
+      "filePath": "docs/business-search-and-discovery.md",
+      "summary": "项目业务、运维或模块说明文档，描述当前代码真实行为和维护入口。",
+      "tags": [
+        "docs",
+        "documentation",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:docs/business-visualization-and-tc-predict.md",
+      "type": "document",
+      "name": "docs/business-visualization-and-tc-predict.md",
+      "filePath": "docs/business-visualization-and-tc-predict.md",
+      "summary": "项目业务、运维或模块说明文档，描述当前代码真实行为和维护入口。",
+      "tags": [
+        "docs",
+        "documentation",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:docs/current-state-and-gaps.md",
+      "type": "document",
+      "name": "docs/current-state-and-gaps.md",
+      "filePath": "docs/current-state-and-gaps.md",
+      "summary": "项目业务、运维或模块说明文档，描述当前代码真实行为和维护入口。",
+      "tags": [
+        "docs",
+        "documentation",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:docs/operations-cli-and-maintenance.md",
+      "type": "document",
+      "name": "docs/operations-cli-and-maintenance.md",
+      "filePath": "docs/operations-cli-and-maintenance.md",
+      "summary": "项目业务、运维或模块说明文档，描述当前代码真实行为和维护入口。",
+      "tags": [
+        "docs",
+        "documentation",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:docs/operations-installation-and-deployment.md",
+      "type": "document",
+      "name": "docs/operations-installation-and-deployment.md",
+      "filePath": "docs/operations-installation-and-deployment.md",
+      "summary": "项目业务、运维或模块说明文档，描述当前代码真实行为和维护入口。",
+      "tags": [
+        "docs",
+        "documentation",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:docs/README.md",
+      "type": "document",
+      "name": "docs/README.md",
+      "filePath": "docs/README.md",
+      "summary": "项目业务、运维或模块说明文档，描述当前代码真实行为和维护入口。",
+      "tags": [
+        "docs",
+        "documentation",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:docs/TC_PREDICTION_MODULE_ANALYSIS.md",
+      "type": "document",
+      "name": "docs/TC_PREDICTION_MODULE_ANALYSIS.md",
+      "filePath": "docs/TC_PREDICTION_MODULE_ANALYSIS.md",
+      "summary": "项目业务、运维或模块说明文档，描述当前代码真实行为和维护入口。",
+      "tags": [
+        "docs",
+        "documentation",
+        "markdown"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "file:frontend/static/css/style.css",
+      "type": "file",
+      "name": "frontend/static/css/style.css",
+      "filePath": "frontend/static/css/style.css",
+      "summary": "markup 类文件，语言/格式为 CSS。",
+      "tags": [
+        "css",
+        "frontend",
+        "markup"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "该文件在接口框架中属于 markup 层，格式为 CSS。"
+    },
+    {
+      "id": "file:frontend/static/js/admin_papers.js",
+      "type": "file",
+      "name": "frontend/static/js/admin_papers.js",
+      "filePath": "frontend/static/js/admin_papers.js",
+      "summary": "前端 JavaScript 脚本，负责页面交互、接口调用、状态管理和图表渲染。",
+      "tags": [
+        "code",
+        "frontend",
+        "javascript"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 JavaScript。"
+    },
+    {
+      "id": "file:frontend/static/js/auth_helper.js",
+      "type": "file",
+      "name": "frontend/static/js/auth_helper.js",
+      "filePath": "frontend/static/js/auth_helper.js",
+      "summary": "前端 JavaScript 脚本，负责页面交互、接口调用、状态管理和图表渲染。",
+      "tags": [
+        "code",
+        "frontend",
+        "javascript"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 JavaScript。"
+    },
+    {
+      "id": "file:frontend/static/js/auth_state.js",
+      "type": "file",
+      "name": "frontend/static/js/auth_state.js",
+      "filePath": "frontend/static/js/auth_state.js",
+      "summary": "前端 JavaScript 脚本，负责页面交互、接口调用、状态管理和图表渲染。",
+      "tags": [
+        "code",
+        "frontend",
+        "javascript"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 JavaScript。"
+    },
+    {
+      "id": "file:frontend/static/js/chart.js",
+      "type": "file",
+      "name": "frontend/static/js/chart.js",
+      "filePath": "frontend/static/js/chart.js",
+      "summary": "前端 JavaScript 脚本，负责页面交互、接口调用、状态管理和图表渲染。",
+      "tags": [
+        "code",
+        "frontend",
+        "javascript"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 JavaScript。"
+    },
+    {
+      "id": "file:frontend/static/js/compound_page.js",
+      "type": "file",
+      "name": "frontend/static/js/compound_page.js",
+      "filePath": "frontend/static/js/compound_page.js",
+      "summary": "前端 JavaScript 脚本，负责页面交互、接口调用、状态管理和图表渲染。",
+      "tags": [
+        "code",
+        "frontend",
+        "javascript"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 JavaScript。"
+    },
+    {
+      "id": "file:frontend/static/js/i18n.js",
+      "type": "file",
+      "name": "frontend/static/js/i18n.js",
+      "filePath": "frontend/static/js/i18n.js",
+      "summary": "前端 JavaScript 脚本，负责页面交互、接口调用、状态管理和图表渲染。",
+      "tags": [
+        "code",
+        "frontend",
+        "javascript"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 JavaScript。"
+    },
+    {
+      "id": "file:frontend/static/js/periodic_table.js",
+      "type": "file",
+      "name": "frontend/static/js/periodic_table.js",
+      "filePath": "frontend/static/js/periodic_table.js",
+      "summary": "前端 JavaScript 脚本，负责页面交互、接口调用、状态管理和图表渲染。",
+      "tags": [
+        "code",
+        "frontend",
+        "javascript"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 JavaScript。"
+    },
+    {
+      "id": "file:frontend/static/js/tc_pre.js",
+      "type": "file",
+      "name": "frontend/static/js/tc_pre.js",
+      "filePath": "frontend/static/js/tc_pre.js",
+      "summary": "前端 JavaScript 脚本，负责页面交互、接口调用、状态管理和图表渲染。",
+      "tags": [
+        "code",
+        "frontend",
+        "javascript"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 code 层，格式为 JavaScript。"
+    },
+    {
+      "id": "file:frontend/templates/admin_dashboard.html",
+      "type": "file",
+      "name": "frontend/templates/admin_dashboard.html",
+      "filePath": "frontend/templates/admin_dashboard.html",
+      "summary": "前端 HTML 模板页面，由 FastAPI 页面路由直接返回。",
+      "tags": [
+        "frontend",
+        "html",
+        "markup"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "该文件在接口框架中属于 markup 层，格式为 HTML。"
+    },
+    {
+      "id": "file:frontend/templates/admin_papers.html",
+      "type": "file",
+      "name": "frontend/templates/admin_papers.html",
+      "filePath": "frontend/templates/admin_papers.html",
+      "summary": "前端 HTML 模板页面，由 FastAPI 页面路由直接返回。",
+      "tags": [
+        "frontend",
+        "html",
+        "markup"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "该文件在接口框架中属于 markup 层，格式为 HTML。"
+    },
+    {
+      "id": "file:frontend/templates/admin_register.html",
+      "type": "file",
+      "name": "frontend/templates/admin_register.html",
+      "filePath": "frontend/templates/admin_register.html",
+      "summary": "前端 HTML 模板页面，由 FastAPI 页面路由直接返回。",
+      "tags": [
+        "frontend",
+        "html",
+        "markup"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 markup 层，格式为 HTML。"
+    },
+    {
+      "id": "file:frontend/templates/compound.html",
+      "type": "file",
+      "name": "frontend/templates/compound.html",
+      "filePath": "frontend/templates/compound.html",
+      "summary": "前端 HTML 模板页面，由 FastAPI 页面路由直接返回。",
+      "tags": [
+        "frontend",
+        "html",
+        "markup"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 markup 层，格式为 HTML。"
+    },
+    {
+      "id": "file:frontend/templates/index.html",
+      "type": "file",
+      "name": "frontend/templates/index.html",
+      "filePath": "frontend/templates/index.html",
+      "summary": "前端 HTML 模板页面，由 FastAPI 页面路由直接返回。",
+      "tags": [
+        "frontend",
+        "html",
+        "markup"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "该文件在接口框架中属于 markup 层，格式为 HTML。"
+    },
+    {
+      "id": "file:frontend/templates/login.html",
+      "type": "file",
+      "name": "frontend/templates/login.html",
+      "filePath": "frontend/templates/login.html",
+      "summary": "前端 HTML 模板页面，由 FastAPI 页面路由直接返回。",
+      "tags": [
+        "frontend",
+        "html",
+        "markup"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 markup 层，格式为 HTML。"
+    },
+    {
+      "id": "file:frontend/templates/superadmin_dashboard.html",
+      "type": "file",
+      "name": "frontend/templates/superadmin_dashboard.html",
+      "filePath": "frontend/templates/superadmin_dashboard.html",
+      "summary": "前端 HTML 模板页面，由 FastAPI 页面路由直接返回。",
+      "tags": [
+        "frontend",
+        "html",
+        "markup"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "该文件在接口框架中属于 markup 层，格式为 HTML。"
+    },
+    {
+      "id": "file:frontend/templates/tc_pre.html",
+      "type": "file",
+      "name": "frontend/templates/tc_pre.html",
+      "filePath": "frontend/templates/tc_pre.html",
+      "summary": "前端 HTML 模板页面，由 FastAPI 页面路由直接返回。",
+      "tags": [
+        "frontend",
+        "html",
+        "markup"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 markup 层，格式为 HTML。"
+    },
+    {
+      "id": "file:frontend/templates/user_register.html",
+      "type": "file",
+      "name": "frontend/templates/user_register.html",
+      "filePath": "frontend/templates/user_register.html",
+      "summary": "前端 HTML 模板页面，由 FastAPI 页面路由直接返回。",
+      "tags": [
+        "frontend",
+        "html",
+        "markup"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 markup 层，格式为 HTML。"
+    },
+    {
+      "id": "service:Procfile",
+      "type": "service",
+      "name": "Procfile",
+      "filePath": "Procfile",
+      "summary": "infra 类文件，语言/格式为 Procfile。",
+      "tags": [
+        "infra",
+        "procfile"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 infra 层，格式为 Procfile。"
+    },
+    {
+      "id": "document:README.md",
+      "type": "document",
+      "name": "README.md",
+      "filePath": "README.md",
+      "summary": "docs 类文件，语言/格式为 Markdown。",
+      "tags": [
+        "docs",
+        "markdown"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 Markdown。"
+    },
+    {
+      "id": "document:requirements.txt",
+      "type": "document",
+      "name": "requirements.txt",
+      "filePath": "requirements.txt",
+      "summary": "docs 类文件，语言/格式为 txt。",
+      "tags": [
+        "docs",
+        "txt"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 docs 层，格式为 txt。"
+    },
+    {
+      "id": "pipeline:scripts/autobackup.sh",
+      "type": "pipeline",
+      "name": "scripts/autobackup.sh",
+      "filePath": "scripts/autobackup.sh",
+      "summary": "运维脚本，用于备份、远程同步或服务维护。",
+      "tags": [
+        "script",
+        "shell"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 script 层，格式为 Shell。"
+    },
+    {
+      "id": "pipeline:scripts/remote_backup.sh",
+      "type": "pipeline",
+      "name": "scripts/remote_backup.sh",
+      "filePath": "scripts/remote_backup.sh",
+      "summary": "运维脚本，用于备份、远程同步或服务维护。",
+      "tags": [
+        "script",
+        "shell"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 script 层，格式为 Shell。"
+    },
+    {
+      "id": "pipeline:start.sh",
+      "type": "pipeline",
+      "name": "start.sh",
+      "filePath": "start.sh",
+      "summary": "script 类文件，语言/格式为 Shell。",
+      "tags": [
+        "script",
+        "shell"
+      ],
+      "complexity": "simple",
+      "languageNotes": "该文件在接口框架中属于 script 层，格式为 Shell。"
+    },
+    {
+      "id": "endpoint:backend/main.py:GET-node",
+      "type": "endpoint",
+      "name": "GET /",
+      "filePath": "backend/main.py",
+      "summary": "接口 `GET /` 由 `read_root` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/main.py:GET-periodic-table",
+      "type": "endpoint",
+      "name": "GET /periodic-table",
+      "filePath": "backend/main.py",
+      "summary": "接口 `GET /periodic-table` 由 `periodic_table_page` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/main.py:GET-compound-element-symbols",
+      "type": "endpoint",
+      "name": "GET /compound/{element_symbols}",
+      "filePath": "backend/main.py",
+      "summary": "接口 `GET /compound/{element_symbols}` 由 `compound_page` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/main.py:GET-admin-register",
+      "type": "endpoint",
+      "name": "GET /admin/register",
+      "filePath": "backend/main.py",
+      "summary": "接口 `GET /admin/register` 由 `admin_register_page` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/main.py:GET-admin-login",
+      "type": "endpoint",
+      "name": "GET /admin/login",
+      "filePath": "backend/main.py",
+      "summary": "接口 `GET /admin/login` 由 `admin_login_page` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/main.py:GET-login",
+      "type": "endpoint",
+      "name": "GET /login",
+      "filePath": "backend/main.py",
+      "summary": "接口 `GET /login` 由 `user_login_page` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/main.py:GET-register",
+      "type": "endpoint",
+      "name": "GET /register",
+      "filePath": "backend/main.py",
+      "summary": "接口 `GET /register` 由 `user_register_page` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/main.py:GET-admin-dashboard",
+      "type": "endpoint",
+      "name": "GET /admin/dashboard",
+      "filePath": "backend/main.py",
+      "summary": "接口 `GET /admin/dashboard` 由 `admin_dashboard_page` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/main.py:GET-admin-superadmin",
+      "type": "endpoint",
+      "name": "GET /admin/superadmin",
+      "filePath": "backend/main.py",
+      "summary": "接口 `GET /admin/superadmin` 由 `superadmin_dashboard_page` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/main.py:GET-admin-my-reviews",
+      "type": "endpoint",
+      "name": "GET /admin/my-reviews",
+      "filePath": "backend/main.py",
+      "summary": "接口 `GET /admin/my-reviews` 由 `admin_my_reviews_page` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/main.py:GET-admin-papers",
+      "type": "endpoint",
+      "name": "GET /admin/papers",
+      "filePath": "backend/main.py",
+      "summary": "接口 `GET /admin/papers` 由 `admin_papers_page` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/main.py:GET-tc-pre",
+      "type": "endpoint",
+      "name": "GET /tc-pre",
+      "filePath": "backend/main.py",
+      "summary": "接口 `GET /tc-pre` 由 `tc_prediction_page` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/main.py:GET-health",
+      "type": "endpoint",
+      "name": "GET /health",
+      "filePath": "backend/main.py",
+      "summary": "接口 `GET /health` 由 `health_check` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/admin.py:GET-api-admin-all-users",
+      "type": "endpoint",
+      "name": "GET /api/admin/all-users",
+      "filePath": "backend/api/admin.py",
+      "summary": "接口 `GET /api/admin/all-users` 由 `get_all_users` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/admin.py:PUT-api-admin-users-user-id-permissions",
+      "type": "endpoint",
+      "name": "PUT /api/admin/users/{user_id}/permissions",
+      "filePath": "backend/api/admin.py",
+      "summary": "接口 `PUT /api/admin/users/{user_id}/permissions` 由 `update_user_permissions` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "put"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/admin.py:DELETE-api-admin-users-user-id",
+      "type": "endpoint",
+      "name": "DELETE /api/admin/users/{user_id}",
+      "filePath": "backend/api/admin.py",
+      "summary": "接口 `DELETE /api/admin/users/{user_id}` 由 `delete_user` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "delete"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/admin.py:GET-api-admin-users-user-id-submitted-papers",
+      "type": "endpoint",
+      "name": "GET /api/admin/users/{user_id}/submitted-papers",
+      "filePath": "backend/api/admin.py",
+      "summary": "接口 `GET /api/admin/users/{user_id}/submitted-papers` 由 `get_user_submitted_papers` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/admin.py:GET-api-admin-pending-approvals",
+      "type": "endpoint",
+      "name": "GET /api/admin/pending-approvals",
+      "filePath": "backend/api/admin.py",
+      "summary": "接口 `GET /api/admin/pending-approvals` 由 `get_pending_approvals` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/admin.py:POST-api-admin-approve-user",
+      "type": "endpoint",
+      "name": "POST /api/admin/approve-user",
+      "filePath": "backend/api/admin.py",
+      "summary": "接口 `POST /api/admin/approve-user` 由 `approve_user` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "post"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/admin.py:GET-api-admin-all-admins",
+      "type": "endpoint",
+      "name": "GET /api/admin/all-admins",
+      "filePath": "backend/api/admin.py",
+      "summary": "接口 `GET /api/admin/all-admins` 由 `get_all_admins` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/admin.py:POST-api-admin-papers-paper-id-review",
+      "type": "endpoint",
+      "name": "POST /api/admin/papers/{paper_id}/review",
+      "filePath": "backend/api/admin.py",
+      "summary": "接口 `POST /api/admin/papers/{paper_id}/review` 由 `review_paper` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "post"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/admin.py:GET-api-admin-papers-unreviewed",
+      "type": "endpoint",
+      "name": "GET /api/admin/papers/unreviewed",
+      "filePath": "backend/api/admin.py",
+      "summary": "接口 `GET /api/admin/papers/unreviewed` 由 `get_unreviewed_papers` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/admin.py:GET-api-admin-my-reviews",
+      "type": "endpoint",
+      "name": "GET /api/admin/my-reviews",
+      "filePath": "backend/api/admin.py",
+      "summary": "接口 `GET /api/admin/my-reviews` 由 `get_my_reviewed_papers` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/admin.py:GET-api-admin-papers-all",
+      "type": "endpoint",
+      "name": "GET /api/admin/papers/all",
+      "filePath": "backend/api/admin.py",
+      "summary": "接口 `GET /api/admin/papers/all` 由 `get_all_papers` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/admin.py:GET-api-admin-papers-paper-id",
+      "type": "endpoint",
+      "name": "GET /api/admin/papers/{paper_id}",
+      "filePath": "backend/api/admin.py",
+      "summary": "接口 `GET /api/admin/papers/{paper_id}` 由 `get_paper_detail` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/admin.py:PUT-api-admin-papers-paper-id",
+      "type": "endpoint",
+      "name": "PUT /api/admin/papers/{paper_id}",
+      "filePath": "backend/api/admin.py",
+      "summary": "接口 `PUT /api/admin/papers/{paper_id}` 由 `update_paper` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "put"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/admin.py:DELETE-api-admin-papers-paper-id",
+      "type": "endpoint",
+      "name": "DELETE /api/admin/papers/{paper_id}",
+      "filePath": "backend/api/admin.py",
+      "summary": "接口 `DELETE /api/admin/papers/{paper_id}` 由 `delete_paper` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "delete"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/admin.py:POST-api-admin-papers-batch-review",
+      "type": "endpoint",
+      "name": "POST /api/admin/papers/batch-review",
+      "filePath": "backend/api/admin.py",
+      "summary": "接口 `POST /api/admin/papers/batch-review` 由 `batch_review_papers` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "post"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/admin.py:POST-api-admin-papers-batch-chart-visibility",
+      "type": "endpoint",
+      "name": "POST /api/admin/papers/batch-chart-visibility",
+      "filePath": "backend/api/admin.py",
+      "summary": "接口 `POST /api/admin/papers/batch-chart-visibility` 由 `batch_chart_visibility` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "post"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/admin.py:POST-api-admin-papers-batch-delete",
+      "type": "endpoint",
+      "name": "POST /api/admin/papers/batch-delete",
+      "filePath": "backend/api/admin.py",
+      "summary": "接口 `POST /api/admin/papers/batch-delete` 由 `batch_delete_papers` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "post"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/admin.py:GET-api-admin-papers-paper-id-images",
+      "type": "endpoint",
+      "name": "GET /api/admin/papers/{paper_id}/images",
+      "filePath": "backend/api/admin.py",
+      "summary": "接口 `GET /api/admin/papers/{paper_id}/images` 由 `get_paper_images` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/admin.py:DELETE-api-admin-papers-paper-id-images-image-id",
+      "type": "endpoint",
+      "name": "DELETE /api/admin/papers/{paper_id}/images/{image_id}",
+      "filePath": "backend/api/admin.py",
+      "summary": "接口 `DELETE /api/admin/papers/{paper_id}/images/{image_id}` 由 `delete_paper_image` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "delete"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/ai_papers.py:GET-api-ai-compounds-element-symbols",
+      "type": "endpoint",
+      "name": "GET /api/ai/compounds/{element_symbols}",
+      "filePath": "backend/api/ai_papers.py",
+      "summary": "接口 `GET /api/ai/compounds/{element_symbols}` 由 `get_ai_compound_info` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/ai_papers.py:GET-api-ai-papers-compound-element-symbols",
+      "type": "endpoint",
+      "name": "GET /api/ai/papers/compound/{element_symbols}",
+      "filePath": "backend/api/ai_papers.py",
+      "summary": "接口 `GET /api/ai/papers/compound/{element_symbols}` 由 `get_ai_papers_by_compound` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/ai_papers.py:POST-api-ai-papers-search-by-mode",
+      "type": "endpoint",
+      "name": "POST /api/ai/papers/search-by-mode",
+      "filePath": "backend/api/ai_papers.py",
+      "summary": "接口 `POST /api/ai/papers/search-by-mode` 由 `search_ai_papers_by_mode` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "post"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/ai_papers.py:GET-api-ai-papers-crystal-structures",
+      "type": "endpoint",
+      "name": "GET /api/ai/papers/crystal-structures",
+      "filePath": "backend/api/ai_papers.py",
+      "summary": "接口 `GET /api/ai/papers/crystal-structures` 由 `get_ai_crystal_structures` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/ai_papers.py:GET-api-ai-papers-paper-id-images-image-order",
+      "type": "endpoint",
+      "name": "GET /api/ai/papers/{paper_id}/images/{image_order}",
+      "filePath": "backend/api/ai_papers.py",
+      "summary": "接口 `GET /api/ai/papers/{paper_id}/images/{image_order}` 由 `get_ai_paper_image` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/alexandria.py:POST-api-alexandria-search",
+      "type": "endpoint",
+      "name": "POST /api/alexandria/search",
+      "filePath": "backend/api/alexandria.py",
+      "summary": "接口 `POST /api/alexandria/search` 由 `search_alexandria` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "post"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/alexandria.py:GET-api-alexandria-elements",
+      "type": "endpoint",
+      "name": "GET /api/alexandria/elements",
+      "filePath": "backend/api/alexandria.py",
+      "summary": "接口 `GET /api/alexandria/elements` 由 `list_alexandria_elements` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/alexandria.py:GET-api-alexandria-material-mat-id",
+      "type": "endpoint",
+      "name": "GET /api/alexandria/material/{mat_id}",
+      "filePath": "backend/api/alexandria.py",
+      "summary": "接口 `GET /api/alexandria/material/{mat_id}` 由 `get_alexandria_material` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/alexandria.py:GET-api-alexandria-material-mat-id-download",
+      "type": "endpoint",
+      "name": "GET /api/alexandria/material/{mat_id}/download",
+      "filePath": "backend/api/alexandria.py",
+      "summary": "接口 `GET /api/alexandria/material/{mat_id}/download` 由 `download_alexandria_material` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/alexandria.py:GET-api-alexandria-stats",
+      "type": "endpoint",
+      "name": "GET /api/alexandria/stats",
+      "filePath": "backend/api/alexandria.py",
+      "summary": "接口 `GET /api/alexandria/stats` 由 `alexandria_stats` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/auth_routes.py:POST-api-auth-register",
+      "type": "endpoint",
+      "name": "POST /api/auth/register",
+      "filePath": "backend/api/auth_routes.py",
+      "summary": "接口 `POST /api/auth/register` 由 `register_step1` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "post"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/auth_routes.py:POST-api-auth-verify-email",
+      "type": "endpoint",
+      "name": "POST /api/auth/verify-email",
+      "filePath": "backend/api/auth_routes.py",
+      "summary": "接口 `POST /api/auth/verify-email` 由 `register_step2` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "post"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/auth_routes.py:POST-api-auth-login",
+      "type": "endpoint",
+      "name": "POST /api/auth/login",
+      "filePath": "backend/api/auth_routes.py",
+      "summary": "接口 `POST /api/auth/login` 由 `login` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "post"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/auth_routes.py:GET-api-auth-me",
+      "type": "endpoint",
+      "name": "GET /api/auth/me",
+      "filePath": "backend/api/auth_routes.py",
+      "summary": "接口 `GET /api/auth/me` 由 `get_me` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/compounds.py:POST-api-compounds-check",
+      "type": "endpoint",
+      "name": "POST /api/compounds/check",
+      "filePath": "backend/api/compounds.py",
+      "summary": "接口 `POST /api/compounds/check` 由 `check_compound_exists` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "post"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/compounds.py:GET-api-compounds-element-symbols",
+      "type": "endpoint",
+      "name": "GET /api/compounds/{element_symbols}",
+      "filePath": "backend/api/compounds.py",
+      "summary": "接口 `GET /api/compounds/{element_symbols}` 由 `get_compound_info` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/compounds.py:POST-api-compounds-search",
+      "type": "endpoint",
+      "name": "POST /api/compounds/search",
+      "filePath": "backend/api/compounds.py",
+      "summary": "接口 `POST /api/compounds/search` 由 `search_compounds` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "post"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/elements.py:GET-api-elements",
+      "type": "endpoint",
+      "name": "GET /api/elements/",
+      "filePath": "backend/api/elements.py",
+      "summary": "接口 `GET /api/elements/` 由 `get_all_elements` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/elements.py:GET-api-elements-symbol",
+      "type": "endpoint",
+      "name": "GET /api/elements/{symbol}",
+      "filePath": "backend/api/elements.py",
+      "summary": "接口 `GET /api/elements/{symbol}` 由 `get_element_by_symbol` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/htsc2025.py:POST-api-htsc2025-search",
+      "type": "endpoint",
+      "name": "POST /api/htsc2025/search",
+      "filePath": "backend/api/htsc2025.py",
+      "summary": "接口 `POST /api/htsc2025/search` 由 `search_htsc2025` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "post"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/htsc2025.py:GET-api-htsc2025-stats",
+      "type": "endpoint",
+      "name": "GET /api/htsc2025/stats",
+      "filePath": "backend/api/htsc2025.py",
+      "summary": "接口 `GET /api/htsc2025/stats` 由 `htsc2025_stats` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/htsc2025.py:GET-api-htsc2025-detail-name",
+      "type": "endpoint",
+      "name": "GET /api/htsc2025/detail/{name}",
+      "filePath": "backend/api/htsc2025.py",
+      "summary": "接口 `GET /api/htsc2025/detail/{name}` 由 `htsc2025_detail` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/papers.py:GET-api-papers-stats-user-ranking",
+      "type": "endpoint",
+      "name": "GET /api/papers/stats/user-ranking",
+      "filePath": "backend/api/papers.py",
+      "summary": "接口 `GET /api/papers/stats/user-ranking` 由 `get_user_ranking` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/papers.py:POST-api-papers",
+      "type": "endpoint",
+      "name": "POST /api/papers/",
+      "filePath": "backend/api/papers.py",
+      "summary": "接口 `POST /api/papers/` 由 `create_paper` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "post"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/papers.py:POST-api-papers-batch-upload",
+      "type": "endpoint",
+      "name": "POST /api/papers/batch-upload",
+      "filePath": "backend/api/papers.py",
+      "summary": "接口 `POST /api/papers/batch-upload` 由 `batch_upload_papers` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "post"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/papers.py:GET-api-papers-batch-upload-example",
+      "type": "endpoint",
+      "name": "GET /api/papers/batch-upload-example",
+      "filePath": "backend/api/papers.py",
+      "summary": "接口 `GET /api/papers/batch-upload-example` 由 `get_batch_upload_example` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/papers.py:GET-api-papers-compound-element-symbols",
+      "type": "endpoint",
+      "name": "GET /api/papers/compound/{element_symbols}",
+      "filePath": "backend/api/papers.py",
+      "summary": "接口 `GET /api/papers/compound/{element_symbols}` 由 `get_papers_by_compound` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/papers.py:POST-api-papers-search-by-mode",
+      "type": "endpoint",
+      "name": "POST /api/papers/search-by-mode",
+      "filePath": "backend/api/papers.py",
+      "summary": "接口 `POST /api/papers/search-by-mode` 由 `search_papers_by_mode` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "post"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/papers.py:GET-api-papers-crystal-structures",
+      "type": "endpoint",
+      "name": "GET /api/papers/crystal-structures",
+      "filePath": "backend/api/papers.py",
+      "summary": "接口 `GET /api/papers/crystal-structures` 由 `get_crystal_structures` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/papers.py:GET-api-papers-paper-id",
+      "type": "endpoint",
+      "name": "GET /api/papers/{paper_id}",
+      "filePath": "backend/api/papers.py",
+      "summary": "接口 `GET /api/papers/{paper_id}` 由 `get_paper_detail` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/papers.py:GET-api-papers-paper-id-images-image-order",
+      "type": "endpoint",
+      "name": "GET /api/papers/{paper_id}/images/{image_order}",
+      "filePath": "backend/api/papers.py",
+      "summary": "接口 `GET /api/papers/{paper_id}/images/{image_order}` 由 `get_paper_image` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/papers.py:GET-api-papers-images-image-id",
+      "type": "endpoint",
+      "name": "GET /api/papers/images/{image_id}",
+      "filePath": "backend/api/papers.py",
+      "summary": "接口 `GET /api/papers/images/{image_id}` 由 `get_image_by_id` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/papers.py:POST-api-papers-export",
+      "type": "endpoint",
+      "name": "POST /api/papers/export",
+      "filePath": "backend/api/papers.py",
+      "summary": "接口 `POST /api/papers/export` 由 `export_papers` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "post"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/papers.py:GET-api-papers-stats-chart-data",
+      "type": "endpoint",
+      "name": "GET /api/papers/stats/chart-data",
+      "filePath": "backend/api/papers.py",
+      "summary": "接口 `GET /api/papers/stats/chart-data` 由 `get_chart_data` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "get"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "endpoint:backend/api/tc_predict.py:POST-api-tc-predict",
+      "type": "endpoint",
+      "name": "POST /api/tc-predict/",
+      "filePath": "backend/api/tc_predict.py",
+      "summary": "接口 `POST /api/tc-predict/` 由 `predict_tc` 实现，是当前 FastAPI 接口框架的一部分。",
+      "tags": [
+        "api",
+        "fastapi",
+        "post"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "接口节点描述 HTTP 方法、路径和实现函数，便于从框架层追踪到路由模块。"
+    },
+    {
+      "id": "table:backend/models.py:elements",
+      "type": "table",
+      "name": "elements",
+      "filePath": "backend/models.py",
+      "summary": "ORM 表 `elements` 由 `Element` 模型定义，是接口数据读写的持久化结构。",
+      "tags": [
+        "database",
+        "sqlalchemy",
+        "sqlite"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "table:backend/models.py:compounds",
+      "type": "table",
+      "name": "compounds",
+      "filePath": "backend/models.py",
+      "summary": "ORM 表 `compounds` 由 `Compound` 模型定义，是接口数据读写的持久化结构。",
+      "tags": [
+        "database",
+        "sqlalchemy",
+        "sqlite"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "table:backend/models.py:users",
+      "type": "table",
+      "name": "users",
+      "filePath": "backend/models.py",
+      "summary": "ORM 表 `users` 由 `User` 模型定义，是接口数据读写的持久化结构。",
+      "tags": [
+        "database",
+        "sqlalchemy",
+        "sqlite"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "table:backend/models.py:papers",
+      "type": "table",
+      "name": "papers",
+      "filePath": "backend/models.py",
+      "summary": "ORM 表 `papers` 由 `Paper` 模型定义，是接口数据读写的持久化结构。",
+      "tags": [
+        "database",
+        "sqlalchemy",
+        "sqlite"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "table:backend/models.py:paper_data",
+      "type": "table",
+      "name": "paper_data",
+      "filePath": "backend/models.py",
+      "summary": "ORM 表 `paper_data` 由 `PaperData` 模型定义，是接口数据读写的持久化结构。",
+      "tags": [
+        "database",
+        "sqlalchemy",
+        "sqlite"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "table:backend/models.py:paper_images",
+      "type": "table",
+      "name": "paper_images",
+      "filePath": "backend/models.py",
+      "summary": "ORM 表 `paper_images` 由 `PaperImage` 模型定义，是接口数据读写的持久化结构。",
+      "tags": [
+        "database",
+        "sqlalchemy",
+        "sqlite"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "concept:four-database-sessions",
+      "type": "concept",
+      "name": "四库会话模型",
+      "summary": "系统把主文献元数据、主图片、AI 文献元数据和 AI 图片拆成四个 SQLite engine/session，API 通过 Depends 注入。",
+      "tags": [
+        "database",
+        "session"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "concept:paper-data-split",
+      "type": "concept",
+      "name": "Paper/PaperData 分层",
+      "summary": "Paper 保存论文元数据和审核状态，PaperData 保存化合物、文章类型、Tc/压强区间和物理参数。",
+      "tags": [
+        "paper",
+        "schema"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "concept:review-gated-chart",
+      "type": "concept",
+      "name": "审核与图表开关联动",
+      "summary": "后台审核状态与 show_in_chart 字段共同决定文献是否进入管理视图和首页图表。",
+      "tags": [
+        "review",
+        "chart"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "concept:element-search-modes",
+      "type": "concept",
+      "name": "元素检索三模式",
+      "summary": "only、combination、contains 三种集合关系贯穿 compounds、papers、AI 和外部数据集检索。",
+      "tags": [
+        "search",
+        "mode"
+      ],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:backend/api/admin.py",
+      "target": "file:backend/database.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/api/admin.py",
+      "target": "file:backend/models.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/api/admin.py",
+      "target": "file:backend/security.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/api/admin.py",
+      "target": "file:backend/email_service.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/api/admin.py",
+      "target": "file:backend/__init__.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/api/admin.py",
+      "target": "file:backend/utils/image_processor.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/api/ai_papers.py",
+      "target": "file:backend/database.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/api/ai_papers.py",
+      "target": "file:backend/__init__.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/api/alexandria.py",
+      "target": "file:backend/alexandria_import.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/api/auth_routes.py",
+      "target": "file:backend/database.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/api/auth_routes.py",
+      "target": "file:backend/email_service.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/api/auth_routes.py",
+      "target": "file:backend/security.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/api/auth_routes.py",
+      "target": "file:backend/models.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/api/compounds.py",
+      "target": "file:backend/database.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/api/compounds.py",
+      "target": "file:backend/__init__.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/api/elements.py",
+      "target": "file:backend/database.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/api/elements.py",
+      "target": "file:backend/__init__.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/api/papers.py",
+      "target": "file:backend/database.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/api/papers.py",
+      "target": "file:backend/utils/doi_resolver.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/api/papers.py",
+      "target": "file:backend/models.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/api/papers.py",
+      "target": "file:backend/security.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/api/papers.py",
+      "target": "file:backend/utils/citation.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/api/papers.py",
+      "target": "file:backend/__init__.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/api/papers.py",
+      "target": "file:backend/merge_csv.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/api/papers.py",
+      "target": "file:backend/utils/image_processor.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/api/tc_predict.py",
+      "target": "file:backend/__init__.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/create_superadmin.py",
+      "target": "file:backend/database.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/create_superadmin.py",
+      "target": "file:backend/security.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/create_superadmin.py",
+      "target": "file:backend/models.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/crud.py",
+      "target": "file:backend/__init__.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/export_data.py",
+      "target": "file:backend/database.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/export_data.py",
+      "target": "file:backend/__init__.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/fix_imported_authors_json.py",
+      "target": "file:backend/database.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/fix_imported_authors_json.py",
+      "target": "file:backend/__init__.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/import_data.py",
+      "target": "file:backend/database.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/import_data.py",
+      "target": "file:backend/__init__.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/import_data.py",
+      "target": "file:backend/utils/image_processor.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/import_reviewed_xlsx.py",
+      "target": "file:backend/database.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/import_reviewed_xlsx.py",
+      "target": "file:backend/__init__.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/init_db.py",
+      "target": "file:backend/database.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/init_db.py",
+      "target": "file:backend/models.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/main.py",
+      "target": "file:backend/api/__init__.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/main.py",
+      "target": "file:backend/init_db.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/merge_csv.py",
+      "target": "file:backend/__init__.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/migrate_ids.py",
+      "target": "file:backend/database.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/migrate_ids.py",
+      "target": "file:backend/__init__.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/models.py",
+      "target": "file:backend/database.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/security.py",
+      "target": "file:backend/database.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/security.py",
+      "target": "file:backend/models.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:backend/main.py",
+      "target": "endpoint:backend/main.py:GET-node",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/main.py:GET-node",
+      "target": "file:backend/main.py",
+      "type": "routes",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:backend/main.py",
+      "target": "endpoint:backend/main.py:GET-periodic-table",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/main.py:GET-periodic-table",
+      "target": "file:backend/main.py",
+      "type": "routes",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:backend/main.py",
+      "target": "endpoint:backend/main.py:GET-compound-element-symbols",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/main.py:GET-compound-element-symbols",
+      "target": "file:backend/main.py",
+      "type": "routes",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:backend/main.py",
+      "target": "endpoint:backend/main.py:GET-admin-register",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/main.py:GET-admin-register",
+      "target": "file:backend/main.py",
+      "type": "routes",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:backend/main.py",
+      "target": "endpoint:backend/main.py:GET-admin-login",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/main.py:GET-admin-login",
+      "target": "file:backend/main.py",
+      "type": "routes",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:backend/main.py",
+      "target": "endpoint:backend/main.py:GET-login",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/main.py:GET-login",
+      "target": "file:backend/main.py",
+      "type": "routes",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:backend/main.py",
+      "target": "endpoint:backend/main.py:GET-register",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/main.py:GET-register",
+      "target": "file:backend/main.py",
+      "type": "routes",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:backend/main.py",
+      "target": "endpoint:backend/main.py:GET-admin-dashboard",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/main.py:GET-admin-dashboard",
+      "target": "file:backend/main.py",
+      "type": "routes",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:backend/main.py",
+      "target": "endpoint:backend/main.py:GET-admin-superadmin",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/main.py:GET-admin-superadmin",
+      "target": "file:backend/main.py",
+      "type": "routes",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:backend/main.py",
+      "target": "endpoint:backend/main.py:GET-admin-my-reviews",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/main.py:GET-admin-my-reviews",
+      "target": "file:backend/main.py",
+      "type": "routes",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:backend/main.py",
+      "target": "endpoint:backend/main.py:GET-admin-papers",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/main.py:GET-admin-papers",
+      "target": "file:backend/main.py",
+      "type": "routes",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:backend/main.py",
+      "target": "endpoint:backend/main.py:GET-tc-pre",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/main.py:GET-tc-pre",
+      "target": "file:backend/main.py",
+      "type": "routes",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:backend/main.py",
+      "target": "endpoint:backend/main.py:GET-health",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/main.py:GET-health",
+      "target": "file:backend/main.py",
+      "type": "routes",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:backend/api/admin.py",
+      "target": "endpoint:backend/api/admin.py:GET-api-admin-all-users",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-all-users",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-all-users",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-all-users",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-all-users",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-all-users",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/admin.py",
+      "target": "endpoint:backend/api/admin.py:PUT-api-admin-users-user-id-permissions",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:PUT-api-admin-users-user-id-permissions",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:PUT-api-admin-users-user-id-permissions",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:PUT-api-admin-users-user-id-permissions",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:PUT-api-admin-users-user-id-permissions",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:PUT-api-admin-users-user-id-permissions",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/admin.py",
+      "target": "endpoint:backend/api/admin.py:DELETE-api-admin-users-user-id",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:DELETE-api-admin-users-user-id",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:DELETE-api-admin-users-user-id",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:DELETE-api-admin-users-user-id",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:DELETE-api-admin-users-user-id",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:DELETE-api-admin-users-user-id",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/admin.py",
+      "target": "endpoint:backend/api/admin.py:GET-api-admin-users-user-id-submitted-papers",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-users-user-id-submitted-papers",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-users-user-id-submitted-papers",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-users-user-id-submitted-papers",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-users-user-id-submitted-papers",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-users-user-id-submitted-papers",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/admin.py",
+      "target": "endpoint:backend/api/admin.py:GET-api-admin-pending-approvals",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-pending-approvals",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-pending-approvals",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-pending-approvals",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-pending-approvals",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-pending-approvals",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/admin.py",
+      "target": "endpoint:backend/api/admin.py:POST-api-admin-approve-user",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:POST-api-admin-approve-user",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:POST-api-admin-approve-user",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:POST-api-admin-approve-user",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:POST-api-admin-approve-user",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:POST-api-admin-approve-user",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/admin.py",
+      "target": "endpoint:backend/api/admin.py:GET-api-admin-all-admins",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-all-admins",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-all-admins",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-all-admins",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-all-admins",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-all-admins",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/admin.py",
+      "target": "endpoint:backend/api/admin.py:POST-api-admin-papers-paper-id-review",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:POST-api-admin-papers-paper-id-review",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:POST-api-admin-papers-paper-id-review",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:POST-api-admin-papers-paper-id-review",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:POST-api-admin-papers-paper-id-review",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:POST-api-admin-papers-paper-id-review",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/admin.py",
+      "target": "endpoint:backend/api/admin.py:GET-api-admin-papers-unreviewed",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-papers-unreviewed",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-papers-unreviewed",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-papers-unreviewed",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-papers-unreviewed",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-papers-unreviewed",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/admin.py",
+      "target": "endpoint:backend/api/admin.py:GET-api-admin-my-reviews",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-my-reviews",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-my-reviews",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-my-reviews",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-my-reviews",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-my-reviews",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/admin.py",
+      "target": "endpoint:backend/api/admin.py:GET-api-admin-papers-all",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-papers-all",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-papers-all",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-papers-all",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-papers-all",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-papers-all",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/admin.py",
+      "target": "endpoint:backend/api/admin.py:GET-api-admin-papers-paper-id",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-papers-paper-id",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-papers-paper-id",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-papers-paper-id",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-papers-paper-id",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-papers-paper-id",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/admin.py",
+      "target": "endpoint:backend/api/admin.py:PUT-api-admin-papers-paper-id",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:PUT-api-admin-papers-paper-id",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:PUT-api-admin-papers-paper-id",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:PUT-api-admin-papers-paper-id",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:PUT-api-admin-papers-paper-id",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:PUT-api-admin-papers-paper-id",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/admin.py",
+      "target": "endpoint:backend/api/admin.py:DELETE-api-admin-papers-paper-id",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:DELETE-api-admin-papers-paper-id",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:DELETE-api-admin-papers-paper-id",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:DELETE-api-admin-papers-paper-id",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:DELETE-api-admin-papers-paper-id",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:DELETE-api-admin-papers-paper-id",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/admin.py",
+      "target": "endpoint:backend/api/admin.py:POST-api-admin-papers-batch-review",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:POST-api-admin-papers-batch-review",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:POST-api-admin-papers-batch-review",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:POST-api-admin-papers-batch-review",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:POST-api-admin-papers-batch-review",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:POST-api-admin-papers-batch-review",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/admin.py",
+      "target": "endpoint:backend/api/admin.py:POST-api-admin-papers-batch-chart-visibility",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:POST-api-admin-papers-batch-chart-visibility",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:POST-api-admin-papers-batch-chart-visibility",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:POST-api-admin-papers-batch-chart-visibility",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:POST-api-admin-papers-batch-chart-visibility",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:POST-api-admin-papers-batch-chart-visibility",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/admin.py",
+      "target": "endpoint:backend/api/admin.py:POST-api-admin-papers-batch-delete",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:POST-api-admin-papers-batch-delete",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:POST-api-admin-papers-batch-delete",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:POST-api-admin-papers-batch-delete",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:POST-api-admin-papers-batch-delete",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:POST-api-admin-papers-batch-delete",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/admin.py",
+      "target": "endpoint:backend/api/admin.py:GET-api-admin-papers-paper-id-images",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-papers-paper-id-images",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-papers-paper-id-images",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-papers-paper-id-images",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-papers-paper-id-images",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:GET-api-admin-papers-paper-id-images",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/admin.py",
+      "target": "endpoint:backend/api/admin.py:DELETE-api-admin-papers-paper-id-images-image-id",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:DELETE-api-admin-papers-paper-id-images-image-id",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:DELETE-api-admin-papers-paper-id-images-image-id",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:DELETE-api-admin-papers-paper-id-images-image-id",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:DELETE-api-admin-papers-paper-id-images-image-id",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/admin.py:DELETE-api-admin-papers-paper-id-images-image-id",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/ai_papers.py",
+      "target": "endpoint:backend/api/ai_papers.py:GET-api-ai-compounds-element-symbols",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/ai_papers.py:GET-api-ai-compounds-element-symbols",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/ai_papers.py:GET-api-ai-compounds-element-symbols",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/ai_papers.py:GET-api-ai-compounds-element-symbols",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/ai_papers.py:GET-api-ai-compounds-element-symbols",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/ai_papers.py",
+      "target": "endpoint:backend/api/ai_papers.py:GET-api-ai-papers-compound-element-symbols",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/ai_papers.py:GET-api-ai-papers-compound-element-symbols",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/ai_papers.py:GET-api-ai-papers-compound-element-symbols",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/ai_papers.py:GET-api-ai-papers-compound-element-symbols",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/ai_papers.py:GET-api-ai-papers-compound-element-symbols",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/ai_papers.py",
+      "target": "endpoint:backend/api/ai_papers.py:POST-api-ai-papers-search-by-mode",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/ai_papers.py:POST-api-ai-papers-search-by-mode",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/ai_papers.py:POST-api-ai-papers-search-by-mode",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/ai_papers.py:POST-api-ai-papers-search-by-mode",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/ai_papers.py:POST-api-ai-papers-search-by-mode",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/ai_papers.py",
+      "target": "endpoint:backend/api/ai_papers.py:GET-api-ai-papers-crystal-structures",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/ai_papers.py:GET-api-ai-papers-crystal-structures",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/ai_papers.py:GET-api-ai-papers-crystal-structures",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/ai_papers.py:GET-api-ai-papers-crystal-structures",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/ai_papers.py:GET-api-ai-papers-crystal-structures",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/ai_papers.py",
+      "target": "endpoint:backend/api/ai_papers.py:GET-api-ai-papers-paper-id-images-image-order",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/ai_papers.py:GET-api-ai-papers-paper-id-images-image-order",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/ai_papers.py:GET-api-ai-papers-paper-id-images-image-order",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/ai_papers.py:GET-api-ai-papers-paper-id-images-image-order",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/ai_papers.py:GET-api-ai-papers-paper-id-images-image-order",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/alexandria.py",
+      "target": "endpoint:backend/api/alexandria.py:POST-api-alexandria-search",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/alexandria.py:POST-api-alexandria-search",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/alexandria.py:POST-api-alexandria-search",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/alexandria.py",
+      "target": "endpoint:backend/api/alexandria.py:GET-api-alexandria-elements",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/alexandria.py:GET-api-alexandria-elements",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/alexandria.py:GET-api-alexandria-elements",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/alexandria.py",
+      "target": "endpoint:backend/api/alexandria.py:GET-api-alexandria-material-mat-id",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/alexandria.py:GET-api-alexandria-material-mat-id",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/alexandria.py:GET-api-alexandria-material-mat-id",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/alexandria.py",
+      "target": "endpoint:backend/api/alexandria.py:GET-api-alexandria-material-mat-id-download",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/alexandria.py:GET-api-alexandria-material-mat-id-download",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/alexandria.py:GET-api-alexandria-material-mat-id-download",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/alexandria.py",
+      "target": "endpoint:backend/api/alexandria.py:GET-api-alexandria-stats",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/alexandria.py:GET-api-alexandria-stats",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/alexandria.py:GET-api-alexandria-stats",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/auth_routes.py",
+      "target": "endpoint:backend/api/auth_routes.py:POST-api-auth-register",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/auth_routes.py:POST-api-auth-register",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/auth_routes.py:POST-api-auth-register",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/auth_routes.py:POST-api-auth-register",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/auth_routes.py",
+      "target": "endpoint:backend/api/auth_routes.py:POST-api-auth-verify-email",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/auth_routes.py:POST-api-auth-verify-email",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/auth_routes.py:POST-api-auth-verify-email",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/auth_routes.py:POST-api-auth-verify-email",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/auth_routes.py",
+      "target": "endpoint:backend/api/auth_routes.py:POST-api-auth-login",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/auth_routes.py:POST-api-auth-login",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/auth_routes.py:POST-api-auth-login",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/auth_routes.py:POST-api-auth-login",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/auth_routes.py",
+      "target": "endpoint:backend/api/auth_routes.py:GET-api-auth-me",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/auth_routes.py:GET-api-auth-me",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/auth_routes.py:GET-api-auth-me",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/auth_routes.py:GET-api-auth-me",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/compounds.py",
+      "target": "endpoint:backend/api/compounds.py:POST-api-compounds-check",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/compounds.py:POST-api-compounds-check",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/compounds.py:POST-api-compounds-check",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/compounds.py:POST-api-compounds-check",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/compounds.py:POST-api-compounds-check",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/compounds.py",
+      "target": "endpoint:backend/api/compounds.py:GET-api-compounds-element-symbols",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/compounds.py:GET-api-compounds-element-symbols",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/compounds.py:GET-api-compounds-element-symbols",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/compounds.py:GET-api-compounds-element-symbols",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/compounds.py:GET-api-compounds-element-symbols",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/compounds.py",
+      "target": "endpoint:backend/api/compounds.py:POST-api-compounds-search",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/compounds.py:POST-api-compounds-search",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/compounds.py:POST-api-compounds-search",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/compounds.py:POST-api-compounds-search",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/compounds.py:POST-api-compounds-search",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/elements.py",
+      "target": "endpoint:backend/api/elements.py:GET-api-elements",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/elements.py:GET-api-elements",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/elements.py:GET-api-elements",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/elements.py:GET-api-elements",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/elements.py:GET-api-elements",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/elements.py",
+      "target": "endpoint:backend/api/elements.py:GET-api-elements-symbol",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/elements.py:GET-api-elements-symbol",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/elements.py:GET-api-elements-symbol",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/elements.py:GET-api-elements-symbol",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/elements.py:GET-api-elements-symbol",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/htsc2025.py",
+      "target": "endpoint:backend/api/htsc2025.py:POST-api-htsc2025-search",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/htsc2025.py:POST-api-htsc2025-search",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/htsc2025.py:POST-api-htsc2025-search",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/htsc2025.py",
+      "target": "endpoint:backend/api/htsc2025.py:GET-api-htsc2025-stats",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/htsc2025.py:GET-api-htsc2025-stats",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/htsc2025.py:GET-api-htsc2025-stats",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/htsc2025.py",
+      "target": "endpoint:backend/api/htsc2025.py:GET-api-htsc2025-detail-name",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/htsc2025.py:GET-api-htsc2025-detail-name",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/htsc2025.py:GET-api-htsc2025-detail-name",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/papers.py",
+      "target": "endpoint:backend/api/papers.py:GET-api-papers-stats-user-ranking",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-stats-user-ranking",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-stats-user-ranking",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-stats-user-ranking",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-stats-user-ranking",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-stats-user-ranking",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/papers.py",
+      "target": "endpoint:backend/api/papers.py:POST-api-papers",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:POST-api-papers",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:POST-api-papers",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:POST-api-papers",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:POST-api-papers",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:POST-api-papers",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/papers.py",
+      "target": "endpoint:backend/api/papers.py:POST-api-papers-batch-upload",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:POST-api-papers-batch-upload",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:POST-api-papers-batch-upload",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:POST-api-papers-batch-upload",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:POST-api-papers-batch-upload",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:POST-api-papers-batch-upload",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/papers.py",
+      "target": "endpoint:backend/api/papers.py:GET-api-papers-batch-upload-example",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-batch-upload-example",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-batch-upload-example",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-batch-upload-example",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-batch-upload-example",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-batch-upload-example",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/papers.py",
+      "target": "endpoint:backend/api/papers.py:GET-api-papers-compound-element-symbols",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-compound-element-symbols",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-compound-element-symbols",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-compound-element-symbols",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-compound-element-symbols",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-compound-element-symbols",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/papers.py",
+      "target": "endpoint:backend/api/papers.py:POST-api-papers-search-by-mode",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:POST-api-papers-search-by-mode",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:POST-api-papers-search-by-mode",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:POST-api-papers-search-by-mode",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:POST-api-papers-search-by-mode",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:POST-api-papers-search-by-mode",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/papers.py",
+      "target": "endpoint:backend/api/papers.py:GET-api-papers-crystal-structures",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-crystal-structures",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-crystal-structures",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-crystal-structures",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-crystal-structures",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-crystal-structures",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/papers.py",
+      "target": "endpoint:backend/api/papers.py:GET-api-papers-paper-id",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-paper-id",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-paper-id",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-paper-id",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-paper-id",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-paper-id",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/papers.py",
+      "target": "endpoint:backend/api/papers.py:GET-api-papers-paper-id-images-image-order",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-paper-id-images-image-order",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-paper-id-images-image-order",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-paper-id-images-image-order",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-paper-id-images-image-order",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-paper-id-images-image-order",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/papers.py",
+      "target": "endpoint:backend/api/papers.py:GET-api-papers-images-image-id",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-images-image-id",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-images-image-id",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-images-image-id",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-images-image-id",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-images-image-id",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/papers.py",
+      "target": "endpoint:backend/api/papers.py:POST-api-papers-export",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:POST-api-papers-export",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:POST-api-papers-export",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:POST-api-papers-export",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:POST-api-papers-export",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:POST-api-papers-export",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/papers.py",
+      "target": "endpoint:backend/api/papers.py:GET-api-papers-stats-chart-data",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-stats-chart-data",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-stats-chart-data",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-stats-chart-data",
+      "target": "file:backend/crud.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-stats-chart-data",
+      "target": "file:backend/models.py",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/papers.py:GET-api-papers-stats-chart-data",
+      "target": "file:backend/security.py",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/api/tc_predict.py",
+      "target": "endpoint:backend/api/tc_predict.py:POST-api-tc-predict",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "endpoint:backend/api/tc_predict.py:POST-api-tc-predict",
+      "target": "file:backend/database.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "endpoint:backend/api/tc_predict.py:POST-api-tc-predict",
+      "target": "file:backend/schemas.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/models.py",
+      "target": "table:backend/models.py:elements",
+      "type": "defines_schema",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/models.py",
+      "target": "table:backend/models.py:compounds",
+      "type": "defines_schema",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/models.py",
+      "target": "table:backend/models.py:users",
+      "type": "defines_schema",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/models.py",
+      "target": "table:backend/models.py:papers",
+      "type": "defines_schema",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/models.py",
+      "target": "table:backend/models.py:paper_data",
+      "type": "defines_schema",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/models.py",
+      "target": "table:backend/models.py:paper_images",
+      "type": "defines_schema",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:backend/crud.py",
+      "target": "table:backend/models.py:elements",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/crud.py",
+      "target": "table:backend/models.py:elements",
+      "type": "writes_to",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/crud.py",
+      "target": "table:backend/models.py:compounds",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/crud.py",
+      "target": "table:backend/models.py:compounds",
+      "type": "writes_to",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/crud.py",
+      "target": "table:backend/models.py:users",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/crud.py",
+      "target": "table:backend/models.py:users",
+      "type": "writes_to",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/crud.py",
+      "target": "table:backend/models.py:papers",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/crud.py",
+      "target": "table:backend/models.py:papers",
+      "type": "writes_to",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/crud.py",
+      "target": "table:backend/models.py:paper_data",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/crud.py",
+      "target": "table:backend/models.py:paper_data",
+      "type": "writes_to",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/crud.py",
+      "target": "table:backend/models.py:paper_images",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/crud.py",
+      "target": "table:backend/models.py:paper_images",
+      "type": "writes_to",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:backend/main.py",
+      "target": "file:backend/api/admin.py",
+      "type": "routes",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:backend/main.py",
+      "target": "file:backend/api/ai_papers.py",
+      "type": "routes",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:backend/main.py",
+      "target": "file:backend/api/alexandria.py",
+      "type": "routes",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:backend/main.py",
+      "target": "file:backend/api/auth_routes.py",
+      "type": "routes",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:backend/main.py",
+      "target": "file:backend/api/compounds.py",
+      "type": "routes",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:backend/main.py",
+      "target": "file:backend/api/elements.py",
+      "type": "routes",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:backend/main.py",
+      "target": "file:backend/api/htsc2025.py",
+      "type": "routes",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:backend/main.py",
+      "target": "file:backend/api/papers.py",
+      "type": "routes",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:backend/main.py",
+      "target": "file:backend/api/tc_predict.py",
+      "type": "routes",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:frontend/static/js/periodic_table.js",
+      "target": "file:backend/api/elements.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8,
+      "description": "前端通过 fetch 调用后端接口模块"
+    },
+    {
+      "source": "file:frontend/static/js/periodic_table.js",
+      "target": "file:backend/api/compounds.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8,
+      "description": "前端通过 fetch 调用后端接口模块"
+    },
+    {
+      "source": "file:frontend/static/js/compound_page.js",
+      "target": "file:backend/api/papers.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8,
+      "description": "前端通过 fetch 调用后端接口模块"
+    },
+    {
+      "source": "file:frontend/static/js/compound_page.js",
+      "target": "file:backend/api/compounds.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8,
+      "description": "前端通过 fetch 调用后端接口模块"
+    },
+    {
+      "source": "file:frontend/static/js/compound_page.js",
+      "target": "file:backend/api/ai_papers.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8,
+      "description": "前端通过 fetch 调用后端接口模块"
+    },
+    {
+      "source": "file:frontend/static/js/compound_page.js",
+      "target": "file:backend/api/alexandria.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8,
+      "description": "前端通过 fetch 调用后端接口模块"
+    },
+    {
+      "source": "file:frontend/static/js/compound_page.js",
+      "target": "file:backend/api/htsc2025.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8,
+      "description": "前端通过 fetch 调用后端接口模块"
+    },
+    {
+      "source": "file:frontend/static/js/admin_papers.js",
+      "target": "file:backend/api/admin.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8,
+      "description": "前端通过 fetch 调用后端接口模块"
+    },
+    {
+      "source": "file:frontend/static/js/chart.js",
+      "target": "file:backend/api/papers.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8,
+      "description": "前端通过 fetch 调用后端接口模块"
+    },
+    {
+      "source": "file:frontend/static/js/auth_helper.js",
+      "target": "file:backend/api/auth_routes.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8,
+      "description": "前端通过 fetch 调用后端接口模块"
+    },
+    {
+      "source": "file:frontend/static/js/auth_state.js",
+      "target": "file:backend/api/auth_routes.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8,
+      "description": "前端通过 fetch 调用后端接口模块"
+    },
+    {
+      "source": "file:frontend/static/js/tc_pre.js",
+      "target": "file:backend/api/tc_predict.py",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8,
+      "description": "前端通过 fetch 调用后端接口模块"
+    },
+    {
+      "source": "concept:four-database-sessions",
+      "target": "file:backend/database.py",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "concept:four-database-sessions",
+      "target": "file:backend/crud.py",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "concept:paper-data-split",
+      "target": "file:backend/database.py",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "concept:paper-data-split",
+      "target": "file:backend/crud.py",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "concept:review-gated-chart",
+      "target": "file:backend/database.py",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "concept:review-gated-chart",
+      "target": "file:backend/crud.py",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "concept:element-search-modes",
+      "target": "file:backend/database.py",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "concept:element-search-modes",
+      "target": "file:backend/crud.py",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ],
+  "layers": [
+    {
+      "id": "layer:fastapi-entrypoints",
+      "name": "FastAPI 应用入口与页面路由",
+      "description": "应用启动、路由注册、静态资源挂载和页面模板返回。",
+      "nodeIds": [
+        "file:backend/main.py",
+        "file:frontend/templates/admin_dashboard.html",
+        "file:frontend/templates/admin_papers.html",
+        "file:frontend/templates/admin_register.html",
+        "file:frontend/templates/compound.html",
+        "file:frontend/templates/index.html",
+        "file:frontend/templates/login.html",
+        "file:frontend/templates/superadmin_dashboard.html",
+        "file:frontend/templates/tc_pre.html",
+        "file:frontend/templates/user_register.html"
+      ]
+    },
+    {
+      "id": "layer:api-interface",
+      "name": "HTTP API 接口层",
+      "description": "所有 /api 路由模块，负责请求参数、权限依赖和业务编排。",
+      "nodeIds": [
+        "file:backend/api/__init__.py",
+        "file:backend/api/admin.py",
+        "file:backend/api/ai_papers.py",
+        "file:backend/api/alexandria.py",
+        "file:backend/api/auth_routes.py",
+        "file:backend/api/compounds.py",
+        "file:backend/api/elements.py",
+        "file:backend/api/htsc2025.py",
+        "file:backend/api/papers.py",
+        "file:backend/api/tc_predict.py"
+      ]
+    },
+    {
+      "id": "layer:auth-security",
+      "name": "认证与权限层",
+      "description": "JWT、密码哈希、邮箱验证码和权限依赖。",
+      "nodeIds": [
+        "file:backend/email_service.py",
+        "file:backend/security.py"
+      ]
+    },
+    {
+      "id": "layer:data-persistence",
+      "name": "数据模型与持久化层",
+      "description": "数据库连接、ORM 模型、CRUD、初始化、迁移和导入导出。",
+      "nodeIds": [
+        "file:backend/alexandria_db.py",
+        "file:backend/alexandria_import.py",
+        "file:backend/crud.py",
+        "file:backend/database.py",
+        "file:backend/export_data.py",
+        "file:backend/fix_imported_authors_json.py",
+        "file:backend/import_data.py",
+        "file:backend/import_reviewed_xlsx.py",
+        "file:backend/init_db.py",
+        "file:backend/merge_csv.py",
+        "file:backend/migrate_ids.py",
+        "file:backend/models.py"
+      ]
+    },
+    {
+      "id": "layer:frontend-clients",
+      "name": "前端接口消费层",
+      "description": "前端脚本、样式和状态辅助代码，调用后端 API 并渲染页面。",
+      "nodeIds": [
+        "file:frontend/static/css/style.css",
+        "file:frontend/static/js/admin_papers.js",
+        "file:frontend/static/js/auth_helper.js",
+        "file:frontend/static/js/auth_state.js",
+        "file:frontend/static/js/chart.js",
+        "file:frontend/static/js/compound_page.js",
+        "file:frontend/static/js/i18n.js",
+        "file:frontend/static/js/periodic_table.js",
+        "file:frontend/static/js/tc_pre.js"
+      ]
+    },
+    {
+      "id": "layer:schemas-utils",
+      "name": "Schema 与工具层",
+      "description": "Pydantic schema、引用生成、DOI 解析、图片处理和预测辅助工具。",
+      "nodeIds": [
+        "file:backend/schemas.py",
+        "file:backend/utils/__init__.py",
+        "file:backend/utils/citation.py",
+        "file:backend/utils/doi_resolver.py",
+        "file:backend/utils/image_processor.py"
+      ]
+    },
+    {
+      "id": "layer:operations-and-runtime",
+      "name": "运行配置与运维脚本",
+      "description": "部署入口、依赖、备份脚本、数据文件和运行配置。",
+      "nodeIds": [
+        "config:.playwright-mcp/page-2026-05-14T07-17-43-938Z.yml",
+        "config:.understand-anything/domain-graph.json",
+        "config:.understand-anything/intermediate/domain-analysis.json",
+        "config:.understand-anything/intermediate/domain-context.json",
+        "config:articles/paper_rewriting_output/paper_spine_config.json",
+        "config:articles/paper_rewriting_output/source_inventory.json",
+        "config:backups/data_export_20260112_110119.json",
+        "file:data/batch_import_example.xlsx",
+        "config:data/data_export.json",
+        "config:data/htsc2025.json",
+        "file:data/hydride_literature_ai.db",
+        "file:data/hydride_literature_images.db",
+        "file:data/hydride_literature.db",
+        "file:data/import_papers_to_sqlite.py",
+        "service:Procfile",
+        "document:requirements.txt",
+        "pipeline:scripts/autobackup.sh",
+        "pipeline:scripts/remote_backup.sh",
+        "pipeline:start.sh"
+      ]
+    },
+    {
+      "id": "layer:documentation-and-articles",
+      "name": "文档与论文材料",
+      "description": "业务文档、运维文档、论文原始材料和 PaperSpine 写作产物。",
+      "nodeIds": [
+        "document:articles/mypaper/comments.md",
+        "file:articles/mypaper/conventional_sc_dataset_manuscript.tex",
+        "document:articles/paper_rewriting_output/artifact_check.md",
+        "document:articles/paper_rewriting_output/citation_quality_audit.md",
+        "document:articles/paper_rewriting_output/citation_support_bank.md",
+        "document:articles/paper_rewriting_output/claim_register.md",
+        "document:articles/paper_rewriting_output/confirmed_motivation.md",
+        "document:articles/paper_rewriting_output/evidence_bank.md",
+        "document:articles/paper_rewriting_output/exemplar_learning_dossier.md",
+        "document:articles/paper_rewriting_output/figure_asset_map.md",
+        "document:articles/paper_rewriting_output/final_artifact_manifest.md",
+        "file:articles/paper_rewriting_output/final_paper/main.tex",
+        "file:articles/paper_rewriting_output/final_paper/paper.aux",
+        "file:articles/paper_rewriting_output/final_paper/paper.fdb_latexmk",
+        "file:articles/paper_rewriting_output/final_paper/paper.fls",
+        "file:articles/paper_rewriting_output/final_paper/paper.out",
+        "document:articles/paper_rewriting_output/integrity_audit.md",
+        "document:articles/paper_rewriting_output/latex_guard.md",
+        "document:articles/paper_rewriting_output/latex_report.md",
+        "document:articles/paper_rewriting_output/logic_transfer_audit.md",
+        "document:articles/paper_rewriting_output/material_inventory.md",
+        "document:articles/paper_rewriting_output/motivation_options_after_research.md",
+        "document:articles/paper_rewriting_output/paper_spine_config.md",
+        "document:articles/paper_rewriting_output/reference_materials/source_index.md",
+        "document:articles/paper_rewriting_output/research_dossier.md",
+        "document:articles/paper_rewriting_output/review_outputs_only/clarity_review_output.md",
+        "document:articles/paper_rewriting_output/review_outputs_only/contribution_review_output.md",
+        "document:articles/paper_rewriting_output/review_outputs_only/methods_review_output.md",
+        "document:articles/paper_rewriting_output/review_outputs_validate/clarity_reviewer.md",
+        "document:articles/paper_rewriting_output/review_outputs_validate/contribution_reviewer.md",
+        "document:articles/paper_rewriting_output/review_outputs_validate/methods_reviewer.md",
+        "document:articles/paper_rewriting_output/review_prompts/clarity_review_output.md",
+        "document:articles/paper_rewriting_output/review_prompts/clarity_reviewer.md",
+        "document:articles/paper_rewriting_output/review_prompts/contribution_review_output.md",
+        "document:articles/paper_rewriting_output/review_prompts/contribution_reviewer.md",
+        "document:articles/paper_rewriting_output/review_prompts/dispatch.md",
+        "document:articles/paper_rewriting_output/review_prompts/methods_review_output.md",
+        "document:articles/paper_rewriting_output/review_prompts/methods_reviewer.md",
+        "document:articles/paper_rewriting_output/section_blueprints.md",
+        "document:articles/paper_rewriting_output/sota_gap_map.md",
+        "document:articles/paper_rewriting_output/source_inventory.md",
+        "document:articles/paper_rewriting_output/source_map.md",
+        "document:articles/paper_rewriting_output/structured_review.md",
+        "document:articles/paper_rewriting_output/style_profile.md",
+        "document:articles/paper_rewriting_output/writing_rationale_matrix.md",
+        "file:articles/raw/2026 HPCSD.pdf:Zone.Identifier",
+        "document:articles/raw/literature-shortlist.md",
+        "document:articles/raw/OpenClaw橙皮书_extracted.txt",
+        "document:docs/article-draft.md",
+        "document:docs/business-auth-and-review.md",
+        "document:docs/business-overview.md",
+        "document:docs/business-paper-ingestion.md",
+        "document:docs/business-search-and-discovery.md",
+        "document:docs/business-visualization-and-tc-predict.md",
+        "document:docs/current-state-and-gaps.md",
+        "document:docs/operations-cli-and-maintenance.md",
+        "document:docs/operations-installation-and-deployment.md",
+        "document:docs/README.md",
+        "document:docs/TC_PREDICTION_MODULE_ANALYSIS.md",
+        "document:README.md"
+      ]
+    },
+    {
+      "id": "layer:package-internal",
+      "name": "包初始化与其他辅助文件",
+      "description": "包初始化和未归入主要接口框架的辅助文件。",
+      "nodeIds": [
+        "file:.codex",
+        "document:.spec-workflow/templates/design-template.md",
+        "document:.spec-workflow/templates/product-template.md",
+        "document:.spec-workflow/templates/requirements-template.md",
+        "document:.spec-workflow/templates/structure-template.md",
+        "document:.spec-workflow/templates/tasks-template.md",
+        "document:.spec-workflow/templates/tech-template.md",
+        "document:.spec-workflow/user-templates/README.md",
+        "file:1",
+        "document:AGENTS.md",
+        "file:backend/__init__.py",
+        "file:backend/create_superadmin.py",
+        "file:backend/migrations/__init__.py"
+      ]
+    }
+  ],
+  "tour": [
+    {
+      "order": 1,
+      "title": "从应用入口看接口装配",
+      "description": "先看 FastAPI 如何创建应用、注册 API router、挂载静态资源并返回页面模板。",
+      "nodeIds": [
+        "file:backend/main.py",
+        "file:backend/api/papers.py",
+        "file:backend/api/admin.py"
+      ]
+    },
+    {
+      "order": 2,
+      "title": "理解数据接口的 schema 边界",
+      "description": "查看 Pydantic schema 与 ORM 模型如何分别承担接口数据形状和数据库表结构。",
+      "nodeIds": [
+        "file:backend/schemas.py",
+        "file:backend/models.py",
+        "concept:paper-data-split"
+      ]
+    },
+    {
+      "order": 3,
+      "title": "追踪文献检索与上传主链路",
+      "description": "从 papers 路由进入 CRUD，再落到 Paper/PaperData/Compound/PaperImage 表。",
+      "nodeIds": [
+        "file:backend/api/papers.py",
+        "file:backend/crud.py",
+        "table:backend/models.py:papers",
+        "table:backend/models.py:paper_data"
+      ]
+    },
+    {
+      "order": 4,
+      "title": "查看认证、审批和后台治理",
+      "description": "理解 JWT 当前用户依赖如何保护上传、管理员审核和超级管理员能力。",
+      "nodeIds": [
+        "file:backend/security.py",
+        "file:backend/api/auth_routes.py",
+        "file:backend/api/admin.py"
+      ]
+    },
+    {
+      "order": 5,
+      "title": "查看前端如何消费接口",
+      "description": "前端脚本通过 fetch 调用元素、文献、后台、图表和预测接口，模板由页面路由返回。",
+      "nodeIds": [
+        "file:frontend/static/js/compound_page.js",
+        "file:frontend/static/js/admin_papers.js",
+        "file:frontend/static/js/chart.js"
+      ]
+    },
+    {
+      "order": 6,
+      "title": "查看运维和数据初始化",
+      "description": "最后看数据库路径、初始化、导入导出和备份脚本如何支撑接口运行。",
+      "nodeIds": [
+        "file:backend/database.py",
+        "file:backend/init_db.py",
+        "file:backend/export_data.py",
+        "pipeline:scripts/autobackup.sh"
+      ]
+    }
+  ]
+}
