@@ -1,7 +1,7 @@
 """
 文献相关API
 """
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Response
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, Response
 from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional, Annotated
@@ -39,50 +39,6 @@ def normalize_superconductor_type(value: str) -> str:
 router = APIRouter(prefix="/api/papers", tags=["papers"])
 
 
-def serialize_paper_for_list(db: Session, paper) -> dict:
-    """序列化文献列表项，允许物理参数中的可空字段原样返回。"""
-    return {
-        "id": paper.id,
-        "compound_id": paper.compound_id,
-        "doi": paper.doi,
-        "title": paper.title,
-        "authors": paper.authors,
-        "journal": paper.journal,
-        "volume": paper.volume,
-        "pages": paper.pages,
-        "year": paper.year,
-        "abstract": paper.abstract,
-        "citation_aps": paper.citation_aps,
-        "citation_bibtex": paper.citation_bibtex,
-        "article_type": paper.article_type,
-        "superconductor_type": paper.superconductor_type,
-        "chemical_formula": paper.chemical_formula,
-        "crystal_structure": paper.crystal_structure,
-        "contributor_name": paper.contributor_name,
-        "contributor_affiliation": paper.contributor_affiliation,
-        "notes": paper.notes,
-        "review_status": paper.review_status,
-        "reviewed_by": paper.reviewed_by,
-        "reviewed_at": paper.reviewed_at.isoformat() if paper.reviewed_at else None,
-        "review_comment": paper.review_comment,
-        "show_in_chart": paper.show_in_chart,
-        "created_at": paper.created_at.isoformat() if paper.created_at else None,
-        "reviewer_name": paper.reviewer.real_name if paper.reviewer else None,
-        "image_count": crud.get_paper_image_count(db, paper.id),
-        "data": [
-            {
-                "pressure": item.pressure,
-                "tc": item.tc,
-                "lambda_val": item.lambda_val,
-                "omega_log": item.omega_log,
-                "n_ef": item.n_ef,
-                "s_factor": item.s_factor,
-            }
-            for item in paper.physical_parameters
-        ],
-    }
-
-
 @router.get("/stats/user-ranking")
 def get_user_ranking(db: Session = Depends(get_db)):
     """获取文献提交数前20的注册用户排名"""
@@ -117,6 +73,7 @@ async def create_paper(
     contributor_affiliation: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
     images: List[UploadFile] = File(default=[]),
+    structure_files: List[UploadFile] = File(default=[]),
     db: Session = Depends(get_db),
     image_db: Session = Depends(get_image_db),
     current_user: Annotated[schemas.User, Depends(get_current_user)] = None
@@ -245,6 +202,20 @@ async def create_paper(
         item.setdefault("chemical_formula", chemical_formula)
         item.setdefault("crystal_structure", crystal_structure)
     crud.create_paper_data(db=db, paper_id=paper.id, data_list=data_list, compound_id=compound.id)
+
+    # 保存结构文件（按索引匹配 paper_data 行）
+    structure_files_to_process = [f for f in structure_files if f.filename]
+    if structure_files_to_process:
+        paper_data_rows = db.query(PaperData).filter(
+            PaperData.paper_id == paper.id
+        ).order_by(PaperData.sequence_in_paper).all()
+        for idx, sf in enumerate(structure_files_to_process):
+            if idx >= len(paper_data_rows):
+                break
+            sf_data = await sf.read()
+            paper_data_rows[idx].structure_file_name = sf.filename
+            paper_data_rows[idx].structure_file_data = sf_data
+        db.commit()
 
     # 9. 处理并保存截图
     for idx, image_file in enumerate(images_to_process, start=1):
@@ -386,7 +357,7 @@ def get_papers_by_compound(
     review_status: Optional[str] = None,  # 审核状态筛选 (approved/unreviewed/rejected/modifying)
     sort_by: str = "year",
     sort_order: str = "desc",
-    limit: int = 30,
+    limit: int = 50,
     offset: int = 0,
     db: Session = Depends(get_db),
     image_db: Session = Depends(get_image_db)
@@ -545,6 +516,7 @@ def get_paper_image(
 def get_image_by_id(
     image_id: int,
     thumbnail: bool = False,
+    database: str = Query('local'),
     image_db: Session = Depends(get_image_db)
 ):
     """
@@ -553,7 +525,19 @@ def get_image_by_id(
     Args:
         image_id: 图片ID
         thumbnail: 是否返回缩略图
+        database: 数据库类型 (local/ai)
     """
+    if database == 'ai':
+        from backend.database import AIImageSessionLocal
+        ai_image_db = AIImageSessionLocal()
+        try:
+            return _serve_image_by_id(ai_image_db, image_id, thumbnail)
+        finally:
+            ai_image_db.close()
+    return _serve_image_by_id(image_db, image_id, thumbnail)
+
+
+def _serve_image_by_id(image_db: Session, image_id: int, thumbnail: bool):
     image = crud.get_image_by_id(image_db, image_id)
     if not image:
         raise HTTPException(status_code=404, detail="图片不存在")
@@ -571,7 +555,6 @@ def get_image_by_id(
     if not image_data:
         raise HTTPException(status_code=404, detail="图片不存在")
 
-    # 返回图片
     return StreamingResponse(
         BytesIO(image_data),
         media_type="image/jpeg"

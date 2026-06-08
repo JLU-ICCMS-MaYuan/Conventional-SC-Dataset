@@ -418,6 +418,13 @@ def get_papers_by_compounds(db: Session, compound_ids: List[int], search_params:
     return query.all()
 
 
+def get_papers_by_compounds_count(db: Session, compound_ids: List[int], search_params: Optional[schemas.PaperSearchParams] = None) -> int:
+    if not compound_ids:
+        return 0
+    query = _build_papers_query(db, compound_ids, search_params)
+    return query.with_entities(func.count(func.distinct(models.Paper.id))).scalar() or 0
+
+
 def get_paper_by_id(db: Session, paper_id: int) -> Optional[models.Paper]:
     return db.query(models.Paper).filter(models.Paper.id == paper_id).first()
 

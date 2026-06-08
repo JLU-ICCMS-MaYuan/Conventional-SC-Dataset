@@ -1,0 +1,41 @@
+# Understand-Anything analysis scope for this repository.
+# Keep source, templates, docs, and configuration; exclude generated artifacts
+# and heavy scientific data files that do not describe application structure.
+
+.git/
+.understand-anything/
+.playwright-mcp/
+.spec-workflow/
+
+articles/raw/
+articles/final_paper/*.aux
+articles/final_paper/*.log
+articles/final_paper/*.out
+articles/final_paper/*.fls
+articles/final_paper/*.fdb_latexmk
+articles/final_paper/*.synctex.gz
+articles/final_paper/*.pdf
+
+data/*.db
+data/*.xlsx
+data/*.json
+
+scripts/Tc_predict/**/*.dat
+scripts/Tc_predict/**/*.npz
+scripts/Tc_predict/**/*.xlsx
+scripts/Tc_predict/**/CONTCAR*
+scripts/Tc_predict/**/POSCAR*
+scripts/Tc_predict/**/INCAR*
+scripts/Tc_predict/**/KPOINTS
+scripts/Tc_predict/**/IBZKPT
+scripts/Tc_predict/**/OSZICAR
+scripts/Tc_predict/**/PCDAT
+scripts/Tc_predict/**/REPORT
+scripts/Tc_predict/**/XDATCAR
+scripts/Tc_predict/**/log.*
+
+*.pdf
+*.db
+*.xlsx
+*.npz
+*.dat

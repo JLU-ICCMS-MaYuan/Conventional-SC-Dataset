@@ -1,127 +1,119 @@
-# 接口框架搭建描述
+# Conventional-SC-Dataset 接口框架说明
 
-本说明由 Understand-Anything 的 `understand` 知识图谱格式整理，聚焦当前项目的 FastAPI 接口框架、数据接口、前端调用和运维支撑关系。
+- 生成时间：2026-06-08T03:11:26.507562+00:00
+- 分析文件数：118
+- 后端路由数：68
+- 图谱节点/边：290 / 523
 
-## 总体结构
+## 架构分层
 
-- 后端入口：`backend/main.py` 创建 FastAPI 应用，注册 API router，挂载 `/static`，并返回首页、组合页、登录页、后台页和 Tc 预测页模板。
-- API 路由：`backend/api/*.py` 按业务模块拆分接口，包括元素、化合物、文献、认证、管理员、AI 文献库、Alexandria、HTSC-2025 和 Tc 预测。
-- 数据接口：`backend/schemas.py` 定义 Pydantic 请求/响应模型；`backend/models.py` 定义 SQLAlchemy ORM 表；`backend/crud.py` 承担主要查询、创建和响应转换。
-- 数据库：`backend/database.py` 暴露主元数据 DB、图片 DB、AI 元数据 DB、AI 图片 DB 四套 session，供路由通过 Depends 注入。
-- 前端消费：`frontend/static/js/*.js` 通过 fetch 调用 API，HTML 模板由页面路由直接返回。
+- **后端 API 层**：FastAPI 路由、认证、文献、化合物、管理、Alexandria、HTSC-2025、AI筛选与Tc预测接口。（11 个文件节点）
+- **后端领域与数据层**：SQLAlchemy 模型、CRUD、数据库连接、导入导出、DOI/图片/引用等工具。（24 个文件节点）
+- **前端交互层**：HTML 模板、CSS 和 JavaScript 页面逻辑，承载周期表、组合页、多数据源浏览和管理页面。（20 个文件节点）
+- **运维与计算脚本层**：启动、初始化、导入、备份和Tc预测辅助脚本。（4 个文件节点）
+- **文档与论文层**：项目文档、业务说明和 PaperSpine 论文产物。（56 个文件节点）
+- **配置与轻量数据层**：Git、环境、依赖、示例数据和小型JSON fixture。（2 个文件节点）
 
-## 架构层
+## 接口模块
 
-- **FastAPI 应用入口与页面路由**：应用启动、路由注册、静态资源挂载和页面模板返回。（10 个文件级节点）
-- **HTTP API 接口层**：所有 /api 路由模块，负责请求参数、权限依赖和业务编排。（10 个文件级节点）
-- **认证与权限层**：JWT、密码哈希、邮箱验证码和权限依赖。（2 个文件级节点）
-- **数据模型与持久化层**：数据库连接、ORM 模型、CRUD、初始化、迁移和导入导出。（12 个文件级节点）
-- **前端接口消费层**：前端脚本、样式和状态辅助代码，调用后端 API 并渲染页面。（9 个文件级节点）
-- **Schema 与工具层**：Pydantic schema、引用生成、DOI 解析、图片处理和预测辅助工具。（5 个文件级节点）
-- **运行配置与运维脚本**：部署入口、依赖、备份脚本、数据文件和运行配置。（19 个文件级节点）
-- **文档与论文材料**：业务文档、运维文档、论文原始材料和 PaperSpine 写作产物。（60 个文件级节点）
-- **包初始化与其他辅助文件**：包初始化和未归入主要接口框架的辅助文件。（13 个文件级节点）
+### `backend/api/admin.py`
+- `GET /all-admins` -> `get_all_admins`
+- `GET /all-users` -> `get_all_users`
+- `POST /approve-user` -> `approve_user`
+- `GET /my-reviews` -> `get_my_reviewed_papers`
+- `GET /papers/all` -> `get_all_papers`
+- `POST /papers/batch-chart-visibility` -> `batch_chart_visibility`
+- `POST /papers/batch-delete` -> `batch_delete_papers`
+- `POST /papers/batch-review` -> `batch_review_papers`
+- `GET /papers/unreviewed` -> `get_unreviewed_papers`
+- `DELETE /papers/{paper_id}` -> `delete_paper`
+- `GET /papers/{paper_id}` -> `get_paper_detail`
+- `PUT /papers/{paper_id}` -> `update_paper`
+- `GET /papers/{paper_id}/images` -> `get_paper_images`
+- `DELETE /papers/{paper_id}/images/{image_id}` -> `delete_paper_image`
+- `POST /papers/{paper_id}/review` -> `review_paper`
+- `GET /pending-approvals` -> `get_pending_approvals`
+- `DELETE /users/{user_id}` -> `delete_user`
+- `PUT /users/{user_id}/permissions` -> `update_user_permissions`
+- `GET /users/{user_id}/submitted-papers` -> `get_user_submitted_papers`
 
-## API 模块分布
+### `backend/api/ai_papers.py`
+- `GET /compounds/{element_symbols}` -> `get_ai_compound_info`
+- `GET /papers/compound/{element_symbols}` -> `get_ai_papers_by_compound`
+- `GET /papers/crystal-structures` -> `get_ai_crystal_structures`
+- `POST /papers/search-by-mode` -> `search_ai_papers_by_mode`
+- `GET /papers/{paper_id}/images/{image_order}` -> `get_ai_paper_image`
 
-- `backend/api/admin.py`：19 个接口
-  - `DELETE /api/admin/papers/{paper_id}`
-  - `DELETE /api/admin/papers/{paper_id}/images/{image_id}`
-  - `DELETE /api/admin/users/{user_id}`
-  - `GET /api/admin/all-admins`
-  - `GET /api/admin/all-users`
-  - `GET /api/admin/my-reviews`
-  - `GET /api/admin/papers/all`
-  - `GET /api/admin/papers/unreviewed`
-  - `GET /api/admin/papers/{paper_id}`
-  - `GET /api/admin/papers/{paper_id}/images`
-  - `GET /api/admin/pending-approvals`
-  - `GET /api/admin/users/{user_id}/submitted-papers`
-  - `POST /api/admin/approve-user`
-  - `POST /api/admin/papers/batch-chart-visibility`
-  - `POST /api/admin/papers/batch-delete`
-  - `POST /api/admin/papers/batch-review`
-  - `POST /api/admin/papers/{paper_id}/review`
-  - `PUT /api/admin/papers/{paper_id}`
-  - `PUT /api/admin/users/{user_id}/permissions`
-- `backend/api/ai_papers.py`：5 个接口
-  - `GET /api/ai/compounds/{element_symbols}`
-  - `GET /api/ai/papers/compound/{element_symbols}`
-  - `GET /api/ai/papers/crystal-structures`
-  - `GET /api/ai/papers/{paper_id}/images/{image_order}`
-  - `POST /api/ai/papers/search-by-mode`
-- `backend/api/alexandria.py`：5 个接口
-  - `GET /api/alexandria/elements`
-  - `GET /api/alexandria/material/{mat_id}`
-  - `GET /api/alexandria/material/{mat_id}/download`
-  - `GET /api/alexandria/stats`
-  - `POST /api/alexandria/search`
-- `backend/api/auth_routes.py`：4 个接口
-  - `GET /api/auth/me`
-  - `POST /api/auth/login`
-  - `POST /api/auth/register`
-  - `POST /api/auth/verify-email`
-- `backend/api/compounds.py`：3 个接口
-  - `GET /api/compounds/{element_symbols}`
-  - `POST /api/compounds/check`
-  - `POST /api/compounds/search`
-- `backend/api/elements.py`：2 个接口
-  - `GET /api/elements/`
-  - `GET /api/elements/{symbol}`
-- `backend/api/htsc2025.py`：3 个接口
-  - `GET /api/htsc2025/detail/{name}`
-  - `GET /api/htsc2025/stats`
-  - `POST /api/htsc2025/search`
-- `backend/api/papers.py`：12 个接口
-  - `GET /api/papers/batch-upload-example`
-  - `GET /api/papers/compound/{element_symbols}`
-  - `GET /api/papers/crystal-structures`
-  - `GET /api/papers/images/{image_id}`
-  - `GET /api/papers/stats/chart-data`
-  - `GET /api/papers/stats/user-ranking`
-  - `GET /api/papers/{paper_id}`
-  - `GET /api/papers/{paper_id}/images/{image_order}`
-  - `POST /api/papers/`
-  - `POST /api/papers/batch-upload`
-  - `POST /api/papers/export`
-  - `POST /api/papers/search-by-mode`
-- `backend/api/tc_predict.py`：1 个接口
-  - `POST /api/tc-predict/`
-- `backend/main.py`：13 个接口
-  - `GET /`
-  - `GET /admin/dashboard`
-  - `GET /admin/login`
-  - `GET /admin/my-reviews`
-  - `GET /admin/papers`
-  - `GET /admin/register`
-  - `GET /admin/superadmin`
-  - `GET /compound/{element_symbols}`
-  - `GET /health`
-  - `GET /login`
-  - `GET /periodic-table`
-  - `GET /register`
-  - `GET /tc-pre`
+### `backend/api/alexandria.py`
+- `GET /elements` -> `list_alexandria_elements`
+- `GET /material/{mat_id}` -> `get_alexandria_material`
+- `GET /material/{mat_id}/cif` -> `get_alexandria_cif`
+- `GET /material/{mat_id}/download` -> `download_alexandria_material`
+- `POST /search` -> `search_alexandria`
+- `GET /stats` -> `alexandria_stats`
 
-## 关键接口链路
+### `backend/api/auth_routes.py`
+- `POST /login` -> `login`
+- `GET /me` -> `get_me`
+- `POST /register` -> `register_step1`
+- `POST /verify-email` -> `register_step2`
 
-- **元素检索链路**：周期表前端选择元素 -> `/api/elements` 和 `/api/compounds` 校验/检索 -> `/compound/{element_symbols}` 页面 -> `/api/papers/compound/{element_symbols}` 加载文献。
-- **文献上传链路**：登录用户调用 `POST /api/papers/` -> DOI 校验和元数据解析 -> `get_or_create_compound` -> 写入 `papers`、`paper_data` -> 图片写入独立图片库。
-- **后台治理链路**：管理员通过 `/api/admin/papers/*` 查看、审核、编辑、批量操作文献；超级管理员额外管理用户权限和删除文献。
-- **图表链路**：后台设置 `show_in_chart` -> `/api/papers/stats/chart-data` 读取可展示 PaperData -> `frontend/static/js/chart.js` 渲染 P-Tc 图表。
-- **外部数据链路**：Alexandria、HTSC-2025、AI 文献库复用元素检索语义，但分别读取独立 JSON/SQLite 数据源。
-- **预测实验链路**：`/tc-pre` 页面上传 CONTCAR 和 PDOS -> `/api/tc-predict/` 解析 H 结构和 PDOS_H -> 返回预测结果，不写入数据库。
+### `backend/api/compounds.py`
+- `POST /check` -> `check_compound_exists`
+- `POST /search` -> `search_compounds`
+- `GET /{element_symbols}` -> `get_compound_info`
 
-## 数据表接口
+### `backend/api/elements.py`
+- `GET /` -> `get_all_elements`
+- `GET /{symbol}` -> `get_element_by_symbol`
 
-- `elements`：ORM 表 `elements` 由 `Element` 模型定义，是接口数据读写的持久化结构。
-- `compounds`：ORM 表 `compounds` 由 `Compound` 模型定义，是接口数据读写的持久化结构。
-- `users`：ORM 表 `users` 由 `User` 模型定义，是接口数据读写的持久化结构。
-- `papers`：ORM 表 `papers` 由 `Paper` 模型定义，是接口数据读写的持久化结构。
-- `paper_data`：ORM 表 `paper_data` 由 `PaperData` 模型定义，是接口数据读写的持久化结构。
-- `paper_images`：ORM 表 `paper_images` 由 `PaperImage` 模型定义，是接口数据读写的持久化结构。
+### `backend/api/htsc2025.py`
+- `GET /detail/{name}` -> `htsc2025_detail`
+- `POST /search` -> `search_htsc2025`
+- `GET /stats` -> `htsc2025_stats`
 
-## 图谱产物
+### `backend/api/papers.py`
+- `POST /` -> `create_paper`
+- `POST /batch-upload` -> `batch_upload_papers`
+- `GET /batch-upload-example` -> `get_batch_upload_example`
+- `GET /compound/{element_symbols}` -> `get_papers_by_compound`
+- `GET /crystal-structures` -> `get_crystal_structures`
+- `POST /export` -> `export_papers`
+- `GET /images/{image_id}` -> `get_image_by_id`
+- `POST /search-by-mode` -> `search_papers_by_mode`
+- `GET /stats/chart-data` -> `get_chart_data`
+- `GET /stats/user-ranking` -> `get_user_ranking`
+- `GET /{paper_id}` -> `get_paper_detail`
+- `GET /{paper_id}/images/{image_order}` -> `get_paper_image`
 
-- 知识图谱：`.understand-anything/knowledge-graph.json`
-- 扫描结果：`.understand-anything/intermediate/scan-result.json`
-- 本说明：`.understand-anything/interface-framework.md`
+### `backend/api/tc_predict.py`
+- `POST /` -> `predict_tc`
+
+### `backend/main.py`
+- `GET /` -> `read_root`
+- `GET /admin/dashboard` -> `admin_dashboard_page`
+- `GET /admin/login` -> `admin_login_page`
+- `GET /admin/my-reviews` -> `admin_my_reviews_page`
+- `GET /admin/papers` -> `admin_papers_page`
+- `GET /admin/register` -> `admin_register_page`
+- `GET /admin/superadmin` -> `superadmin_dashboard_page`
+- `GET /compound/{element_symbols}` -> `compound_page`
+- `GET /health` -> `health_check`
+- `GET /login` -> `user_login_page`
+- `GET /periodic-table` -> `periodic_table_page`
+- `GET /register` -> `user_register_page`
+- `GET /tc-pre` -> `tc_prediction_page`
+
+## 合并 origin/master 后的关键结构变化
+
+- 组合页数据源从单一本地文献库扩展为 `local`、`ai`、`alexandria`、`htsc2025` 多模式。
+- `backend/api/papers.py` 和 `backend/api/ai_papers.py` 通过 `get_papers_by_compounds_count` 返回分页总数，前端可稳定显示 page/total/has_next。
+- `backend/api/alexandria.py` 提供 EPC 材料搜索、详情下载和 CIF 导出；其真实数据依赖 `backend/alexandria_import.py` 生成本地 SQLite。
+- `backend/api/htsc2025.py` 读取 `data/htsc2025.json`，为常压高温超导候选提供搜索、统计和详情接口。
+- 前端 `frontend/static/js/compound_page.js` 统一承接本地论文、AI筛选论文、Alexandria、HTSC-2025 和测试数据的渲染分支。
+
+## 建议的接口框架边界
+
+- 保持本地文献库和 AI 筛选库的响应模型一致，但在 UI 和论文中明确来源差异。
+- Alexandria/HTSC-2025 属于外部或计算数据适配器，不应写入主文献审核流。
+- Tc 预测模块保持实验工具边界，输出不直接进入 reviewed paper records。

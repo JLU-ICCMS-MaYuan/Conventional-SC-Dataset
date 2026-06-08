@@ -1,2474 +1,428 @@
 {
   "version": "1.0.0",
-  "project": {
-    "name": "Conventional-SC-Dataset",
-    "languages": [
-      "Python",
-      "JavaScript",
-      "Shell"
+  "generatedAt": "2026-06-08T03:11:26.507562+00:00",
+  "language": "zh",
+  "summary": "合并 origin/master 后，项目形成本地文献库、AI筛选库、Alexandria EPC、HTSC-2025 和Tc预测并行的数据源结构。",
+  "domains": [
+    {
+      "id": "domain:search",
+      "name": "元素组合检索",
+      "entrypoints": [
+        "/",
+        "/compound/{element_symbols}",
+        "/api/compounds/search",
+        "/api/papers/search-by-mode"
+      ],
+      "description": "周期表选择元素，按 only/combination/contains 映射化合物和文献。"
+    },
+    {
+      "id": "domain:literature",
+      "name": "文献提交与审核",
+      "entrypoints": [
+        "/api/papers/",
+        "/api/admin/*",
+        "/api/auth/*"
+      ],
+      "description": "登录用户提交 DOI 与物性参数，管理员审核、编辑并控制图表展示。"
+    },
+    {
+      "id": "domain:multi-source",
+      "name": "多数据源浏览",
+      "entrypoints": [
+        "/api/ai/*",
+        "/api/alexandria/*",
+        "/api/htsc2025/*"
+      ],
+      "description": "组合页可切换本地、AI筛选、Alexandria EPC 和 HTSC-2025 数据源。"
+    },
+    {
+      "id": "domain:prediction",
+      "name": "Tc预测实验",
+      "entrypoints": [
+        "/tc-pre",
+        "/api/tc-predict/"
+      ],
+      "description": "上传 CONTCAR 与 PDOS 文件进行探索性 Tc 预测，不写入文献库。"
+    },
+    {
+      "id": "domain:operations",
+      "name": "导入导出与运维",
+      "entrypoints": [
+        "backend/import_data.py",
+        "backend/export_data.py",
+        "backend/alexandria_import.py",
+        "start.sh"
+      ],
+      "description": "初始化、导入、导出、备份、Alexandria构建和服务启动。"
+    }
+  ],
+  "apiModules": {
+    "backend/api/admin.py": [
+      {
+        "method": "GET",
+        "path": "/all-users",
+        "handler": "get_all_users"
+      },
+      {
+        "method": "PUT",
+        "path": "/users/{user_id}/permissions",
+        "handler": "update_user_permissions"
+      },
+      {
+        "method": "DELETE",
+        "path": "/users/{user_id}",
+        "handler": "delete_user"
+      },
+      {
+        "method": "GET",
+        "path": "/users/{user_id}/submitted-papers",
+        "handler": "get_user_submitted_papers"
+      },
+      {
+        "method": "GET",
+        "path": "/pending-approvals",
+        "handler": "get_pending_approvals"
+      },
+      {
+        "method": "POST",
+        "path": "/approve-user",
+        "handler": "approve_user"
+      },
+      {
+        "method": "GET",
+        "path": "/all-admins",
+        "handler": "get_all_admins"
+      },
+      {
+        "method": "POST",
+        "path": "/papers/{paper_id}/review",
+        "handler": "review_paper"
+      },
+      {
+        "method": "GET",
+        "path": "/papers/unreviewed",
+        "handler": "get_unreviewed_papers"
+      },
+      {
+        "method": "GET",
+        "path": "/my-reviews",
+        "handler": "get_my_reviewed_papers"
+      },
+      {
+        "method": "GET",
+        "path": "/papers/all",
+        "handler": "get_all_papers"
+      },
+      {
+        "method": "GET",
+        "path": "/papers/{paper_id}",
+        "handler": "get_paper_detail"
+      },
+      {
+        "method": "PUT",
+        "path": "/papers/{paper_id}",
+        "handler": "update_paper"
+      },
+      {
+        "method": "DELETE",
+        "path": "/papers/{paper_id}",
+        "handler": "delete_paper"
+      },
+      {
+        "method": "POST",
+        "path": "/papers/batch-review",
+        "handler": "batch_review_papers"
+      },
+      {
+        "method": "POST",
+        "path": "/papers/batch-chart-visibility",
+        "handler": "batch_chart_visibility"
+      },
+      {
+        "method": "POST",
+        "path": "/papers/batch-delete",
+        "handler": "batch_delete_papers"
+      },
+      {
+        "method": "GET",
+        "path": "/papers/{paper_id}/images",
+        "handler": "get_paper_images"
+      },
+      {
+        "method": "DELETE",
+        "path": "/papers/{paper_id}/images/{image_id}",
+        "handler": "delete_paper_image"
+      }
     ],
-    "frameworks": [
-      "FastAPI",
-      "SQLAlchemy",
-      "SQLite",
-      "Bootstrap"
+    "backend/api/ai_papers.py": [
+      {
+        "method": "GET",
+        "path": "/compounds/{element_symbols}",
+        "handler": "get_ai_compound_info"
+      },
+      {
+        "method": "GET",
+        "path": "/papers/compound/{element_symbols}",
+        "handler": "get_ai_papers_by_compound"
+      },
+      {
+        "method": "POST",
+        "path": "/papers/search-by-mode",
+        "handler": "search_ai_papers_by_mode"
+      },
+      {
+        "method": "GET",
+        "path": "/papers/crystal-structures",
+        "handler": "get_ai_crystal_structures"
+      },
+      {
+        "method": "GET",
+        "path": "/papers/{paper_id}/images/{image_order}",
+        "handler": "get_ai_paper_image"
+      }
     ],
-    "description": "基于元素周期表的常规超导文献收集、检索、审核、图表展示与实验预测平台。",
-    "analyzedAt": "2026-06-08T01:44:57.090354+00:00",
-    "gitCommitHash": "af94f068959a902459f0540bfd91db2d72105bc3"
+    "backend/api/alexandria.py": [
+      {
+        "method": "POST",
+        "path": "/search",
+        "handler": "search_alexandria"
+      },
+      {
+        "method": "GET",
+        "path": "/elements",
+        "handler": "list_alexandria_elements"
+      },
+      {
+        "method": "GET",
+        "path": "/material/{mat_id}",
+        "handler": "get_alexandria_material"
+      },
+      {
+        "method": "GET",
+        "path": "/material/{mat_id}/download",
+        "handler": "download_alexandria_material"
+      },
+      {
+        "method": "GET",
+        "path": "/stats",
+        "handler": "alexandria_stats"
+      },
+      {
+        "method": "GET",
+        "path": "/material/{mat_id}/cif",
+        "handler": "get_alexandria_cif"
+      }
+    ],
+    "backend/api/auth_routes.py": [
+      {
+        "method": "POST",
+        "path": "/register",
+        "handler": "register_step1"
+      },
+      {
+        "method": "POST",
+        "path": "/verify-email",
+        "handler": "register_step2"
+      },
+      {
+        "method": "POST",
+        "path": "/login",
+        "handler": "login"
+      },
+      {
+        "method": "GET",
+        "path": "/me",
+        "handler": "get_me"
+      }
+    ],
+    "backend/api/compounds.py": [
+      {
+        "method": "POST",
+        "path": "/check",
+        "handler": "check_compound_exists"
+      },
+      {
+        "method": "GET",
+        "path": "/{element_symbols}",
+        "handler": "get_compound_info"
+      },
+      {
+        "method": "POST",
+        "path": "/search",
+        "handler": "search_compounds"
+      }
+    ],
+    "backend/api/elements.py": [
+      {
+        "method": "GET",
+        "path": "/",
+        "handler": "get_all_elements"
+      },
+      {
+        "method": "GET",
+        "path": "/{symbol}",
+        "handler": "get_element_by_symbol"
+      }
+    ],
+    "backend/api/htsc2025.py": [
+      {
+        "method": "POST",
+        "path": "/search",
+        "handler": "search_htsc2025"
+      },
+      {
+        "method": "GET",
+        "path": "/stats",
+        "handler": "htsc2025_stats"
+      },
+      {
+        "method": "GET",
+        "path": "/detail/{name}",
+        "handler": "htsc2025_detail"
+      }
+    ],
+    "backend/api/papers.py": [
+      {
+        "method": "GET",
+        "path": "/stats/user-ranking",
+        "handler": "get_user_ranking"
+      },
+      {
+        "method": "POST",
+        "path": "/",
+        "handler": "create_paper"
+      },
+      {
+        "method": "POST",
+        "path": "/batch-upload",
+        "handler": "batch_upload_papers"
+      },
+      {
+        "method": "GET",
+        "path": "/batch-upload-example",
+        "handler": "get_batch_upload_example"
+      },
+      {
+        "method": "GET",
+        "path": "/compound/{element_symbols}",
+        "handler": "get_papers_by_compound"
+      },
+      {
+        "method": "POST",
+        "path": "/search-by-mode",
+        "handler": "search_papers_by_mode"
+      },
+      {
+        "method": "GET",
+        "path": "/crystal-structures",
+        "handler": "get_crystal_structures"
+      },
+      {
+        "method": "GET",
+        "path": "/{paper_id}",
+        "handler": "get_paper_detail"
+      },
+      {
+        "method": "GET",
+        "path": "/{paper_id}/images/{image_order}",
+        "handler": "get_paper_image"
+      },
+      {
+        "method": "GET",
+        "path": "/images/{image_id}",
+        "handler": "get_image_by_id"
+      },
+      {
+        "method": "POST",
+        "path": "/export",
+        "handler": "export_papers"
+      },
+      {
+        "method": "GET",
+        "path": "/stats/chart-data",
+        "handler": "get_chart_data"
+      }
+    ],
+    "backend/api/tc_predict.py": [
+      {
+        "method": "POST",
+        "path": "/",
+        "handler": "predict_tc"
+      }
+    ],
+    "backend/main.py": [
+      {
+        "method": "GET",
+        "path": "/",
+        "handler": "read_root"
+      },
+      {
+        "method": "GET",
+        "path": "/periodic-table",
+        "handler": "periodic_table_page"
+      },
+      {
+        "method": "GET",
+        "path": "/compound/{element_symbols}",
+        "handler": "compound_page"
+      },
+      {
+        "method": "GET",
+        "path": "/admin/register",
+        "handler": "admin_register_page"
+      },
+      {
+        "method": "GET",
+        "path": "/admin/login",
+        "handler": "admin_login_page"
+      },
+      {
+        "method": "GET",
+        "path": "/login",
+        "handler": "user_login_page"
+      },
+      {
+        "method": "GET",
+        "path": "/register",
+        "handler": "user_register_page"
+      },
+      {
+        "method": "GET",
+        "path": "/admin/dashboard",
+        "handler": "admin_dashboard_page"
+      },
+      {
+        "method": "GET",
+        "path": "/admin/superadmin",
+        "handler": "superadmin_dashboard_page"
+      },
+      {
+        "method": "GET",
+        "path": "/admin/my-reviews",
+        "handler": "admin_my_reviews_page"
+      },
+      {
+        "method": "GET",
+        "path": "/admin/papers",
+        "handler": "admin_papers_page"
+      },
+      {
+        "method": "GET",
+        "path": "/tc-pre",
+        "handler": "tc_prediction_page"
+      },
+      {
+        "method": "GET",
+        "path": "/health",
+        "handler": "health_check"
+      }
+    ]
   },
-  "nodes": [
-    {
-      "id": "domain:search-and-discovery",
-      "type": "domain",
-      "name": "元素体系检索与文献发现",
-      "summary": "围绕周期表元素选择、化合物组合匹配和文献列表浏览展开。该域把元素、化学式、组合模式和分页筛选统一为用户进入数据库的主路径。",
-      "tags": [
-        "search",
-        "compound",
-        "papers"
-      ],
-      "complexity": "complex",
-      "domainMeta": {
-        "entities": [
-          "Element",
-          "Compound",
-          "Paper",
-          "PaperData"
-        ],
-        "businessRules": [
-          "检索模式只接受 only、combination、contains",
-          "元素组合需要排序和标准化",
-          "文献列表按审核状态、关键词、年份等条件筛选"
-        ],
-        "crossDomainInteractions": [
-          "读取文献入库产生的 Paper/PaperData",
-          "向统计可视化提供筛选后的文献集合"
-        ]
-      }
-    },
-    {
-      "id": "domain:paper-ingestion-and-data-curation",
-      "type": "domain",
-      "name": "文献入库与数据整理",
-      "summary": "负责把 DOI、物理参数、截图和批量文件转换为数据库记录。它同时承接历史数据导入导出与图片附件保存，是科研数据沉淀的核心入口。",
-      "tags": [
-        "ingestion",
-        "doi",
-        "data-curation"
-      ],
-      "complexity": "complex",
-      "domainMeta": {
-        "entities": [
-          "Paper",
-          "PaperData",
-          "PaperImage",
-          "Compound"
-        ],
-        "businessRules": [
-          "普通用户上传必须登录",
-          "单体系内 DOI 不能重复",
-          "截图数量和格式需要校验",
-          "Tc/压强以数组区间写入文本字段"
-        ],
-        "crossDomainInteractions": [
-          "依赖身份域提供用户身份",
-          "产出数据供检索、审核和图表展示使用"
-        ]
-      }
-    },
-    {
-      "id": "domain:identity-review-and-governance",
-      "type": "domain",
-      "name": "身份认证、审批与审核治理",
-      "summary": "覆盖普通用户注册登录、邮箱验证码、管理员申请、超级管理员审批和文献审核。该域控制谁能提交、谁能管理，以及哪些文献能进入前台和图表。",
-      "tags": [
-        "auth",
-        "admin",
-        "review"
-      ],
-      "complexity": "complex",
-      "domainMeta": {
-        "entities": [
-          "User",
-          "Token",
-          "ReviewStatus",
-          "AdminApproval"
-        ],
-        "businessRules": [
-          "注册采用邮箱验证码两步流程",
-          "管理员需要超级管理员审批后才能使用后台",
-          "文献审核状态限定为 approved/rejected/modifying/unreviewed/admin_only",
-          "超级管理员才可删除用户和批量删除文献"
-        ],
-        "crossDomainInteractions": [
-          "约束文献入库权限",
-          "控制统计可视化中的 show_in_chart 开关"
-        ]
-      }
-    },
-    {
-      "id": "domain:analytics-and-visualization",
-      "type": "domain",
-      "name": "统计图表与引用输出",
-      "summary": "负责首页 P-Tc 图表、贡献者排行、文献引用格式导出和前端展示数据。该域主要消费已审核或被标记展示的文献与物理参数。",
-      "tags": [
-        "analytics",
-        "chart",
-        "export"
-      ],
-      "complexity": "moderate",
-      "domainMeta": {
-        "entities": [
-          "ChartPoint",
-          "Citation",
-          "UserRanking"
-        ],
-        "businessRules": [
-          "图表只读取 show_in_chart=True 的文献",
-          "P-Tc 数据点需要可解析的 tc 和 tc_press 区间",
-          "引用导出按所选文献即时生成"
-        ],
-        "crossDomainInteractions": [
-          "消费文献域和审核域状态",
-          "为前端页面提供趋势和引用输出"
-        ]
-      }
-    },
-    {
-      "id": "domain:external-datasets-and-prediction",
-      "type": "domain",
-      "name": "外部数据集与 Tc 预测实验",
-      "summary": "承接 Alexandria、HTSC-2025、AI 筛选库和 Tc 预测实验页。该域与主文献库相对独立，主要提供探索性材料检索和不入库的预测计算。",
-      "tags": [
-        "dataset",
-        "prediction",
-        "experimental"
-      ],
-      "complexity": "complex",
-      "domainMeta": {
-        "entities": [
-          "AlexandriaEntry",
-          "HTSC2025Record",
-          "AI Paper",
-          "TcPrediction"
-        ],
-        "businessRules": [
-          "Tc 预测不写入主数据库",
-          "结构文件必须含 H 相关结构",
-          "PDOS 上传必须包含 PDOS_H 文件",
-          "外部数据集使用独立文件或独立 SQLite"
-        ],
-        "crossDomainInteractions": [
-          "可从元素体系发现路径进入",
-          "与主文献库共享部分检索语义但不共享写入流程"
-        ]
-      }
-    },
-    {
-      "id": "domain:operations-and-persistence",
-      "type": "domain",
-      "name": "运维支撑与持久化",
-      "summary": "负责 SQLite 路径选择、数据库初始化、迁移、导入导出、超级管理员创建和备份脚本。该域保证系统能在本地和部署环境中启动、恢复和维护。",
-      "tags": [
-        "operations",
-        "sqlite",
-        "maintenance"
-      ],
-      "complexity": "complex",
-      "domainMeta": {
-        "entities": [
-          "MetadataDB",
-          "ImageDB",
-          "AI MetadataDB",
-          "AI ImageDB",
-          "Backup"
-        ],
-        "businessRules": [
-          "主库和图片库是独立 SQLite 文件",
-          "启动时自动 create_all 并补齐兼容列",
-          "危险导入可清空现有数据，需要人工确认",
-          "运维脚本默认面向当前仓库结构"
-        ],
-        "crossDomainInteractions": [
-          "为所有业务域提供数据库会话和表结构",
-          "支撑灾备与数据迁移"
-        ]
-      }
-    },
-    {
-      "id": "flow:periodic-element-search",
-      "type": "flow",
-      "name": "周期表元素检索",
-      "summary": "用户从首页选择元素，系统检查元素组合是否存在并进入组合检索。",
-      "tags": [
-        "periodic-table",
-        "search"
-      ],
-      "complexity": "moderate",
-      "domainMeta": {
-        "entryPoint": "POST /api/compounds/check",
-        "entryType": "http"
-      }
-    },
-    {
-      "id": "flow:compound-literature-browse",
-      "type": "flow",
-      "name": "元素组合文献浏览",
-      "summary": "按元素组合加载文献列表，并支持关键词、年份、期刊、空间群、审核状态和分页排序。",
-      "tags": [
-        "papers",
-        "browse"
-      ],
-      "complexity": "complex",
-      "domainMeta": {
-        "entryPoint": "GET /api/papers/compound/{element_symbols}",
-        "entryType": "http"
-      }
-    },
-    {
-      "id": "flow:mode-based-compound-search",
-      "type": "flow",
-      "name": "组合模式检索",
-      "summary": "按 only、combination、contains 三种模式返回匹配化合物或文献集合。",
-      "tags": [
-        "mode-search",
-        "compound"
-      ],
-      "complexity": "complex",
-      "domainMeta": {
-        "entryPoint": "POST /api/compounds/search; POST /api/papers/search-by-mode",
-        "entryType": "http"
-      }
-    },
-    {
-      "id": "flow:single-paper-upload",
-      "type": "flow",
-      "name": "单篇文献上传",
-      "summary": "登录用户提交 DOI、元素、化学式、物理参数和截图，系统解析元数据并创建文献记录。",
-      "tags": [
-        "upload",
-        "doi"
-      ],
-      "complexity": "complex",
-      "domainMeta": {
-        "entryPoint": "POST /api/papers/",
-        "entryType": "http"
-      }
-    },
-    {
-      "id": "flow:batch-paper-upload",
-      "type": "flow",
-      "name": "批量表格上传",
-      "summary": "用户上传约定格式表格，系统解析片段并批量创建文献和物理数据。",
-      "tags": [
-        "batch",
-        "xlsx"
-      ],
-      "complexity": "moderate",
-      "domainMeta": {
-        "entryPoint": "POST /api/papers/batch-upload",
-        "entryType": "http"
-      }
-    },
-    {
-      "id": "flow:json-import-export",
-      "type": "flow",
-      "name": "JSON 导入导出",
-      "summary": "维护脚本在数据库与 JSON 包之间转换文献、物理数据和图片附件。",
-      "tags": [
-        "import",
-        "export"
-      ],
-      "complexity": "complex",
-      "domainMeta": {
-        "entryPoint": "python -m backend.import_data; python -m backend.export_data",
-        "entryType": "cli"
-      }
-    },
-    {
-      "id": "flow:paper-image-management",
-      "type": "flow",
-      "name": "文献截图管理",
-      "summary": "上传、读取、分组展示和删除文献截图，图片数据保存在独立图片库。",
-      "tags": [
-        "image",
-        "blob"
-      ],
-      "complexity": "moderate",
-      "domainMeta": {
-        "entryPoint": "GET/DELETE /api/admin/papers/{paper_id}/images",
-        "entryType": "http"
-      }
-    },
-    {
-      "id": "flow:email-registration-login",
-      "type": "flow",
-      "name": "邮箱验证码注册与登录",
-      "summary": "用户提交注册信息、验证邮箱验证码并通过 JWT 登录访问受保护接口。",
-      "tags": [
-        "auth",
-        "email"
-      ],
-      "complexity": "complex",
-      "domainMeta": {
-        "entryPoint": "POST /api/auth/register; POST /api/auth/verify-email; POST /api/auth/login",
-        "entryType": "http"
-      }
-    },
-    {
-      "id": "flow:admin-approval",
-      "type": "flow",
-      "name": "管理员申请审批",
-      "summary": "超级管理员查看待审批管理员申请，批准后授予后台能力，拒绝时删除申请用户。",
-      "tags": [
-        "admin",
-        "approval"
-      ],
-      "complexity": "moderate",
-      "domainMeta": {
-        "entryPoint": "GET /api/admin/pending-approvals; POST /api/admin/approve-user",
-        "entryType": "http"
-      }
-    },
-    {
-      "id": "flow:paper-review-governance",
-      "type": "flow",
-      "name": "文献审核与后台治理",
-      "summary": "管理员审核、编辑、批量审核文献，超级管理员可删除文献并批量控制图表展示。",
-      "tags": [
-        "review",
-        "governance"
-      ],
-      "complexity": "complex",
-      "domainMeta": {
-        "entryPoint": "POST /api/admin/papers/{paper_id}/review; PUT /api/admin/papers/{paper_id}",
-        "entryType": "http"
-      }
-    },
-    {
-      "id": "flow:ptc-chart-data",
-      "type": "flow",
-      "name": "P-Tc 图表数据生成",
-      "summary": "系统读取允许展示的文献物理参数，转换为首页图表需要的点和区间。",
-      "tags": [
-        "chart",
-        "tc-pressure"
-      ],
-      "complexity": "moderate",
-      "domainMeta": {
-        "entryPoint": "GET /api/papers/stats/chart-data",
-        "entryType": "http"
-      }
-    },
-    {
-      "id": "flow:citation-export",
-      "type": "flow",
-      "name": "文献引用导出",
-      "summary": "用户选择文献后按 APS 或 BibTeX 格式生成引用文本。",
-      "tags": [
-        "citation",
-        "export"
-      ],
-      "complexity": "simple",
-      "domainMeta": {
-        "entryPoint": "POST /api/papers/export",
-        "entryType": "http"
-      }
-    },
-    {
-      "id": "flow:contributor-ranking",
-      "type": "flow",
-      "name": "贡献者排行展示",
-      "summary": "系统汇总注册用户贡献信息并返回前端排行数据。",
-      "tags": [
-        "ranking",
-        "users"
-      ],
-      "complexity": "simple",
-      "domainMeta": {
-        "entryPoint": "GET /api/papers/stats/user-ranking",
-        "entryType": "http"
-      }
-    },
-    {
-      "id": "flow:tc-prediction-experiment",
-      "type": "flow",
-      "name": "Tc 预测实验",
-      "summary": "用户上传 CONTCAR 与 PDOS 文件，系统抽取 H 子晶格和 PDOS 特征后返回预测 Tc。",
-      "tags": [
-        "tc-predict",
-        "experiment"
-      ],
-      "complexity": "complex",
-      "domainMeta": {
-        "entryPoint": "POST /api/tc-predict/",
-        "entryType": "http"
-      }
-    },
-    {
-      "id": "flow:alexandria-material-search",
-      "type": "flow",
-      "name": "Alexandria 材料检索",
-      "summary": "按元素、最低 Tc 和稳定性条件检索 Alexandria 电声耦合数据。",
-      "tags": [
-        "alexandria",
-        "dataset"
-      ],
-      "complexity": "moderate",
-      "domainMeta": {
-        "entryPoint": "POST /api/alexandria/search",
-        "entryType": "http"
-      }
-    },
-    {
-      "id": "flow:htsc2025-dataset-search",
-      "type": "flow",
-      "name": "HTSC-2025 数据集检索",
-      "summary": "按元素检索常压高温超导基准数据，并提供统计和详情。",
-      "tags": [
-        "htsc2025",
-        "dataset"
-      ],
-      "complexity": "moderate",
-      "domainMeta": {
-        "entryPoint": "POST /api/htsc2025/search",
-        "entryType": "http"
-      }
-    },
-    {
-      "id": "flow:ai-filtered-paper-browse",
-      "type": "flow",
-      "name": "AI 筛选文献库浏览",
-      "summary": "使用独立 AI SQLite 库复用主文献检索模式，浏览 AI 筛选出的候选文献。",
-      "tags": [
-        "ai",
-        "papers"
-      ],
-      "complexity": "moderate",
-      "domainMeta": {
-        "entryPoint": "GET /api/ai/papers/compound/{element_symbols}",
-        "entryType": "http"
-      }
-    },
-    {
-      "id": "flow:database-session-routing",
-      "type": "flow",
-      "name": "数据库会话与路径选择",
-      "summary": "根据环境变量选择主库、图片库、AI 主库和 AI 图片库，并为 API 提供依赖注入会话。",
-      "tags": [
-        "database",
-        "session"
-      ],
-      "complexity": "moderate",
-      "domainMeta": {
-        "entryPoint": "backend.database",
-        "entryType": "manual"
-      }
-    },
-    {
-      "id": "flow:database-initialization",
-      "type": "flow",
-      "name": "数据库初始化与兼容补列",
-      "summary": "应用启动或维护命令创建表、填充元素字典，并为旧库补齐网站业务字段和索引。",
-      "tags": [
-        "init",
-        "migration"
-      ],
-      "complexity": "complex",
-      "domainMeta": {
-        "entryPoint": "python -m backend.init_db",
-        "entryType": "cli"
-      }
-    },
-    {
-      "id": "flow:maintenance-backup",
-      "type": "flow",
-      "name": "维护脚本与备份",
-      "summary": "通过超级管理员创建、ID 迁移、自动备份和远程同步脚本维护部署环境。",
-      "tags": [
-        "backup",
-        "maintenance"
-      ],
-      "complexity": "moderate",
-      "domainMeta": {
-        "entryPoint": "scripts/autobackup.sh; scripts/remote_backup.sh",
-        "entryType": "cli"
-      }
-    },
-    {
-      "id": "step:periodic-element-search:load-elements",
-      "type": "step",
-      "name": "加载元素字典",
-      "summary": "读取 118 个元素供周期表渲染和合法性校验。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/elements.py",
-      "lineRange": [
-        14,
-        14
-      ]
-    },
-    {
-      "id": "step:periodic-element-search:submit-selection",
-      "type": "step",
-      "name": "提交元素组合",
-      "summary": "前端把所选元素提交给组合检查接口。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "frontend/static/js/periodic_table.js",
-      "lineRange": [
-        1,
-        1
-      ]
-    },
-    {
-      "id": "step:periodic-element-search:normalize-selection",
-      "type": "step",
-      "name": "标准化元素列表",
-      "summary": "后端按集合和排序处理元素组合。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/compounds.py",
-      "lineRange": [
-        15,
-        15
-      ]
-    },
-    {
-      "id": "step:periodic-element-search:navigate-compound",
-      "type": "step",
-      "name": "进入组合页",
-      "summary": "存在或可检索时跳转到 /compound/{element_symbols}。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/main.py",
-      "lineRange": [
-        79,
-        79
-      ]
-    },
-    {
-      "id": "step:compound-literature-browse:parse-route",
-      "type": "step",
-      "name": "解析元素路由",
-      "summary": "从 URL 中拆分元素符号列表。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/papers.py",
-      "lineRange": [
-        378,
-        378
-      ]
-    },
-    {
-      "id": "step:compound-literature-browse:find-compounds",
-      "type": "step",
-      "name": "定位匹配化合物",
-      "summary": "按 exact 模式查找元素集合一致的 compounds。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/crud.py",
-      "lineRange": [
-        186,
-        186
-      ]
-    },
-    {
-      "id": "step:compound-literature-browse:build-filter",
-      "type": "step",
-      "name": "构建筛选条件",
-      "summary": "组合关键词、年份、期刊、空间群和审核状态条件。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/crud.py",
-      "lineRange": [
-        364,
-        364
-      ]
-    },
-    {
-      "id": "step:compound-literature-browse:paginate-results",
-      "type": "step",
-      "name": "分页排序文献",
-      "summary": "按年份或创建时间排序并应用 offset/limit。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/crud.py",
-      "lineRange": [
-        390,
-        390
-      ]
-    },
-    {
-      "id": "step:compound-literature-browse:serialize-response",
-      "type": "step",
-      "name": "序列化响应",
-      "summary": "把 Paper/PaperData/PaperImage 转换为前端列表结构。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/crud.py",
-      "lineRange": [
-        665,
-        665
-      ]
-    },
-    {
-      "id": "step:mode-based-compound-search:validate-mode",
-      "type": "step",
-      "name": "校验检索模式",
-      "summary": "只允许 only、combination、contains 三类模式。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/schemas.py",
-      "lineRange": [
-        62,
-        62
-      ]
-    },
-    {
-      "id": "step:mode-based-compound-search:match-compounds",
-      "type": "step",
-      "name": "匹配化合物集合",
-      "summary": "遍历 compounds 并按集合关系筛选。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/crud.py",
-      "lineRange": [
-        190,
-        190
-      ]
-    },
-    {
-      "id": "step:mode-based-compound-search:count-papers",
-      "type": "step",
-      "name": "统计文献数量",
-      "summary": "按匹配 compound_id 统计去重文献数量。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/crud.py",
-      "lineRange": [
-        653,
-        653
-      ]
-    },
-    {
-      "id": "step:mode-based-compound-search:return-page",
-      "type": "step",
-      "name": "返回分页结果",
-      "summary": "按组合长度和名称排序后返回分页数据。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/compounds.py",
-      "lineRange": [
-        107,
-        107
-      ]
-    },
-    {
-      "id": "step:single-paper-upload:require-login",
-      "type": "step",
-      "name": "要求登录",
-      "summary": "上传接口依赖当前用户身份，未登录直接拒绝。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/papers.py",
-      "lineRange": [
-        107,
-        107
-      ]
-    },
-    {
-      "id": "step:single-paper-upload:parse-form",
-      "type": "step",
-      "name": "解析表单 JSON",
-      "summary": "解析元素列表和多组 physical_data。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/papers.py",
-      "lineRange": [
-        138,
-        138
-      ]
-    },
-    {
-      "id": "step:single-paper-upload:resolve-doi",
-      "type": "step",
-      "name": "验证并解析 DOI",
-      "summary": "普通用户必须通过 DOI 校验并获取 Crossref 元数据。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/papers.py",
-      "lineRange": [
-        162,
-        162
-      ]
-    },
-    {
-      "id": "step:single-paper-upload:create-compound",
-      "type": "step",
-      "name": "创建或复用化合物",
-      "summary": "按化学式优先、元素组合兜底创建 Compound。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/crud.py",
-      "lineRange": [
-        156,
-        156
-      ]
-    },
-    {
-      "id": "step:single-paper-upload:write-paper-data",
-      "type": "step",
-      "name": "写入文献和物理参数",
-      "summary": "创建 Paper 后写入多条 PaperData 并计算 s_factor。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/crud.py",
-      "lineRange": [
-        284,
-        284
-      ]
-    },
-    {
-      "id": "step:single-paper-upload:store-images",
-      "type": "step",
-      "name": "处理并保存截图",
-      "summary": "校验图片、压缩缩略图并写入图片库。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/papers.py",
-      "lineRange": [
-        250,
-        250
-      ]
-    },
-    {
-      "id": "step:batch-paper-upload:read-file",
-      "type": "step",
-      "name": "读取上传文件",
-      "summary": "接收 xlsx/csv/txt 并交给 merge_csv 解析。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/papers.py",
-      "lineRange": [
-        284,
-        284
-      ]
-    },
-    {
-      "id": "step:batch-paper-upload:parse-fragment",
-      "type": "step",
-      "name": "解析批量片段",
-      "summary": "生成 papers 和 paper_data 片段。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/merge_csv.py",
-      "lineRange": [
-        1,
-        1
-      ]
-    },
-    {
-      "id": "step:batch-paper-upload:deduplicate-doi",
-      "type": "step",
-      "name": "跳过重复 DOI",
-      "summary": "同一化合物下已存在 DOI 时不重复创建。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/papers.py",
-      "lineRange": [
-        314,
-        314
-      ]
-    },
-    {
-      "id": "step:batch-paper-upload:persist-batch",
-      "type": "step",
-      "name": "批量落库",
-      "summary": "创建文献并映射临时 ID 到真实 paper_id。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/papers.py",
-      "lineRange": [
-        319,
-        319
-      ]
-    },
-    {
-      "id": "step:json-import-export:export-elements",
-      "type": "step",
-      "name": "导出基础表",
-      "summary": "导出 elements、compounds、papers、paper_data。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/export_data.py",
-      "lineRange": [
-        20,
-        20
-      ]
-    },
-    {
-      "id": "step:json-import-export:export-images",
-      "type": "step",
-      "name": "导出图片文件",
-      "summary": "把 BLOB 图片写出到 data/images 并在 JSON 中记录路径。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/export_data.py",
-      "lineRange": [
-        104,
-        104
-      ]
-    },
-    {
-      "id": "step:json-import-export:import-compounds",
-      "type": "step",
-      "name": "导入化合物",
-      "summary": "导入时标准化元素并创建化合物映射。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/import_data.py",
-      "lineRange": [
-        56,
-        56
-      ]
-    },
-    {
-      "id": "step:json-import-export:import-papers",
-      "type": "step",
-      "name": "导入文献数据",
-      "summary": "按 DOI 跳过已有文献并写入网站业务字段。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/import_data.py",
-      "lineRange": [
-        96,
-        96
-      ]
-    },
-    {
-      "id": "step:json-import-export:import-params-images",
-      "type": "step",
-      "name": "导入物理参数和图片",
-      "summary": "重建 PaperData 与 PaperImage 记录。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/import_data.py",
-      "lineRange": [
-        131,
-        131
-      ]
-    },
-    {
-      "id": "step:paper-image-management:flatten-images",
-      "type": "step",
-      "name": "平铺图片列表",
-      "summary": "兼容新旧图片存储形态并生成统一列表。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/crud.py",
-      "lineRange": [
-        449,
-        449
-      ]
-    },
-    {
-      "id": "step:paper-image-management:group-review-images",
-      "type": "step",
-      "name": "构建审核分组",
-      "summary": "按 figs 或文本说明把图片组合成审核视图。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/crud.py",
-      "lineRange": [
-        530,
-        530
-      ]
-    },
-    {
-      "id": "step:paper-image-management:stream-image",
-      "type": "step",
-      "name": "流式返回图片",
-      "summary": "按 paper_id/order 或 image_id 返回原图/缩略图。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/papers.py",
-      "lineRange": [
-        512,
-        512
-      ]
-    },
-    {
-      "id": "step:paper-image-management:delete-image",
-      "type": "step",
-      "name": "删除截图",
-      "summary": "管理员删除图片时至少保留一张。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/admin.py",
-      "lineRange": [
-        925,
-        925
-      ]
-    },
-    {
-      "id": "step:email-registration-login:register-step-one",
-      "type": "step",
-      "name": "注册第一步",
-      "summary": "检查邮箱、生成验证码并发送邮件。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/auth_routes.py",
-      "lineRange": [
-        48,
-        48
-      ]
-    },
-    {
-      "id": "step:email-registration-login:verify-code",
-      "type": "step",
-      "name": "验证邮箱验证码",
-      "summary": "校验验证码和过期时间后激活账号。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/auth_routes.py",
-      "lineRange": [
-        113,
-        113
-      ]
-    },
-    {
-      "id": "step:email-registration-login:login-user",
-      "type": "step",
-      "name": "登录签发令牌",
-      "summary": "校验密码与审批状态后返回 JWT。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/auth_routes.py",
-      "lineRange": [
-        171,
-        171
-      ]
-    },
-    {
-      "id": "step:email-registration-login:resolve-current-user",
-      "type": "step",
-      "name": "解析当前用户",
-      "summary": "受保护接口通过 token 获取 User。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/security.py",
-      "lineRange": [
-        69,
-        69
-      ]
-    },
-    {
-      "id": "step:admin-approval:list-pending",
-      "type": "step",
-      "name": "列出待审批申请",
-      "summary": "超级管理员查看已验证邮箱但未批准的管理员。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/admin.py",
-      "lineRange": [
-        224,
-        224
-      ]
-    },
-    {
-      "id": "step:admin-approval:approve-admin",
-      "type": "step",
-      "name": "批准管理员",
-      "summary": "设置 is_approved、approved_at 和 approved_by。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/admin.py",
-      "lineRange": [
-        252,
-        252
-      ]
-    },
-    {
-      "id": "step:admin-approval:reject-admin",
-      "type": "step",
-      "name": "拒绝申请",
-      "summary": "发送拒绝通知并删除申请用户。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/admin.py",
-      "lineRange": [
-        252,
-        252
-      ]
-    },
-    {
-      "id": "step:admin-approval:manage-permissions",
-      "type": "step",
-      "name": "管理权限",
-      "summary": "超级管理员修改用户 admin/superadmin/approved 状态。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/admin.py",
-      "lineRange": [
-        148,
-        148
-      ]
-    },
-    {
-      "id": "step:paper-review-governance:list-unreviewed",
-      "type": "step",
-      "name": "查看未审核文献",
-      "summary": "管理员分页查看 review_status=unreviewed 的文献。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/admin.py",
-      "lineRange": [
-        394,
-        394
-      ]
-    },
-    {
-      "id": "step:paper-review-governance:review-paper",
-      "type": "step",
-      "name": "更新审核状态",
-      "summary": "写入 review_status、review_comment、reviewed_by、reviewed_at。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/admin.py",
-      "lineRange": [
-        339,
-        339
-      ]
-    },
-    {
-      "id": "step:paper-review-governance:edit-paper",
-      "type": "step",
-      "name": "编辑文献信息",
-      "summary": "更新元数据或重建物理数据。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/admin.py",
-      "lineRange": [
-        584,
-        584
-      ]
-    },
-    {
-      "id": "step:paper-review-governance:batch-review",
-      "type": "step",
-      "name": "批量审核",
-      "summary": "批量设置文献审核状态。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/admin.py",
-      "lineRange": [
-        763,
-        763
-      ]
-    },
-    {
-      "id": "step:paper-review-governance:delete-paper",
-      "type": "step",
-      "name": "删除文献",
-      "summary": "超级管理员删除 Paper 并清理图片。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/admin.py",
-      "lineRange": [
-        712,
-        712
-      ]
-    },
-    {
-      "id": "step:ptc-chart-data:select-visible",
-      "type": "step",
-      "name": "筛选可展示文献",
-      "summary": "只读取 show_in_chart=True 的文献数据点。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/papers.py",
-      "lineRange": [
-        621,
-        621
-      ]
-    },
-    {
-      "id": "step:ptc-chart-data:parse-ranges",
-      "type": "step",
-      "name": "解析 Tc 和压强区间",
-      "summary": "从 JSON 文本字段得到代表值和区间。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/models.py",
-      "lineRange": [
-        143,
-        143
-      ]
-    },
-    {
-      "id": "step:ptc-chart-data:build-points",
-      "type": "step",
-      "name": "生成图表点",
-      "summary": "返回 x/y、区间、年份、DOI 和类型标签。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/papers.py",
-      "lineRange": [
-        625,
-        625
-      ]
-    },
-    {
-      "id": "step:ptc-chart-data:render-chart",
-      "type": "step",
-      "name": "前端渲染图表",
-      "summary": "首页 JS 消费接口数据绘制 P-Tc 分布。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "frontend/static/js/chart.js",
-      "lineRange": [
-        1,
-        1
-      ]
-    },
-    {
-      "id": "step:citation-export:select-papers",
-      "type": "step",
-      "name": "读取选中文献",
-      "summary": "按 paper_ids 获取文献列表。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/papers.py",
-      "lineRange": [
-        581,
-        581
-      ]
-    },
-    {
-      "id": "step:citation-export:normalize-authors",
-      "type": "step",
-      "name": "规范作者字段",
-      "summary": "把作者字符串转为 JSON 数组。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/crud.py",
-      "lineRange": [
-        727,
-        727
-      ]
-    },
-    {
-      "id": "step:citation-export:generate-citation",
-      "type": "step",
-      "name": "生成引用文本",
-      "summary": "按 APS 或 BibTeX 调用引用生成器。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/utils/citation.py",
-      "lineRange": [
-        1,
-        1
-      ]
-    },
-    {
-      "id": "step:citation-export:download-text",
-      "type": "step",
-      "name": "返回文本下载",
-      "summary": "用 text/plain 返回引用内容。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/papers.py",
-      "lineRange": [
-        611,
-        611
-      ]
-    },
-    {
-      "id": "step:contributor-ranking:load-users",
-      "type": "step",
-      "name": "读取用户列表",
-      "summary": "查询注册用户作为排行候选。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/papers.py",
-      "lineRange": [
-        86,
-        86
-      ]
-    },
-    {
-      "id": "step:contributor-ranking:compute-counts",
-      "type": "step",
-      "name": "计算贡献数量",
-      "summary": "按当前实现保留排行形状。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/papers.py",
-      "lineRange": [
-        91,
-        91
-      ]
-    },
-    {
-      "id": "step:contributor-ranking:return-top",
-      "type": "step",
-      "name": "返回前 20",
-      "summary": "按数量排序并返回前端。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/papers.py",
-      "lineRange": [
-        98,
-        98
-      ]
-    },
-    {
-      "id": "step:tc-prediction-experiment:upload-files",
-      "type": "step",
-      "name": "上传结构和 PDOS",
-      "summary": "接收 CONTCAR 和多个 PDOS 文件。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/tc_predict.py",
-      "lineRange": [
-        100,
-        100
-      ]
-    },
-    {
-      "id": "step:tc-prediction-experiment:validate-h",
-      "type": "step",
-      "name": "校验 H 结构",
-      "summary": "提取 H 子晶格并要求存在氢相关结构。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/tc_predict.py",
-      "lineRange": [
-        20,
-        20
-      ]
-    },
-    {
-      "id": "step:tc-prediction-experiment:read-pdos",
-      "type": "step",
-      "name": "读取 PDOS_H",
-      "summary": "从 PDOS 文件中提取 H 态密度特征。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/tc_predict.py",
-      "lineRange": [
-        60,
-        60
-      ]
-    },
-    {
-      "id": "step:tc-prediction-experiment:predict-result",
-      "type": "step",
-      "name": "计算预测值",
-      "summary": "返回 predicted_tc 和特征值，不写入数据库。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/tc_predict.py",
-      "lineRange": [
-        100,
-        100
-      ]
-    },
-    {
-      "id": "step:alexandria-material-search:prepare-index",
-      "type": "step",
-      "name": "准备 SQLite 索引",
-      "summary": "通过 alexandria_import 读取 entries 和 element_idx。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/alexandria_import.py",
-      "lineRange": [
-        23,
-        23
-      ]
-    },
-    {
-      "id": "step:alexandria-material-search:search-elements",
-      "type": "step",
-      "name": "按元素检索",
-      "summary": "根据 only/combination/contains 过滤材料。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/alexandria.py",
-      "lineRange": [
-        45,
-        45
-      ]
-    },
-    {
-      "id": "step:alexandria-material-search:filter-tc-stable",
-      "type": "step",
-      "name": "过滤 Tc 和稳定性",
-      "summary": "应用 min_tc 与 stable_only 条件。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/alexandria_import.py",
-      "lineRange": [
-        1,
-        1
-      ]
-    },
-    {
-      "id": "step:alexandria-material-search:return-material",
-      "type": "step",
-      "name": "返回详情或下载",
-      "summary": "按 mat_id 返回轻量详情或完整 JSON。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/alexandria.py",
-      "lineRange": [
-        81,
-        81
-      ]
-    },
-    {
-      "id": "step:htsc2025-dataset-search:load-json",
-      "type": "step",
-      "name": "加载数据集 JSON",
-      "summary": "读取 data/htsc2025.json。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/htsc2025.py",
-      "lineRange": [
-        1,
-        1
-      ]
-    },
-    {
-      "id": "step:htsc2025-dataset-search:match-elements",
-      "type": "step",
-      "name": "匹配元素",
-      "summary": "按元素集合关系过滤记录。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/htsc2025.py",
-      "lineRange": [
-        61,
-        61
-      ]
-    },
-    {
-      "id": "step:htsc2025-dataset-search:serve-stats-detail",
-      "type": "step",
-      "name": "提供统计详情",
-      "summary": "返回统计、详情和 CIF 数据。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/htsc2025.py",
-      "lineRange": [
-        91,
-        91
-      ]
-    },
-    {
-      "id": "step:ai-filtered-paper-browse:open-ai-db",
-      "type": "step",
-      "name": "打开 AI 数据库",
-      "summary": "使用 get_ai_db 和 get_ai_image_db。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/database.py",
-      "lineRange": [
-        120,
-        120
-      ]
-    },
-    {
-      "id": "step:ai-filtered-paper-browse:reuse-search",
-      "type": "step",
-      "name": "复用文献检索",
-      "summary": "调用主 crud 逻辑检索 AI 文献。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/ai_papers.py",
-      "lineRange": [
-        44,
-        44
-      ]
-    },
-    {
-      "id": "step:ai-filtered-paper-browse:serve-ai-images",
-      "type": "step",
-      "name": "返回 AI 图片",
-      "summary": "从 AI 图片库按顺序读取图片。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/api/ai_papers.py",
-      "lineRange": [
-        158,
-        158
-      ]
-    },
-    {
-      "id": "step:database-session-routing:resolve-paths",
-      "type": "step",
-      "name": "解析数据库路径",
-      "summary": "从环境变量或 data 目录选择数据库文件。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/database.py",
-      "lineRange": [
-        24,
-        24
-      ]
-    },
-    {
-      "id": "step:database-session-routing:create-engines",
-      "type": "step",
-      "name": "创建四个 engine",
-      "summary": "分别绑定主库、图片库、AI 主库、AI 图片库。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/database.py",
-      "lineRange": [
-        68,
-        68
-      ]
-    },
-    {
-      "id": "step:database-session-routing:provide-sessions",
-      "type": "step",
-      "name": "提供依赖会话",
-      "summary": "FastAPI 通过 get_db 等函数注入会话。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/database.py",
-      "lineRange": [
-        102,
-        102
-      ]
-    },
-    {
-      "id": "step:database-initialization:create-tables",
-      "type": "step",
-      "name": "创建主库和图片库表",
-      "summary": "调用 MetadataBase/ImageBase.create_all。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/init_db.py",
-      "lineRange": [
-        139,
-        139
-      ]
-    },
-    {
-      "id": "step:database-initialization:seed-elements",
-      "type": "step",
-      "name": "填充元素字典",
-      "summary": "首次初始化写入 118 个元素。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/init_db.py",
-      "lineRange": [
-        153,
-        153
-      ]
-    },
-    {
-      "id": "step:database-initialization:ensure-columns",
-      "type": "step",
-      "name": "兼容补列",
-      "summary": "为旧库补齐 papers 和 paper_data 的网站字段。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/init_db.py",
-      "lineRange": [
-        184,
-        184
-      ]
-    },
-    {
-      "id": "step:database-initialization:ensure-indexes",
-      "type": "step",
-      "name": "补充索引",
-      "summary": "为审核、年份、DOI、图片 paper_id 等字段建索引。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/init_db.py",
-      "lineRange": [
-        213,
-        213
-      ]
-    },
-    {
-      "id": "step:maintenance-backup:create-superadmin",
-      "type": "step",
-      "name": "创建超级管理员",
-      "summary": "交互式创建最高权限账号。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/create_superadmin.py",
-      "lineRange": [
-        1,
-        1
-      ]
-    },
-    {
-      "id": "step:maintenance-backup:migrate-ids",
-      "type": "step",
-      "name": "迁移元素 ID",
-      "summary": "为旧 compounds 补齐 element_id_list。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "backend/migrate_ids.py",
-      "lineRange": [
-        1,
-        1
-      ]
-    },
-    {
-      "id": "step:maintenance-backup:backup-local",
-      "type": "step",
-      "name": "执行本地备份",
-      "summary": "按脚本打包数据库和导出文件。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "scripts/autobackup.sh",
-      "lineRange": [
-        1,
-        1
-      ]
-    },
-    {
-      "id": "step:maintenance-backup:backup-remote",
-      "type": "step",
-      "name": "同步远程备份",
-      "summary": "通过远程脚本同步备份数据。",
-      "tags": [
-        "business-step"
-      ],
-      "complexity": "moderate",
-      "filePath": "scripts/remote_backup.sh",
-      "lineRange": [
-        1,
-        1
-      ]
-    }
-  ],
-  "edges": [
-    {
-      "source": "domain:search-and-discovery",
-      "target": "flow:periodic-element-search",
-      "type": "contains_flow",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "domain:search-and-discovery",
-      "target": "flow:compound-literature-browse",
-      "type": "contains_flow",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "domain:search-and-discovery",
-      "target": "flow:mode-based-compound-search",
-      "type": "contains_flow",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "domain:paper-ingestion-and-data-curation",
-      "target": "flow:single-paper-upload",
-      "type": "contains_flow",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "domain:paper-ingestion-and-data-curation",
-      "target": "flow:batch-paper-upload",
-      "type": "contains_flow",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "domain:paper-ingestion-and-data-curation",
-      "target": "flow:json-import-export",
-      "type": "contains_flow",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "domain:paper-ingestion-and-data-curation",
-      "target": "flow:paper-image-management",
-      "type": "contains_flow",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "domain:identity-review-and-governance",
-      "target": "flow:email-registration-login",
-      "type": "contains_flow",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "domain:identity-review-and-governance",
-      "target": "flow:admin-approval",
-      "type": "contains_flow",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "domain:identity-review-and-governance",
-      "target": "flow:paper-review-governance",
-      "type": "contains_flow",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "domain:analytics-and-visualization",
-      "target": "flow:ptc-chart-data",
-      "type": "contains_flow",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "domain:analytics-and-visualization",
-      "target": "flow:citation-export",
-      "type": "contains_flow",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "domain:analytics-and-visualization",
-      "target": "flow:contributor-ranking",
-      "type": "contains_flow",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "domain:external-datasets-and-prediction",
-      "target": "flow:tc-prediction-experiment",
-      "type": "contains_flow",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "domain:external-datasets-and-prediction",
-      "target": "flow:alexandria-material-search",
-      "type": "contains_flow",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "domain:external-datasets-and-prediction",
-      "target": "flow:htsc2025-dataset-search",
-      "type": "contains_flow",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "domain:external-datasets-and-prediction",
-      "target": "flow:ai-filtered-paper-browse",
-      "type": "contains_flow",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "domain:operations-and-persistence",
-      "target": "flow:database-session-routing",
-      "type": "contains_flow",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "domain:operations-and-persistence",
-      "target": "flow:database-initialization",
-      "type": "contains_flow",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "domain:operations-and-persistence",
-      "target": "flow:maintenance-backup",
-      "type": "contains_flow",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "flow:periodic-element-search",
-      "target": "step:periodic-element-search:load-elements",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.2
-    },
-    {
-      "source": "flow:periodic-element-search",
-      "target": "step:periodic-element-search:submit-selection",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "flow:periodic-element-search",
-      "target": "step:periodic-element-search:normalize-selection",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "flow:periodic-element-search",
-      "target": "step:periodic-element-search:navigate-compound",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "flow:compound-literature-browse",
-      "target": "step:compound-literature-browse:parse-route",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.2
-    },
-    {
-      "source": "flow:compound-literature-browse",
-      "target": "step:compound-literature-browse:find-compounds",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.4
-    },
-    {
-      "source": "flow:compound-literature-browse",
-      "target": "step:compound-literature-browse:build-filter",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
-      "source": "flow:compound-literature-browse",
-      "target": "step:compound-literature-browse:paginate-results",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "flow:compound-literature-browse",
-      "target": "step:compound-literature-browse:serialize-response",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "flow:mode-based-compound-search",
-      "target": "step:mode-based-compound-search:validate-mode",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.2
-    },
-    {
-      "source": "flow:mode-based-compound-search",
-      "target": "step:mode-based-compound-search:match-compounds",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "flow:mode-based-compound-search",
-      "target": "step:mode-based-compound-search:count-papers",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "flow:mode-based-compound-search",
-      "target": "step:mode-based-compound-search:return-page",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "flow:single-paper-upload",
-      "target": "step:single-paper-upload:require-login",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.2
-    },
-    {
-      "source": "flow:single-paper-upload",
-      "target": "step:single-paper-upload:parse-form",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.3
-    },
-    {
-      "source": "flow:single-paper-upload",
-      "target": "step:single-paper-upload:resolve-doi",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "flow:single-paper-upload",
-      "target": "step:single-paper-upload:create-compound",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.7
-    },
-    {
-      "source": "flow:single-paper-upload",
-      "target": "step:single-paper-upload:write-paper-data",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "flow:single-paper-upload",
-      "target": "step:single-paper-upload:store-images",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "flow:batch-paper-upload",
-      "target": "step:batch-paper-upload:read-file",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.2
-    },
-    {
-      "source": "flow:batch-paper-upload",
-      "target": "step:batch-paper-upload:parse-fragment",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "flow:batch-paper-upload",
-      "target": "step:batch-paper-upload:deduplicate-doi",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "flow:batch-paper-upload",
-      "target": "step:batch-paper-upload:persist-batch",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "flow:json-import-export",
-      "target": "step:json-import-export:export-elements",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.2
-    },
-    {
-      "source": "flow:json-import-export",
-      "target": "step:json-import-export:export-images",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.4
-    },
-    {
-      "source": "flow:json-import-export",
-      "target": "step:json-import-export:import-compounds",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
-      "source": "flow:json-import-export",
-      "target": "step:json-import-export:import-papers",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "flow:json-import-export",
-      "target": "step:json-import-export:import-params-images",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "flow:paper-image-management",
-      "target": "step:paper-image-management:flatten-images",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.2
-    },
-    {
-      "source": "flow:paper-image-management",
-      "target": "step:paper-image-management:group-review-images",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "flow:paper-image-management",
-      "target": "step:paper-image-management:stream-image",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "flow:paper-image-management",
-      "target": "step:paper-image-management:delete-image",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "flow:email-registration-login",
-      "target": "step:email-registration-login:register-step-one",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.2
-    },
-    {
-      "source": "flow:email-registration-login",
-      "target": "step:email-registration-login:verify-code",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "flow:email-registration-login",
-      "target": "step:email-registration-login:login-user",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "flow:email-registration-login",
-      "target": "step:email-registration-login:resolve-current-user",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "flow:admin-approval",
-      "target": "step:admin-approval:list-pending",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.2
-    },
-    {
-      "source": "flow:admin-approval",
-      "target": "step:admin-approval:approve-admin",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "flow:admin-approval",
-      "target": "step:admin-approval:reject-admin",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "flow:admin-approval",
-      "target": "step:admin-approval:manage-permissions",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "flow:paper-review-governance",
-      "target": "step:paper-review-governance:list-unreviewed",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.2
-    },
-    {
-      "source": "flow:paper-review-governance",
-      "target": "step:paper-review-governance:review-paper",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.4
-    },
-    {
-      "source": "flow:paper-review-governance",
-      "target": "step:paper-review-governance:edit-paper",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
-      "source": "flow:paper-review-governance",
-      "target": "step:paper-review-governance:batch-review",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "flow:paper-review-governance",
-      "target": "step:paper-review-governance:delete-paper",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "flow:ptc-chart-data",
-      "target": "step:ptc-chart-data:select-visible",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.2
-    },
-    {
-      "source": "flow:ptc-chart-data",
-      "target": "step:ptc-chart-data:parse-ranges",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "flow:ptc-chart-data",
-      "target": "step:ptc-chart-data:build-points",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "flow:ptc-chart-data",
-      "target": "step:ptc-chart-data:render-chart",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "flow:citation-export",
-      "target": "step:citation-export:select-papers",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.2
-    },
-    {
-      "source": "flow:citation-export",
-      "target": "step:citation-export:normalize-authors",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "flow:citation-export",
-      "target": "step:citation-export:generate-citation",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "flow:citation-export",
-      "target": "step:citation-export:download-text",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "flow:contributor-ranking",
-      "target": "step:contributor-ranking:load-users",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.3
-    },
-    {
-      "source": "flow:contributor-ranking",
-      "target": "step:contributor-ranking:compute-counts",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.7
-    },
-    {
-      "source": "flow:contributor-ranking",
-      "target": "step:contributor-ranking:return-top",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "flow:tc-prediction-experiment",
-      "target": "step:tc-prediction-experiment:upload-files",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.2
-    },
-    {
-      "source": "flow:tc-prediction-experiment",
-      "target": "step:tc-prediction-experiment:validate-h",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "flow:tc-prediction-experiment",
-      "target": "step:tc-prediction-experiment:read-pdos",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "flow:tc-prediction-experiment",
-      "target": "step:tc-prediction-experiment:predict-result",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "flow:alexandria-material-search",
-      "target": "step:alexandria-material-search:prepare-index",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.2
-    },
-    {
-      "source": "flow:alexandria-material-search",
-      "target": "step:alexandria-material-search:search-elements",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "flow:alexandria-material-search",
-      "target": "step:alexandria-material-search:filter-tc-stable",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "flow:alexandria-material-search",
-      "target": "step:alexandria-material-search:return-material",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "flow:htsc2025-dataset-search",
-      "target": "step:htsc2025-dataset-search:load-json",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.3
-    },
-    {
-      "source": "flow:htsc2025-dataset-search",
-      "target": "step:htsc2025-dataset-search:match-elements",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.7
-    },
-    {
-      "source": "flow:htsc2025-dataset-search",
-      "target": "step:htsc2025-dataset-search:serve-stats-detail",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "flow:ai-filtered-paper-browse",
-      "target": "step:ai-filtered-paper-browse:open-ai-db",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.3
-    },
-    {
-      "source": "flow:ai-filtered-paper-browse",
-      "target": "step:ai-filtered-paper-browse:reuse-search",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.7
-    },
-    {
-      "source": "flow:ai-filtered-paper-browse",
-      "target": "step:ai-filtered-paper-browse:serve-ai-images",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "flow:database-session-routing",
-      "target": "step:database-session-routing:resolve-paths",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.3
-    },
-    {
-      "source": "flow:database-session-routing",
-      "target": "step:database-session-routing:create-engines",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.7
-    },
-    {
-      "source": "flow:database-session-routing",
-      "target": "step:database-session-routing:provide-sessions",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "flow:database-initialization",
-      "target": "step:database-initialization:create-tables",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.2
-    },
-    {
-      "source": "flow:database-initialization",
-      "target": "step:database-initialization:seed-elements",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "flow:database-initialization",
-      "target": "step:database-initialization:ensure-columns",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "flow:database-initialization",
-      "target": "step:database-initialization:ensure-indexes",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "flow:maintenance-backup",
-      "target": "step:maintenance-backup:create-superadmin",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.2
-    },
-    {
-      "source": "flow:maintenance-backup",
-      "target": "step:maintenance-backup:migrate-ids",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "flow:maintenance-backup",
-      "target": "step:maintenance-backup:backup-local",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "flow:maintenance-backup",
-      "target": "step:maintenance-backup:backup-remote",
-      "type": "flow_step",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "domain:paper-ingestion-and-data-curation",
-      "target": "domain:search-and-discovery",
-      "type": "cross_domain",
-      "direction": "forward",
-      "description": "入库产生的文献和物理数据是检索浏览的数据来源。",
-      "weight": 0.6
-    },
-    {
-      "source": "domain:identity-review-and-governance",
-      "target": "domain:paper-ingestion-and-data-curation",
-      "type": "cross_domain",
-      "direction": "forward",
-      "description": "身份域决定用户是否可上传，审核域决定文献后续状态。",
-      "weight": 0.6
-    },
-    {
-      "source": "domain:identity-review-and-governance",
-      "target": "domain:analytics-and-visualization",
-      "type": "cross_domain",
-      "direction": "forward",
-      "description": "审核和 show_in_chart 状态控制图表展示范围。",
-      "weight": 0.6
-    },
-    {
-      "source": "domain:search-and-discovery",
-      "target": "domain:external-datasets-and-prediction",
-      "type": "cross_domain",
-      "direction": "forward",
-      "description": "元素选择语义被 AI 文献库、Alexandria 和 HTSC-2025 复用。",
-      "weight": 0.6
-    },
-    {
-      "source": "domain:operations-and-persistence",
-      "target": "domain:paper-ingestion-and-data-curation",
-      "type": "cross_domain",
-      "direction": "forward",
-      "description": "数据库会话、初始化和维护脚本支撑文献写入与恢复。",
-      "weight": 0.6
-    },
-    {
-      "source": "domain:operations-and-persistence",
-      "target": "domain:identity-review-and-governance",
-      "type": "cross_domain",
-      "direction": "forward",
-      "description": "用户表、JWT 配置和超级管理员创建依赖运维支撑。",
-      "weight": 0.6
-    }
-  ],
-  "layers": [],
-  "tour": []
+  "stats": {
+    "filesAnalyzed": 118,
+    "routes": 68,
+    "nodes": 290,
+    "edges": 523,
+    "layers": 6
+  }
 }

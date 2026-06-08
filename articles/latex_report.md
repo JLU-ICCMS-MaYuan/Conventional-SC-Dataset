@@ -6,17 +6,18 @@
 - English PDF: `articles/final_paper/main.pdf`
 - Chinese source: `articles/final_paper/main_zh.tex`
 - Chinese PDF: `articles/final_paper/main_zh.pdf`
-- Command: `latexmk -pdf -interaction=nonstopmode -halt-on-error -jobname=paper "main.tex"`
-- Engine used by `latexmk`: `pdflatex`
-- Result: PASS, PDF generated successfully.
+- English command: `pdflatex -interaction=nonstopmode -halt-on-error "main.tex"` followed by a second pass.
+- Chinese command: `xelatex -interaction=nonstopmode -halt-on-error "main_zh.tex"` followed by a second pass.
+- Result: PASS, both PDFs generated successfully.
 
 ## Log Status
 
-- Undefined citations: none in final `paper.log`.
-- LaTeX warnings: none in final `paper.log`.
+- Undefined citations: none after the second pass.
+- Undefined references: none after the second pass.
 - Remaining typography notes:
-  - 1 minor overfull hbox around `hydride_literature_ai.db`.
-  - 4 underfull hboxes in bibliography paragraphs.
+  - English: 2 minor overfull hboxes around the synchronized snapshot sentence and `hydride_literature_ai.db`.
+  - Chinese: 1 overfull hbox around `hydride_literature_ai.db`.
+  - English/Chinese: several underfull hboxes in bibliography paragraphs.
 
 These typography notes do not block compilation, but they can be polished before submission.
 
@@ -25,6 +26,8 @@ These typography notes do not block compilation, but they can be polished before
 The final LaTeX source includes targeted revisions after structured review:
 
 - Added a clearer boundary for the AI-screened database.
+- Added explicit local / AI-screened / HTSC-2025 / Alexandria data-source modes after synchronizing `mayuan` with `origin/master`.
+- Updated repository statistics to 15,572 counted lines, 68 backend routes, nine page templates, and 140 bundled HTSC-2025 fixture records.
 - Expanded the Design principles framing paragraph.
 - Added a System implementation bridge paragraph.
 - Added a reproducibility protocol paragraph for repository statistics and workflow validation.

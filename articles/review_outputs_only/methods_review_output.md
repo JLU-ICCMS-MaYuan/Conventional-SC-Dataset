@@ -13,7 +13,7 @@
 
 ### 1. Current repository and data status: evaluation is descriptive but not reproducible enough
 
-The manuscript reports that the repository snapshot dated 2 June 2026 contains 15,044 lines, 67 backend routes, nine page templates, and nine non-`__init__` API modules. These are useful implementation descriptors, but the Methods section does not explain how these numbers were computed. A reproducible paper should provide the exact commands, inclusion/exclusion rules, and whether generated files, virtual environments, static assets, migrations, database files, and tests were included.
+The manuscript reports that the repository snapshot synchronized with origin/master on 8 June 2026 contains 15,572 lines, 68 backend routes, nine page templates, and nine non-`__init__` API modules. These are useful implementation descriptors, but the Methods section does not explain how these numbers were computed. A reproducible paper should provide the exact commands, inclusion/exclusion rules, and whether generated files, virtual environments, static assets, migrations, database files, and tests were included.
 
 This matters because these quantities are presented as evidence that the platform is more than a static spreadsheet or isolated prototype. Without a reproducible counting protocol, readers cannot independently verify the claim.
 

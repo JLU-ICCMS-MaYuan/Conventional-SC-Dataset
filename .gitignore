@@ -33,6 +33,7 @@ wheels/
 
 # 日志
 *.log
+.play*
 
 # 环境变量
 .env

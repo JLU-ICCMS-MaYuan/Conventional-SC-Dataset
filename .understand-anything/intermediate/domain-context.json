@@ -1,1252 +1,387 @@
 {
-  "projectRoot": "/home/mayuan/code/Conventional-SC-Dataset",
-  "fileCount": 43,
-  "fileTree": [
-    "backend/api/__init__.py",
-    "backend/api/admin.py",
-    "backend/api/ai_papers.py",
-    "backend/api/alexandria.py",
-    "backend/api/auth_routes.py",
-    "backend/api/compounds.py",
-    "backend/api/elements.py",
-    "backend/api/htsc2025.py",
-    "backend/api/papers.py",
-    "backend/api/tc_predict.py",
-    "backend/migrations/__init__.py",
-    "backend/utils/__init__.py",
-    "backend/utils/citation.py",
-    "backend/utils/doi_resolver.py",
-    "backend/utils/image_processor.py",
-    "backend/__init__.py",
-    "backend/alexandria_db.py",
-    "backend/alexandria_import.py",
-    "backend/create_superadmin.py",
-    "backend/crud.py",
-    "backend/database.py",
-    "backend/email_service.py",
-    "backend/export_data.py",
-    "backend/fix_imported_authors_json.py",
-    "backend/import_data.py",
-    "backend/import_reviewed_xlsx.py",
-    "backend/init_db.py",
-    "backend/main.py",
-    "backend/merge_csv.py",
-    "backend/migrate_ids.py",
-    "backend/models.py",
-    "backend/schemas.py",
-    "backend/security.py",
-    "data/import_papers_to_sqlite.py",
-    "frontend/static/js/admin_papers.js",
-    "frontend/static/js/auth_helper.js",
-    "frontend/static/js/auth_state.js",
-    "frontend/static/js/bootstrap.bundle.min.js",
-    "frontend/static/js/chart.js",
-    "frontend/static/js/compound_page.js",
-    "frontend/static/js/i18n.js",
-    "frontend/static/js/periodic_table.js",
-    "frontend/static/js/tc_pre.js"
-  ],
-  "entryPoints": [
-    {
-      "file": "backend/api/admin.py",
-      "line": 115,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/all-users\"",
-      "snippet": "@router.get(\"/all-users\", summary=\"\u83b7\u53d6\u6240\u6709\u7528\u6237\u5217\u8868\uff08\u4ec5\u8d85\u7ea7\u7ba1\u7406\u5458\uff09\")\nasync def get_all_users(\n    db: Session = Depends(get_db),\n    current_user: User = Depends(get_current_superadmin)\n):"
-    },
-    {
-      "file": "backend/api/admin.py",
-      "line": 148,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.put(\"/users/{user_id}/permissions\"",
-      "snippet": "@router.put(\"/users/{user_id}/permissions\", summary=\"\u4fee\u6539\u7528\u6237\u6743\u9650\uff08\u4ec5\u8d85\u7ea7\u7ba1\u7406\u5458\uff09\")\nasync def update_user_permissions(\n    user_id: int,\n    request: UserPermissionRequest,\n    db: Session = Depends(get_db),"
-    },
-    {
-      "file": "backend/api/admin.py",
-      "line": 176,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.delete(\"/users/{user_id}\"",
-      "snippet": "@router.delete(\"/users/{user_id}\", summary=\"\u5220\u9664\u7528\u6237\uff08\u4ec5\u8d85\u7ea7\u7ba1\u7406\u5458\uff09\")\nasync def delete_user(\n    user_id: int,\n    db: Session = Depends(get_db),\n    current_user: User = Depends(get_current_superadmin)"
-    },
-    {
-      "file": "backend/api/admin.py",
-      "line": 195,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/users/{user_id}/submitted-papers\"",
-      "snippet": "@router.get(\"/users/{user_id}/submitted-papers\", summary=\"\u83b7\u53d6\u7528\u6237\u63d0\u4ea4\u7684\u6587\u732e\u5217\u8868\")\nasync def get_user_submitted_papers(\n    user_id: int,\n    db: Session = Depends(get_db),\n    current_user: User = Depends(get_current_superadmin)"
-    },
-    {
-      "file": "backend/api/admin.py",
-      "line": 224,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/pending-approvals\"",
-      "snippet": "@router.get(\"/pending-approvals\", summary=\"\u83b7\u53d6\u5f85\u5ba1\u6279\u7684\u7ba1\u7406\u5458\u5217\u8868\uff08\u4ec5\u8d85\u7ea7\u7ba1\u7406\u5458\uff09\")\nasync def get_pending_approvals(\n    db: Session = Depends(get_db),\n    current_user: User = Depends(get_current_superadmin)\n):"
-    },
-    {
-      "file": "backend/api/admin.py",
-      "line": 252,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.post(\"/approve-user\"",
-      "snippet": "@router.post(\"/approve-user\", summary=\"\u5ba1\u6279\u7ba1\u7406\u5458\u7533\u8bf7\uff08\u4ec5\u8d85\u7ea7\u7ba1\u7406\u5458\uff09\")\nasync def approve_user(\n    request: ApproveRequest,\n    db: Session = Depends(get_db),\n    current_user: User = Depends(get_current_superadmin)"
-    },
-    {
-      "file": "backend/api/admin.py",
-      "line": 313,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/all-admins\"",
-      "snippet": "@router.get(\"/all-admins\", summary=\"\u83b7\u53d6\u6240\u6709\u7ba1\u7406\u5458\u5217\u8868\uff08\u4ec5\u8d85\u7ea7\u7ba1\u7406\u5458\uff09\")\nasync def get_all_admins(\n    db: Session = Depends(get_db),\n    current_user: User = Depends(get_current_superadmin)\n):"
-    },
-    {
-      "file": "backend/api/admin.py",
-      "line": 339,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.post(\"/papers/{paper_id}/review\"",
-      "snippet": "@router.post(\"/papers/{paper_id}/review\", summary=\"\u66f4\u65b0\u6587\u732e\u5ba1\u6838\u72b6\u6001\")\nasync def review_paper(\n    paper_id: int,\n    request: ReviewPaperRequest,\n    db: Session = Depends(get_db),"
-    },
-    {
-      "file": "backend/api/admin.py",
-      "line": 394,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/papers/unreviewed\"",
-      "snippet": "@router.get(\"/papers/unreviewed\", summary=\"\u83b7\u53d6\u672a\u5ba1\u6838\u6587\u732e\u5217\u8868\")\nasync def get_unreviewed_papers(\n    limit: int = 30,\n    offset: int = 0,\n    db: Session = Depends(get_db),"
-    },
-    {
-      "file": "backend/api/admin.py",
-      "line": 421,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/my-reviews\"",
-      "snippet": "@router.get(\"/my-reviews\", summary=\"\u83b7\u53d6\u6211\u5ba1\u6838\u7684\u6587\u732e\u5217\u8868\")\nasync def get_my_reviewed_papers(\n    db: Session = Depends(get_db),\n    current_user: User = Depends(get_current_admin)\n):"
-    },
-    {
-      "file": "backend/api/admin.py",
-      "line": 471,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/papers/all\"",
-      "snippet": "@router.get(\"/papers/all\", summary=\"\u83b7\u53d6\u6240\u6709\u6587\u732e\uff08\u652f\u6301\u591a\u7ef4\u5ea6\u7b5b\u9009\uff09\")\nasync def get_all_papers(\n    review_status: Optional[str] = None,  # unreviewed, approved, rejected, modifying\n    article_type: Optional[str] = None,  # theoretical, experimental\n    superconductor_type: Optional[str] = None,  # cuprate, iron_b"
-    },
-    {
-      "file": "backend/api/admin.py",
-      "line": 556,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/papers/{paper_id}\"",
-      "snippet": "@router.get(\"/papers/{paper_id}\", summary=\"\u83b7\u53d6\u6587\u732e\u8be6\u7ec6\u4fe1\u606f\")\nasync def get_paper_detail(\n    paper_id: int,\n    db: Session = Depends(get_db),\n    image_db: Session = Depends(get_image_db),"
-    },
-    {
-      "file": "backend/api/admin.py",
-      "line": 584,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.put(\"/papers/{paper_id}\"",
-      "snippet": "@router.put(\"/papers/{paper_id}\", summary=\"\u7f16\u8f91\u6587\u732e\u4fe1\u606f\")\nasync def update_paper(\n    paper_id: int,\n    request: UpdatePaperRequest,\n    db: Session = Depends(get_db),"
-    },
-    {
-      "file": "backend/api/admin.py",
-      "line": 712,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.delete(\"/papers/{paper_id}\"",
-      "snippet": "@router.delete(\"/papers/{paper_id}\", summary=\"\u5220\u9664\u6587\u732e\uff08\u4ec5\u8d85\u7ea7\u7ba1\u7406\u5458\uff09\")\nasync def delete_paper(\n    paper_id: int,\n    db: Session = Depends(get_db),\n    image_db: Session = Depends(get_image_db),"
-    },
-    {
-      "file": "backend/api/admin.py",
-      "line": 763,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.post(\"/papers/batch-review\"",
-      "snippet": "@router.post(\"/papers/batch-review\", summary=\"\u6279\u91cf\u5ba1\u6838\u6587\u732e\")\nasync def batch_review_papers(\n    request: BatchReviewRequest,\n    db: Session = Depends(get_db),\n    current_user: User = Depends(get_current_admin)"
-    },
-    {
-      "file": "backend/api/admin.py",
-      "line": 810,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.post(\"/papers/batch-chart-visibility\"",
-      "snippet": "@router.post(\"/papers/batch-chart-visibility\", summary=\"\u6279\u91cf\u8bbe\u7f6e\u56fe\u8868\u663e\u793a\uff08\u4ec5\u8d85\u7ea7\u7ba1\u7406\u5458\uff09\")\nasync def batch_chart_visibility(\n    request: ChartVisibilityRequest,\n    db: Session = Depends(get_db),\n    current_user: User = Depends(get_current_superadmin)"
-    },
-    {
-      "file": "backend/api/admin.py",
-      "line": 846,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.post(\"/papers/batch-delete\"",
-      "snippet": "@router.post(\"/papers/batch-delete\", summary=\"\u6279\u91cf\u5220\u9664\u6587\u732e\uff08\u4ec5\u8d85\u7ea7\u7ba1\u7406\u5458\uff09\")\nasync def batch_delete_papers(\n    request: BatchReviewRequest,\n    db: Session = Depends(get_db),\n    image_db: Session = Depends(get_image_db),"
-    },
-    {
-      "file": "backend/api/admin.py",
-      "line": 901,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/papers/{paper_id}/images\"",
-      "snippet": "@router.get(\"/papers/{paper_id}/images\", summary=\"\u83b7\u53d6\u6587\u732e\u7684\u6240\u6709\u56fe\u7247\")\nasync def get_paper_images(\n    paper_id: int,\n    db: Session = Depends(get_db),\n    image_db: Session = Depends(get_image_db),"
-    },
-    {
-      "file": "backend/api/admin.py",
-      "line": 925,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.delete(\"/papers/{paper_id}/images/{image_id}\"",
-      "snippet": "@router.delete(\"/papers/{paper_id}/images/{image_id}\", summary=\"\u5220\u9664\u6587\u732e\u622a\u56fe\")\nasync def delete_paper_image(\n    paper_id: int,\n    image_id: int,\n    db: Session = Depends(get_db),"
-    },
-    {
-      "file": "backend/api/ai_papers.py",
-      "line": 17,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/compounds/{element_symbols}\"",
-      "snippet": "@router.get(\"/compounds/{element_symbols}\")\ndef get_ai_compound_info(\n    element_symbols: str,\n    db: Session = Depends(get_ai_db)\n):"
-    },
-    {
-      "file": "backend/api/ai_papers.py",
-      "line": 44,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/papers/compound/{element_symbols}\"",
-      "snippet": "@router.get(\"/papers/compound/{element_symbols}\", response_model=schemas.PaperPaginationResponse)\ndef get_ai_papers_by_compound(\n    element_symbols: str,\n    keyword: Optional[str] = None,\n    year_min: Optional[int] = None,"
-    },
-    {
-      "file": "backend/api/ai_papers.py",
-      "line": 102,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.post(\"/papers/search-by-mode\"",
-      "snippet": "@router.post(\"/papers/search-by-mode\", response_model=schemas.PaperPaginationResponse)\ndef search_ai_papers_by_mode(\n    request: schemas.PaperModeSearchRequest,\n    db: Session = Depends(get_ai_db),\n    image_db: Session = Depends(get_ai_image_db)"
-    },
-    {
-      "file": "backend/api/ai_papers.py",
-      "line": 152,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/papers/crystal-structures\"",
-      "snippet": "@router.get(\"/papers/crystal-structures\")\ndef get_ai_crystal_structures(db: Session = Depends(get_ai_db)):\n    \"\"\"\u83b7\u53d6AI\u6570\u636e\u5e93\u4e2d\u6240\u6709\u6676\u4f53\u7ed3\u6784\u7c7b\u578b\"\"\"\n    return crud.get_all_crystal_structures(db)\n"
-    },
-    {
-      "file": "backend/api/ai_papers.py",
-      "line": 158,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/papers/{paper_id}/images/{image_order}\"",
-      "snippet": "@router.get(\"/papers/{paper_id}/images/{image_order}\")\ndef get_ai_paper_image(\n    paper_id: int,\n    image_order: int,\n    thumbnail: bool = False,"
-    },
-    {
-      "file": "backend/api/alexandria.py",
-      "line": 45,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.post(\"/search\"",
-      "snippet": "@router.post(\"/search\", response_model=AlexandriaSearchResult)\ndef search_alexandria(request: AlexandriaSearchRequest):\n    \"\"\"\u6309\u5143\u7d20\u641c\u7d22 Alexandria \u6570\u636e\u5e93\u4e2d\u7684\u6750\u6599\"\"\"\n    if not request.elements:\n        raise HTTPException(status_code=400, detail=\"\u81f3\u5c11\u9700\u8981\u9009\u62e9\u4e00\u4e2a\u5143\u7d20\")"
-    },
-    {
-      "file": "backend/api/alexandria.py",
-      "line": 62,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/elements\"",
-      "snippet": "@router.get(\"/elements\")\ndef list_alexandria_elements():\n    \"\"\"\u5217\u51fa Alexandria \u6570\u636e\u5e93\u4e2d\u6240\u6709\u5143\u7d20\u53ca\u5176\u884c\u8303\u56f4\"\"\"\n    try:\n        from backend.alexandria_import import get_read_conn"
-    },
-    {
-      "file": "backend/api/alexandria.py",
-      "line": 81,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/material/{mat_id}\"",
-      "snippet": "@router.get(\"/material/{mat_id}\")\ndef get_alexandria_material(mat_id: str):\n    \"\"\"\u83b7\u53d6\u6750\u6599\u539f\u59cb\u6570\u636e\uff08\u4e0d\u542b force_constants \u548c dyns\uff0c\u51cf\u5c0f\u54cd\u5e94\u4f53\u79ef\uff09\"\"\"\n    from backend.alexandria_import import get_read_conn\n    conn = get_read_conn()"
-    },
-    {
-      "file": "backend/api/alexandria.py",
-      "line": 97,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/material/{mat_id}/download\"",
-      "snippet": "@router.get(\"/material/{mat_id}/download\")\ndef download_alexandria_material(mat_id: str):\n    \"\"\"\u4e0b\u8f7d\u6750\u6599\u5b8c\u6574\u539f\u59cb\u6570\u636e\uff08\u542b force_constants \u548c dyns\uff0c\u6587\u4ef6\u8f83\u5927\uff09\"\"\"\n    from backend.alexandria_import import get_read_conn\n    conn = get_read_conn()"
-    },
-    {
-      "file": "backend/api/alexandria.py",
-      "line": 117,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/stats\"",
-      "snippet": "@router.get(\"/stats\")\ndef alexandria_stats():\n    \"\"\"\u8fd4\u56de Alexandria \u6570\u636e\u5e93\u7edf\u8ba1\u4fe1\u606f\"\"\"\n    try:\n        from backend.alexandria_import import get_read_conn"
-    },
-    {
-      "file": "backend/api/auth_routes.py",
-      "line": 48,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.post(\"/register\"",
-      "snippet": "@router.post(\"/register\", summary=\"\u7528\u6237/\u7ba1\u7406\u5458\u6ce8\u518c\uff08\u7b2c\u4e00\u6b65\uff1a\u53d1\u9001\u9a8c\u8bc1\u7801\uff09\")\nasync def register_step1(request: RegisterRequest, db: Session = Depends(get_db)):\n    \"\"\"\n    \u6ce8\u518c\u6d41\u7a0b\u7b2c\u4e00\u6b65\uff1a\u9a8c\u8bc1\u90ae\u7bb1\u5e76\u53d1\u9001\u9a8c\u8bc1\u7801\n"
-    },
-    {
-      "file": "backend/api/auth_routes.py",
-      "line": 113,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.post(\"/verify-email\"",
-      "snippet": "@router.post(\"/verify-email\", summary=\"\u6ce8\u518c\u9a8c\u8bc1\uff08\u7b2c\u4e8c\u6b65\uff1a\u9a8c\u8bc1\u90ae\u7bb1\uff09\")\nasync def register_step2(request: VerifyEmailRequest, db: Session = Depends(get_db)):\n    \"\"\"\n    \u6ce8\u518c\u6d41\u7a0b\u7b2c\u4e8c\u6b65\uff1a\u9a8c\u8bc1\u90ae\u7bb1\u9a8c\u8bc1\u7801\n"
-    },
-    {
-      "file": "backend/api/auth_routes.py",
-      "line": 171,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.post(\"/login\"",
-      "snippet": "@router.post(\"/login\", response_model=TokenResponse, summary=\"\u7528\u6237/\u7ba1\u7406\u5458\u767b\u5f55\")\nasync def login(request: LoginRequest, db: Session = Depends(get_db)):\n    \"\"\"\n    \u7528\u6237/\u7ba1\u7406\u5458\u767b\u5f55\n    \"\"\""
-    },
-    {
-      "file": "backend/api/auth_routes.py",
-      "line": 219,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/me\"",
-      "snippet": "@router.get(\"/me\", summary=\"\u83b7\u53d6\u5f53\u524d\u7528\u6237\u4fe1\u606f\")\nasync def get_me(current_user: User = Depends(get_current_user)):\n    \"\"\"\u83b7\u53d6\u5f53\u524d\u767b\u5f55\u7528\u6237\u7684\u4fe1\u606f\"\"\"\n    return {\n        \"id\": current_user.id,"
-    },
-    {
-      "file": "backend/api/compounds.py",
-      "line": 15,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.post(\"/check\"",
-      "snippet": "@router.post(\"/check\")\ndef check_compound_exists(\n    compound_data: schemas.CompoundCreate,\n    db: Session = Depends(get_db)\n):"
-    },
-    {
-      "file": "backend/api/compounds.py",
-      "line": 70,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/{element_symbols}\"",
-      "snippet": "@router.get(\"/{element_symbols}\")\ndef get_compound_info(\n    element_symbols: str,\n    db: Session = Depends(get_db)\n):"
-    },
-    {
-      "file": "backend/api/compounds.py",
-      "line": 107,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.post(\"/search\"",
-      "snippet": "@router.post(\"/search\", response_model=schemas.CompoundSearchPaginationResponse)\ndef search_compounds(\n    request: schemas.CompoundSearchRequest,\n    db: Session = Depends(get_db)\n):"
-    },
-    {
-      "file": "backend/api/elements.py",
-      "line": 14,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/\"",
-      "snippet": "@router.get(\"/\", response_model=List[schemas.ElementResponse])\ndef get_all_elements(db: Session = Depends(get_db)):\n    \"\"\"\n    \u83b7\u53d6\u6240\u6709118\u4e2a\u5143\u7d20\n    \"\"\""
-    },
-    {
-      "file": "backend/api/elements.py",
-      "line": 23,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/{symbol}\"",
-      "snippet": "@router.get(\"/{symbol}\", response_model=schemas.ElementResponse)\ndef get_element_by_symbol(symbol: str, db: Session = Depends(get_db)):\n    \"\"\"\n    \u6839\u636e\u5143\u7d20\u7b26\u53f7\u83b7\u53d6\u5143\u7d20\u4fe1\u606f\n"
-    },
-    {
-      "file": "backend/api/htsc2025.py",
-      "line": 61,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.post(\"/search\"",
-      "snippet": "@router.post(\"/search\", response_model=HTSC2025SearchResult)\ndef search_htsc2025(request: HTSC2025SearchRequest):\n    \"\"\"\u6309\u5143\u7d20\u641c\u7d22 HTSC-2025 \u6570\u636e\u96c6\u4e2d\u7684\u6750\u6599\"\"\"\n    if not request.elements:\n        raise HTTPException(status_code=400, detail=\"\u81f3\u5c11\u9700\u8981\u9009\u62e9\u4e00\u4e2a\u5143\u7d20\")"
-    },
-    {
-      "file": "backend/api/htsc2025.py",
-      "line": 91,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/stats\"",
-      "snippet": "@router.get(\"/stats\")\ndef htsc2025_stats():\n    \"\"\"\u8fd4\u56de HTSC-2025 \u7edf\u8ba1\u4fe1\u606f\"\"\"\n    data = _load_dataset()\n    records = data.get(\"records\", [])"
-    },
-    {
-      "file": "backend/api/htsc2025.py",
-      "line": 121,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/detail/{name}\"",
-      "snippet": "@router.get(\"/detail/{name}\")\ndef htsc2025_detail(name: str):\n    \"\"\"\u8fd4\u56de\u5355\u4e2a\u6750\u6599\u7684\u8be6\u7ec6\u6570\u636e\uff08\u542b CIF\uff09\"\"\"\n    data = _load_dataset()\n    name = name.replace(\"--\", \"-\")"
-    },
-    {
-      "file": "backend/api/papers.py",
-      "line": 86,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/stats/user-ranking\"",
-      "snippet": "@router.get(\"/stats/user-ranking\")\ndef get_user_ranking(db: Session = Depends(get_db)):\n    \"\"\"\u83b7\u53d6\u6587\u732e\u63d0\u4ea4\u6570\u524d20\u7684\u6ce8\u518c\u7528\u6237\u6392\u540d\"\"\"\n    from backend.models import Paper, User\n    "
-    },
-    {
-      "file": "backend/api/papers.py",
-      "line": 107,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.post(\"/\"",
-      "snippet": "@router.post(\"/\", response_model=schemas.PaperResponse)\nasync def create_paper(\n    doi: str = Form(...),\n    element_symbols: str = Form(...),  # JSON\u5b57\u7b26\u4e32\n    article_type: str = Form(...),  # \u6587\u7ae0\u7c7b\u578b: theoretical \u6216 experimental"
-    },
-    {
-      "file": "backend/api/papers.py",
-      "line": 284,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.post(\"/batch-upload\"",
-      "snippet": "@router.post(\"/batch-upload\")\nasync def batch_upload_papers(\n    file: UploadFile = File(...),\n    db: Session = Depends(get_db),\n    current_user: Annotated[schemas.User, Depends(get_current_user)] = None"
-    },
-    {
-      "file": "backend/api/papers.py",
-      "line": 356,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/batch-upload-example\"",
-      "snippet": "@router.get(\"/batch-upload-example\")\ndef get_batch_upload_example():\n    \"\"\"\n    \u83b7\u53d6\u6279\u91cf\u4e0a\u4f20\u793a\u4f8b\u6587\u4ef6 (.xlsx)\n    \"\"\""
-    },
-    {
-      "file": "backend/api/papers.py",
-      "line": 378,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/compound/{element_symbols}\"",
-      "snippet": "@router.get(\"/compound/{element_symbols}\", response_model=schemas.PaperPaginationResponse)\ndef get_papers_by_compound(\n    element_symbols: str,\n    keyword: Optional[str] = None,\n    year_min: Optional[int] = None,"
-    },
-    {
-      "file": "backend/api/papers.py",
-      "line": 438,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.post(\"/search-by-mode\"",
-      "snippet": "@router.post(\"/search-by-mode\", response_model=schemas.PaperPaginationResponse)\ndef search_papers_by_mode(\n    request: schemas.PaperModeSearchRequest,\n    db: Session = Depends(get_db),\n    image_db: Session = Depends(get_image_db)"
-    },
-    {
-      "file": "backend/api/papers.py",
-      "line": 486,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/crystal-structures\"",
-      "snippet": "@router.get(\"/crystal-structures\")\ndef get_crystal_structures(db: Session = Depends(get_db)):\n    \"\"\"\n    \u83b7\u53d6\u6240\u6709\u5df2\u5b58\u5728\u7684\u6676\u4f53\u7ed3\u6784\u7c7b\u578b\uff08\u7528\u4e8e\u81ea\u52a8\u8865\u5168\uff09\n"
-    },
-    {
-      "file": "backend/api/papers.py",
-      "line": 498,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/{paper_id}\"",
-      "snippet": "@router.get(\"/{paper_id}\", response_model=schemas.PaperDetail)\ndef get_paper_detail(paper_id: int, db: Session = Depends(get_db), image_db: Session = Depends(get_image_db)):\n    \"\"\"\n    \u83b7\u53d6\u6587\u732e\u8be6\u60c5\n    \"\"\""
-    },
-    {
-      "file": "backend/api/papers.py",
-      "line": 512,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/{paper_id}/images/{image_order}\"",
-      "snippet": "@router.get(\"/{paper_id}/images/{image_order}\")\ndef get_paper_image(\n    paper_id: int,\n    image_order: int,\n    thumbnail: bool = False,"
-    },
-    {
-      "file": "backend/api/papers.py",
-      "line": 544,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/images/{image_id}\"",
-      "snippet": "@router.get(\"/images/{image_id}\")\ndef get_image_by_id(\n    image_id: int,\n    thumbnail: bool = False,\n    image_db: Session = Depends(get_image_db)"
-    },
-    {
-      "file": "backend/api/papers.py",
-      "line": 581,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.post(\"/export\"",
-      "snippet": "@router.post(\"/export\")\ndef export_papers(\n    export_data: schemas.ExportFormat,\n    db: Session = Depends(get_db)\n):"
-    },
-    {
-      "file": "backend/api/papers.py",
-      "line": 621,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.get(\"/stats/chart-data\"",
-      "snippet": "@router.get(\"/stats/chart-data\")\ndef get_chart_data(db: Session = Depends(get_db)):\n    \"\"\"\u83b7\u53d6\u7528\u4e8e\u56fe\u8868\u5c55\u793a\u7684 P-Tc \u6570\u636e\u70b9\uff08\u4ec5 show_in_chart=True \u7684\u6587\u732e\uff09\"\"\"\n    result = []\n    rows = db.query(PaperData).join(Paper).filter(Paper.show_in_chart == True).all()"
-    },
-    {
-      "file": "backend/api/tc_predict.py",
-      "line": 100,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "router.post(\"/\"",
-      "snippet": "@router.post(\"/\", response_model=schemas.TcPredictionResponse)\nasync def predict_tc(\n    contcar: UploadFile = File(..., description=\"VASP CONTCAR \u6587\u4ef6\"),\n    pdos_files: List[UploadFile] = File(..., description=\"\u5305\u542b PDOS_H \u5728\u5185\u7684 PDOS \u6570\u636e\u6587\u4ef6\")\n):"
-    },
-    {
-      "file": "backend/main.py",
-      "line": 55,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "app.get(\"/\"",
-      "snippet": "@app.get(\"/\")\ndef read_root():\n    \"\"\"\u8fd4\u56de\u4e3b\u9875\"\"\"\n    index_file = TEMPLATES_DIR / \"index.html\"\n    if index_file.exists():"
-    },
-    {
-      "file": "backend/main.py",
-      "line": 69,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "app.get(\"/periodic-table\"",
-      "snippet": "@app.get(\"/periodic-table\")\ndef periodic_table_page():\n    \"\"\"\u8fd4\u56de\u5143\u7d20\u5468\u671f\u8868\u9875\u9762\"\"\"\n    index_file = TEMPLATES_DIR / \"index.html\"\n    if index_file.exists():"
-    },
-    {
-      "file": "backend/main.py",
-      "line": 79,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "app.get(\"/compound/{element_symbols}\"",
-      "snippet": "@app.get(\"/compound/{element_symbols}\")\ndef compound_page(element_symbols: str):\n    \"\"\"\u8fd4\u56de\u5143\u7d20\u7ec4\u5408\u9875\u9762\"\"\"\n    compound_file = TEMPLATES_DIR / \"compound.html\"\n    if compound_file.exists():"
-    },
-    {
-      "file": "backend/main.py",
-      "line": 89,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "app.get(\"/admin/register\"",
-      "snippet": "@app.get(\"/admin/register\")\ndef admin_register_page():\n    \"\"\"\u8fd4\u56de\u7ba1\u7406\u5458\u6ce8\u518c\u9875\u9762\"\"\"\n    register_file = TEMPLATES_DIR / \"admin_register.html\"\n    if register_file.exists():"
-    },
-    {
-      "file": "backend/main.py",
-      "line": 106,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "app.get(\"/admin/login\"",
-      "snippet": "@app.get(\"/admin/login\")\ndef admin_login_page():\n    \"\"\"\u8fd4\u56de\u7ba1\u7406\u5458\u767b\u5f55\u9875\u9762\"\"\"\n    return _serve_login_page()\n"
-    },
-    {
-      "file": "backend/main.py",
-      "line": 113,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "app.get(\"/login\"",
-      "snippet": "@app.get(\"/login\")\ndef user_login_page():\n    \"\"\"\u8fd4\u56de\u7528\u6237\u767b\u5f55\u9875\u9762\"\"\"\n    return _serve_login_page()\n"
-    },
-    {
-      "file": "backend/main.py",
-      "line": 120,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "app.get(\"/register\"",
-      "snippet": "@app.get(\"/register\")\ndef user_register_page():\n    \"\"\"\u8fd4\u56de\u7528\u6237\u6ce8\u518c\u9875\u9762\"\"\"\n    register_file = TEMPLATES_DIR / \"user_register.html\"\n    if register_file.exists():"
-    },
-    {
-      "file": "backend/main.py",
-      "line": 130,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "app.get(\"/admin/dashboard\"",
-      "snippet": "@app.get(\"/admin/dashboard\")\ndef admin_dashboard_page():\n    \"\"\"\u8fd4\u56de\u7ba1\u7406\u5458\u5ba1\u6838\u9762\u677f\"\"\"\n    dashboard_file = TEMPLATES_DIR / \"admin_dashboard.html\"\n    if dashboard_file.exists():"
-    },
-    {
-      "file": "backend/main.py",
-      "line": 140,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "app.get(\"/admin/superadmin\"",
-      "snippet": "@app.get(\"/admin/superadmin\")\ndef superadmin_dashboard_page():\n    \"\"\"\u8fd4\u56de\u8d85\u7ea7\u7ba1\u7406\u5458\u5ba1\u6279\u9762\u677f\"\"\"\n    superadmin_file = TEMPLATES_DIR / \"superadmin_dashboard.html\"\n    if superadmin_file.exists():"
-    },
-    {
-      "file": "backend/main.py",
-      "line": 150,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "app.get(\"/admin/my-reviews\"",
-      "snippet": "@app.get(\"/admin/my-reviews\")\ndef admin_my_reviews_page():\n    \"\"\"\u8fd4\u56de\u6211\u5ba1\u6838\u7684\u6587\u732e\u9875\u9762\"\"\"\n    # \u6682\u65f6\u91cd\u5b9a\u5411\u5230\u5ba1\u6838\u9762\u677f\n    dashboard_file = TEMPLATES_DIR / \"admin_dashboard.html\""
-    },
-    {
-      "file": "backend/main.py",
-      "line": 161,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "app.get(\"/admin/papers\"",
-      "snippet": "@app.get(\"/admin/papers\")\ndef admin_papers_page():\n    \"\"\"\u8fd4\u56de\u5168\u5c40\u6587\u732e\u7ba1\u7406\u9875\u9762\"\"\"\n    papers_file = TEMPLATES_DIR / \"admin_papers.html\"\n    if papers_file.exists():"
-    },
-    {
-      "file": "backend/main.py",
-      "line": 170,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "app.get(\"/tc-pre\"",
-      "snippet": "@app.get(\"/tc-pre\")\ndef tc_prediction_page():\n    \"\"\"Tc \u9884\u6d4b\u5b9e\u9a8c\u9875\u9762\"\"\"\n    page_file = TEMPLATES_DIR / \"tc_pre.html\"\n    if page_file.exists():"
-    },
-    {
-      "file": "backend/main.py",
-      "line": 180,
-      "type": "http",
-      "description": "Express/Koa route",
-      "match": "app.get(\"/health\"",
-      "snippet": "@app.get(\"/health\")\ndef health_check():\n    \"\"\"\u5065\u5eb7\u68c0\u67e5\"\"\"\n    return {\"status\": \"ok\", \"service\": \"superconductor-dataset\"}\n"
-    },
-    {
-      "file": "backend/main.py",
-      "line": 55,
-      "type": "http",
-      "description": "Decorator route (Flask/FastAPI/NestJS)",
-      "match": "@app.get(\"/\"",
-      "snippet": "@app.get(\"/\")\ndef read_root():\n    \"\"\"\u8fd4\u56de\u4e3b\u9875\"\"\"\n    index_file = TEMPLATES_DIR / \"index.html\"\n    if index_file.exists():"
-    },
-    {
-      "file": "backend/main.py",
-      "line": 69,
-      "type": "http",
-      "description": "Decorator route (Flask/FastAPI/NestJS)",
-      "match": "@app.get(\"/periodic-table\"",
-      "snippet": "@app.get(\"/periodic-table\")\ndef periodic_table_page():\n    \"\"\"\u8fd4\u56de\u5143\u7d20\u5468\u671f\u8868\u9875\u9762\"\"\"\n    index_file = TEMPLATES_DIR / \"index.html\"\n    if index_file.exists():"
-    },
-    {
-      "file": "backend/main.py",
-      "line": 79,
-      "type": "http",
-      "description": "Decorator route (Flask/FastAPI/NestJS)",
-      "match": "@app.get(\"/compound/{element_symbols}\"",
-      "snippet": "@app.get(\"/compound/{element_symbols}\")\ndef compound_page(element_symbols: str):\n    \"\"\"\u8fd4\u56de\u5143\u7d20\u7ec4\u5408\u9875\u9762\"\"\"\n    compound_file = TEMPLATES_DIR / \"compound.html\"\n    if compound_file.exists():"
-    },
-    {
-      "file": "backend/main.py",
-      "line": 89,
-      "type": "http",
-      "description": "Decorator route (Flask/FastAPI/NestJS)",
-      "match": "@app.get(\"/admin/register\"",
-      "snippet": "@app.get(\"/admin/register\")\ndef admin_register_page():\n    \"\"\"\u8fd4\u56de\u7ba1\u7406\u5458\u6ce8\u518c\u9875\u9762\"\"\"\n    register_file = TEMPLATES_DIR / \"admin_register.html\"\n    if register_file.exists():"
-    },
-    {
-      "file": "backend/main.py",
-      "line": 106,
-      "type": "http",
-      "description": "Decorator route (Flask/FastAPI/NestJS)",
-      "match": "@app.get(\"/admin/login\"",
-      "snippet": "@app.get(\"/admin/login\")\ndef admin_login_page():\n    \"\"\"\u8fd4\u56de\u7ba1\u7406\u5458\u767b\u5f55\u9875\u9762\"\"\"\n    return _serve_login_page()\n"
-    },
-    {
-      "file": "backend/main.py",
-      "line": 113,
-      "type": "http",
-      "description": "Decorator route (Flask/FastAPI/NestJS)",
-      "match": "@app.get(\"/login\"",
-      "snippet": "@app.get(\"/login\")\ndef user_login_page():\n    \"\"\"\u8fd4\u56de\u7528\u6237\u767b\u5f55\u9875\u9762\"\"\"\n    return _serve_login_page()\n"
-    },
-    {
-      "file": "backend/main.py",
-      "line": 120,
-      "type": "http",
-      "description": "Decorator route (Flask/FastAPI/NestJS)",
-      "match": "@app.get(\"/register\"",
-      "snippet": "@app.get(\"/register\")\ndef user_register_page():\n    \"\"\"\u8fd4\u56de\u7528\u6237\u6ce8\u518c\u9875\u9762\"\"\"\n    register_file = TEMPLATES_DIR / \"user_register.html\"\n    if register_file.exists():"
-    },
-    {
-      "file": "backend/main.py",
-      "line": 130,
-      "type": "http",
-      "description": "Decorator route (Flask/FastAPI/NestJS)",
-      "match": "@app.get(\"/admin/dashboard\"",
-      "snippet": "@app.get(\"/admin/dashboard\")\ndef admin_dashboard_page():\n    \"\"\"\u8fd4\u56de\u7ba1\u7406\u5458\u5ba1\u6838\u9762\u677f\"\"\"\n    dashboard_file = TEMPLATES_DIR / \"admin_dashboard.html\"\n    if dashboard_file.exists():"
-    },
-    {
-      "file": "backend/main.py",
-      "line": 140,
-      "type": "http",
-      "description": "Decorator route (Flask/FastAPI/NestJS)",
-      "match": "@app.get(\"/admin/superadmin\"",
-      "snippet": "@app.get(\"/admin/superadmin\")\ndef superadmin_dashboard_page():\n    \"\"\"\u8fd4\u56de\u8d85\u7ea7\u7ba1\u7406\u5458\u5ba1\u6279\u9762\u677f\"\"\"\n    superadmin_file = TEMPLATES_DIR / \"superadmin_dashboard.html\"\n    if superadmin_file.exists():"
-    },
-    {
-      "file": "backend/main.py",
-      "line": 150,
-      "type": "http",
-      "description": "Decorator route (Flask/FastAPI/NestJS)",
-      "match": "@app.get(\"/admin/my-reviews\"",
-      "snippet": "@app.get(\"/admin/my-reviews\")\ndef admin_my_reviews_page():\n    \"\"\"\u8fd4\u56de\u6211\u5ba1\u6838\u7684\u6587\u732e\u9875\u9762\"\"\"\n    # \u6682\u65f6\u91cd\u5b9a\u5411\u5230\u5ba1\u6838\u9762\u677f\n    dashboard_file = TEMPLATES_DIR / \"admin_dashboard.html\""
-    },
-    {
-      "file": "backend/main.py",
-      "line": 161,
-      "type": "http",
-      "description": "Decorator route (Flask/FastAPI/NestJS)",
-      "match": "@app.get(\"/admin/papers\"",
-      "snippet": "@app.get(\"/admin/papers\")\ndef admin_papers_page():\n    \"\"\"\u8fd4\u56de\u5168\u5c40\u6587\u732e\u7ba1\u7406\u9875\u9762\"\"\"\n    papers_file = TEMPLATES_DIR / \"admin_papers.html\"\n    if papers_file.exists():"
-    },
-    {
-      "file": "backend/main.py",
-      "line": 170,
-      "type": "http",
-      "description": "Decorator route (Flask/FastAPI/NestJS)",
-      "match": "@app.get(\"/tc-pre\"",
-      "snippet": "@app.get(\"/tc-pre\")\ndef tc_prediction_page():\n    \"\"\"Tc \u9884\u6d4b\u5b9e\u9a8c\u9875\u9762\"\"\"\n    page_file = TEMPLATES_DIR / \"tc_pre.html\"\n    if page_file.exists():"
-    },
-    {
-      "file": "backend/main.py",
-      "line": 180,
-      "type": "http",
-      "description": "Decorator route (Flask/FastAPI/NestJS)",
-      "match": "@app.get(\"/health\"",
-      "snippet": "@app.get(\"/health\")\ndef health_check():\n    \"\"\"\u5065\u5eb7\u68c0\u67e5\"\"\"\n    return {\"status\": \"ok\", \"service\": \"superconductor-dataset\"}\n"
+  "scanStats": {
+    "filesScanned": 118,
+    "byCategory": {
+      "docs": 53,
+      "code": 46,
+      "config": 3,
+      "markup": 12,
+      "infra": 1,
+      "script": 3
+    },
+    "byLanguage": {
+      "markdown": 52,
+      "tex": 2,
+      "json": 3,
+      "python": 36,
+      "css": 1,
+      "javascript": 8,
+      "html": 11,
+      "procfile": 1,
+      "txt": 1,
+      "shell": 3
     }
-  ],
-  "fileSignatures": [
-    {
-      "file": "backend/api/auth_routes.py",
-      "exports": [
-        "RegisterRequest",
-        "VerifyEmailRequest",
-        "LoginRequest",
-        "TokenResponse"
-      ],
-      "imports": [
-        "fastapi",
-        "sqlalchemy.orm",
-        "pydantic",
-        "datetime",
-        "backend.database",
-        "backend.models",
-        "backend.security",
-        "backend.email_service"
-      ],
-      "lines": 231,
-      "preview": "\"\"\"\n\u7ba1\u7406\u5458\u8ba4\u8bc1 API\n\"\"\"\nfrom fastapi import APIRouter, Depends, HTTPException, status\nfrom sqlalchemy.orm import Session\nfrom pydantic import BaseModel, EmailStr\nfrom datetime import datetime, timedelta\nfrom backend.database import get_db\nfrom backend.models import User\nfrom backend.security import (\n    hash_password,\n    verify_password,\n    create_access_token,\n    generate_verification_code,\n    get_current_user,\n    get_current_admin,\n    get_current_superadmin\n)\nfrom backend.email_service import"
-    },
-    {
-      "file": "backend/api/__init__.py",
-      "exports": [],
-      "imports": [],
-      "lines": 0,
-      "preview": ""
-    },
-    {
-      "file": "backend/api/admin.py",
-      "exports": [
-        "normalize_superconductor_type_value",
-        "to_storage_superconductor_type_value",
-        "PendingAdminResponse",
-        "ApproveRequest",
-        "ChartVisibilityRequest",
-        "ReviewPaperRequest",
-        "PaperReviewInfo",
-        "UserPermissionRequest"
-      ],
-      "imports": [
-        "fastapi",
-        "sqlalchemy.orm",
-        "pydantic",
-        "datetime",
-        "typing",
-        "backend.database",
-        "backend.models",
-        "backend",
-        "backend.security",
-        "backend.email_service"
-      ],
-      "lines": 977,
-      "preview": "\"\"\"\n\u7ba1\u7406\u5458\u7ba1\u7406\u4e0e\u6587\u732e\u5ba1\u6838 API\n\"\"\"\nfrom fastapi import APIRouter, Depends, HTTPException, status\nfrom sqlalchemy.orm import Session\nfrom pydantic import BaseModel\nfrom datetime import datetime\nfrom typing import List, Optional\nimport json\nfrom backend.database import get_db, get_image_db\nfrom backend.models import User, Paper, PaperData\nfrom backend import crud\nfrom backend.security import get_current_superadmin, get_current_admin\nfrom backend.email_service import email_service\n\nrouter = APIRouter(prefix=\"/"
-    },
-    {
-      "file": "backend/api/ai_papers.py",
-      "exports": [
-        "get_ai_compound_info",
-        "get_ai_papers_by_compound"
-      ],
-      "imports": [
-        "fastapi",
-        "fastapi.responses",
-        "sqlalchemy.orm",
-        "typing",
-        "io",
-        "backend.database",
-        "backend"
-      ],
-      "lines": 179,
-      "preview": "\"\"\"\nAI\u7b5b\u9009\u6570\u636e\u5e93 API\n\u4f7f\u7528 hydride_literature_ai.db \u548c hydride_literature_image_ai.db\n\"\"\"\nfrom fastapi import APIRouter, Depends, HTTPException, Query\nfrom fastapi.responses import StreamingResponse\nfrom sqlalchemy.orm import Session\nfrom typing import Optional\nfrom io import BytesIO\n\nfrom backend.database import get_ai_db, get_ai_image_db\nfrom backend import crud, schemas\n\nrouter = APIRouter(prefix=\"/api/ai\", tags=[\"ai\"])\n\n\n@router.get(\"/compounds/{element_symbols}\")\ndef get_ai_compound_info(\n    elemen"
-    },
-    {
-      "file": "backend/api/alexandria.py",
-      "exports": [
-        "AlexandriaSearchRequest",
-        "AlexandriaMaterial",
-        "AlexandriaSearchResult",
-        "search_alexandria",
-        "list_alexandria_elements"
-      ],
-      "imports": [
-        "fastapi",
-        "fastapi.responses",
-        "typing",
-        "pydantic",
-        "backend.alexandria_import",
-        "backend.alexandria_import"
-      ],
-      "lines": 128,
-      "preview": "\"\"\"\nAlexandria \u7535\u58f0\u8026\u5408\u6570\u636e\u5e93 API\n\"\"\"\nimport json\nfrom fastapi import APIRouter, HTTPException, Query\nfrom fastapi.responses import Response\nfrom typing import List, Optional\nfrom pydantic import BaseModel, Field\n\nfrom backend.alexandria_import import query_by_elements\n\nrouter = APIRouter(prefix=\"/api/alexandria\", tags=[\"alexandria\"])\n\n\nclass AlexandriaSearchRequest(BaseModel):\n    elements: List[str] = Field(..., description=\"\u5143\u7d20\u7b26\u53f7\u5217\u8868\")\n    mode: str = Field(\"contains\", description=\"\u7b5b\u9009\u6a21\u5f0f: only, combinat"
-    },
-    {
-      "file": "backend/api/compounds.py",
-      "exports": [
-        "check_compound_exists",
-        "get_compound_info"
-      ],
-      "imports": [
-        "fastapi",
-        "sqlalchemy.orm",
-        "typing",
-        "backend.database",
-        "backend"
-      ],
-      "lines": 119,
-      "preview": "\"\"\"\n\u5143\u7d20\u7ec4\u5408\u76f8\u5173API\n\"\"\"\nfrom fastapi import APIRouter, Depends, HTTPException\nfrom sqlalchemy.orm import Session\nfrom typing import List\nimport json\n\nfrom backend.database import get_db\nfrom backend import crud, schemas\n\nrouter = APIRouter(prefix=\"/api/compounds\", tags=[\"compounds\"])\n\n\n@router.post(\"/check\")\ndef check_compound_exists(\n    compound_data: schemas.CompoundCreate,\n    db: Session = Depends(get_db)\n):\n    \"\"\"\n    \u68c0\u67e5\u5143\u7d20\u7ec4\u5408\u662f\u5426\u5b58\u5728\u4e14\u6709\u6587\u732e\n\n    Args:\n        compound_data: \u5305\u542b\u5143\u7d20\u7b26\u53f7\u5217\u8868\u7684\u6570\u636e\n\n    Returns:\n  "
-    },
-    {
-      "file": "backend/api/elements.py",
-      "exports": [
-        "get_all_elements",
-        "get_element_by_symbol"
-      ],
-      "imports": [
-        "fastapi",
-        "sqlalchemy.orm",
-        "typing",
-        "backend.database",
-        "backend"
-      ],
-      "lines": 34,
-      "preview": "\"\"\"\n\u5143\u7d20\u76f8\u5173API\n\"\"\"\nfrom fastapi import APIRouter, Depends, HTTPException\nfrom sqlalchemy.orm import Session\nfrom typing import List\n\nfrom backend.database import get_db\nfrom backend import crud, schemas\n\nrouter = APIRouter(prefix=\"/api/elements\", tags=[\"elements\"])\n\n\n@router.get(\"/\", response_model=List[schemas.ElementResponse])\ndef get_all_elements(db: Session = Depends(get_db)):\n    \"\"\"\n    \u83b7\u53d6\u6240\u6709118\u4e2a\u5143\u7d20\n    \"\"\"\n    elements = crud.get_all_elements(db)\n    return elements\n\n\n@router.get(\"/{symbol}\", "
-    },
-    {
-      "file": "backend/api/htsc2025.py",
-      "exports": [
-        "_load_dataset",
-        "_entry_matches",
-        "HTSC2025SearchRequest",
-        "HTSC2025SearchResult",
-        "search_htsc2025"
-      ],
-      "imports": [
-        "typing",
-        "fastapi",
-        "pydantic"
-      ],
-      "lines": 137,
-      "preview": "\"\"\"\nHTSC-2025 \u5e38\u538b\u9ad8\u6e29\u8d85\u5bfc\u4f53\u57fa\u51c6\u6570\u636e\u96c6 API\n\"\"\"\nimport json\nimport os\nfrom typing import List, Optional, Dict, Set\nfrom fastapi import APIRouter, HTTPException\nfrom pydantic import BaseModel, Field\n\nrouter = APIRouter(prefix=\"/api/htsc2025\", tags=[\"htsc2025\"])\n\nDATA_DIR = os.path.join(\n    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),\n    \"data\"\n)\nDATA_PATH = os.path.join(DATA_DIR, \"htsc2025.json\")\n\n_dataset = None\n\n\ndef _load_dataset():\n    global _dataset\n    if _dataset is "
-    },
-    {
-      "file": "backend/api/papers.py",
-      "exports": [
-        "normalize_superconductor_type",
-        "serialize_paper_for_list"
-      ],
-      "imports": [
-        "fastapi",
-        "fastapi.responses",
-        "sqlalchemy.orm",
-        "typing",
-        "io",
-        "pathlib",
-        "backend.database",
-        "backend",
-        "backend.models",
-        "backend.utils.doi_resolver",
-        "backend.utils.citation",
-        "backend.utils.image_processor",
-        "backend.security"
-      ],
-      "lines": 641,
-      "preview": "\"\"\"\n\u6587\u732e\u76f8\u5173API\n\"\"\"\nfrom fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Response\nfrom fastapi.responses import StreamingResponse, FileResponse\nfrom sqlalchemy.orm import Session\nfrom typing import List, Optional, Annotated\nimport json\nfrom io import BytesIO\nfrom pathlib import Path\n\nfrom backend.database import get_db, get_image_db\nfrom backend import crud, schemas\nfrom backend.models import Paper, PaperData\nfrom backend.utils.doi_resolver import get_doi_metadata, validate"
-    },
-    {
-      "file": "backend/api/tc_predict.py",
-      "exports": [
-        "_load_structure",
-        "_extract_h_sublattice",
-        "_read_pdos_value"
-      ],
-      "imports": [
-        "typing",
-        "fastapi",
-        "pymatgen.core",
-        "io",
-        "backend"
-      ],
-      "lines": 156,
-      "preview": "\"\"\"\nTc \u9884\u6d4b API\n\"\"\"\nfrom typing import List, Tuple, Dict\nfrom fastapi import APIRouter, UploadFile, File, HTTPException\nimport numpy as np\nfrom pymatgen.core import Structure\nfrom io import BytesIO\n\nfrom backend import schemas\n\nrouter = APIRouter(prefix=\"/api/tc-predict\", tags=[\"tc-predict\"])\n\nBOND_THRESHOLD = 1.4\nCOUPLING_RANGE = (0.98, 1.28)\nSLOPE1 = 16370.6\nSLOPE2 = 24.7\nMAX_METAL_FILES = 4\n\n\ndef _load_structure(content: bytes) -> Structure:\n    \"\"\"\u89e3\u6790 CONTCAR \u5185\u5bb9\"\"\"\n    try:\n        text = conte"
-    },
-    {
-      "file": "backend/utils/doi_resolver.py",
-      "exports": [
-        "DOIResolver"
-      ],
-      "imports": [
-        "typing"
-      ],
-      "lines": 160,
-      "preview": "\"\"\"\nDOI\u89e3\u6790\u5de5\u5177\n\u901a\u8fc7CrossRef API\u83b7\u53d6\u6587\u732e\u5143\u6570\u636e\n\"\"\"\nimport httpx\nimport json\nfrom typing import Optional, Dict, Any\n\n\nclass DOIResolver:\n    \"\"\"DOI\u89e3\u6790\u5668\"\"\"\n\n    def __init__(self):\n        self.crossref_api_url = \"https://api.crossref.org/works/\"\n        self.doi_org_url = \"https://doi.org/\"\n        self.timeout = 30.0\n\n    async def resolve_doi(self, doi: str) -> Optional[Dict[str, Any]]:\n        \"\"\"\n        \u89e3\u6790DOI\u5e76\u83b7\u53d6\u6587\u732e\u5143\u6570\u636e\n\n        Args:\n            doi: DOI\u6807\u8bc6\u7b26\uff0c\u5982 \"10.1038/nature12345\"\n\n        Returns:\n        "
-    },
-    {
-      "file": "backend/utils/image_processor.py",
-      "exports": [
-        "ImageProcessor"
-      ],
-      "imports": [
-        "PIL",
-        "io",
-        "typing"
-      ],
-      "lines": 185,
-      "preview": "\"\"\"\n\u56fe\u7247\u5904\u7406\u5de5\u5177\n\u7528\u4e8e\u751f\u6210\u7f29\u7565\u56fe\u548c\u538b\u7f29\u56fe\u7247\n\"\"\"\nfrom PIL import Image\nfrom io import BytesIO\nfrom typing import Tuple\n\n\nclass ImageProcessor:\n    \"\"\"\u56fe\u7247\u5904\u7406\u5668\"\"\"\n\n    def __init__(\n        self,\n        thumbnail_size: Tuple[int, int] = (200, 200),\n        max_image_size: Tuple[int, int] = (1920, 1920),\n        jpeg_quality: int = 85\n    ):\n        \"\"\"\n        \u521d\u59cb\u5316\u56fe\u7247\u5904\u7406\u5668\n\n        Args:\n            thumbnail_size: \u7f29\u7565\u56fe\u5c3a\u5bf8\uff08\u5bbd, \u9ad8\uff09\uff0c\u9ed8\u8ba4200x200\n            max_image_size: \u539f\u56fe\u6700\u5927\u5c3a\u5bf8\uff08\u5bbd, \u9ad8\uff09\uff0c\u9ed8\u8ba41920x1920\n            jpeg_quality: JPEG\u538b\u7f29\u8d28\u91cf"
-    },
-    {
-      "file": "backend/email_service.py",
-      "exports": [
-        "EmailService"
-      ],
-      "imports": [
-        "email.mime.text",
-        "email.mime.multipart",
-        "typing"
-      ],
-      "lines": 178,
-      "preview": "\"\"\"   \"\"\"\n\u90ae\u7bb1\u670d\u52a1\u6a21\u5757 - SMTP \u53d1\u9001\u9a8c\u8bc1\u7801\n\"\"\"   \"\"\"   \"\"\"   \"\"\"\nimport smtplib\nfrom email.mime.text import MIMEText\nfrom email.mime.multipart import MIMEMultipart\nimport os\nfrom typing import Optional\n\n\nclass EmailService:\n    \"\"\"\u90ae\u7bb1\u670d\u52a1\u7c7b\"\"\"\n\n          def __init__(\u81ea\u6211):def __init__(\u81ea\u6211):def __init__(self):\n        # \u4ece\u73af\u5883\u53d8\u91cf\u8bfb\u53d6SMTP\u914d\u7f6e\n        self.smtp_server = os.getenv(\"SMTP_SERVER\", \"smtp.163.com\")  # \u9ed8\u8ba4163\u90ae\u7bb1\n        self.smtp_port = int(os.getenv(\"SMTP_PORT\", \"465\"))  # SSL\u7aef\u53e3\n        self.smtp_username = os.gete"
-    },
-    {
-      "file": "backend/models.py",
-      "exports": [
-        "Element",
-        "Compound",
-        "User"
-      ],
-      "imports": [
-        "sqlalchemy",
-        "sqlalchemy.orm",
-        "sqlalchemy.sql",
-        "backend.database"
-      ],
-      "lines": 248,
-      "preview": "\"\"\"\n\u6570\u636e\u5e93\u6a21\u578b\u5b9a\u4e49\n\n\u5f53\u524d\u6570\u636e\u4e3b\u4f53\u91c7\u7528 data/import_papers_to_sqlite.py \u751f\u6210\u7684\u65b0\u7ed3\u6784\uff1a\n- papers \u4fdd\u5b58\u8bba\u6587\u5143\u6570\u636e\n- compounds \u4fdd\u5b58\u5177\u4f53\u5316\u5b66\u5f0f\u4e0e\u7ec4\u6210\n- paper_data \u5173\u8054\u8bba\u6587\u4e0e\u5316\u5408\u7269\uff0c\u5e76\u4fdd\u5b58\u7269\u7406\u6570\u636e\u70b9\n- paper_images \u6bcf\u7bc7\u8bba\u6587\u4e00\u884c\uff0c\u6700\u591a\u4fdd\u5b58 fig1..fig40\n\"\"\"\nfrom sqlalchemy import Column, Integer, String, Text, BLOB, DateTime, ForeignKey, Boolean, Float\nfrom sqlalchemy.orm import relationship\nfrom sqlalchemy.sql import func\nimport json\n\nfrom backend.database import Base, ImageBase\n\n\nclass Element(Base):\n    \"\"\"\u5143\u7d20\u8868 - \u5b58\u50a8118\u4e2a\u5316\u5b66\u5143\u7d20\"\"\"\n    __tablename__ = \"elements\"\n\n    id = Column"
-    },
-    {
-      "file": "backend/migrations/__init__.py",
-      "exports": [],
-      "imports": [],
-      "lines": 3,
-      "preview": "\"\"\"\n\u6570\u636e\u5e93\u8fc1\u79fb\u811a\u672c\u5305\n\"\"\""
-    },
-    {
-      "file": "backend/utils/__init__.py",
-      "exports": [],
-      "imports": [],
-      "lines": 0,
-      "preview": ""
-    },
-    {
-      "file": "backend/utils/citation.py",
-      "exports": [
-        "CitationGenerator"
-      ],
-      "imports": [
-        "typing"
-      ],
-      "lines": 353,
-      "preview": "\"\"\"\n\u5f15\u7528\u683c\u5f0f\u751f\u6210\u5de5\u5177\n\u652f\u6301APS\u548cBibTeX\u683c\u5f0f\n\"\"\"\nfrom typing import List, Optional\nimport re\n\n\nclass CitationGenerator:\n    \"\"\"\u5f15\u7528\u683c\u5f0f\u751f\u6210\u5668\"\"\"\n\n    @staticmethod\n    def generate_aps_citation(\n        authors: List[str],\n        title: str,\n        journal: Optional[str] = None,\n        volume: Optional[str] = None,\n        pages: Optional[str] = None,\n        year: Optional[int] = None,\n        doi: Optional[str] = None\n    ) -> str:\n        \"\"\"\n        \u751f\u6210APS\uff08American Physical Society\uff09\u683c\u5f0f\u7684\u5f15\u7528\n\n        \u683c\u5f0f\u793a\u4f8b\uff1a\n        H."
-    },
-    {
-      "file": "backend/__init__.py",
-      "exports": [],
-      "imports": [],
-      "lines": 0,
-      "preview": ""
-    },
-    {
-      "file": "backend/alexandria_db.py",
-      "exports": [
-        "_build_index"
-      ],
-      "imports": [
-        "typing"
-      ],
-      "lines": 192,
-      "preview": "\"\"\"\nAlexandria \u7535\u58f0\u8026\u5408\u6570\u636e\u5e93\u67e5\u8be2\u6a21\u5757\n\u4ece\u9884\u7d22\u5f15 JSON \u6587\u4ef6\u4e2d\u5feb\u901f\u68c0\u7d22\u6750\u6599\u6570\u636e\n\"\"\"\nimport json\nimport os\nimport time\nfrom typing import List, Optional, Dict, Any\n\nALEXANDRIA_DIR = os.path.join(\n    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),\n    \"data\", \"alexandria\"\n)\nINDEX_FILE = os.path.join(ALEXANDRIA_DIR, \"_index.json\")\n\n_index: List[Dict[str, Any]] = None\n_index_loaded = False\n\n\ndef _build_index() -> List[Dict[str, Any]]:\n    \"\"\"\u626b\u63cf\u6240\u6709 JSON \u6587\u4ef6\uff0c\u63d0\u53d6\u5173\u952e\u5b57\u6bb5\u6784\u5efa\u7d22\u5f15\"\"\"\n    files = sorted([\n        f for f in os.listd"
-    },
-    {
-      "file": "backend/alexandria_import.py",
-      "exports": [
-        "get_conn",
-        "get_read_conn",
-        "create_tables"
-      ],
-      "imports": [
-        "typing"
-      ],
-      "lines": 385,
-      "preview": "\"\"\"\n\u5c06 Alexandria \u539f\u59cb JSON \u6570\u636e\u5bfc\u5165 SQLite \u6570\u636e\u5e93\n\u4fdd\u7559\u5b8c\u6574\u539f\u59cb\u6570\u636e + \u5143\u7d20\u7d22\u5f15\uff0c\u652f\u6301\u5feb\u901f\u5143\u7d20\u67e5\u627e\n\"\"\"\nimport json\nimport os\nimport sqlite3\nimport time\nimport sys\nfrom typing import List, Set, Dict, Any, Optional\n\nALEXANDRIA_DIR = os.path.join(\n    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),\n    \"data\", \"alexandria\"\n)\nDB_PATH = os.path.join(ALEXANDRIA_DIR, \"alexandria.db\")\n\n\n# \u53ea\u8bfb\u8fde\u63a5\u7f13\u5b58\uff08\u7ebf\u7a0b\u5b89\u5168\uff0cWAL \u6a21\u5f0f\u652f\u6301\u5e76\u53d1\u8bfb\uff09\n_read_conn: Optional[sqlite3.Connection] = None\n\n\ndef get_conn() -> sqlite3.Connection:\n    \"\"\"\u83b7\u53d6\u5199\u5165\u8fde\u63a5\uff08\u7528\u4e8e\u5bfc\u5165\uff09\"\"\"\n"
-    },
-    {
-      "file": "backend/create_superadmin.py",
-      "exports": [
-        "create_superadmin",
-        "main"
-      ],
-      "imports": [
-        "backend.database",
-        "backend.models",
-        "backend.security",
-        "datetime"
-      ],
-      "lines": 135,
-      "preview": "\"\"\"\n\u521b\u5efa\u8d85\u7ea7\u7ba1\u7406\u5458\u8d26\u6237\n\n\u4f7f\u7528\u65b9\u6cd5\uff1a\npython -m backend.create_superadmin\n\n\u6216\u8bbe\u7f6e\u73af\u5883\u53d8\u91cf\u540e\u81ea\u52a8\u521b\u5efa\uff1a\nSUPERADMIN_EMAIL=admin@example.com\nSUPERADMIN_PASSWORD=your_password\nSUPERADMIN_NAME=\u7ba1\u7406\u5458\u59d3\u540d\n\"\"\"\nfrom backend.database import SessionLocal\nfrom backend.models import User\nfrom backend.security import hash_password\nfrom datetime import datetime\nimport os\nimport getpass\n\n\ndef create_superadmin(email: str, password: str, real_name: str):\n    \"\"\"\u521b\u5efa\u8d85\u7ea7\u7ba1\u7406\u5458\u8d26\u6237\"\"\"\n    db = SessionLocal()\n\n    try:\n        # \u68c0\u67e5\u662f\u5426\u5df2\u5b58\u5728\u8be5\u90ae\u7bb1\n        existing_u"
-    },
-    {
-      "file": "backend/crud.py",
-      "exports": [
-        "normalize_article_type",
-        "to_storage_article_type",
-        "normalize_superconductor_type",
-        "to_storage_superconductor_type",
-        "compute_s_factor",
-        "safe_json_loads"
-      ],
-      "imports": [
-        "typing",
-        "sqlalchemy",
-        "sqlalchemy.orm",
-        "backend"
-      ],
-      "lines": 735,
-      "preview": "\"\"\"\n\u6570\u636e\u5e93CRUD\u4e0e\u65b0\u65e7\u524d\u7aef\u517c\u5bb9\u8f6c\u6362\u3002\n\"\"\"\nimport json\nimport math\nimport re\nfrom typing import Any, List, Optional\n\nfrom sqlalchemy import func, or_\nfrom sqlalchemy.orm import Query, Session\n\nfrom backend import models, schemas\n\n\nARTICLE_TYPE_TO_LONG = {\"e\": \"experimental\", \"t\": \"theoretical\"}\nARTICLE_TYPE_TO_SHORT = {\"experimental\": \"e\", \"theoretical\": \"t\"}\nSC_TYPE_TO_LONG = {\n    \"c\": \"cuprate\",\n    \"i\": \"iron_based\",\n    \"n\": \"nickel_based\",\n    \"h\": \"hydride\",\n    \"cb\": \"carbon\",\n    \"or\": \"organic\",\n    \"o"
-    },
-    {
-      "file": "backend/database.py",
-      "exports": [
-        "_pick_existing_path"
-      ],
-      "imports": [
-        "sqlalchemy",
-        "sqlalchemy.ext.declarative",
-        "sqlalchemy.orm",
-        "pathlib"
-      ],
-      "lines": 135,
-      "preview": "\"\"\"\n\u6570\u636e\u5e93\u914d\u7f6e\u6a21\u5757\n\"\"\"\nfrom sqlalchemy import create_engine\nfrom sqlalchemy.ext.declarative import declarative_base\nfrom sqlalchemy.orm import sessionmaker\nimport os\nfrom pathlib import Path\n\n# \u6570\u636e\u5e93\u6587\u4ef6\u8def\u5f84\uff0c\u652f\u6301\u901a\u8fc7\u73af\u5883\u53d8\u91cf\u81ea\u5b9a\u4e49\u6301\u4e45\u5316\u5377\u4f4d\u7f6e\nBASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))\nDEFAULT_DATA_DIR = os.environ.get(\"DATA_DIR\") or os.path.join(BASE_DIR, \"data\")\n\n\ndef _pick_existing_path(directory: str, candidates: list[str], default_name: str) -> str:\n    base_path = Path(directory)\n    for name"
-    },
-    {
-      "file": "backend/export_data.py",
-      "exports": [
-        "export_all_data"
-      ],
-      "imports": [
-        "pathlib",
-        "backend.database",
-        "backend"
-      ],
-      "lines": 163,
-      "preview": "\"\"\"\n\u6570\u636e\u5bfc\u51fa\u5de5\u5177\n\u5c06\u6570\u636e\u5e93\u4e2d\u7684\u6240\u6709\u6570\u636e\u5bfc\u51fa\u4e3aJSON\u6587\u4ef6\n\"\"\"\nimport json\nimport sys\nfrom pathlib import Path\n\nfrom backend.database import MetadataSessionLocal, ImageSessionLocal\nfrom backend import models\n\n\ndef export_all_data(output_file: str = \"data_export.json\"):\n    \"\"\"\n    \u5bfc\u51fa\u6240\u6709\u6570\u636e\u5230JSON\u6587\u4ef6\n\n    Args:\n        output_file: \u8f93\u51fa\u6587\u4ef6\u8def\u5f84\n    \"\"\"\n    db = MetadataSessionLocal()\n    image_db = ImageSessionLocal()\n\n    try:\n        print(\"\u5f00\u59cb\u5bfc\u51fa\u6570\u636e...\")\n\n        data = {\n            \"elements\": [],\n            \"compounds\": [],\n      "
-    },
-    {
-      "file": "backend/fix_imported_authors_json.py",
-      "exports": [
-        "normalize_authors",
-        "main"
-      ],
-      "imports": [
-        "__future__",
-        "backend.database",
-        "backend"
-      ],
-      "lines": 53,
-      "preview": "\"\"\"\n\u5c06 HydrideLiteratureData Import \u5bfc\u5165\u7684\u666e\u901a\u5b57\u7b26\u4e32 authors \u4fee\u6b63\u4e3a JSON \u5b57\u7b26\u4e32\u6570\u7ec4\u3002\n\"\"\"\n\nfrom __future__ import annotations\n\nimport json\n\nfrom backend.database import SessionLocal\nfrom backend import models\n\n\ndef normalize_authors(value: str | None) -> str:\n    if not value:\n        return \"[]\"\n    text = str(value).strip()\n    if not text:\n        return \"[]\"\n    if text.startswith(\"[\"):\n        return text\n    if \";\" in text:\n        parts = [item.strip() for item in text.split(\";\") if item.strip()]\n    else:"
-    },
-    {
-      "file": "backend/import_data.py",
-      "exports": [
-        "get_all_element_symbols",
-        "standardize_elements",
-        "import_all_data"
-      ],
-      "imports": [
-        "pathlib",
-        "datetime",
-        "sqlalchemy.orm",
-        "backend.database",
-        "backend"
-      ],
-      "lines": 229,
-      "preview": "\"\"\"\n\u6570\u636e\u5bfc\u5165\u5de5\u5177\n\u4eceJSON\u6587\u4ef6\u5bfc\u5165\u6570\u636e\u5230\u6570\u636e\u5e93\n\"\"\"\nimport json\nimport base64\nfrom pathlib import Path\nfrom datetime import datetime\nfrom sqlalchemy.orm import Session\n\nfrom backend.database import MetadataSessionLocal, ImageSessionLocal\nfrom backend import models, crud\n\n\ndef get_all_element_symbols(db: Session):\n    \"\"\"\u83b7\u53d6\u6240\u6709\u6709\u6548\u7684\u5143\u7d20\u7b26\u53f7\"\"\"\n    return {e.symbol for e in db.query(models.Element).all()}\n\n\ndef standardize_elements(symbols_list, valid_elements):\n    \"\"\"\u8fc7\u6ee4\u5e76\u6392\u5e8f\u5143\u7d20\u7b26\u53f7\uff0c\u786e\u4fdd\u6807\u51c6\u5316\"\"\"\n    if not symbols_list:\n        retur"
-    },
-    {
-      "file": "backend/import_reviewed_xlsx.py",
-      "exports": [
-        "col_to_index",
-        "read_cell"
-      ],
-      "imports": [
-        "__future__",
-        "pathlib",
-        "typing",
-        "xml.etree",
-        "sqlalchemy.orm",
-        "backend.database",
-        "backend"
-      ],
-      "lines": 316,
-      "preview": "\"\"\"\n\u5c06 HydrideLiteratureData \u8f93\u51fa\u7684 superconductor_data_reviewed.xlsx \u5bfc\u5165\u6570\u636e\u5e93\u3002\n\"\"\"\n\nfrom __future__ import annotations\n\nimport hashlib\nimport json\nimport math\nimport re\nimport zipfile\nfrom pathlib import Path\nfrom typing import Iterable\nfrom xml.etree import ElementTree as ET\n\nfrom sqlalchemy.orm import Session\n\nfrom backend.database import SessionLocal\nfrom backend import crud, models\n\n\nMAIN_NS = \"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"\nNS = {\"a\": MAIN_NS}\n\nMETA_HEADERS = [\n    \"fi"
-    },
-    {
-      "file": "backend/init_db.py",
-      "exports": [],
-      "imports": [
-        "backend.database",
-        "backend.models",
-        "sqlalchemy"
-      ],
-      "lines": 231,
-      "preview": "\"\"\"\n\u6570\u636e\u5e93\u521d\u59cb\u5316\u811a\u672c\n\u521b\u5efa\u6240\u6709\u8868\u5e76\u586b\u5145118\u4e2a\u5143\u7d20\u6570\u636e\n\"\"\"\nfrom backend.database import (\n    metadata_engine,\n    image_engine,\n    MetadataSessionLocal,\n    MetadataBase,\n    ImageBase,\n    METADATA_DATABASE_PATH,\n    IMAGE_DATABASE_PATH,\n)\nfrom backend.models import Element\nfrom sqlalchemy import text\n\n\n# 118\u4e2a\u5143\u7d20\u6570\u636e\uff08\u539f\u5b50\u5e8f\u6570\u3001\u7b26\u53f7\u3001\u82f1\u6587\u540d\u3001\u4e2d\u6587\u540d\uff09\nELEMENTS_DATA = [\n    (1, \"H\", \"Hydrogen\", \"\u6c22\"),\n    (2, \"He\", \"Helium\", \"\u6c26\"),\n    (3, \"Li\", \"Lithium\", \"\u9502\"),\n    (4, \"Be\", \"Beryllium\", \"\u94cd\"),\n    (5, \"B\", \"Boron\", \"\u787c\"),\n    (6, \"C\", \"Carb"
-    },
-    {
-      "file": "backend/main.py",
-      "exports": [
-        "read_root",
-        "periodic_table_page",
-        "compound_page"
-      ],
-      "imports": [
-        "fastapi",
-        "fastapi.middleware.cors",
-        "fastapi.middleware.gzip",
-        "fastapi.staticfiles",
-        "fastapi.responses",
-        "pathlib",
-        "backend.api"
-      ],
-      "lines": 226,
-      "preview": "\"\"\"\nFastAPI\u4e3b\u5e94\u7528\n\u8d85\u5bfc\u6587\u732e\u6570\u636e\u5e93\u7f51\u7ad9\u540e\u7aef\u670d\u52a1\n\"\"\"\nfrom fastapi import FastAPI\nfrom fastapi.middleware.cors import CORSMiddleware\nfrom fastapi.middleware.gzip import GZipMiddleware\nfrom fastapi.staticfiles import StaticFiles\nfrom fastapi.responses import FileResponse\nfrom pathlib import Path\n\nfrom backend.api import elements, compounds, papers, admin, auth_routes, tc_predict, alexandria, htsc2025, ai_papers\n\n# \u521b\u5efaFastAPI\u5e94\u7528\napp = FastAPI(\n    title=\"\u8d85\u5bfc\u6587\u732e\u6570\u636e\u5e93 API\",\n    description=\"Conventional Superconductor Dataset"
-    },
-    {
-      "file": "backend/merge_csv.py",
-      "exports": [
-        "create_example_xlsx"
-      ],
-      "imports": [
-        "pathlib",
-        "datetime",
-        "pydantic",
-        "backend"
-      ],
-      "lines": 260,
-      "preview": "import csv\nimport json\nimport re\nimport sys\nimport io\nfrom pathlib import Path\nfrom datetime import datetime\nfrom pydantic import ValidationError\nimport openpyxl\n\n# \u5bfc\u5165\u9a8c\u8bc1\u6a21\u578b\ntry:\n    from backend import schemas\nexcept ImportError:\n    import schemas\n\n# \u914d\u7f6e\u6620\u5c04 (\u7528\u4e8e\u652f\u6301\u7f29\u5199\u8f93\u5165)\nARTICLE_TYPE_MAP = {\n    't': 'theoretical', 'theoretical': 'theoretical',\n    'e': 'experimental', 'experimental': 'experimental'\n}\n\nSC_TYPE_MAP = {\n    'c': 'cuprate', 'cuprate': 'cuprate',\n    'i': 'iron_based', 'iron_based': 'iro"
-    },
-    {
-      "file": "backend/migrate_ids.py",
-      "exports": [
-        "migrate_compound_ids"
-      ],
-      "imports": [
-        "backend.database",
-        "backend"
-      ],
-      "lines": 43,
-      "preview": "\"\"\"\n\u6570\u636e\u5e93\u8fc1\u79fb\u811a\u672c\uff1a\u4e3a\u73b0\u6709\u5316\u5408\u7269\u586b\u5145 element_id_list\n\"\"\"\nimport json\nfrom backend.database import SessionLocal\nfrom backend import models, crud\n\ndef migrate_compound_ids():\n    db = SessionLocal()\n    try:\n        compounds = db.query(models.Compound).all()\n        print(f\"\u5f00\u59cb\u8fc1\u79fb {len(compounds)} \u6761\u8bb0\u5f55...\")\n        \n        updated_count = 0\n        for compound in compounds:\n            # \u89e3\u6790\u73b0\u6709\u7684\u5143\u7d20\u7b26\u53f7\n            if compound.element_list and compound.element_list != \"[]\":\n                symbols = json.loads(compound"
-    },
-    {
-      "file": "backend/schemas.py",
-      "exports": [
-        "ElementBase",
-        "ElementResponse",
-        "CompoundCreate",
-        "CompoundResponse",
-        "CompoundSearchRequest",
-        "CompoundSearchResult"
-      ],
-      "imports": [
-        "pydantic",
-        "typing",
-        "datetime"
-      ],
-      "lines": 323,
-      "preview": "\"\"\"\nPydantic\u6570\u636e\u6a21\u578b\n\u7528\u4e8eAPI\u7684\u8f93\u5165\u8f93\u51fa\u9a8c\u8bc1\n\"\"\"\nfrom pydantic import BaseModel, Field, validator\nfrom typing import Optional, List\nfrom datetime import datetime\nimport re\n\n\n# ============= \u5143\u7d20\u76f8\u5173 =============\n\nclass ElementBase(BaseModel):\n    symbol: str\n    name: str\n    name_zh: Optional[str] = None\n    atomic_number: int\n\n\nclass ElementResponse(ElementBase):\n    id: int\n\n    class Config:\n        from_attributes = True\n\n\n# ============= \u5143\u7d20\u7ec4\u5408\u76f8\u5173 =============\n\nclass CompoundCreate(BaseModel):\n    element_sym"
-    },
-    {
-      "file": "backend/security.py",
-      "exports": [
-        "hash_password",
-        "verify_password",
-        "create_access_token",
-        "decode_access_token",
-        "generate_verification_code"
-      ],
-      "imports": [
-        "datetime",
-        "typing",
-        "passlib.context",
-        "jose",
-        "fastapi",
-        "fastapi.security",
-        "sqlalchemy.orm",
-        "backend.database",
-        "backend.models"
-      ],
-      "lines": 122,
-      "preview": "\"\"\"\n\u8ba4\u8bc1\u4e0e\u5b89\u5168\u5de5\u5177\u6a21\u5757\n\"\"\"\nfrom datetime import datetime, timedelta\nfrom typing import Optional\nfrom passlib.context import CryptContext\nfrom jose import JWTError, jwt\nfrom fastapi import Depends, HTTPException, status\nfrom fastapi.security import HTTPBearer, HTTPAuthorizationCredentials\nfrom sqlalchemy.orm import Session\nfrom backend.database import get_db\nfrom backend.models import User\nimport os\nimport random\nimport string\n\n# \u5bc6\u7801\u54c8\u5e0c\u4e0a\u4e0b\u6587\npwd_context = CryptContext(schemes=[\"bcrypt\"], deprecated=\"auto\")\n\n#"
-    },
-    {
-      "file": "data/import_papers_to_sqlite.py",
-      "exports": [],
-      "imports": [
-        "__future__",
-        "dataclasses",
-        "pathlib",
-        "typing",
-        "urllib.error",
-        "urllib.parse",
-        "urllib.request"
-      ],
-      "lines": 1203,
-      "preview": "#!/usr/bin/env python3\n\"\"\"Import MinerU markdown/images into SQLite with staged extraction.\"\"\"\n\nfrom __future__ import annotations\n\nimport argparse\nimport json\nimport re\nimport sqlite3\nfrom dataclasses import dataclass\nfrom pathlib import Path\nfrom typing import Any\nfrom urllib.error import HTTPError, URLError\nfrom urllib.parse import quote\nfrom urllib.request import urlopen\n\nSUPPORTED_IMAGE_SUFFIXES = {\".png\", \".jpg\", \".jpeg\", \".webp\", \".bmp\", \".gif\", \".tif\", \".tiff\"}\nMIN_IMAGE_BYTES = 10 * 102"
-    },
-    {
-      "file": "frontend/static/js/admin_papers.js",
-      "exports": [],
-      "imports": [],
-      "lines": 1002,
-      "preview": "// \u5168\u5c40\u6587\u732e\u7ba1\u7406\u9875\u9762 - JavaScript\n\nlet token = '';\nlet currentUser = null;\nlet editModal = null;\nlet selectedPapers = new Set();\nlet currentPage = 0;\nlet totalPapers = 0;\nconst pageSize = 20;\nconst SUPER_TYPES = ['cuprate', 'iron_based', 'nickel_based', 'hydride', 'carbon', 'organic', 'others'];\nconst LEGACY_SUPER_TYPES = {\n    'carbon_organic': 'carbon',\n    'conventional': 'others',\n    'other_conventional': 'others',\n    'unconventional': 'others',\n    'other_unconventional': 'others',\n    'unknown': "
-    },
-    {
-      "file": "frontend/static/js/auth_helper.js",
-      "exports": [],
-      "imports": [],
-      "lines": 61,
-      "preview": "// \u5bfc\u822a\u680f\u767b\u5f55\u72b6\u6001\u5c55\u793a & \u901a\u7528\u767b\u51fa\n\nfunction getAuthStateSafely() {\n    if (typeof window === 'undefined' || !window.authState) {\n        return null;\n    }\n    return window.authState.get();\n}\n\nfunction initUserNavbar() {\n    const userNav = document.getElementById('user-nav');\n    if (!userNav) return;\n\n    const state = getAuthStateSafely();\n    if (state && state.user) {\n        renderLoggedInNav(userNav, state.user);\n    } else {\n        renderLoggedOutNav(userNav);\n    }\n}\n\nfunction renderLoggedInNav(con"
-    },
-    {
-      "file": "frontend/static/js/auth_state.js",
-      "exports": [],
-      "imports": [],
-      "lines": 50,
-      "preview": "(function() {\n    const TOKEN_KEY = 'auth_token';\n    const USER_KEY = 'auth_user';\n\n    function save(token, user) {\n        if (!token || !user) {\n            throw new Error('\u767b\u5f55\u4fe1\u606f\u4e0d\u5b8c\u6574');\n        }\n        localStorage.setItem(TOKEN_KEY, token);\n        localStorage.setItem(USER_KEY, JSON.stringify(user));\n    }\n\n    function get() {\n        const token = localStorage.getItem(TOKEN_KEY);\n        const rawUser = localStorage.getItem(USER_KEY);\n        if (!token || !rawUser) {\n            return"
-    },
-    {
-      "file": "frontend/static/js/bootstrap.bundle.min.js",
-      "exports": [],
-      "imports": [],
-      "lines": 6,
-      "preview": "/*!\n  * Bootstrap v5.3.0 (https://getbootstrap.com/)\n  * Copyright 2011-2023 The Bootstrap Authors (https://github.com/twbs/bootstrap/graphs/contributors)\n  * Licensed under MIT (https://github.com/twbs/bootstrap/blob/main/LICENSE)\n  */\n!function(t,e){\"object\"==typeof exports&&\"undefined\"!=typeof module?module.exports=e():\"function\"==typeof define&&define.amd?define(e):(t=\"undefined\"!=typeof globalThis?globalThis:t||self).bootstrap=e()}(this,(function(){\"use strict\";const t=new Map,e={set(e,i,n)"
-    },
-    {
-      "file": "frontend/static/js/chart.js",
-      "exports": [],
-      "imports": [],
-      "lines": 14,
-      "preview": "/*!\n * Chart.js v4.5.1\n * https://www.chartjs.org\n * (c) 2025 Chart.js Contributors\n * Released under the MIT License\n */\n!function(t,e){\"object\"==typeof exports&&\"undefined\"!=typeof module?module.exports=e():\"function\"==typeof define&&define.amd?define(e):(t=\"undefined\"!=typeof globalThis?globalThis:t||self).Chart=e()}(this,(function(){\"use strict\";var t=Object.freeze({__proto__:null,get Colors(){return Jo},get Decimation(){return ta},get Filler(){return ba},get Legend(){return Ma},get SubTitle"
-    },
-    {
-      "file": "frontend/static/js/compound_page.js",
-      "exports": [],
-      "imports": [],
-      "lines": 1554,
-      "preview": "// \u5168\u5c40\u53d8\u91cf\nlet elementSymbols = '';\nlet uploadModal, imageModal;\nlet selectedFiles = [];\nlet currentReviewStatus = 'all'; // \u5f53\u524d\u9009\u62e9\u7684\u5ba1\u6838\u72b6\u6001\u7b5b\u9009\nlet currentDatabase = 'local'; // 'local' \u6216 'alexandria'\nconst paperCache = new Map();\nconst alexDetailCache = {};\nconst urlParams = new URLSearchParams(window.location.search);\nconst PAPERS_PER_PAGE = 30;\nlet currentPage = 1;\nlet currentSearchParams = {};\nlet viewMode = urlParams.get('mode') || 'only';\nconst ONLY_MODE_PAGE_SIZE = 50;\nconst currentSearchParams = {"
-    }
-  ],
-  "metadata": {
-    "README.md": "# \u8d85\u5bfc\u6587\u732e\u6570\u636e\u5e93\n\n\u57fa\u4e8e\u5143\u7d20\u5468\u671f\u8868\u7684\u8d85\u5bfc\u6587\u732e\u6536\u96c6\u4e0e\u68c0\u7d22\u5e73\u53f0\uff0c\u652f\u6301\u6587\u732e\u4e0a\u4f20\u3001\u5ba1\u6838\u3001\u56fe\u8868\u5c55\u793a\u4ee5\u53ca\u8fdc\u7a0b\u5907\u4efd\u3002\n\n## \u6838\u5fc3\u529f\u80fd\n- \u5468\u671f\u8868\u9009\u5143\u7d20\uff0c\u8df3\u8f6c\u5143\u7d20\u7ec4\u5408\u6587\u732e\u9875\n- \u6587\u732e\u4e0a\u4f20\uff08DOI \u89e3\u6790\u3001\u622a\u56fe\u3001\u7269\u7406\u53c2\u6570\u5f55\u5165\uff09\n- \u7ba1\u7406\u5458/\u8d85\u7ea7\u7ba1\u7406\u5458\u5ba1\u6838\u4e0e\u5ba1\u6279\n- Tc/\u538b\u5f3a\u56fe\u8868\u3001\u7ec4\u5408\u7b5b\u9009\u3001\u5f15\u7528\u5bfc\u51fa\uff08APS/BibTeX/RIS\uff09\n- \u8fdc\u7a0b\u5907\u4efd\u811a\u672c\uff0c\u652f\u6301\u65e5/\u5468\u81ea\u52a8\u4fdd\u7559\u7b56\u7565\n\n## \u5b9e\u9a8c\u529f\u80fd\n- `/tc-pre`\uff1a\u4e0a\u4f20 CONTCAR \u4e0e PDOS\uff08\u542b `PDOS_H.dat`\uff09\uff0c\u5728\u7ebf\u8fd0\u884c\u7cbe\u7b80\u811a\u672c\u4f30\u7b97 Tc\n\n\n\u53ef\u9009\uff1a\u521b\u5efa\u8d85\u7ea7\u7ba1\u7406\u5458  \n`python -m backend.create_superadmin`\n\n## \u7ba1\u7406\u540e\u53f0\n- \u767b\u5f55\uff1a`/admin/login`\n- \u6ce8\u518c\uff1a`/admin/register`\uff08\u5f85\u8d85\u7ea7\u7ba1\u7406\u5458\u5ba1\u6279\uff09\n- \u5ba1\u6838\u9762\u677f\uff1a`/admin/dashboard`\n- \u8d85\u7ea7\u7ba1\u7406\u5458\u5ba1\u6279\uff1a`/admin/superadmin`\n\n\u8be6\u89c1 [ADMIN_SYSTEM.md](ADMIN_SYSTEM.md)\u3002\n"
+  },
+  "apiGroups": {
+    "backend/api/admin.py": [
+      {
+        "method": "GET",
+        "path": "/all-users",
+        "handler": "get_all_users"
+      },
+      {
+        "method": "PUT",
+        "path": "/users/{user_id}/permissions",
+        "handler": "update_user_permissions"
+      },
+      {
+        "method": "DELETE",
+        "path": "/users/{user_id}",
+        "handler": "delete_user"
+      },
+      {
+        "method": "GET",
+        "path": "/users/{user_id}/submitted-papers",
+        "handler": "get_user_submitted_papers"
+      },
+      {
+        "method": "GET",
+        "path": "/pending-approvals",
+        "handler": "get_pending_approvals"
+      },
+      {
+        "method": "POST",
+        "path": "/approve-user",
+        "handler": "approve_user"
+      },
+      {
+        "method": "GET",
+        "path": "/all-admins",
+        "handler": "get_all_admins"
+      },
+      {
+        "method": "POST",
+        "path": "/papers/{paper_id}/review",
+        "handler": "review_paper"
+      },
+      {
+        "method": "GET",
+        "path": "/papers/unreviewed",
+        "handler": "get_unreviewed_papers"
+      },
+      {
+        "method": "GET",
+        "path": "/my-reviews",
+        "handler": "get_my_reviewed_papers"
+      },
+      {
+        "method": "GET",
+        "path": "/papers/all",
+        "handler": "get_all_papers"
+      },
+      {
+        "method": "GET",
+        "path": "/papers/{paper_id}",
+        "handler": "get_paper_detail"
+      },
+      {
+        "method": "PUT",
+        "path": "/papers/{paper_id}",
+        "handler": "update_paper"
+      },
+      {
+        "method": "DELETE",
+        "path": "/papers/{paper_id}",
+        "handler": "delete_paper"
+      },
+      {
+        "method": "POST",
+        "path": "/papers/batch-review",
+        "handler": "batch_review_papers"
+      },
+      {
+        "method": "POST",
+        "path": "/papers/batch-chart-visibility",
+        "handler": "batch_chart_visibility"
+      },
+      {
+        "method": "POST",
+        "path": "/papers/batch-delete",
+        "handler": "batch_delete_papers"
+      },
+      {
+        "method": "GET",
+        "path": "/papers/{paper_id}/images",
+        "handler": "get_paper_images"
+      },
+      {
+        "method": "DELETE",
+        "path": "/papers/{paper_id}/images/{image_id}",
+        "handler": "delete_paper_image"
+      }
+    ],
+    "backend/api/ai_papers.py": [
+      {
+        "method": "GET",
+        "path": "/compounds/{element_symbols}",
+        "handler": "get_ai_compound_info"
+      },
+      {
+        "method": "GET",
+        "path": "/papers/compound/{element_symbols}",
+        "handler": "get_ai_papers_by_compound"
+      },
+      {
+        "method": "POST",
+        "path": "/papers/search-by-mode",
+        "handler": "search_ai_papers_by_mode"
+      },
+      {
+        "method": "GET",
+        "path": "/papers/crystal-structures",
+        "handler": "get_ai_crystal_structures"
+      },
+      {
+        "method": "GET",
+        "path": "/papers/{paper_id}/images/{image_order}",
+        "handler": "get_ai_paper_image"
+      }
+    ],
+    "backend/api/alexandria.py": [
+      {
+        "method": "POST",
+        "path": "/search",
+        "handler": "search_alexandria"
+      },
+      {
+        "method": "GET",
+        "path": "/elements",
+        "handler": "list_alexandria_elements"
+      },
+      {
+        "method": "GET",
+        "path": "/material/{mat_id}",
+        "handler": "get_alexandria_material"
+      },
+      {
+        "method": "GET",
+        "path": "/material/{mat_id}/download",
+        "handler": "download_alexandria_material"
+      },
+      {
+        "method": "GET",
+        "path": "/stats",
+        "handler": "alexandria_stats"
+      },
+      {
+        "method": "GET",
+        "path": "/material/{mat_id}/cif",
+        "handler": "get_alexandria_cif"
+      }
+    ],
+    "backend/api/auth_routes.py": [
+      {
+        "method": "POST",
+        "path": "/register",
+        "handler": "register_step1"
+      },
+      {
+        "method": "POST",
+        "path": "/verify-email",
+        "handler": "register_step2"
+      },
+      {
+        "method": "POST",
+        "path": "/login",
+        "handler": "login"
+      },
+      {
+        "method": "GET",
+        "path": "/me",
+        "handler": "get_me"
+      }
+    ],
+    "backend/api/compounds.py": [
+      {
+        "method": "POST",
+        "path": "/check",
+        "handler": "check_compound_exists"
+      },
+      {
+        "method": "GET",
+        "path": "/{element_symbols}",
+        "handler": "get_compound_info"
+      },
+      {
+        "method": "POST",
+        "path": "/search",
+        "handler": "search_compounds"
+      }
+    ],
+    "backend/api/elements.py": [
+      {
+        "method": "GET",
+        "path": "/",
+        "handler": "get_all_elements"
+      },
+      {
+        "method": "GET",
+        "path": "/{symbol}",
+        "handler": "get_element_by_symbol"
+      }
+    ],
+    "backend/api/htsc2025.py": [
+      {
+        "method": "POST",
+        "path": "/search",
+        "handler": "search_htsc2025"
+      },
+      {
+        "method": "GET",
+        "path": "/stats",
+        "handler": "htsc2025_stats"
+      },
+      {
+        "method": "GET",
+        "path": "/detail/{name}",
+        "handler": "htsc2025_detail"
+      }
+    ],
+    "backend/api/papers.py": [
+      {
+        "method": "GET",
+        "path": "/stats/user-ranking",
+        "handler": "get_user_ranking"
+      },
+      {
+        "method": "POST",
+        "path": "/",
+        "handler": "create_paper"
+      },
+      {
+        "method": "POST",
+        "path": "/batch-upload",
+        "handler": "batch_upload_papers"
+      },
+      {
+        "method": "GET",
+        "path": "/batch-upload-example",
+        "handler": "get_batch_upload_example"
+      },
+      {
+        "method": "GET",
+        "path": "/compound/{element_symbols}",
+        "handler": "get_papers_by_compound"
+      },
+      {
+        "method": "POST",
+        "path": "/search-by-mode",
+        "handler": "search_papers_by_mode"
+      },
+      {
+        "method": "GET",
+        "path": "/crystal-structures",
+        "handler": "get_crystal_structures"
+      },
+      {
+        "method": "GET",
+        "path": "/{paper_id}",
+        "handler": "get_paper_detail"
+      },
+      {
+        "method": "GET",
+        "path": "/{paper_id}/images/{image_order}",
+        "handler": "get_paper_image"
+      },
+      {
+        "method": "GET",
+        "path": "/images/{image_id}",
+        "handler": "get_image_by_id"
+      },
+      {
+        "method": "POST",
+        "path": "/export",
+        "handler": "export_papers"
+      },
+      {
+        "method": "GET",
+        "path": "/stats/chart-data",
+        "handler": "get_chart_data"
+      }
+    ],
+    "backend/api/tc_predict.py": [
+      {
+        "method": "POST",
+        "path": "/",
+        "handler": "predict_tc"
+      }
+    ],
+    "backend/main.py": [
+      {
+        "method": "GET",
+        "path": "/",
+        "handler": "read_root"
+      },
+      {
+        "method": "GET",
+        "path": "/periodic-table",
+        "handler": "periodic_table_page"
+      },
+      {
+        "method": "GET",
+        "path": "/compound/{element_symbols}",
+        "handler": "compound_page"
+      },
+      {
+        "method": "GET",
+        "path": "/admin/register",
+        "handler": "admin_register_page"
+      },
+      {
+        "method": "GET",
+        "path": "/admin/login",
+        "handler": "admin_login_page"
+      },
+      {
+        "method": "GET",
+        "path": "/login",
+        "handler": "user_login_page"
+      },
+      {
+        "method": "GET",
+        "path": "/register",
+        "handler": "user_register_page"
+      },
+      {
+        "method": "GET",
+        "path": "/admin/dashboard",
+        "handler": "admin_dashboard_page"
+      },
+      {
+        "method": "GET",
+        "path": "/admin/superadmin",
+        "handler": "superadmin_dashboard_page"
+      },
+      {
+        "method": "GET",
+        "path": "/admin/my-reviews",
+        "handler": "admin_my_reviews_page"
+      },
+      {
+        "method": "GET",
+        "path": "/admin/papers",
+        "handler": "admin_papers_page"
+      },
+      {
+        "method": "GET",
+        "path": "/tc-pre",
+        "handler": "tc_prediction_page"
+      },
+      {
+        "method": "GET",
+        "path": "/health",
+        "handler": "health_check"
+      }
+    ]
   }
 }
