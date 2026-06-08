@@ -343,7 +343,15 @@ def query_by_elements(elements: List[str], mode: str = "contains",
 
     data_sql = f"""
         SELECT e.id, e.mat_id, e.formula, e.elements, e.nsites, e.spg,
-               e.lambda_val, e.tc_max, e.imag, e.band_gap, e.dos_ef
+               e.lambda_val, e.tc_max, e.imag, e.band_gap, e.dos_ef,
+               json_extract(e.data, '$.tc.TcMcMillan[5]') as tc_mcmillan,
+               json_extract(e.data, '$.tc.TcAllenDynes[5]') as tc_allen_dynes,
+               json_extract(e.data, '$.tc.TcEliashberg[5]') as tc_eliashberg,
+               json_extract(e.data, '$."tc"."wlog[K]"') as wlog,
+               json_extract(e.data, '$.tc.integral_a2F') as integral_a2f,
+               json_extract(e.data, '$.stress[0]') as sxx,
+               json_extract(e.data, '$.stress[1]') as syy,
+               json_extract(e.data, '$.stress[2]') as szz
         FROM _q q JOIN entries e ON e.id = q.entry_id
         {where_extra}
         ORDER BY e.tc_max DESC NULLS LAST
@@ -353,12 +361,21 @@ def query_by_elements(elements: List[str], mode: str = "contains",
 
     items = []
     for r in conn.execute(data_sql, params_data).fetchall():
+        # 应力单位 kbar → GPa: P = -(sxx+syy+szz)/3 * 0.1
+        sxx, syy, szz = r[16], r[17], r[18]
+        if sxx is not None and syy is not None and szz is not None:
+            pressure = round(-(sxx + syy + szz) / 3.0 * 0.1, 2)
+        else:
+            pressure = None
         items.append({
             "id": r[0], "mat_id": r[1], "formula": r[2],
             "elements": json.loads(r[3]) if r[3] else [],
             "nsites": r[4], "spg": r[5],
             "lambda_val": r[6], "tc_max": r[7], "imag": bool(r[8]),
             "band_gap": r[9], "dos_ef": r[10],
+            "tc_mcmillan": r[11], "tc_allen_dynes": r[12],
+            "tc_eliashberg": r[13], "wlog": r[14], "integral_a2f": r[15],
+            "pressure": pressure,
         })
 
     conn.execute("DROP TABLE IF EXISTS _q")
