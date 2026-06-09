@@ -1,5 +1,6 @@
 from backend import models  # noqa: F401
 from backend.database import Base
+from sqlalchemy import Boolean, Float, JSON, Text
 
 
 EXPECTED_TABLES = {
@@ -23,3 +24,53 @@ def test_superconductor_records_include_required_redesign_columns():
     assert "anisotropic_eliashberg_tc" in columns
     assert "show_in_chart" in columns
     assert "pseudopotential_name" in columns
+
+
+def test_core_json_columns_are_json_and_required():
+    assert isinstance(Base.metadata.tables["chemical_systems"].columns["elements_list"].type, JSON)
+    assert Base.metadata.tables["chemical_systems"].columns["elements_list"].nullable is False
+    assert isinstance(Base.metadata.tables["superconductors"].columns["composition"].type, JSON)
+    assert Base.metadata.tables["superconductors"].columns["composition"].nullable is False
+    assert isinstance(Base.metadata.tables["papers"].columns["authors"].type, JSON)
+    assert Base.metadata.tables["papers"].columns["authors"].nullable is False
+    assert isinstance(Base.metadata.tables["superconductor_records"].columns["element_n_ef"].type, JSON)
+
+
+def test_key_constraints_and_foreign_keys_are_declared():
+    superconductors = Base.metadata.tables["superconductors"]
+    papers = Base.metadata.tables["papers"]
+    records = Base.metadata.tables["superconductor_records"]
+
+    assert superconductors.columns["formula_normalized"].unique is True
+    assert superconductors.columns["formula_normalized"].index is True
+    assert {fk.column.table.name for fk in superconductors.columns["chemical_system_id"].foreign_keys} == {"chemical_systems"}
+
+    assert papers.columns["doi"].unique is True
+    assert papers.columns["review_status"].default.arg == "pending"
+    assert {fk.column.table.name for fk in papers.columns["uploaded_by_user_id"].foreign_keys} == {"users"}
+    assert {fk.column.table.name for fk in papers.columns["reviewed_by_user_id"].foreign_keys} == {"users"}
+
+    assert {fk.column.table.name for fk in records.columns["superconductor_id"].foreign_keys} == {"superconductors"}
+    assert {fk.column.table.name for fk in records.columns["paper_id"].foreign_keys} == {"papers"}
+
+
+def test_superconductor_record_column_types_and_nullability():
+    records = Base.metadata.tables["superconductor_records"]
+
+    assert records.columns["superconductor_id"].nullable is False
+    assert records.columns["paper_id"].nullable is True
+    assert records.columns["source_label"].nullable is False
+    assert records.columns["pressure_gpa"].nullable is False
+    assert records.columns["show_in_chart"].nullable is False
+    assert records.columns["show_in_chart"].default.arg is False
+    assert isinstance(records.columns["pressure_gpa"].type, Float)
+    assert isinstance(records.columns["show_in_chart"].type, Boolean)
+    assert isinstance(records.columns["note"].type, Text)
+
+
+def test_superconductor_records_avoid_nullable_unique_identity_constraint():
+    records = Base.metadata.tables["superconductor_records"]
+
+    assert "uq_superconductor_record_identity" not in {
+        constraint.name for constraint in records.constraints
+    }

@@ -11,7 +11,6 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
-    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -127,16 +126,6 @@ class Paper(Base):
 
 class SuperconductorRecord(Base):
     __tablename__ = "superconductor_records"
-    __table_args__ = (
-        UniqueConstraint(
-            "superconductor_id",
-            "paper_id",
-            "source_label",
-            "pressure_gpa",
-            "space_group_symbol",
-            name="uq_superconductor_record_identity",
-        ),
-    )
 
     id = Column(Integer, primary_key=True)
     superconductor_id = Column(Integer, ForeignKey("superconductors.id"), nullable=False, index=True)
