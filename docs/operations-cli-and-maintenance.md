@@ -18,13 +18,14 @@ python --version
 ## 3. 数据库初始化
 
 ```bash
+python -m alembic upgrade head
 python -m backend.init_db
 ```
 
 用途：
-- 创建数据表
+- 使用 Alembic 创建或升级数据表
 - 初始化 118 个元素基础数据
-- 补齐缺失表结构
+- `backend.init_db` 不再负责 `create_all` 或临时 `ALTER TABLE`
 
 ## 4. 创建超级管理员
 
@@ -44,8 +45,8 @@ python -m backend.export_data /path/to/export.json
 ```
 
 用途：
-- 导出数据库中的文献、物理数据和图片
-- 用于备份、迁移和离线保存
+- 旧脚本仍保留，但当前 MySQL 六表结构下需要重写后才能作为正式导出入口
+- 当前不应把它视为已适配新结构的备份方案
 
 ## 6. 数据导入
 
@@ -55,8 +56,8 @@ python -m backend.import_data data/data_export.json --clear
 ```
 
 用途：
-- 从导出的 JSON 恢复数据库
-- `--clear` 会先清理现有数据再导入，应谨慎使用
+- 旧脚本仍保留，但当前 MySQL 六表结构下需要重写后才能作为正式导入入口
+- 旧数据可以后续重新导入或人工整理
 
 ## 7. 组合 ID 迁移
 
@@ -65,8 +66,8 @@ python -m backend.migrate_ids
 ```
 
 用途：
-- 为旧元素组合补齐或修正 `element_id_list`
-- 提高组合匹配效率
+- 该脚本面向旧组合表
+- 新 MySQL 结构不依赖 `element_id_list`，该脚本当前不作为新结构维护入口
 
 ## 8. 批量上传辅助
 
@@ -76,7 +77,7 @@ python -m backend.migrate_ids
 
 ### 8.2 服务端批量处理
 - 接口：`POST /api/papers/batch-upload`
-- 适用于已登录用户通过首页快速上传导入历史数据
+- 当前接口保留入口，但新 MySQL 结构下的批量导入逻辑未实现
 
 ## 9. 服务维护
 
@@ -95,9 +96,9 @@ journalctl -u Conventional-SC-Dataset -f
 
 ## 10. 备份建议
 
-### 10.1 SQLite 文件级备份
+### 10.1 MySQL 备份
 ```bash
-cp data/superconductor.db data/backup_$(date +%F).db
+mysqldump -u user -p superconductor_dataset > backup_$(date +%F).sql
 ```
 
 ### 10.2 使用脚本
@@ -128,7 +129,8 @@ cp data/superconductor.db data/backup_$(date +%F).db
 
 ### 11.4 需要重建数据库
 ```bash
+python -m alembic upgrade head
 python -m backend.init_db
 ```
 
-如果要完全重置，应先自行备份当前数据库，再处理数据库文件和管理员重建流程。
+如果要完全重置，应先自行备份当前 MySQL 数据库，再处理建表、元素初始化和管理员重建流程。

@@ -8,7 +8,7 @@
 
 - Python 3.10+ 环境
 - 已安装 `requirements.txt` 中依赖
-- 有可写的数据目录用于 SQLite 数据库和图片
+- 可连接的 MySQL 数据库
 - 能设置 JWT 与邮件相关环境变量
 
 ## 3. 本地开发启动
@@ -18,12 +18,17 @@
 pip install -r requirements.txt
 ```
 
-### 3.2 初始化数据库
+### 3.2 创建表结构
+```bash
+python -m alembic upgrade head
+```
+
+### 3.3 初始化基础元素数据
 ```bash
 python -m backend.init_db
 ```
 
-### 3.3 启动方式
+### 3.4 启动方式
 
 #### 使用启动脚本
 ```bash
@@ -43,17 +48,16 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 
 注意：`--reload` 只适合开发，不适合生产。
 
-## 4. 数据目录
+## 4. 数据库
 
-当前系统默认依赖 SQLite 数据文件和图片存储目录。部署时需要保证：
+当前系统默认使用 MySQL。表结构由 Alembic 管理，`backend.init_db` 只负责初始化 `periodic_table_elements` 基础元素数据。
 
-- 数据目录存在
-- 服务进程对数据目录有读写权限
-- 数据目录不要与代码目录的生命周期绑定
+部署时需要保证：
 
-建议区分：
-- 代码目录：如 `/var/www/Conventional-SC-Dataset`
-- 数据目录：如 `/var/lib/Conventional-SC-Dataset/data`
+- MySQL 服务可访问
+- 数据库和账号已创建
+- 字符集建议使用 `utf8mb4`
+- `DATABASE_URL` 指向目标库
 
 ## 5. 关键环境变量
 
@@ -74,6 +78,11 @@ SMTP_SENDER_EMAIL=your_email@example.com
 ### 5.3 端口
 ```bash
 PORT=8000
+```
+
+### 5.4 数据库
+```bash
+DATABASE_URL=mysql+pymysql://user:password@127.0.0.1:3306/superconductor_dataset?charset=utf8mb4
 ```
 
 ## 6. 生产部署建议
@@ -107,8 +116,11 @@ WantedBy=multi-user.target
 
 ### 7.1 初始化数据库
 ```bash
+python -m alembic upgrade head
 python -m backend.init_db
 ```
+
+`backend.init_db` 不再执行 `create_all` 或 `ALTER TABLE`。
 
 ### 7.2 创建超级管理员
 ```bash

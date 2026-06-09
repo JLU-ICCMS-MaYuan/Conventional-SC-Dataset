@@ -23,7 +23,7 @@
 - 用超导体类型做颜色区分
 
 #### 数据库实时 P-Tc 分布
-- 读取数据库中标记为可展示的文献数据
+- 读取数据库中标记为可展示的超导记录
 - 展示压强与 Tc 的分布关系
 
 #### 贡献者排行
@@ -31,9 +31,13 @@
 - 以用户真实姓名为展示维度
 
 ### 2.3 数据来源
-- 图表数据接口：`/api/papers/stats/chart-data`
+- Tc-Pressure 图表接口：`/api/papers/stats/tc-pressure`
+- Tc-Year 图表接口：`/api/papers/stats/tc-year`
+- 兼容接口：`/api/papers/stats/chart-data`
 - 用户排行接口：`/api/papers/stats/user-ranking`
-- 图表是否展示受文献 `show_in_chart` 控制
+- 图表是否展示受 `superconductor_records.show_in_chart` 控制
+- Tc-Year 图表只使用有关联 `paper_id` 且论文有 `year` 的记录
+- 没有关联论文年份的外部来源记录不会进入 Tc-Year 图
 
 ## 3. Tc 预测实验模块
 
@@ -45,6 +49,7 @@
 ### 3.2 输入
 - 一个 VASP 结构文件 `CONTCAR/POSCAR`
 - 一组 PDOS 文件，其中必须包含 `PDOS_H`
+- `numpy` 和 `pymatgen` 采用懒加载；缺依赖时只影响该实验接口，不影响主站启动
 
 ### 3.3 核心流程
 1. 解析结构文件
