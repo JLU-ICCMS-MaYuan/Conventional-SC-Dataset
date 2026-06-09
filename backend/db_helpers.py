@@ -30,7 +30,7 @@ def build_system_key(symbols: Iterable[str]) -> tuple[str, list[str]]:
 FORMULA_TOKEN_RE = re.compile(r"([A-Z][a-z]?)(\d+(?:\.\d+)?)?")
 
 
-def parse_formula_composition(formula: str) -> dict[str, float]:
+def parse_formula_composition(formula: str) -> dict[str, Decimal]:
     if not formula or not formula.strip():
         raise ValueError("chemical formula is required")
     value = formula.strip()
@@ -41,23 +41,23 @@ def parse_formula_composition(formula: str) -> dict[str, float]:
         if not match:
             raise ValueError(f"invalid chemical formula: {formula}")
         symbol, amount_text = match.groups()
-        amount = float(amount_text) if amount_text else 1.0
+        amount = Decimal(amount_text) if amount_text else Decimal("1")
         if amount <= 0:
             raise ValueError(f"invalid chemical formula amount: {formula}")
-        composition[symbol] = composition.get(symbol, 0.0) + amount
+        composition[symbol] = composition.get(symbol, Decimal("0")) + amount
         cursor = match.end()
     if not composition:
         raise ValueError(f"invalid chemical formula: {formula}")
     return composition
 
 
-def _format_formula_amount(amount: float) -> str:
-    if amount.is_integer():
+def _format_formula_amount(amount: Decimal) -> str:
+    if amount == amount.to_integral_value():
         return str(int(amount))
-    return format(Decimal(str(amount)), "f").rstrip("0").rstrip(".")
+    return format(amount.normalize(), "f").rstrip("0").rstrip(".")
 
 
-def normalize_formula(formula: str) -> tuple[str, list[str], dict[str, float], dict[str, float]]:
+def normalize_formula(formula: str) -> tuple[str, list[str], dict[str, Decimal], dict[str, Decimal]]:
     composition = parse_formula_composition(formula)
     elements = sorted(composition)
     normalized_parts = []

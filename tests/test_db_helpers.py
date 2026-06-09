@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from backend.db_helpers import (
     build_system_key,
     normalize_formula,
@@ -10,15 +12,15 @@ def test_build_system_key_sorts_symbols():
 
 
 def test_parse_formula_composition_counts_atoms():
-    assert parse_formula_composition("LaH10") == {"La": 1, "H": 10}
+    assert parse_formula_composition("LaH10") == {"La": Decimal("1"), "H": Decimal("10")}
 
 
 def test_parse_formula_composition_supports_decimal_amounts():
     assert parse_formula_composition("Ba0.6K0.4Fe2As2") == {
-        "Ba": 0.6,
-        "K": 0.4,
-        "Fe": 2.0,
-        "As": 2.0,
+        "Ba": Decimal("0.6"),
+        "K": Decimal("0.4"),
+        "Fe": Decimal("2"),
+        "As": Decimal("2"),
     }
 
 
@@ -50,30 +52,38 @@ def test_normalize_formula_sorts_symbols():
     normalized, elements, composition, ratios = normalize_formula("LaH10")
     assert normalized == "H10La"
     assert elements == ["H", "La"]
-    assert composition == {"La": 1, "H": 10}
-    assert ratios["La"] == 1 / 11
-    assert ratios["H"] == 10 / 11
+    assert composition == {"La": Decimal("1"), "H": Decimal("10")}
+    assert ratios["La"] == Decimal("1") / Decimal("11")
+    assert ratios["H"] == Decimal("10") / Decimal("11")
 
 
 def test_normalize_formula_formats_decimal_amounts():
     normalized, elements, composition, ratios = normalize_formula("Ba0.6K0.4Fe2As2")
     assert normalized == "As2Ba0.6Fe2K0.4"
     assert elements == ["As", "Ba", "Fe", "K"]
-    assert composition == {"Ba": 0.6, "K": 0.4, "Fe": 2.0, "As": 2.0}
-    assert ratios["Ba"] == 0.6 / 5.0
-    assert ratios["K"] == 0.4 / 5.0
-    assert ratios["Fe"] == 2.0 / 5.0
-    assert ratios["As"] == 2.0 / 5.0
+    assert composition == {"Ba": Decimal("0.6"), "K": Decimal("0.4"), "Fe": Decimal("2"), "As": Decimal("2")}
+    assert ratios["Ba"] == Decimal("0.6") / Decimal("5")
+    assert ratios["K"] == Decimal("0.4") / Decimal("5")
+    assert ratios["Fe"] == Decimal("2") / Decimal("5")
+    assert ratios["As"] == Decimal("2") / Decimal("5")
 
 
 def test_normalize_formula_does_not_emit_scientific_notation():
     normalized, _, _, _ = normalize_formula("H0.00001")
     assert normalized == "H0.00001"
-    assert parse_formula_composition(normalized) == {"H": 0.00001}
+    assert parse_formula_composition(normalized) == {"H": Decimal("0.00001")}
 
 
 def test_normalize_formula_keeps_very_small_decimal_amounts():
     normalized, _, _, _ = normalize_formula("H0.0000000000001")
     assert normalized == "H0.0000000000001"
     assert "e" not in normalized.lower()
-    assert parse_formula_composition(normalized) == {"H": 0.0000000000001}
+    assert parse_formula_composition(normalized) == {"H": Decimal("0.0000000000001")}
+
+
+def test_normalize_formula_keeps_sub_float_decimal_amounts():
+    amount = "0." + ("0" * 400) + "1"
+    normalized, _, _, _ = normalize_formula(f"H{amount}")
+    assert normalized == f"H{amount}"
+    assert "e" not in normalized.lower()
+    assert parse_formula_composition(normalized) == {"H": Decimal(amount)}
