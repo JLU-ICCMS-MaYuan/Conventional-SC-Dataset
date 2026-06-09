@@ -1,161 +1,128 @@
 """
-数据导出工具
-将数据库中的所有数据导出为JSON文件
+Export the redesigned MySQL dataset as JSON.
 """
+
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
-from backend.database import MetadataSessionLocal, ImageSessionLocal
+from sqlalchemy.orm import Session
+
 from backend import models
+from backend.database import SessionLocal
 
 
-def export_all_data(output_file: str = "data_export.json"):
-    """
-    导出所有数据到JSON文件
+SCHEMA_VERSION = "mysql-redesign-v1"
 
-    Args:
-        output_file: 输出文件路径
-    """
-    db = MetadataSessionLocal()
-    image_db = ImageSessionLocal()
 
+def _dt(value) -> str | None:
+    return value.isoformat() if value else None
+
+
+def _user_to_dict(user: models.User) -> dict[str, Any]:
+    return {
+        "id": user.id,
+        "email": user.email,
+        "real_name": user.real_name,
+        "affiliation": user.affiliation,
+        "role": user.role,
+        "is_approved": user.is_approved,
+        "is_email_verified": user.is_email_verified,
+        "approved_at": _dt(user.approved_at),
+        "created_at": _dt(user.created_at),
+        "updated_at": _dt(user.updated_at),
+    }
+
+
+def _paper_to_dict(paper: models.Paper) -> dict[str, Any]:
+    return {
+        "id": paper.id,
+        "doi": paper.doi,
+        "title": paper.title,
+        "journal": paper.journal,
+        "volume": paper.volume,
+        "pages": paper.pages,
+        "year": paper.year,
+        "abstract": paper.abstract,
+        "authors": paper.authors,
+        "uploaded_by_email": paper.uploaded_by_user.email if paper.uploaded_by_user else None,
+        "reviewed_by_email": paper.reviewed_by_user.email if paper.reviewed_by_user else None,
+        "review_status": paper.review_status,
+        "reviewed_at": _dt(paper.reviewed_at),
+        "review_comment": paper.review_comment,
+        "created_at": _dt(paper.created_at),
+        "updated_at": _dt(paper.updated_at),
+    }
+
+
+def _record_to_dict(record: models.SuperconductorRecord) -> dict[str, Any]:
+    superconductor = record.superconductor
+    return {
+        "id": record.id,
+        "paper_doi": record.paper.doi if record.paper else None,
+        "chemical_formula": superconductor.chemical_formula if superconductor else None,
+        "source_label": record.source_label,
+        "pressure_gpa": record.pressure_gpa,
+        "space_group_symbol": record.space_group_symbol,
+        "space_group_number": record.space_group_number,
+        "crystal_structure": record.crystal_structure,
+        "thermodynamically_stable": record.thermodynamically_stable,
+        "dynamically_stable": record.dynamically_stable,
+        "energy_above_hull": record.energy_above_hull,
+        "mcmillan_tc": record.mcmillan_tc,
+        "allen_dynes_tc": record.allen_dynes_tc,
+        "isotropic_eliashberg_tc": record.isotropic_eliashberg_tc,
+        "anisotropic_eliashberg_tc": record.anisotropic_eliashberg_tc,
+        "experimental_tc": record.experimental_tc,
+        "lambda_value": record.lambda_value,
+        "omega_log": record.omega_log,
+        "n_ef_total": record.n_ef_total,
+        "element_n_ef": record.element_n_ef,
+        "pseudopotential_type": record.pseudopotential_type,
+        "pseudopotential_name": record.pseudopotential_name,
+        "exchange_correlation_functional": record.exchange_correlation_functional,
+        "calculation_code": record.calculation_code,
+        "k_grid": record.k_grid,
+        "q_grid": record.q_grid,
+        "energy_cutoff_value": record.energy_cutoff_value,
+        "energy_cutoff_unit": record.energy_cutoff_unit,
+        "show_in_chart": record.show_in_chart,
+        "s_factor": record.s_factor,
+        "method": record.method,
+        "note": record.note,
+        "created_at": _dt(record.created_at),
+        "updated_at": _dt(record.updated_at),
+    }
+
+
+def build_export_payload(db: Session) -> dict[str, Any]:
+    users = db.query(models.User).order_by(models.User.id).all()
+    papers = db.query(models.Paper).order_by(models.Paper.id).all()
+    records = db.query(models.SuperconductorRecord).order_by(models.SuperconductorRecord.id).all()
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "users": [_user_to_dict(user) for user in users],
+        "papers": [_paper_to_dict(paper) for paper in papers],
+        "superconductor_records": [_record_to_dict(record) for record in records],
+    }
+
+
+def export_all_data(output_file: str = "data/data_export.json") -> dict[str, Any]:
+    output_path = Path(output_file)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    db = SessionLocal()
     try:
-        print("开始导出数据...")
-
-        data = {
-            "elements": [],
-            "compounds": [],
-            "papers": [],
-            "paper_data": [],
-            "paper_images": []
-        }
-
-        print("导出元素数据...")
-        elements = db.query(models.Element).all()
-        for elem in elements:
-            data["elements"].append({
-                "id": elem.id,
-                "symbol": elem.symbol,
-                "name": elem.name,
-                "atomic_number": elem.atomic_number
-            })
-
-        print("导出元素组合数据...")
-        compounds = db.query(models.Compound).all()
-        for comp in compounds:
-            data["compounds"].append({
-                "id": comp.id,
-                "chemical_formula": comp.chemical_formula,
-                "element_list": json.loads(comp.element_list) if comp.element_list else [],
-                "element_id_list": json.loads(comp.element_id_list) if comp.element_id_list else [],
-                "composition": json.loads(comp.composition) if comp.composition else [],
-                "element_ratio": json.loads(comp.element_ratio) if comp.element_ratio else [],
-            })
-
-        print("导出文献数据...")
-        papers = db.query(models.Paper).all()
-        for paper in papers:
-            data["papers"].append({
-                "id": paper.id,
-                "doi": paper.doi,
-                "title": paper.title,
-                "authors": paper.authors,
-                "journal": paper.journal,
-                "volume": paper.volume,
-                "pages": paper.pages,
-                "year": paper.year,
-                "abstract": paper.abstract,
-                "contributor_name": paper.contributor_name,
-                "contributor_affiliation": paper.contributor_affiliation,
-                "notes": paper.notes,
-                "review_status": paper.review_status,
-                "review_comment": paper.review_comment,
-                "show_in_chart": paper.show_in_chart,
-                "created_at": paper.created_at.isoformat() if paper.created_at else None,
-            })
-
-        print("导出物理参数数据...")
-        physical_params = db.query(models.PaperData).all()
-        for p in physical_params:
-            data["paper_data"].append({
-                "id": p.id,
-                "paper_id": p.paper_id,
-                "compound_id": p.compound_id,
-                "article_type": p.article_type,
-                "superconductor_type": p.superconductor_type,
-                "chemical_formula": p.chemical_formula,
-                "crystal_structure": p.crystal_structure,
-                "tc": p.tc_range,
-                "tc_press": p.pressure_range,
-                "lambda_val": p.lambda_val,
-                "omega_log": p.omega_log,
-                "n_ef": p.n_ef,
-                "s_factor": p.s_factor,
-                "sample_name": p.sample_name,
-                "data_source_note": p.data_source_note,
-                "sequence_in_paper": p.sequence_in_paper,
-            })
-
-        print("导出文献截图数据...")
-        images_dir = Path("data/images")
-        images_dir.mkdir(parents=True, exist_ok=True)
-
-        images = image_db.query(models.PaperImage).all()
-        for img in images:
-            if img.image_data:
-                image_filename = f"paper_{img.paper_id}_order_{img.image_order or 1}.jpg"
-                image_path = images_dir / image_filename
-                with open(image_path, 'wb') as f:
-                    f.write(img.image_data)
-                data["paper_images"].append({
-                    "id": img.id,
-                    "paper_id": img.paper_id,
-                    "file_path": str(image_path),
-                    "image_order": img.image_order or 1,
-                    "file_size": img.file_size,
-                    "created_at": img.created_at.isoformat() if img.created_at else None
-                })
-                continue
-
-            figs = []
-            for i in range(1, 41):
-                blob = getattr(img, f"fig{i}", None)
-                if not blob:
-                    continue
-                image_filename = f"paper_{img.paper_id}_fig_{i}.jpg"
-                image_path = images_dir / image_filename
-                with open(image_path, 'wb') as f:
-                    f.write(blob)
-                figs.append({
-                    "id": img.id * 100 + i,
-                    "paper_id": img.paper_id,
-                    "file_path": str(image_path),
-                    "image_order": i,
-                    "file_size": len(blob),
-                    "created_at": img.created_at.isoformat() if img.created_at else None
-                })
-            data["paper_images"].extend(figs)
-
-        output_path = Path(output_file)
-        with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-
-        print(f"\n✅ 导出完成！")
+        payload = build_export_payload(db)
+        output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        print("✅ 导出完成")
         print(f"   文件位置: {output_path.absolute()}")
-        print(f"   元素: {len(data['elements'])} 个")
-        print(f"   元素组合: {len(data['compounds'])} 个")
-        print(f"   文献: {len(data['papers'])} 篇")
-        print(f"   物理参数: {len(data['paper_data'])} 条")
-        print(f"   截图: {len(data['paper_images'])} 张")
-        print(f"   文件大小: {output_path.stat().st_size / 1024 / 1024:.2f} MB")
-
-    except Exception as e:
-        print(f"❌ 导出失败: {e}")
-        raise
+        print(f"   用户: {len(payload['users'])} 个")
+        print(f"   文献: {len(payload['papers'])} 篇")
+        print(f"   超导记录: {len(payload['superconductor_records'])} 条")
+        return payload
     finally:
         db.close()
-        image_db.close()
 
 
 if __name__ == "__main__":

@@ -1,229 +1,193 @@
 """
-数据导入工具
-从JSON文件导入数据到数据库
+Import JSON data into the redesigned MySQL schema.
 """
+
 import json
-import base64
-from pathlib import Path
+import sys
 from datetime import datetime
+from pathlib import Path
+from typing import Any
+
 from sqlalchemy.orm import Session
 
-from backend.database import MetadataSessionLocal, ImageSessionLocal
-from backend import models, crud
+from backend import crud, models
+from backend.database import SessionLocal
+from backend.export_data import SCHEMA_VERSION
 
 
-def get_all_element_symbols(db: Session):
-    """获取所有有效的元素符号"""
-    return {e.symbol for e in db.query(models.Element).all()}
+SYSTEM_IMPORT_EMAIL = "import@example.local"
 
 
-def standardize_elements(symbols_list, valid_elements):
-    """过滤并排序元素符号，确保标准化"""
-    if not symbols_list:
-        return []
-    # 过滤掉非有效元素的字符串（如 '170190', 'GPa' 等）
-    valid_list = [s for s in symbols_list if s in valid_elements]
-    return sorted(list(set(valid_list)))
+def _parse_dt(value: str | None):
+    if not value:
+        return None
+    return datetime.fromisoformat(value)
 
 
-def import_all_data(input_file: str = "data/data_export.json", clear_existing: bool = False):
-    """
-    从JSON文件导入数据，并强制执行元素符号标准化
-    """
-    input_path = Path(input_file)
-    if not input_path.exists():
-        print(f"❌ 文件不存在: {input_path}")
-        return
+def _ensure_import_user(db: Session) -> models.User:
+    user = db.query(models.User).filter(models.User.email == SYSTEM_IMPORT_EMAIL).first()
+    if user:
+        return user
+    user = models.User(
+        email=SYSTEM_IMPORT_EMAIL,
+        password_hash="!",
+        real_name="Data Import",
+        role="admin",
+        is_approved=True,
+        is_email_verified=True,
+    )
+    db.add(user)
+    db.flush()
+    return user
 
-    db = MetadataSessionLocal()
-    image_db = ImageSessionLocal()
-    valid_elements = get_all_element_symbols(db)
 
-    try:
-        print(f"读取数据文件: {input_path}...")
-        with open(input_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+def _upsert_user(db: Session, item: dict[str, Any]) -> models.User:
+    user = db.query(models.User).filter(models.User.email == item["email"]).first()
+    if not user:
+        user = models.User(email=item["email"], password_hash="!")
+        db.add(user)
+    user.real_name = item.get("real_name") or item["email"]
+    user.affiliation = item.get("affiliation")
+    user.role = item.get("role") or "user"
+    user.is_approved = bool(item.get("is_approved", user.role == "user"))
+    user.is_email_verified = bool(item.get("is_email_verified", True))
+    user.approved_at = _parse_dt(item.get("approved_at"))
+    return user
 
-        if clear_existing:
-            print("⚠️  清空现有数据...")
-            image_db.query(models.PaperImage).delete()
-            image_db.commit()
-            db.query(models.PaperData).delete()
-            db.query(models.Paper).delete()
-            db.query(models.Compound).delete()
-            db.commit()
 
-        compound_id_mapping = {}
-        paper_id_mapping = {}
+def _clear_business_data(db: Session) -> None:
+    db.query(models.SuperconductorRecord).delete()
+    db.query(models.Paper).delete()
+    db.query(models.Superconductor).delete()
+    db.query(models.ChemicalSystem).delete()
+    db.query(models.User).delete()
+    db.commit()
 
-        print("处理元素组合...")
-        compounds_to_process = data.get("compounds", [])
 
-        if not compounds_to_process and "papers" in data:
-            print("   JSON中缺少compounds信息，正在从papers中推断...")
-            seen_combos = set()
-            for p in data["papers"]:
-                raw_symbols = p.get("element_list") or p.get("element_symbols", "").split("-")
-                std_list = standardize_elements(raw_symbols, valid_elements)
-                if std_list:
-                    combo_key = "-".join(std_list)
-                    if combo_key not in seen_combos:
-                        compounds_to_process.append({
-                            "id": p.get("compound_id", -1),
-                            "element_symbols": combo_key,
-                            "element_list": std_list,
-                            "created_at": p.get("created_at", datetime.now().isoformat())
-                        })
-                        seen_combos.add(combo_key)
+def _record_item(db: Session, item: dict[str, Any], paper_by_doi: dict[str, models.Paper]) -> models.SuperconductorRecord | None:
+    formula = item.get("chemical_formula")
+    if not formula:
+        return None
+    superconductor = crud.get_or_create_superconductor(db, formula)
+    paper = paper_by_doi.get(item.get("paper_doi")) if item.get("paper_doi") else None
+    record = models.SuperconductorRecord(
+        superconductor_id=superconductor.id,
+        paper_id=paper.id if paper else None,
+        source_label=item.get("source_label") or ("paper" if paper else "import"),
+        pressure_gpa=item["pressure_gpa"],
+        space_group_symbol=item.get("space_group_symbol"),
+        space_group_number=item.get("space_group_number"),
+        crystal_structure=item.get("crystal_structure"),
+        thermodynamically_stable=item.get("thermodynamically_stable"),
+        dynamically_stable=item.get("dynamically_stable"),
+        energy_above_hull=item.get("energy_above_hull"),
+        mcmillan_tc=item.get("mcmillan_tc"),
+        allen_dynes_tc=item.get("allen_dynes_tc"),
+        isotropic_eliashberg_tc=item.get("isotropic_eliashberg_tc"),
+        anisotropic_eliashberg_tc=item.get("anisotropic_eliashberg_tc"),
+        experimental_tc=item.get("experimental_tc"),
+        lambda_value=item.get("lambda_value"),
+        omega_log=item.get("omega_log"),
+        n_ef_total=item.get("n_ef_total"),
+        element_n_ef=item.get("element_n_ef"),
+        pseudopotential_type=item.get("pseudopotential_type"),
+        pseudopotential_name=item.get("pseudopotential_name"),
+        exchange_correlation_functional=item.get("exchange_correlation_functional"),
+        calculation_code=item.get("calculation_code"),
+        k_grid=item.get("k_grid"),
+        q_grid=item.get("q_grid"),
+        energy_cutoff_value=item.get("energy_cutoff_value"),
+        energy_cutoff_unit=item.get("energy_cutoff_unit"),
+        show_in_chart=bool(item.get("show_in_chart", False)),
+        s_factor=item.get("s_factor"),
+        method=item.get("method"),
+        note=item.get("note"),
+    )
+    db.add(record)
+    return record
 
-        for comp_data in compounds_to_process:
-            std_list = comp_data.get("element_list") or []
-            chemical_formula = comp_data.get("chemical_formula")
-            if chemical_formula:
-                compound = crud.get_or_create_compound(db, std_list, chemical_formula)
-            else:
-                compound = crud.get_or_create_compound(db, std_list)
-            if not compound:
-                continue
-            if "id" in comp_data:
-                compound_id_mapping[comp_data["id"]] = compound.id
-            if chemical_formula:
-                compound_id_mapping[chemical_formula] = compound.id
 
-        db.commit()
-        print("   ✅ 元素组合准备就绪")
+def import_payload(db: Session, payload: dict[str, Any], clear_existing: bool = False) -> dict[str, int]:
+    if payload.get("schema_version") != SCHEMA_VERSION:
+        raise ValueError(f"unsupported schema_version: {payload.get('schema_version')}")
+    if clear_existing:
+        _clear_business_data(db)
 
-        print("导入文献...")
-        for paper_data in data.get("papers", []):
-            existing = db.query(models.Paper).filter(models.Paper.doi == paper_data["doi"]).first()
-            if existing:
-                paper_id_mapping[paper_data["id"]] = existing.id
-                continue
+    user_by_email: dict[str, models.User] = {}
+    for item in payload.get("users", []):
+        user = _upsert_user(db, item)
+        user_by_email[user.email] = user
+    import_user = _ensure_import_user(db)
+    db.flush()
 
+    paper_by_doi: dict[str, models.Paper] = {}
+    for item in payload.get("papers", []):
+        doi = item["doi"]
+        paper = db.query(models.Paper).filter(models.Paper.doi == doi).first()
+        if not paper:
+            uploaded_by = user_by_email.get(item.get("uploaded_by_email")) or import_user
+            reviewed_by = user_by_email.get(item.get("reviewed_by_email"))
             paper = models.Paper(
-                doi=paper_data["doi"],
-                title=paper_data.get("title"),
-                authors=paper_data.get("authors"),
-                journal=paper_data.get("journal"),
-                volume=paper_data.get("volume"),
-                pages=paper_data.get("pages"),
-                year=paper_data.get("year"),
-                abstract=paper_data.get("abstract"),
-                contributor_name=paper_data.get("contributor_name", "Data Import"),
-                contributor_affiliation=paper_data.get("contributor_affiliation", "System"),
-                notes=paper_data.get("notes"),
-                review_status=paper_data.get("review_status", "unreviewed"),
-                review_comment=paper_data.get("review_comment"),
-                show_in_chart=paper_data.get("show_in_chart", False),
-                created_at=datetime.fromisoformat(paper_data["created_at"]) if paper_data.get("created_at") else datetime.now(),
+                doi=doi,
+                uploaded_by_user_id=uploaded_by.id,
+                reviewed_by_user_id=reviewed_by.id if reviewed_by else None,
             )
             db.add(paper)
-            db.flush()
-            paper_id_mapping[paper_data["id"]] = paper.id
+        paper.title = item.get("title") or f"Imported Paper: {doi}"
+        paper.journal = item.get("journal")
+        paper.volume = item.get("volume")
+        paper.pages = item.get("pages")
+        paper.year = item.get("year")
+        paper.abstract = item.get("abstract")
+        paper.authors = item.get("authors") or []
+        paper.review_status = item.get("review_status") or "pending"
+        paper.reviewed_at = _parse_dt(item.get("reviewed_at"))
+        paper.review_comment = item.get("review_comment")
+        db.flush()
+        paper_by_doi[paper.doi] = paper
 
-        db.commit()
-        print(f"   ✅ 文献导入完成 ({len(paper_id_mapping)} 篇)")
+    imported_records = 0
+    for item in payload.get("superconductor_records", []):
+        if _record_item(db, item, paper_by_doi):
+            imported_records += 1
 
-        print("导入物理参数...")
-        imported_params = 0
-        for param_data in data.get("paper_data", []):
-            old_paper_id = param_data.get("paper_id")
-            new_paper_id = paper_id_mapping.get(old_paper_id)
-            if not new_paper_id:
-                continue
+    db.commit()
+    return {
+        "users": len(user_by_email) + (0 if SYSTEM_IMPORT_EMAIL in user_by_email else 1),
+        "papers": len(paper_by_doi),
+        "superconductor_records": imported_records,
+    }
 
-            compound_id = None
-            old_compound_id = param_data.get("compound_id")
-            if old_compound_id in compound_id_mapping:
-                compound_id = compound_id_mapping[old_compound_id]
-            elif param_data.get("chemical_formula") in compound_id_mapping:
-                compound_id = compound_id_mapping[param_data.get("chemical_formula")]
-            elif param_data.get("chemical_formula"):
-                compound = crud.get_or_create_compound(db, [], param_data.get("chemical_formula"))
-                compound_id = compound.id if compound else None
 
-            param = models.PaperData(
-                paper_id=new_paper_id,
-                compound_id=compound_id,
-                article_type=param_data.get("article_type"),
-                superconductor_type=param_data.get("superconductor_type"),
-                chemical_formula=param_data.get("chemical_formula"),
-                crystal_structure=param_data.get("crystal_structure"),
-                tc=json.dumps(param_data.get("tc"), ensure_ascii=False) if param_data.get("tc") is not None else None,
-                tc_press=json.dumps(param_data.get("tc_press"), ensure_ascii=False) if param_data.get("tc_press") is not None else None,
-                lambda_val=param_data.get("lambda_val"),
-                omega_log=param_data.get("omega_log"),
-                n_ef=param_data.get("n_ef"),
-                s_factor=param_data.get("s_factor"),
-                sample_name=param_data.get("sample_name"),
-                data_source_note=param_data.get("data_source_note"),
-                sequence_in_paper=param_data.get("sequence_in_paper"),
-            )
-            db.add(param)
-            imported_params += 1
-
-        db.commit()
-        print(f"   ✅ 物理参数导入完成 ({imported_params} 条)")
-
-        print("导入文献截图...")
-        imported_images = 0
-        from backend.utils.image_processor import process_image
-
-        for img_data in data.get("paper_images", []):
-            new_paper_id = paper_id_mapping.get(img_data.get("paper_id"))
-            if not new_paper_id:
-                continue
-
-            image_bin = None
-            thumb_bin = None
-            file_path = img_data.get("file_path")
-            if file_path and Path(file_path).exists():
-                with open(file_path, 'rb') as f:
-                    raw_data = f.read()
-                    image_bin, thumb_bin = process_image(raw_data)
-            elif "image_data" in img_data:
-                image_bin = base64.b64decode(img_data["image_data"])
-                if "thumbnail_data" in img_data:
-                    thumb_bin = base64.b64decode(img_data["thumbnail_data"])
-                else:
-                    _, thumb_bin = process_image(image_bin)
-
-            if image_bin and thumb_bin:
-                image = models.PaperImage(
-                    paper_id=new_paper_id,
-                    image_data=image_bin,
-                    thumbnail_data=thumb_bin,
-                    image_order=img_data.get("image_order", 1),
-                    file_size=len(image_bin)
-                )
-                image_db.add(image)
-                imported_images += 1
-
-        image_db.commit()
-        print(f"   ✅ 截图导入完成 ({imported_images} 张)")
-
-    except Exception as e:
-        print(f"❌ 导入失败: {e}")
+def import_all_data(input_file: str = "data/data_export.json", clear_existing: bool = False) -> dict[str, int]:
+    input_path = Path(input_file)
+    if not input_path.exists():
+        raise FileNotFoundError(f"文件不存在: {input_path}")
+    payload = json.loads(input_path.read_text(encoding="utf-8"))
+    db = SessionLocal()
+    try:
+        result = import_payload(db, payload, clear_existing=clear_existing)
+        print("✅ 导入完成")
+        print(f"   用户: {result['users']} 个")
+        print(f"   文献: {result['papers']} 篇")
+        print(f"   超导记录: {result['superconductor_records']} 条")
+        return result
+    except Exception:
         db.rollback()
-        image_db.rollback()
         raise
     finally:
         db.close()
-        image_db.close()
 
 
 if __name__ == "__main__":
-    import sys
-    input_f = "data/data_export.json"
+    input_file = "data/data_export.json"
     if len(sys.argv) > 1 and not sys.argv[1].startswith("--"):
-        input_f = sys.argv[1]
-    
+        input_file = sys.argv[1]
+
     clear = "--clear" in sys.argv
-    
     if clear:
         confirm = input("⚠️  确定要清空现有数据吗？(yes/no): ")
         if confirm.lower() != "yes":
             print("取消操作")
             sys.exit(0)
-            
-    import_all_data(input_f, clear)
+    import_all_data(input_file, clear_existing=clear)

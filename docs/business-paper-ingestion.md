@@ -69,11 +69,15 @@
 
 #### 导出
 - 脚本：`python -m backend.export_data`
-- 规划中：需要按新六表结构重新整理导出逻辑
+- 当前导出 `mysql-redesign-v1` JSON
+- 导出内容包括 `users`、`papers` 和 `superconductor_records`
+- `chemical_systems` 与 `superconductors` 可由记录中的 `chemical_formula` 重建
 
 #### 导入
 - 脚本：`python -m backend.import_data <json_path>`
-- 规划中：旧导入脚本仍包含旧表概念，需要重写后再作为正式入口
+- 当前支持导入 `mysql-redesign-v1` JSON
+- 可使用 `--clear` 清空业务数据后重建
+- 若导入文件没有可用上传用户，系统会创建 `import@example.local` 作为导入用户
 
 ### 6.3 ID 迁移
 - 旧 `migrate_ids` 脚本面向旧组合表，新 MySQL 结构不再依赖 `element_id_list`

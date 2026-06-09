@@ -1126,17 +1126,16 @@ function renderPaperCard(paper) {
 
     // 审核状态徽章（从后端数据获取）
     const statusMap = {
-        'unreviewed': { text: '⏳ 未审核', class: 'bg-warning' },
-        'approved': { text: '✅ 已审核', class: 'bg-success' },
-        'reviewed': { text: '✅ 已审核', class: 'bg-success' }, // 兼容旧数据
-        'rejected': { text: '❌ 已拒绝', class: 'bg-danger' },
-        'modifying': { text: '🛠️ 待修改', class: 'bg-info' },
-        'admin_only': { text: '🔒 仅管理员可见', class: 'bg-dark' }
+        'pending': { text: '未审核', class: 'bg-warning' },
+        'approved': { text: '已通过', class: 'bg-success' },
+        'reviewed': { text: '已通过', class: 'bg-success' },
+        'rejected': { text: '已拒绝', class: 'bg-danger' },
+        'needs_revision': { text: '需修改', class: 'bg-info' }
     };
-    const statusInfo = statusMap[paper.review_status] || statusMap['unreviewed'];
-    let reviewBadge = `<span class="badge ${statusInfo.class}">${statusInfo.text}${paper.reviewer_name && paper.review_status !== 'unreviewed' ? ` (${paper.reviewer_name})` : ''}</span>`;
+    const statusInfo = statusMap[paper.review_status] || statusMap['pending'];
+    let reviewBadge = `<span class="badge ${statusInfo.class}">${statusInfo.text}${paper.reviewer_name && paper.review_status !== 'pending' ? ` (${paper.reviewer_name})` : ''}</span>`;
     
-    if (paper.review_comment && paper.review_status !== 'unreviewed') {
+    if (paper.review_comment && paper.review_status !== 'pending') {
         reviewBadge += `<br><small class="text-muted" title="${paper.review_comment}">备注: ${paper.review_comment}</small>`;
     }
 

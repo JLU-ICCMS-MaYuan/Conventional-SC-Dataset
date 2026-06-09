@@ -211,11 +211,10 @@
                         <div class="mb-3">
                             <label class="form-label" data-i18n="admin.review_status">审核状态</label>
                             <select class="form-select" id="editReviewStatus">
-                                <option value="unreviewed">⏳ 未审核</option>
+                                <option value="pending">未审核</option>
                                 <option value="approved">✅ 已通过</option>
                                 <option value="rejected">❌ 已拒绝</option>
-                                <option value="modifying">🛠️ 待修改</option>
-                                <option value="admin_only">🔒 仅管理员可见</option>
+                                <option value="needs_revision">需修改</option>
                             </select>
                         </div>
 
@@ -663,7 +662,7 @@
             }
 
             const currentImage = previewGroupImages[previewImageIndex];
-            imageEl.src = `/api/papers/images/${currentImage.id}?database=${currentDatabase}`;
+            imageEl.src = `/api/papers/images/${currentImage.id}`;
             imageEl.alt = `图片 ${currentImage.order}`;
             captionEl.textContent = `第 ${previewGroupIndex + 1} 组 · 图片 ${currentImage.order} / 第 ${previewImageIndex + 1} 张，共 ${previewGroupImages.length} 张`;
             introEl.innerHTML = renderImageGroupIntro(previewGroupIntro);
@@ -735,7 +734,7 @@
                                 class="btn p-0 border-0 bg-transparent text-decoration-none"
                                 onclick="openImagePreviewByGroup(${groupIndex}, ${index})"
                                 aria-label="放大查看图片 ${img.order}">
-                            <img src="/api/papers/images/${img.id}?thumbnail=true&database=${currentDatabase}"
+                            <img src="/api/papers/images/${img.id}?thumbnail=true"
                                  alt="图片 ${img.order}"
                                  class="img-thumbnail"
                                  style="width: 140px; height: 140px; object-fit: cover;">
@@ -764,7 +763,7 @@
                 container.innerHTML = '<div class="text-muted small">正在加载图片分组...</div>';
             }
 
-            const response = await fetch(`/api/admin/papers/${paperId}/images?database=${currentDatabase}`, {
+            const response = await fetch(`/api/admin/papers/${paperId}/images`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -923,7 +922,7 @@
         async function loadUnreviewedPapers() {
             const offset = (dashboardPagination.page - 1) * dashboardPagination.pageSize;
             try {
-                const response = await fetch(`/api/admin/papers/unreviewed?limit=${dashboardPagination.pageSize}&offset=${offset}&database=${currentDatabase}`, {
+                const response = await fetch(`/api/admin/papers/unreviewed?limit=${dashboardPagination.pageSize}&offset=${offset}`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
@@ -1040,7 +1039,7 @@
             }
 
             try {
-                const response = await fetch(`/api/admin/papers/${paperId}/review?database=${currentDatabase}`, {
+                const response = await fetch(`/api/admin/papers/${paperId}/review`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -1121,7 +1120,7 @@
         // 打开编辑模态框
         async function openEditModal(paperId) {
             try {
-                const response = await fetch(`/api/admin/papers/${paperId}?database=${currentDatabase}`, {
+                const response = await fetch(`/api/admin/papers/${paperId}`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
@@ -1143,7 +1142,7 @@
                 document.getElementById('editAuthors').value = paper.authors || '';
                 document.getElementById('editArticleType').value = paper.article_type || 'experimental';
                 document.getElementById('editSuperconductorType').value = normalizeSuperconductorType(paper.superconductor_type);
-                document.getElementById('editReviewStatus').value = paper.review_status || 'unreviewed';
+                document.getElementById('editReviewStatus').value = paper.review_status || 'pending';
 
                 const dataContainer = document.getElementById('editDataPointsContainer');
                 dataContainer.innerHTML = '';
@@ -1194,7 +1193,7 @@
             };
 
             try {
-                const response = await fetch(`/api/admin/papers/${paperId}?database=${currentDatabase}`, {
+                const response = await fetch(`/api/admin/papers/${paperId}`, {
                     method: 'PUT',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -1238,7 +1237,7 @@
             }
 
             try {
-                const response = await fetch(`/api/admin/papers/${paperId}?database=${currentDatabase}`, {
+                const response = await fetch(`/api/admin/papers/${paperId}`, {
                     method: 'DELETE',
                     headers: {
                         'Authorization': `Bearer ${token}`

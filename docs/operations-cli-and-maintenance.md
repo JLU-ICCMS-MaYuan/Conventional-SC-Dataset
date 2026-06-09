@@ -45,8 +45,9 @@ python -m backend.export_data /path/to/export.json
 ```
 
 用途：
-- 旧脚本仍保留，但当前 MySQL 六表结构下需要重写后才能作为正式导出入口
-- 当前不应把它视为已适配新结构的备份方案
+- 导出 `mysql-redesign-v1` JSON
+- 包含 `users`、`papers`、`superconductor_records`
+- 不导出图片，因为图片存储已下线
 
 ## 6. 数据导入
 
@@ -56,8 +57,9 @@ python -m backend.import_data data/data_export.json --clear
 ```
 
 用途：
-- 旧脚本仍保留，但当前 MySQL 六表结构下需要重写后才能作为正式导入入口
-- 旧数据可以后续重新导入或人工整理
+- 导入 `mysql-redesign-v1` JSON
+- `--clear` 会先清理用户、论文、超导体和记录等业务数据，应谨慎使用
+- 旧数据可以后续整理成该 JSON 格式后导入
 
 ## 7. 组合 ID 迁移
 
@@ -73,7 +75,7 @@ python -m backend.migrate_ids
 
 ### 8.1 下载批量上传示例
 - 前端入口会调用 `/api/papers/batch-upload-example`
-- 可用于生成和确认批量上传格式
+- 当前返回 501，等待新 `superconductor_records` 表格格式确定
 
 ### 8.2 服务端批量处理
 - 接口：`POST /api/papers/batch-upload`

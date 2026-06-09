@@ -72,11 +72,10 @@
                     <label class="form-label">审核状态</label>
                     <select class="form-select" id="filterReviewStatus">
                         <option value="">全部</option>
-                        <option value="unreviewed">⏳ 未审核</option>
+                        <option value="pending">未审核</option>
                         <option value="approved">✅ 已通过</option>
                         <option value="rejected">❌ 已拒绝</option>
-                        <option value="modifying">🛠️ 待修改</option>
-                        <option value="admin_only">🔒 仅管理员可见</option>
+                        <option value="needs_revision">需修改</option>
                     </select>
                 </div>
                 <div class="col-md-3">
@@ -144,9 +143,8 @@
                     <select class="form-select form-select-sm me-2" id="batchStatusSelect" style="width: auto;">
                         <option value="approved">✅ 通过</option>
                         <option value="rejected">❌ 拒绝</option>
-                        <option value="modifying">🛠️ 待修改</option>
-                        <option value="admin_only">🔒 仅管理员可见</option>
-                        <option value="unreviewed">⏳ 撤回审核</option>
+                        <option value="needs_revision">需修改</option>
+                        <option value="pending">撤回审核</option>
                         <option value="chart_show" data-superadmin-only="true">📈 显示在图表</option>
                         <option value="chart_hide" data-superadmin-only="true">📉 从图表隐藏</option>
                         <option value="delete" data-superadmin-only="true">🗑️ 删除</option>
@@ -302,11 +300,10 @@
                                     <div class="mb-3">
                                         <label class="form-label">变更状态为</label>
                                         <select class="form-select" id="editReviewStatus">
-                                            <option value="unreviewed">⏳ 未审核</option>
+                                            <option value="pending">未审核</option>
                                             <option value="approved">✅ 已通过</option>
                                             <option value="rejected">❌ 已拒绝</option>
-                                            <option value="modifying">🛠️ 待修改</option>
-                                            <option value="admin_only">🔒 仅管理员可见</option>
+                                            <option value="needs_revision">需修改</option>
                                         </select>
                                     </div>
                                     <div class="mb-3">

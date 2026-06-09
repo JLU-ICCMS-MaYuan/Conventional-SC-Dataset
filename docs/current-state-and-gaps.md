@@ -14,11 +14,11 @@
 - 管理员审核论文
 - 基于 `superconductor_records.show_in_chart` 的图表展示控制
 - Alembic 管理 MySQL 表结构
+- `mysql-redesign-v1` JSON 导入导出
 
 当前仍未落地或需要重写的能力：
 
 - 新结构下的批量导入
-- 新结构下的 JSON 导入导出
 - 旧 AI 论文双库入口
 - 图片存储与图片展示
 - 点赞、评论、弹幕、热度排序等互动能力
@@ -89,9 +89,9 @@ Tc-Year 图只使用有关联论文年份的记录。
 
 ## 4. 当前缺口
 
-### 4.1 批量导入和导入导出
+### 4.1 批量导入
 
-旧导入导出脚本仍在仓库中，但它们包含旧 `Compound/PaperData/PaperImage` 思路。新 MySQL 结构下需要按六表重新设计字段映射后再启用。
+旧批量表格解析脚本包含旧 `Compound/PaperData/PaperImage` 思路。新 MySQL 结构下需要按 `superconductor_records` 重新设计字段映射后再启用。
 
 ### 4.2 管理后台细粒度编辑
 

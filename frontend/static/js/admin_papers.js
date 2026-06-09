@@ -193,7 +193,7 @@ async function loadPapers(page = 0) {
     }
 
     try {
-        const response = await fetch(`/api/admin/papers/all?${queryParams}&database=${getSelectedDatabase()}`, {
+        const response = await fetch(`/api/admin/papers/all?${queryParams}`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
@@ -262,18 +262,17 @@ function renderPapers(papers) {
         // 审核状态徽章
         let reviewBadge = '';
         const statusMap = {
-            'unreviewed': { text: '⏳ 未审核', class: 'bg-warning' },
-            'approved': { text: '✅ 已通过', class: 'bg-success' },
-            'reviewed': { text: '✅ 已通过', class: 'bg-success' }, // 兼容旧数据
-            'rejected': { text: '❌ 已拒绝', class: 'bg-danger' },
-            'modifying': { text: '🛠️ 待修改', class: 'bg-info' },
-            'admin_only': { text: '🔒 仅管理员可见', class: 'bg-dark' }
+            'pending': { text: '未审核', class: 'bg-warning' },
+            'approved': { text: '已通过', class: 'bg-success' },
+            'reviewed': { text: '已通过', class: 'bg-success' },
+            'rejected': { text: '已拒绝', class: 'bg-danger' },
+            'needs_revision': { text: '需修改', class: 'bg-info' }
         };
         
-        const statusInfo = statusMap[paper.review_status] || statusMap['unreviewed'];
+        const statusInfo = statusMap[paper.review_status] || statusMap['pending'];
         reviewBadge = `<span class="badge ${statusInfo.class}">${statusInfo.text}</span>`;
         
-        if (paper.reviewer_name && paper.review_status !== 'unreviewed') {
+        if (paper.reviewer_name && paper.review_status !== 'pending') {
             reviewBadge += `<br><small class="text-muted">${escapeHtml(paper.reviewer_name)}</small>`;
         }
         
@@ -323,7 +322,7 @@ function renderPapers(papers) {
                         '<span class="badge bg-secondary">隐藏</span>'}
                 </td>
                 <td>${reviewBadge}</td>
-                <td><span class="badge bg-secondary">${paper.images_count}张</span></td>
+                <td><span class="badge bg-secondary">已下线</span></td>
                 <td>
                     <div class="btn-group btn-group-sm">
                         <a href="https://doi.org/${paper.doi}" target="_blank" class="btn btn-outline-primary">原文</a>
@@ -484,7 +483,7 @@ async function batchReview() {
     }
 
     try {
-        const response = await fetch(`/api/admin/papers/batch-review?database=${getSelectedDatabase()}`, {
+        const response = await fetch(`/api/admin/papers/batch-review`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -523,7 +522,7 @@ async function batchChartVisibility(show) {
     }
 
     try {
-        const response = await fetch(`/api/admin/papers/batch-chart-visibility?database=${getSelectedDatabase()}`, {
+        const response = await fetch(`/api/admin/papers/batch-chart-visibility`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -572,7 +571,7 @@ async function batchDelete() {
     }
 
     try {
-        const response = await fetch(`/api/admin/papers/batch-delete?database=${getSelectedDatabase()}`, {
+        const response = await fetch(`/api/admin/papers/batch-delete`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -656,7 +655,7 @@ function removeEditDataRow(button) {
 async function openEditModal(paperId) {
     console.log('Opening edit modal for paper:', paperId);
     try {
-        const response = await fetch(`/api/admin/papers/${paperId}?database=${getSelectedDatabase()}`, {
+        const response = await fetch(`/api/admin/papers/${paperId}`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
@@ -711,24 +710,24 @@ async function openEditModal(paperId) {
         setVal('editNotes', paper.notes);
 
         // 3. 审核信息
-        setVal('editReviewStatus', paper.review_status || 'unreviewed');
+        setVal('editReviewStatus', paper.review_status || 'pending');
         setVal('editReviewComment', paper.review_comment || '');
         
         const statusMap = {
-            'unreviewed': '<span class="badge bg-warning">⏳ 未审核</span>',
-            'approved': '<span class="badge bg-success">✅ 已通过</span>',
-            'rejected': '<span class="badge bg-danger">❌ 已拒绝</span>',
-            'modifying': '<span class="badge bg-info">🛠️ 待修改</span>',
-            'admin_only': '<span class="badge bg-dark">🔒 仅管理员可见</span>'
+            'pending': '<span class="badge bg-warning">未审核</span>',
+            'approved': '<span class="badge bg-success">已通过</span>',
+            'rejected': '<span class="badge bg-danger">已拒绝</span>',
+            'needs_revision': '<span class="badge bg-info">需修改</span>'
         };
         const statusDisplay = document.getElementById('currentReviewStatusDisplay');
         if (statusDisplay) {
-            statusDisplay.innerHTML = statusMap[paper.review_status] || statusMap['unreviewed'];
+            statusDisplay.innerHTML = statusMap[paper.review_status] || statusMap['pending'];
         }
 
-        // 4. 加载图片
-        if (typeof loadPaperImages === 'function') {
-            loadPaperImages(paperId);
+        // 4. 图片存储已下线
+        const imagesContainer = document.getElementById('paperImagesContainer');
+        if (imagesContainer) {
+            imagesContainer.innerHTML = '<div class="alert alert-secondary">文献图片存储已下线</div>';
         }
 
         // 5. 显示模态框
@@ -758,7 +757,7 @@ async function submitReviewAction() {
     const comment = commentEl.value;
 
     try {
-        const response = await fetch(`/api/admin/papers/${paperId}/review?database=${getSelectedDatabase()}`, {
+        const response = await fetch(`/api/admin/papers/${paperId}/review`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -776,11 +775,10 @@ async function submitReviewAction() {
             alert('审核状态已更新！');
             // 更新当前显示的 Badge
             const statusMap = {
-                'unreviewed': '<span class="badge bg-warning">⏳ 未审核</span>',
-                'approved': '<span class="badge bg-success">✅ 已通过</span>',
-                'rejected': '<span class="badge bg-danger">❌ 已拒绝</span>',
-                'modifying': '<span class="badge bg-info">🛠️ 待修改</span>',
-                'admin_only': '<span class="badge bg-dark">🔒 仅管理员可见</span>'
+                'pending': '<span class="badge bg-warning">未审核</span>',
+                'approved': '<span class="badge bg-success">已通过</span>',
+                'rejected': '<span class="badge bg-danger">已拒绝</span>',
+                'needs_revision': '<span class="badge bg-info">需修改</span>'
             };
             const statusDisplay = document.getElementById('currentReviewStatusDisplay');
             if (statusDisplay) {
@@ -849,7 +847,7 @@ async function savePaperEdits() {
     };
 
     try {
-        const response = await fetch(`/api/admin/papers/${paperId}?database=${getSelectedDatabase()}`, {
+        const response = await fetch(`/api/admin/papers/${paperId}`, {
             method: 'PUT',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -877,7 +875,7 @@ async function savePaperEdits() {
 
 async function loadPaperImages(paperId) {
     try {
-        const response = await fetch(`/api/admin/papers/${paperId}/images?database=${getSelectedDatabase()}`, {
+        const response = await fetch(`/api/admin/papers/${paperId}/images`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
@@ -912,7 +910,7 @@ function renderImagesList(paperId, images) {
         html += `
             <div class="col-md-4 mb-3">
                 <div class="card">
-                    <img src="/api/papers/images/${img.id}?thumbnail=true&database=${getSelectedDatabase()}" class="card-img-top" alt="截图${img.order}">
+                    <img src="/api/papers/images/${img.id}?thumbnail=true" class="card-img-top" alt="截图${img.order}">
                     <div class="card-body">
                         <h6 class="card-title">图片 ${img.order}</h6>
                         <p class="card-text">
@@ -939,7 +937,7 @@ async function deleteImage(paperId, imageId) {
     }
 
     try {
-        const response = await fetch(`/api/admin/papers/${paperId}/images/${imageId}?database=${getSelectedDatabase()}`, {
+        const response = await fetch(`/api/admin/papers/${paperId}/images/${imageId}`, {
             method: 'DELETE',
             headers: {
                 'Authorization': `Bearer ${token}`
@@ -979,7 +977,7 @@ async function deleteSinglePaper(paperId, paperDoi, paperTitle) {
     }
 
     try {
-        const response = await fetch(`/api/admin/papers/${paperId}?database=${getSelectedDatabase()}`, {
+        const response = await fetch(`/api/admin/papers/${paperId}`, {
             method: 'DELETE',
             headers: {
                 'Authorization': `Bearer ${token}`

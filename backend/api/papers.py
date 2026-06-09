@@ -6,7 +6,6 @@ import json
 from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
-from fastapi.responses import FileResponse
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -353,11 +352,7 @@ async def batch_upload_papers(
 
 @router.get("/batch-upload-example")
 def get_batch_upload_example():
-    return FileResponse(
-        path="data/batch_import_example.xlsx",
-        filename="superconductor_batch_upload_example.xlsx",
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
+    raise HTTPException(status_code=501, detail="批量上传示例需按新 superconductor_records 格式重新生成")
 
 
 @router.get("/compound/{element_symbols}")
