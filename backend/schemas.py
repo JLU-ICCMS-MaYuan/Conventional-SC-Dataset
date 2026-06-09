@@ -3,7 +3,7 @@ Pydantic数据模型
 用于API的输入输出验证
 """
 from pydantic import BaseModel, Field, validator
-from typing import Optional, List
+from typing import Any, Literal, Optional, List
 from datetime import datetime
 import re
 
@@ -84,6 +84,42 @@ class CompoundSearchPaginationResponse(BaseModel):
     page: int
     page_size: int
     total_pages: int
+    has_prev: bool
+    has_next: bool
+
+
+SearchMode = Literal[
+    "formula_search",
+    "elements_exact_search",
+    "elements_combination_search",
+    "elements_contained_search",
+]
+
+
+class SuperconductorSearchRequest(BaseModel):
+    mode: SearchMode
+    formula: Optional[str] = None
+    elements: List[str] = Field(default_factory=list)
+    limit: int = Field(default=50, ge=1, le=200)
+    offset: int = Field(default=0, ge=0)
+
+
+class SuperconductorSummary(BaseModel):
+    id: int
+    chemical_system_id: int
+    chemical_formula: str
+    formula_normalized: str
+    display_name: str
+    elements_list: List[str]
+    composition: dict[str, Any]
+    element_ratio: dict[str, Any]
+
+
+class SuperconductorSearchResponse(BaseModel):
+    items: List[SuperconductorSummary]
+    total: int
+    page: int
+    page_size: int
     has_prev: bool
     has_next: bool
 
