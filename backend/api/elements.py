@@ -1,34 +1,36 @@
 """
-元素相关API
+Periodic-table element APIs.
 """
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
 
 from backend.database import get_db
-from backend import crud, schemas
+from backend.models import PeriodicTableElement
+
 
 router = APIRouter(prefix="/api/elements", tags=["elements"])
 
 
-@router.get("/", response_model=List[schemas.ElementResponse])
+def _element_to_dict(element: PeriodicTableElement) -> dict:
+    return {
+        "id": element.id,
+        "symbol": element.symbol,
+        "name": element.english_name,
+        "name_zh": element.chinese_name,
+        "atomic_number": element.atomic_number,
+    }
+
+
+@router.get("/")
 def get_all_elements(db: Session = Depends(get_db)):
-    """
-    获取所有118个元素
-    """
-    elements = crud.get_all_elements(db)
-    return elements
+    elements = db.query(PeriodicTableElement).order_by(PeriodicTableElement.atomic_number).all()
+    return [_element_to_dict(element) for element in elements]
 
 
-@router.get("/{symbol}", response_model=schemas.ElementResponse)
+@router.get("/{symbol}")
 def get_element_by_symbol(symbol: str, db: Session = Depends(get_db)):
-    """
-    根据元素符号获取元素信息
-
-    Args:
-        symbol: 元素符号，如 "Cu"
-    """
-    element = crud.get_element_by_symbol(db, symbol)
+    element = db.query(PeriodicTableElement).filter(PeriodicTableElement.symbol == symbol).first()
     if not element:
         raise HTTPException(status_code=404, detail=f"元素 {symbol} 不存在")
-    return element
+    return _element_to_dict(element)

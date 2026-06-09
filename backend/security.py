@@ -102,7 +102,7 @@ async def get_current_admin(
     current_user: User = Depends(get_current_user)
 ) -> User:
     """获取当前管理员（必须已批准）"""
-    if not current_user.is_admin or not current_user.is_approved:
+    if current_user.role not in {"admin", "superadmin"} or not current_user.is_approved:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="需要管理员权限"
@@ -114,7 +114,7 @@ async def get_current_superadmin(
     current_user: User = Depends(get_current_user)
 ) -> User:
     """获取当前超级管理员"""
-    if not current_user.is_superadmin:
+    if current_user.role != "superadmin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="需要超级管理员权限"

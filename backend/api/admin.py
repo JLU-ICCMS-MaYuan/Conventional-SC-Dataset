@@ -1,156 +1,178 @@
 """
-管理员管理与文献审核 API
+Admin APIs for users, paper review, and chart visibility.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
+
 from datetime import datetime
-from typing import List, Optional
-import json
-from backend.database import get_db, get_image_db, get_ai_db, get_ai_image_db
-from backend.models import User, Paper, PaperData
-from backend import crud
-from backend.security import get_current_superadmin, get_current_admin
-from backend.email_service import email_service
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
+from sqlalchemy import or_
+from sqlalchemy.orm import Session
+
+from backend import models
+from backend.database import get_db
+from backend.security import get_current_admin, get_current_superadmin
+
 
 router = APIRouter(prefix="/api/admin", tags=["管理员"])
 
-
-def _resolve_admin_db(database: str):
-    """根据 database 参数返回 (db_session, image_db_session)"""
-    from backend.database import MetadataSessionLocal, ImageSessionLocal, AIMetadataSessionLocal, AIImageSessionLocal
-    if database == 'ai':
-        return AIMetadataSessionLocal(), AIImageSessionLocal()
-    return MetadataSessionLocal(), ImageSessionLocal()
-
-SUPERCONDUCTOR_TYPES = {"cuprate", "iron_based", "nickel_based", "hydride", "carbon", "organic", "others"}
-LEGACY_SUPERCONDUCTOR_MAP = {
-    "carbon_organic": "carbon",
-    "conventional": "others",
-    "other_conventional": "others",
-    "unconventional": "others",
-    "other_unconventional": "others",
-    "unknown": "others"
-}
-
-
-def normalize_superconductor_type_value(value: Optional[str]) -> Optional[str]:
-    if value is None:
-        return None
-    normalized = (LEGACY_SUPERCONDUCTOR_MAP.get(value, value) or "").strip()
-    if normalized not in SUPERCONDUCTOR_TYPES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="无效的超导体类型"
-        )
-    return normalized
-
-
-def to_storage_superconductor_type_value(value: Optional[str]) -> Optional[str]:
-    normalized = normalize_superconductor_type_value(value)
-    return crud.to_storage_superconductor_type(normalized)
-
-
-# Pydantic 模型
-class PendingAdminResponse(BaseModel):
-    id: int
-    email: str
-    real_name: str
-    created_at: str
-    is_email_verified: bool
+REVIEW_STATUSES = {"pending", "approved", "rejected", "needs_revision"}
+ROLES = {"user", "admin", "superadmin"}
 
 
 class ApproveRequest(BaseModel):
     user_id: int
-    approved: bool  # True=通过，False=拒绝
-
-
-class ChartVisibilityRequest(BaseModel):
-    paper_ids: List[int]
-    show: bool
+    approved: bool
 
 
 class ReviewPaperRequest(BaseModel):
-    status: str  # approved, rejected, modifying, unreviewed
+    status: str
     comment: Optional[str] = None
 
 
-class PaperReviewInfo(BaseModel):
-    id: int
-    doi: str
-    title: str
-    review_status: str
-    reviewed_by: Optional[int]
-    reviewed_at: Optional[str]
-    reviewer_name: Optional[str]
-
-
 class UserPermissionRequest(BaseModel):
-    is_admin: bool
-    is_superadmin: bool
+    role: Optional[str] = None
+    is_admin: Optional[bool] = None
+    is_superadmin: Optional[bool] = None
     is_approved: bool
 
 
-def admin_paper_summary(db: Session, image_db: Session, paper: Paper) -> dict:
-    data = crud.paper_to_response(db, paper, image_db=image_db)
-    first_data = data["data"][0] if data["data"] else {}
+class ChartVisibilityRequest(BaseModel):
+    paper_ids: list[int]
+    show: bool
+
+
+class BatchReviewRequest(BaseModel):
+    paper_ids: list[int]
+    status: str
+    comment: Optional[str] = None
+
+
+class BatchDeleteRequest(BaseModel):
+    paper_ids: list[int]
+
+
+def _is_admin(user: models.User) -> bool:
+    return user.role in {"admin", "superadmin"}
+
+
+def _is_superadmin(user: models.User) -> bool:
+    return user.role == "superadmin"
+
+
+def _legacy_role(is_admin: Optional[bool], is_superadmin: Optional[bool], fallback: str = "user") -> str:
+    if is_superadmin:
+        return "superadmin"
+    if is_admin:
+        return "admin"
+    return fallback
+
+
+def _user_to_dict(db: Session, user: models.User) -> dict:
     return {
-        "id": paper.id,
-        "doi": paper.doi,
-        "title": paper.title,
-        "year": paper.year,
-        "journal": paper.journal,
-        "article_type": data.get("article_type"),
-        "superconductor_type": data.get("superconductor_type"),
-        "chemical_formula": data.get("chemical_formula"),
-        "tc": first_data.get("tc"),
-        "tc_press": first_data.get("tc_press"),
-        "s_factor": first_data.get("s_factor"),
-        "data": data.get("data", []),
-        "compound_symbols": data.get("compound_symbols"),
-        "review_status": paper.review_status,
-        "review_comment": paper.review_comment,
-        "reviewer_name": paper.reviewer.real_name if paper.reviewer else None,
-        "contributor_name": paper.contributor_name,
-        "created_at": paper.created_at.isoformat() if paper.created_at else None,
-        "images_count": crud.get_paper_image_count(image_db, paper.id),
-        "show_in_chart": paper.show_in_chart,
+        "id": user.id,
+        "email": user.email,
+        "real_name": user.real_name,
+        "role": user.role,
+        "is_admin": _is_admin(user),
+        "is_superadmin": _is_superadmin(user),
+        "is_approved": user.is_approved,
+        "is_email_verified": user.is_email_verified,
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+        "approved_at": user.approved_at.isoformat() if user.approved_at else None,
+        "submitted_count": db.query(models.Paper).filter(models.Paper.uploaded_by_user_id == user.id).count(),
+        "reviewed_count": db.query(models.Paper).filter(models.Paper.reviewed_by_user_id == user.id).count(),
     }
 
 
-# ========== 超级管理员功能 ==========
+def _record_to_dict(record: models.SuperconductorRecord) -> dict:
+    return {
+        "id": record.id,
+        "superconductor_id": record.superconductor_id,
+        "chemical_formula": record.superconductor.chemical_formula if record.superconductor else None,
+        "source_label": record.source_label,
+        "pressure_gpa": record.pressure_gpa,
+        "space_group_symbol": record.space_group_symbol,
+        "space_group_number": record.space_group_number,
+        "crystal_structure": record.crystal_structure,
+        "energy_above_hull": record.energy_above_hull,
+        "mcmillan_tc": record.mcmillan_tc,
+        "allen_dynes_tc": record.allen_dynes_tc,
+        "isotropic_eliashberg_tc": record.isotropic_eliashberg_tc,
+        "anisotropic_eliashberg_tc": record.anisotropic_eliashberg_tc,
+        "experimental_tc": record.experimental_tc,
+        "lambda_value": record.lambda_value,
+        "omega_log": record.omega_log,
+        "n_ef_total": record.n_ef_total,
+        "element_n_ef": record.element_n_ef,
+        "show_in_chart": record.show_in_chart,
+    }
+
+
+def _paper_to_dict(paper: models.Paper, include_records: bool = False) -> dict:
+    reviewer = paper.reviewed_by_user
+    uploader = paper.uploaded_by_user
+    payload = {
+        "id": paper.id,
+        "doi": paper.doi,
+        "title": paper.title,
+        "authors": paper.authors,
+        "journal": paper.journal,
+        "volume": paper.volume,
+        "pages": paper.pages,
+        "year": paper.year,
+        "abstract": paper.abstract,
+        "review_status": paper.review_status,
+        "review_comment": paper.review_comment,
+        "reviewed_by_user_id": paper.reviewed_by_user_id,
+        "reviewer_name": reviewer.real_name if reviewer else None,
+        "reviewed_at": paper.reviewed_at.isoformat() if paper.reviewed_at else None,
+        "uploaded_by_user_id": paper.uploaded_by_user_id,
+        "uploader_name": uploader.real_name if uploader else None,
+        "created_at": paper.created_at.isoformat() if paper.created_at else None,
+        "updated_at": paper.updated_at.isoformat() if paper.updated_at else None,
+        "record_count": len(paper.records),
+        "show_in_chart": any(record.show_in_chart for record in paper.records),
+    }
+    if include_records:
+        payload["records"] = [_record_to_dict(record) for record in paper.records]
+    return payload
+
+
+def _paper_query(
+    db: Session,
+    *,
+    status_filter: Optional[str] = None,
+    keyword: Optional[str] = None,
+    year_min: Optional[int] = None,
+    year_max: Optional[int] = None,
+):
+    query = db.query(models.Paper)
+    if status_filter:
+        query = query.filter(models.Paper.review_status == status_filter)
+    if keyword:
+        pattern = f"%{keyword}%"
+        query = query.filter(
+            or_(
+                models.Paper.title.like(pattern),
+                models.Paper.doi.like(pattern),
+                models.Paper.journal.like(pattern),
+            )
+        )
+    if year_min is not None:
+        query = query.filter(models.Paper.year >= year_min)
+    if year_max is not None:
+        query = query.filter(models.Paper.year <= year_max)
+    return query
+
 
 @router.get("/all-users", summary="获取所有用户列表（仅超级管理员）")
 async def get_all_users(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_superadmin)
+    current_user: models.User = Depends(get_current_superadmin),
 ):
-    """获取数据库中所有用户及其统计信息"""
-    users = db.query(User).all()
-
-    result = []
-    for user in users:
-        # 统计提交的文献（基于姓名匹配）
-        from backend.models import Paper
-        submitted_count = db.query(Paper).filter(Paper.contributor_name == user.real_name).count()
-        # 统计审核的文献
-        reviewed_count = len(user.reviewed_papers)
-
-        result.append({
-            "id": user.id,
-            "email": user.email,
-            "real_name": user.real_name,
-            "is_admin": user.is_admin,
-            "is_superadmin": user.is_superadmin,
-            "is_approved": user.is_approved,
-            "is_email_verified": user.is_email_verified,
-            "created_at": user.created_at.isoformat() if user.created_at else None,
-            "approved_at": user.approved_at.isoformat() if user.approved_at else None,
-            "submitted_count": submitted_count,
-            "reviewed_count": reviewed_count
-        })
-    
-    return result
+    return [_user_to_dict(db, user) for user in db.query(models.User).all()]
 
 
 @router.put("/users/{user_id}/permissions", summary="修改用户权限（仅超级管理员）")
@@ -158,866 +180,250 @@ async def update_user_permissions(
     user_id: int,
     request: UserPermissionRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_superadmin)
+    current_user: models.User = Depends(get_current_superadmin),
 ):
-    """修改指定用户的权限状态"""
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
-    
-    # 防止取消最后一个超级管理员的权限
-    if user.id == current_user.id and not request.is_superadmin:
+    if user.id == current_user.id and request.role != "superadmin" and request.is_superadmin is False:
         raise HTTPException(status_code=400, detail="不能取消自己的超级管理员权限")
 
-    user.is_admin = request.is_admin
-    user.is_superadmin = request.is_superadmin
+    role = request.role or _legacy_role(request.is_admin, request.is_superadmin, user.role)
+    if role not in ROLES:
+        raise HTTPException(status_code=400, detail="无效的用户角色")
+    user.role = role
     user.is_approved = request.is_approved
-    
-    if request.is_approved and not user.approved_at:
+    if user.is_approved and not user.approved_at:
         user.approved_at = datetime.utcnow()
-        user.approved_by = current_user.id
-
+        user.approved_by_user_id = current_user.id
     db.commit()
-    return {"message": "用户权限已更新", "user_id": user.id}
+    return {"message": "用户权限已更新", "user": _user_to_dict(db, user)}
 
 
 @router.delete("/users/{user_id}", summary="删除用户（仅超级管理员）")
 async def delete_user(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_superadmin)
+    current_user: models.User = Depends(get_current_superadmin),
 ):
-    """删除用户"""
-    user = db.query(User).filter(User.id == user_id).first()
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="不能删除自己的账号")
+    user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
-    
-    if user.id == current_user.id:
-        raise HTTPException(status_code=400, detail="不能删除自己")
-
     db.delete(user)
     db.commit()
-    return {"message": f"用户 {user.real_name} 已删除"}
+    return {"message": "用户已删除"}
 
-
-@router.get("/users/{user_id}/submitted-papers", summary="获取用户提交的文献列表")
-async def get_user_submitted_papers(
-    user_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_superadmin)
-):
-    """获取指定用户提交的所有文献（基于姓名匹配）"""
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
-    
-    from backend.models import Paper
-    papers = db.query(Paper).filter(Paper.contributor_name == user.real_name).order_by(Paper.created_at.desc()).all()
-
-    return [
-        {
-            "id": paper.id,
-            "doi": paper.doi,
-            "title": paper.title,
-            "year": paper.year,
-            "review_status": paper.review_status,
-            "created_at": paper.created_at.isoformat()
-        }
-        for paper in papers
-    ]
-
-
-# ========== 超级管理员功能 ==========
 
 @router.get("/pending-approvals", summary="获取待审批的管理员列表（仅超级管理员）")
 async def get_pending_approvals(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_superadmin)
+    current_user: models.User = Depends(get_current_superadmin),
 ):
-    """
-    获取所有待审批的管理员申请
-
-    只有超级管理员可以访问
-    """
-    pending_users = db.query(User).filter(
-        User.is_admin == True,
-        User.is_email_verified == True,
-        User.is_approved == False
-    ).all()
-
-    return [
-        {
-            "id": user.id,
-            "email": user.email,
-            "real_name": user.real_name,
-            "created_at": user.created_at.isoformat(),
-            "is_email_verified": user.is_email_verified
-        }
-        for user in pending_users
-    ]
+    users = (
+        db.query(models.User)
+        .filter(models.User.role == "admin", models.User.is_approved == False)
+        .all()
+    )
+    return [_user_to_dict(db, user) for user in users]
 
 
 @router.post("/approve-user", summary="审批管理员申请（仅超级管理员）")
 async def approve_user(
     request: ApproveRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_superadmin)
+    current_user: models.User = Depends(get_current_superadmin),
 ):
-    """
-    批准或拒绝管理员申请
-
-    只有超级管理员可以操作
-    """
-    user = db.query(User).filter(User.id == request.user_id).first()
-
+    user = db.query(models.User).filter(models.User.id == request.user_id).first()
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="用户不存在"
-        )
-
-    if user.is_approved:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="该用户已经被审批"
-        )
-
-    if request.approved:
-        # 批准
-        user.is_approved = True
-        user.approved_at = datetime.utcnow()
-        user.approved_by = current_user.id
-        db.commit()
-
-        # 发送批准通知邮件
-        email_service.send_approval_notification(
-            to_email=user.email,
-            real_name=user.real_name,
-            approved=True
-        )
-
-        return {
-            "message": f"已批准 {user.real_name} 的管理员申请",
-            "user_id": user.id,
-            "email": user.email
-        }
-    else:
-        # 拒绝 - 删除该用户
-        email_service.send_approval_notification(
-            to_email=user.email,
-            real_name=user.real_name,
-            approved=False
-        )
-
-        db.delete(user)
-        db.commit()
-
-        return {
-            "message": f"已拒绝 {user.real_name} 的管理员申请",
-            "user_id": user.id
-        }
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if user.role not in {"admin", "superadmin"}:
+        raise HTTPException(status_code=400, detail="该用户不是管理员申请")
+    user.is_approved = request.approved
+    user.approved_at = datetime.utcnow() if request.approved else None
+    user.approved_by_user_id = current_user.id if request.approved else None
+    db.commit()
+    return {"message": "审批已更新", "user": _user_to_dict(db, user)}
 
 
 @router.get("/all-admins", summary="获取所有管理员列表（仅超级管理员）")
 async def get_all_admins(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_superadmin)
+    current_user: models.User = Depends(get_current_superadmin),
 ):
-    """获取所有已批准的管理员"""
-    admins = db.query(User).filter(
-        User.is_admin == True,
-        User.is_approved == True
-    ).all()
+    users = db.query(models.User).filter(models.User.role.in_(["admin", "superadmin"])).all()
+    return [_user_to_dict(db, user) for user in users]
 
-    return [
-        {
-            "id": admin.id,
-            "email": admin.email,
-            "real_name": admin.real_name,
-            "is_superadmin": admin.is_superadmin,
-            "approved_at": admin.approved_at.isoformat() if admin.approved_at else None,
-            "reviewed_papers_count": len(admin.reviewed_papers)
-        }
-        for admin in admins
-    ]
-
-
-# ========== 文献审核功能（所有管理员） ==========
 
 @router.post("/papers/{paper_id}/review", summary="更新文献审核状态")
 async def review_paper(
     paper_id: int,
     request: ReviewPaperRequest,
-    database: str = Query('local'),
-    current_user: User = Depends(get_current_admin)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_admin),
 ):
-    """
-    更新文献的审核状态
-
-    支持的状态:
-    - approved: 已通过
-    - rejected: 已拒绝
-    - modifying: 待修改
-    - unreviewed: 未审核
-    - admin_only: 仅管理员可见
-    """
-    db, image_db = _resolve_admin_db(database)
-    try:
-        paper = db.query(Paper).filter(Paper.id == paper_id).first()
-
-        if not paper:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="文献不存在"
-            )
-
-        valid_statuses = ["approved", "rejected", "modifying", "unreviewed", "admin_only"]
-        if request.status not in valid_statuses:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"无效的状态。必须是以下之一: {', '.join(valid_statuses)}"
-            )
-
-        # 更新审核信息
-        paper.review_status = request.status
-        paper.review_comment = request.comment
-
-        if request.status == "unreviewed":
-            paper.reviewed_by = None
-            paper.reviewed_at = None
-        else:
-            paper.reviewed_by = current_user.id
-            paper.reviewed_at = datetime.utcnow()
-
-        db.commit()
-
-        return {
-            "message": f"文献审核状态已更新为: {request.status}",
-            "paper_id": paper.id,
-            "doi": paper.doi,
-            "status": paper.review_status,
-            "reviewer": current_user.real_name if paper.reviewed_by else None,
-            "reviewed_at": paper.reviewed_at.isoformat() if paper.reviewed_at else None
-        }
-    finally:
-        db.close()
-        image_db.close()
+    if request.status not in REVIEW_STATUSES:
+        raise HTTPException(status_code=400, detail="无效的审核状态")
+    paper = db.query(models.Paper).filter(models.Paper.id == paper_id).first()
+    if not paper:
+        raise HTTPException(status_code=404, detail="文献不存在")
+    paper.review_status = request.status
+    paper.review_comment = request.comment
+    paper.reviewed_by_user_id = current_user.id
+    paper.reviewed_at = datetime.utcnow()
+    db.commit()
+    return {"message": "审核状态已更新", "paper": _paper_to_dict(paper)}
 
 
 @router.get("/papers/unreviewed", summary="获取未审核文献列表")
 async def get_unreviewed_papers(
     limit: int = 50,
     offset: int = 0,
-    database: str = Query('local'),
-    current_user: User = Depends(get_current_admin)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_admin),
 ):
-    """
-    获取所有未审核的文献（分页）
-    支持 database=ai 查询 AI 筛选数据库
-    """
-    db, image_db = _resolve_admin_db(database)
-    try:
-        papers = db.query(Paper).filter(
-            Paper.review_status == "unreviewed"
-        ).order_by(Paper.created_at.desc()).offset(offset).limit(limit).all()
-
-        total = db.query(Paper).filter(Paper.review_status == "unreviewed").count()
-
-        return {
-            "total": total,
-            "offset": offset,
-            "limit": limit,
-            "papers": [admin_paper_summary(db, image_db, paper) for paper in papers]
-        }
-    finally:
-        db.close()
-        image_db.close()
+    query = _paper_query(db, status_filter="pending").order_by(models.Paper.created_at.asc())
+    total = query.count()
+    papers = query.offset(offset).limit(limit).all()
+    return {"items": [_paper_to_dict(paper) for paper in papers], "total": total}
 
 
 @router.get("/my-reviews", summary="获取我审核的文献列表")
-async def get_my_reviewed_papers(
+async def get_my_reviews(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_admin)
+    current_user: models.User = Depends(get_current_admin),
 ):
-    """获取当前管理员审核过的所有文献"""
-    papers = db.query(Paper).filter(
-        Paper.reviewed_by == current_user.id
-    ).order_by(Paper.reviewed_at.desc()).all()
-
-    return {
-        "total": len(papers),
-        "papers": [
-            {
-                "id": paper.id,
-                "doi": paper.doi,
-                "title": paper.title,
-                "year": paper.year,
-                "reviewed_at": paper.reviewed_at.isoformat()
-            }
-            for paper in papers
-        ]
-    }
+    papers = db.query(models.Paper).filter(models.Paper.reviewed_by_user_id == current_user.id).all()
+    return [_paper_to_dict(paper) for paper in papers]
 
 
-# ========== 文献编辑与删除功能（管理员/超级管理员） ==========
-
-class UpdatePaperRequest(BaseModel):
-    """文献编辑请求模型"""
-    title: Optional[str] = None
-    authors: Optional[str] = None
-    journal: Optional[str] = None
-    volume: Optional[str] = None
-    pages: Optional[str] = None
-    year: Optional[int] = None
-    abstract: Optional[str] = None
-    article_type: Optional[str] = None  # theoretical 或 experimental
-    superconductor_type: Optional[str] = None  # cuprate, iron_based, nickel_based, hydride, carbon, organic, others
-    chemical_formula: Optional[str] = None
-    crystal_structure: Optional[str] = None
-    contributor_name: Optional[str] = None
-    contributor_affiliation: Optional[str] = None
-    notes: Optional[str] = None
-    physical_data: Optional[List[dict]] = None  # 物理数据数组
-    show_in_chart: Optional[bool] = None
-    review_status: Optional[str] = None
-
-
-# ========== 全局文献管理功能 ==========
-
-@router.get("/papers/all", summary="获取所有文献（支持多维度筛选）")
+@router.get("/papers/all", summary="获取所有文献（支持筛选）")
 async def get_all_papers(
+    keyword: Optional[str] = None,
     review_status: Optional[str] = None,
-    article_type: Optional[str] = None,
-    superconductor_type: Optional[str] = None,
-    show_in_chart: Optional[bool] = None,
     year_min: Optional[int] = None,
     year_max: Optional[int] = None,
-    keyword: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
-    database: str = Query('local'),
-    current_user: User = Depends(get_current_admin)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_admin),
 ):
-    """
-    获取所有文献列表（不限元素组合）
-    支持 database=ai 查询 AI 筛选数据库
-    """
-    db, image_db = _resolve_admin_db(database)
-    try:
-        query = db.query(Paper)
-
-        # 审核状态筛选
-        if review_status:
-            query = query.filter(Paper.review_status == review_status)
-
-        joined_data = False
-
-        # 文章类型筛选
-        if article_type:
-            query = query.join(PaperData)
-            joined_data = True
-            query = query.filter(PaperData.article_type == crud.to_storage_article_type(article_type))
-
-        # 超导体类型筛选
-        normalized_super_type = to_storage_superconductor_type_value(superconductor_type) if superconductor_type else None
-
-        if normalized_super_type:
-            if not joined_data:
-                query = query.join(PaperData)
-                joined_data = True
-            query = query.filter(PaperData.superconductor_type == normalized_super_type)
-
-        # 年份范围筛选
-        if year_min:
-            query = query.filter(Paper.year >= year_min)
-        if year_max:
-            query = query.filter(Paper.year <= year_max)
-
-        # 图表显示筛选
-        if show_in_chart is not None:
-            query = query.filter(Paper.show_in_chart == show_in_chart)
-
-        # 关键词搜索
-        if keyword:
-            search_pattern = f"%{keyword}%"
-            if not joined_data:
-                query = query.outerjoin(PaperData)
-                joined_data = True
-            query = query.filter(
-                (Paper.title.like(search_pattern)) |
-                (Paper.doi.like(search_pattern)) |
-                (PaperData.chemical_formula.like(search_pattern))
-            )
-
-        # 获取总数
-        query = query.distinct()
-        total = query.count()
-
-        # 分页查询
-        papers = query.order_by(Paper.created_at.desc()).offset(offset).limit(limit).all()
-
-        return {
-            "total": total,
-            "offset": offset,
-            "limit": limit,
-            "papers": [admin_paper_summary(db, image_db, paper) for paper in papers]
-        }
-    finally:
-        db.close()
-        image_db.close()
+    query = _paper_query(
+        db,
+        status_filter=review_status,
+        keyword=keyword,
+        year_min=year_min,
+        year_max=year_max,
+    ).order_by(models.Paper.created_at.desc())
+    total = query.count()
+    papers = query.offset(offset).limit(limit).all()
+    return {
+        "items": [_paper_to_dict(paper) for paper in papers],
+        "total": total,
+        "page": (offset // limit) + 1 if limit else 1,
+        "page_size": limit,
+        "has_next": offset + limit < total,
+        "has_prev": offset > 0,
+    }
 
 
 @router.get("/papers/{paper_id}", summary="获取文献详细信息")
 async def get_paper_detail(
     paper_id: int,
-    database: str = Query('local'),
-    current_user: User = Depends(get_current_admin)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_admin),
 ):
-    """
-    获取文献的完整信息（用于编辑表单）
-    支持 database=ai 查询 AI 筛选数据库
-    """
-    db, image_db = _resolve_admin_db(database)
-    try:
-        paper = db.query(Paper).filter(Paper.id == paper_id).first()
-
-        if not paper:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="文献不存在"
-            )
-
-        data = crud.paper_to_response(db, paper, image_db=image_db)
-        data.update({
-            "created_at": paper.created_at.isoformat() if paper.created_at else None,
-            "show_in_chart": paper.show_in_chart,
-        })
-        return data
-    finally:
-        db.close()
-        image_db.close()
+    paper = db.query(models.Paper).filter(models.Paper.id == paper_id).first()
+    if not paper:
+        raise HTTPException(status_code=404, detail="文献不存在")
+    return _paper_to_dict(paper, include_records=True)
 
 
-@router.put("/papers/{paper_id}", summary="编辑文献信息")
+@router.put("/papers/{paper_id}", summary="编辑文献基础信息")
 async def update_paper(
     paper_id: int,
-    request: UpdatePaperRequest,
-    database: str = Query('local'),
-    current_user: User = Depends(get_current_admin)
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_admin),
 ):
-    """
-    编辑文献信息
-    支持 database=ai 编辑 AI 筛选数据库中的文献
-    """
-    db, image_db = _resolve_admin_db(database)
-    try:
-        paper = db.query(Paper).filter(Paper.id == paper_id).first()
-
-        if not paper:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="文献不存在"
-            )
-
-        # 验证文章类型
-        if request.article_type and request.article_type not in ["theoretical", "experimental"]:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="文章类型必须是 theoretical 或 experimental"
-            )
-
-        normalized_super_type = None
-        if request.superconductor_type:
-            normalized_super_type = to_storage_superconductor_type_value(request.superconductor_type)
-
-        # 验证审核状态
-        if request.review_status and request.review_status not in [
-            "approved", "rejected", "modifying", "unreviewed", "admin_only"
-        ]:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="无效的审核状态"
-            )
-
-        # 验证年份范围
-        if request.year and (request.year < 1900 or request.year > 2100):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="年份必须在 1900-2100 之间"
-            )
-
-        # 更新字段（只更新非None的字段）
-        update_data = request.dict(exclude_unset=True)
-        has_physical_data_update = "physical_data" in update_data
-
-        # 特殊处理物理数据
-        if has_physical_data_update:
-            new_data = update_data.pop("physical_data")
-            if new_data is not None:
-                from backend.models import PaperData
-                db.query(PaperData).filter(PaperData.paper_id == paper_id).delete()
-                db.flush()
-                for item in new_data:
-                    formula = item.get("chemical_formula") or request.chemical_formula
-                    compound = crud.get_or_create_compound(db, [], formula) if formula else None
-                    tc_range = crud.normalize_numeric_range(item.get("tc"))
-                    pressure_range = crud.normalize_numeric_range(item.get("tc_press"))
-                    item_article_type = item.get("article_type") or request.article_type
-                    item_super_type = (
-                        to_storage_superconductor_type_value(item.get("superconductor_type"))
-                        if item.get("superconductor_type")
-                        else normalized_super_type
-                    )
-                    db_data = PaperData(
-                        paper_id=paper_id,
-                        compound_id=compound.id if compound else item.get("compound_id"),
-                        article_type=crud.to_storage_article_type(item_article_type),
-                        superconductor_type=item_super_type,
-                        chemical_formula=formula,
-                        crystal_structure=item.get("crystal_structure") or request.crystal_structure,
-                        tc=crud.range_to_json(tc_range),
-                        tc_press=crud.range_to_json(pressure_range),
-                        lambda_val=item.get("lambda_val"),
-                        omega_log=item.get("omega_log"),
-                        n_ef=item.get("n_ef"),
-                        s_factor=item.get("s_factor") if item.get("s_factor") is not None else crud.compute_s_factor_from_ranges(
-                            pressure_range, tc_range
-                        ),
-                        sample_name=item.get("sample_name"),
-                        data_source_note=item.get("data_source_note"),
-                    )
-                    db.add(db_data)
-
-        paper_fields = {
-            "title", "authors", "journal", "volume", "pages", "year", "abstract",
-            "contributor_name", "contributor_affiliation", "notes",
-            "show_in_chart", "review_status",
-        }
-        for field, value in update_data.items():
-            if field in paper_fields and value is not None:
-                setattr(paper, field, value)
-
-        data_fields_changed = any(
-            getattr(request, name) is not None
-            for name in ("article_type", "superconductor_type", "chemical_formula", "crystal_structure")
-        )
-        if data_fields_changed and not has_physical_data_update:
-            for item in paper.physical_parameters:
-                if request.article_type is not None:
-                    item.article_type = crud.to_storage_article_type(request.article_type)
-                if normalized_super_type is not None:
-                    item.superconductor_type = normalized_super_type
-                if request.chemical_formula is not None:
-                    item.chemical_formula = request.chemical_formula
-                    compound = crud.get_or_create_compound(db, [], request.chemical_formula)
-                    item.compound_id = compound.id if compound else item.compound_id
-                if request.crystal_structure is not None:
-                    item.crystal_structure = request.crystal_structure
-
-        db.commit()
-        db.refresh(paper)
-
-        return {
-            "message": "文献信息已更新",
-            "paper_id": paper.id,
-            "doi": paper.doi,
-            "title": paper.title,
-            "updated_by": current_user.real_name
-        }
-    finally:
-        db.close()
-        image_db.close()
+    paper = db.query(models.Paper).filter(models.Paper.id == paper_id).first()
+    if not paper:
+        raise HTTPException(status_code=404, detail="文献不存在")
+    for field in ("doi", "title", "authors", "journal", "volume", "pages", "year", "abstract", "review_comment"):
+        if field in payload:
+            setattr(paper, field, payload[field])
+    db.commit()
+    return {"message": "文献信息已更新", "paper": _paper_to_dict(paper, include_records=True)}
 
 
 @router.delete("/papers/{paper_id}", summary="删除文献（仅超级管理员）")
 async def delete_paper(
     paper_id: int,
-    database: str = Query('local'),
-    current_user: User = Depends(get_current_superadmin)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_superadmin),
 ):
-    """
-    删除文献及其所有关联数据
-
-    仅超级管理员可以操作
-    会级联删除所有文献截图
-    """
-    db, image_db = _resolve_admin_db(database)
-    try:
-        paper = db.query(Paper).filter(Paper.id == paper_id).first()
-
-        if not paper:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="文献不存在"
-            )
-
-        # 记录删除的文献信息（用于日志）
-        image_count = crud.get_paper_image_count(image_db, paper.id)
-        deleted_info = {
-            "paper_id": paper.id,
-            "doi": paper.doi,
-            "title": paper.title,
-            "compound": crud.paper_to_response(db, paper, image_db=image_db).get("compound_symbols"),
-            "images_count": image_count,
-            "deleted_by": current_user.real_name,
-            "deleted_at": datetime.utcnow().isoformat()
-        }
-
-        crud.delete_all_paper_images(image_db, paper.id)
-        db.delete(paper)
-        db.commit()
-
-        return {
-            "message": f"文献《{deleted_info['title']}》已删除",
-            "deleted_info": deleted_info
-        }
-    finally:
-        db.close()
-        image_db.close()
-
-
-# ========== 批量操作功能 ==========
-
-class BatchReviewRequest(BaseModel):
-    """批量审核请求模型"""
-    paper_ids: List[int]
-    status: str = "approved"  # 默认批量设为已通过
+    paper = db.query(models.Paper).filter(models.Paper.id == paper_id).first()
+    if not paper:
+        raise HTTPException(status_code=404, detail="文献不存在")
+    for record in paper.records:
+        db.delete(record)
+    db.delete(paper)
+    db.commit()
+    return {"message": "文献已删除"}
 
 
 @router.post("/papers/batch-review", summary="批量审核文献")
 async def batch_review_papers(
     request: BatchReviewRequest,
-    database: str = Query('local'),
-    current_user: User = Depends(get_current_admin)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_admin),
 ):
-    """
-    批量将文献标记为已审核
-
-    所有管理员都可以操作
-    """
-    db, image_db = _resolve_admin_db(database)
-    try:
-        if not request.paper_ids:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="未提供文献ID列表"
-            )
-
-        # 查询所有指定的文献
-        papers = db.query(Paper).filter(Paper.id.in_(request.paper_ids)).all()
-
-        if not papers:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="未找到指定的文献"
-            )
-
-        # 批量标记
-        reviewed_count = 0
-        for paper in papers:
-            paper.review_status = request.status
-            if request.status == "unreviewed":
-                paper.reviewed_by = None
-                paper.reviewed_at = None
-            else:
-                paper.reviewed_by = current_user.id
-                paper.reviewed_at = datetime.utcnow()
-            reviewed_count += 1
-
-        db.commit()
-
-        return {
-            "message": f"批量更新完成，已将 {reviewed_count} 篇文献设为 {request.status}",
-            "reviewed_count": reviewed_count,
-            "total_requested": len(request.paper_ids)
-        }
-    finally:
-        db.close()
-        image_db.close()
+    if request.status not in REVIEW_STATUSES:
+        raise HTTPException(status_code=400, detail="无效的审核状态")
+    papers = db.query(models.Paper).filter(models.Paper.id.in_(request.paper_ids)).all()
+    for paper in papers:
+        paper.review_status = request.status
+        paper.review_comment = request.comment
+        paper.reviewed_by_user_id = current_user.id
+        paper.reviewed_at = datetime.utcnow()
+    db.commit()
+    return {"message": "批量审核完成", "updated": len(papers)}
 
 
-@router.post("/papers/batch-chart-visibility", summary="批量设置图表显示（仅超级管理员）")
+@router.post("/papers/batch-chart-visibility", summary="批量设置图表显示")
 async def batch_chart_visibility(
     request: ChartVisibilityRequest,
-    database: str = Query('local'),
-    current_user: User = Depends(get_current_superadmin)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_admin),
 ):
-    """
-    批量更新文献是否显示在图表中
-    """
-    db, image_db = _resolve_admin_db(database)
-    try:
-        if not request.paper_ids:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="未提供文献ID列表"
-            )
-
-        papers = db.query(Paper).filter(Paper.id.in_(request.paper_ids)).all()
-
-        if not papers:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="未找到指定的文献"
-            )
-
-        for paper in papers:
-            paper.show_in_chart = request.show
-
-        db.commit()
-
-        visibility_text = "显示" if request.show else "隐藏"
-        return {
-            "message": f"已将 {len(papers)} 篇文献设置为 {visibility_text}",
-            "updated_count": len(papers),
-            "show": request.show
-        }
-    finally:
-        db.close()
-        image_db.close()
+    records = db.query(models.SuperconductorRecord).filter(models.SuperconductorRecord.paper_id.in_(request.paper_ids)).all()
+    for record in records:
+        record.show_in_chart = request.show
+    db.commit()
+    return {"message": "图表显示状态已更新", "updated": len(records)}
 
 
 @router.post("/papers/batch-delete", summary="批量删除文献（仅超级管理员）")
 async def batch_delete_papers(
-    request: BatchReviewRequest,
-    database: str = Query('local'),
-    current_user: User = Depends(get_current_superadmin)
+    request: BatchDeleteRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_superadmin),
 ):
-    """
-    批量删除文献及其所有关联数据
-
-    仅超级管理员可以操作
-    """
-    db, image_db = _resolve_admin_db(database)
-    try:
-        if not request.paper_ids:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="未提供文献ID列表"
-            )
-
-        # 查询所有指定的文献
-        papers = db.query(Paper).filter(Paper.id.in_(request.paper_ids)).all()
-
-        if not papers:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="未找到指定的文献"
-            )
-
-        # 记录删除信息
-        deleted_papers = []
-        for paper in papers:
-            deleted_papers.append({
-                "paper_id": paper.id,
-                "doi": paper.doi,
-                "title": paper.title
-            })
-            crud.delete_all_paper_images(image_db, paper.id)
-            db.delete(paper)
-
-        db.commit()
-
-        return {
-            "message": f"批量删除完成",
-            "deleted_count": len(deleted_papers),
-            "deleted_papers": deleted_papers,
-            "deleted_by": current_user.real_name,
-            "deleted_at": datetime.utcnow().isoformat()
-        }
-    finally:
-        db.close()
-        image_db.close()
-
-
-# ========== 图片管理功能 ==========
-
-from backend.models import PaperImage
-from backend.utils.image_processor import process_image
+    papers = db.query(models.Paper).filter(models.Paper.id.in_(request.paper_ids)).all()
+    for paper in papers:
+        for record in paper.records:
+            db.delete(record)
+        db.delete(paper)
+    db.commit()
+    return {"message": "批量删除完成", "deleted": len(papers)}
 
 
 @router.get("/papers/{paper_id}/images", summary="获取文献的所有图片")
-async def get_paper_images(
-    paper_id: int,
-    database: str = Query('local'),
-    current_user: User = Depends(get_current_admin)
-):
-    """
-    获取文献的所有截图列表
-
-    返回平铺图片列表以及按组整理的审核视图数据
-    """
-    db, image_db = _resolve_admin_db(database)
-    try:
-        paper = db.query(Paper).filter(Paper.id == paper_id).first()
-
-        if not paper:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="文献不存在"
-            )
-
-        rows = crud.get_paper_images(image_db, paper_id)
-        return crud.build_paper_image_review_groups(paper, rows)
-    finally:
-        db.close()
-        image_db.close()
+async def get_paper_images(paper_id: int):
+    raise HTTPException(status_code=status.HTTP_410_GONE, detail="文献图片存储已下线")
 
 
 @router.delete("/papers/{paper_id}/images/{image_id}", summary="删除文献截图")
-async def delete_paper_image(
-    paper_id: int,
-    image_id: int,
-    database: str = Query('local'),
-    current_user: User = Depends(get_current_admin)
-):
-    """
-    删除指定的文献截图
-
-    管理员可以操作
-    """
-    db, image_db = _resolve_admin_db(database)
-    try:
-        image = None
-        selected_order = None
-        if image_id >= 100:
-            row_id, selected_order = divmod(image_id, 100)
-            image = image_db.query(PaperImage).filter(
-                PaperImage.id == row_id,
-                PaperImage.paper_id == paper_id
-            ).first()
-        else:
-            image = image_db.query(PaperImage).filter(
-                PaperImage.id == image_id,
-                PaperImage.paper_id == paper_id
-            ).first()
-
-        if not image:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="图片不存在"
-            )
-
-        paper = db.query(Paper).filter(Paper.id == paper_id).first()
-        image_count = crud.get_paper_image_count(image_db, paper_id)
-        if image_count <= 1:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="至少需要保留一张图片"
-            )
-
-        if selected_order:
-            setattr(image, f"fig{selected_order}", None)
-        else:
-            image_db.delete(image)
-
-        image_db.commit()
-
-        return {
-            "message": "图片已删除",
-            "deleted_image_id": image_id,
-            "remaining_images": image_count - 1
-        }
-    finally:
-        db.close()
-        image_db.close()
+async def delete_paper_image(paper_id: int, image_id: int):
+    raise HTTPException(status_code=status.HTTP_410_GONE, detail="文献图片存储已下线")

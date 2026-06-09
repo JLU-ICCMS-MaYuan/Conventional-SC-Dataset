@@ -61,6 +61,10 @@ def upgrade():
         sa.Column("role", sa.String(length=50), nullable=False, server_default="user"),
         sa.Column("is_approved", sa.Boolean(), nullable=False, server_default=sa.text("0")),
         sa.Column("is_email_verified", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("verification_code", sa.String(length=16)),
+        sa.Column("verification_expires", sa.DateTime(timezone=True)),
+        sa.Column("approved_at", sa.DateTime(timezone=True)),
+        sa.Column("approved_by_user_id", sa.Integer(), sa.ForeignKey("users.id")),
         *_timestamps(),
         sa.UniqueConstraint("email", name="uq_users_email"),
     )

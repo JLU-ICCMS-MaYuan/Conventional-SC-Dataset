@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pathlib import Path
 
-from backend.api import elements, compounds, papers, admin, auth_routes, tc_predict, alexandria, htsc2025, ai_papers
+from backend.api import elements, compounds, papers, admin, auth_routes, tc_predict, alexandria, htsc2025
 
 # 创建FastAPI应用
 app = FastAPI(
@@ -39,7 +39,6 @@ app.include_router(admin.router)  # 管理员API
 app.include_router(tc_predict.router)  # Tc 预测 API
 app.include_router(alexandria.router)  # Alexandria 数据库 API
 app.include_router(htsc2025.router)  # HTSC-2025 数据集 API
-app.include_router(ai_papers.router)  # AI筛选数据库 API
 
 # 挂载静态文件目录
 BASE_DIR = Path(__file__).resolve().parent.parent

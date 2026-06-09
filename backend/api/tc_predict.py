@@ -1,10 +1,8 @@
 """
 Tc 预测 API
 """
-from typing import List, Tuple, Dict
+from typing import Any, List, Tuple, Dict
 from fastapi import APIRouter, UploadFile, File, HTTPException
-import numpy as np
-from pymatgen.core import Structure
 from io import BytesIO
 
 from backend import schemas
@@ -18,16 +16,29 @@ SLOPE2 = 24.7
 MAX_METAL_FILES = 4
 
 
-def _load_structure(content: bytes) -> Structure:
+def _load_numeric_dependencies():
+    try:
+        import numpy as np
+        from pymatgen.core import Structure
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Tc 预测依赖 numpy 和 pymatgen，请安装 requirements.txt 后再使用该实验功能",
+        ) from exc
+    return np, Structure
+
+
+def _load_structure(content: bytes) -> Any:
     """解析 CONTCAR 内容"""
+    _, structure_cls = _load_numeric_dependencies()
     try:
         text = content.decode("utf-8", errors="ignore")
-        return Structure.from_str(text, fmt="poscar")
+        return structure_cls.from_str(text, fmt="poscar")
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"无法解析 CONTCAR: {exc}") from exc
 
 
-def _extract_h_sublattice(structure: Structure) -> Tuple[List[float], int, float]:
+def _extract_h_sublattice(structure: Any) -> Tuple[List[float], int, float]:
     """获取 H-H 键长等特征"""
     composition = structure.composition.reduced_composition
     h_per_formula = composition.get_el_amt_dict().get("H", 0)
@@ -62,6 +73,7 @@ def _extract_h_sublattice(structure: Structure) -> Tuple[List[float], int, float
 
 def _read_pdos_value(content: bytes) -> float:
     """读取 PDOS 文件的费米能态密度"""
+    np, _ = _load_numeric_dependencies()
     data = None
     for loader in (np.loadtxt, np.genfromtxt):
         try:
@@ -81,6 +93,7 @@ def _read_pdos_value(content: bytes) -> float:
 
 
 def _normalize_bonds(bonds: List[float], atoms: int) -> Dict[float, float]:
+    np, _ = _load_numeric_dependencies()
     counts: Dict[float, float] = {}
     for value in bonds:
         rounded = np.floor(value * 1000) / 1000
@@ -105,6 +118,7 @@ async def predict_tc(
     """
     上传 CONTCAR + PDOS 计算 Tc（实验页面）
     """
+    np, _ = _load_numeric_dependencies()
     if not pdos_files:
         raise HTTPException(status_code=400, detail="请至少上传一个 PDOS 文件（需要包含 PDOS_H.dat）")
 

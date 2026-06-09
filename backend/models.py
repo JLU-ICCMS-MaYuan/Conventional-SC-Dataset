@@ -76,6 +76,10 @@ class User(Base):
     role = Column(String(50), default="user", nullable=False, index=True)
     is_approved = Column(Boolean, default=False, nullable=False)
     is_email_verified = Column(Boolean, default=False, nullable=False)
+    verification_code = Column(String(16))
+    verification_expires = Column(DateTime(timezone=True))
+    approved_at = Column(DateTime(timezone=True))
+    approved_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
