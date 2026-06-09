@@ -70,3 +70,10 @@ def test_normalize_formula_does_not_emit_scientific_notation():
     normalized, _, _, _ = normalize_formula("H0.00001")
     assert normalized == "H0.00001"
     assert parse_formula_composition(normalized) == {"H": 0.00001}
+
+
+def test_normalize_formula_keeps_very_small_decimal_amounts():
+    normalized, _, _, _ = normalize_formula("H0.0000000000001")
+    assert normalized == "H0.0000000000001"
+    assert "e" not in normalized.lower()
+    assert parse_formula_composition(normalized) == {"H": 0.0000000000001}
