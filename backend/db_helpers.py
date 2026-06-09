@@ -53,7 +53,7 @@ def parse_formula_composition(formula: str) -> dict[str, float]:
 def _format_formula_amount(amount: float) -> str:
     if amount.is_integer():
         return str(int(amount))
-    return f"{amount:g}"
+    return f"{amount:.12f}".rstrip("0").rstrip(".")
 
 
 def normalize_formula(formula: str) -> tuple[str, list[str], dict[str, float], dict[str, float]]:

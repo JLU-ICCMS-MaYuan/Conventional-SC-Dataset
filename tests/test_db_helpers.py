@@ -64,3 +64,9 @@ def test_normalize_formula_formats_decimal_amounts():
     assert ratios["K"] == 0.4 / 5.0
     assert ratios["Fe"] == 2.0 / 5.0
     assert ratios["As"] == 2.0 / 5.0
+
+
+def test_normalize_formula_does_not_emit_scientific_notation():
+    normalized, _, _, _ = normalize_formula("H0.00001")
+    assert normalized == "H0.00001"
+    assert parse_formula_composition(normalized) == {"H": 0.00001}
