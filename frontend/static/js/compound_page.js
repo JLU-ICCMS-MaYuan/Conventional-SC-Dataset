@@ -3,7 +3,7 @@ let elementSymbols = '';
 let uploadModal, imageModal;
 let selectedFiles = [];
 let currentReviewStatus = 'all'; // 当前选择的审核状态筛选
-let currentDatabase = 'local'; // 'local' 或 'alexandria'
+let currentDatabase = 'local';
 const paperCache = new Map();
 const alexDetailCache = {};
 const cifDetailCache = {};
@@ -44,7 +44,12 @@ function _addLegend(containerEl, elements) {
     containerEl.appendChild(leg);
 }
 const urlParams = new URLSearchParams(window.location.search);
-let viewMode = urlParams.get('mode') || 'only';
+const SEARCH_MODE_ALIASES = {
+    only: 'elements_exact_search',
+    combination: 'elements_combination_search',
+    contains: 'elements_contained_search',
+};
+let viewMode = SEARCH_MODE_ALIASES[urlParams.get('mode')] || urlParams.get('mode') || 'elements_exact_search';
 const ONLY_MODE_PAGE_SIZE = 50;
 const currentSearchParams = {};
 const onlyModePagination = {
@@ -59,8 +64,8 @@ const multiModePagination = {
     total: 0,
     totalPages: 0,
 };
-if (!['only', 'combination', 'contains'].includes(viewMode)) {
-    viewMode = 'only';
+if (!['elements_exact_search', 'elements_combination_search', 'elements_contained_search', 'formula_search'].includes(viewMode)) {
+    viewMode = 'elements_exact_search';
 }
 
 function getAuthState() {
@@ -78,11 +83,12 @@ function getSelectedElementsFromPath() {
 
 function getModeDescription(mode = viewMode) {
     const map = {
-        only: I18N.t('compound.mode_desc_only'),
-        combination: I18N.t('compound.mode_desc_combination'),
-        contains: I18N.t('compound.mode_desc_contains')
+        elements_exact_search: I18N.t('compound.mode_desc_only'),
+        elements_combination_search: I18N.t('compound.mode_desc_combination'),
+        elements_contained_search: I18N.t('compound.mode_desc_contains'),
+        formula_search: I18N.t('compound.mode_desc_only')
     };
-    return map[mode] || map.only;
+    return map[mode] || map.elements_exact_search;
 }
 
 function updateModeSubtitle(extraText) {
@@ -167,14 +173,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const pathParts = window.location.pathname.split('/');
     elementSymbols = pathParts[pathParts.length - 1];
 
-    // 从 URL 恢复数据库选择
-    const dbParam = urlParams.get('db');
-    if (dbParam && ['local', 'ai', 'alexandria', 'htsc2025', 'test'].includes(dbParam)) {
-        currentDatabase = dbParam;
-        const select = document.getElementById('db-select');
-        if (select) select.value = dbParam;
-    }
-
     // 初始化模态框
     uploadModal = new bootstrap.Modal(document.getElementById('uploadModal'));
     imageModal = new bootstrap.Modal(document.getElementById('imageModal'));
@@ -183,25 +181,6 @@ document.addEventListener('DOMContentLoaded', function() {
     loadCompoundInfo();
     loadPapers();
     loadCrystalStructures();
-
-    // 初始化数据库描述
-    const descEl = document.getElementById('db-desc');
-    if (descEl) {
-        const descKey = `compound.${currentDatabase}_db_desc`;
-        descEl.textContent = I18N.t(descKey);
-    }
-
-    // 根据数据库选择调整筛选控件可见性
-    const isLocalOrAi = currentDatabase === 'local' || currentDatabase === 'ai';
-    document.querySelectorAll('.alexandria-filter').forEach(el => el.style.display = isLocalOrAi ? 'none' : '');
-    document.getElementById('export-dropdown').style.display = isLocalOrAi ? '' : 'none';
-    const reviewGroup = document.querySelector('.btn-group[role="group"]');
-    if (reviewGroup) {
-        reviewGroup.closest('.col-auto').style.display = (currentDatabase === 'local') ? '' : 'none';
-    }
-
-    // 设置图片上传预览
-    document.getElementById('images-input').addEventListener('change', handleImageSelection);
 
     const uploadBtn = document.getElementById('open-upload-btn');
     const state = getAuthState();
@@ -229,22 +208,8 @@ document.addEventListener('DOMContentLoaded', function() {
 // 加载元素组合信息
 async function loadCompoundInfo() {
     if (!elementSymbols) return;
-    try {
-        const response = await fetch(`/api${getApiBase()}/compounds/${elementSymbols}`);
-        if (response.ok) {
-            const data = await response.json();
-            document.getElementById('compound-title').textContent = `${data.element_symbols} ${I18N.t('compound.system_sc')}`;
-            if (viewMode === 'only') {
-                updateModeSubtitle(`当前组合共收录 ${data.paper_count} 篇文献`);
-            } else {
-                updateModeSubtitle('正在汇总相关组合文献…');
-            }
-        } else {
-            document.getElementById('compound-title').textContent = I18N.t('compound.combination_not_found');
-        }
-    } catch (error) {
-        console.error('加载元素组合信息失败:', error);
-    }
+    document.getElementById('compound-title').textContent = `${elementSymbols} ${I18N.t('compound.system_sc')}`;
+    updateModeSubtitle();
 }
 
 // 加载文献列表
@@ -256,24 +221,9 @@ async function loadPapers(searchParams = null) {
         Object.assign(currentSearchParams, searchParams);
     }
 
-    if (currentDatabase === 'alexandria') {
-        await loadAlexandriaMaterials(container);
-        return;
-    }
-
-    if (currentDatabase === 'test') {
-        await loadTestDatabase(container);
-        return;
-    }
-
-    if (currentDatabase === 'htsc2025') {
-        await loadHTSC2025Materials(container);
-        return;
-    }
-
     try {
         const queryString = buildQueryString(currentSearchParams);
-        if (viewMode === 'only') {
+        if (viewMode === 'elements_exact_search') {
             const payload = await fetchPapersForCombination(elementSymbols, queryString);
             renderSingleCombination(container, payload);
             updateModeSubtitle(`共 ${payload.total} 篇文献`);
@@ -288,39 +238,6 @@ async function loadPapers(searchParams = null) {
     }
 }
 
-// 数据库切换
-function onDatabaseChange() {
-    currentDatabase = document.getElementById('db-select').value;
-    // 将数据库选择持久化到 URL
-    const url = new URL(window.location);
-    url.searchParams.set('db', currentDatabase);
-    window.history.replaceState(null, '', url);
-    const isLocalOrAi = currentDatabase === 'local' || currentDatabase === 'ai';
-    const isTest = currentDatabase === 'test';
-    const showReviewFilter = currentDatabase === 'local';
-
-    // 显示/隐藏 Alexandria/HTSC 专属筛选控件
-    document.querySelectorAll('.alexandria-filter').forEach(el => el.style.display = (isLocalOrAi && !isTest) ? 'none' : '');
-    // 批量导出：本地和AI数据库可用
-    document.getElementById('export-dropdown').style.display = (isLocalOrAi || isTest) ? '' : 'none';
-
-    // 审核状态筛选只对本地数据库有效
-    const reviewGroup = document.querySelector('.btn-group[role="group"]');
-    if (reviewGroup) {
-        reviewGroup.closest('.col-auto').style.display = showReviewFilter ? '' : 'none';
-    }
-
-    // 更新数据库描述
-    const descEl = document.getElementById('db-desc');
-    if (descEl) {
-        const descKey = `compound.${currentDatabase}_db_desc`;
-        descEl.textContent = I18N.t(descKey);
-    }
-
-    resetCurrentPage();
-    loadPapers(currentSearchParams);
-}
-
 // 审核状态筛选
 function filterByReviewStatus(status) {
     currentReviewStatus = status;
@@ -329,11 +246,10 @@ function filterByReviewStatus(status) {
 }
 
 function getActivePaginationState() {
-    return viewMode === 'only' ? onlyModePagination : multiModePagination;
+    return viewMode === 'elements_exact_search' ? onlyModePagination : multiModePagination;
 }
 
 function getApiBase() {
-    if (currentDatabase === 'ai' || currentDatabase === 'test') return '/ai';
     return '';
 }
 
@@ -1161,8 +1077,9 @@ function renderCombinationSection(section) {
 function renderEmptyState(customText) {
     const statusMap = {
         'approved': I18N.t('compound.review_status_approved'),
-        'unreviewed': I18N.t('compound.review_status_unreviewed'),
-        'rejected': I18N.t('compound.review_status_rejected')
+        'pending': I18N.t('compound.review_status_unreviewed'),
+        'rejected': I18N.t('compound.review_status_rejected'),
+        'needs_revision': '需修改'
     };
     const statusText = statusMap[currentReviewStatus] || '';
     const message = customText || `这个元素组合还没有${statusText}文献记录${currentReviewStatus === 'all' ? '，<strong>成为第一个贡献者吧！</strong>' : ''}`;
@@ -1511,7 +1428,7 @@ function addDataRow() {
         <div class="row g-2">
             <div class="col-md-2">
                 <label class="small">${I18N.t('compound.chemical_formula')}</label>
-                <input type="text" class="form-control form-control-sm formula-val" placeholder="e.g. YBa₂Cu₃O₇">
+                <input type="text" class="form-control form-control-sm formula-val" required placeholder="e.g. LaH10">
             </div>
             <div class="col-md-2">
                 <label class="small">${I18N.t('compound.crystal_structure')}</label>
@@ -1537,11 +1454,7 @@ function addDataRow() {
                 <label class="small">N(Ef)</label>
                 <input type="number" step="any" class="form-control form-control-sm nef-val" placeholder="N">
             </div>
-            <div class="col-md-2">
-                <label class="small">${I18N.t('compound.structure_file')}</label>
-                <input type="file" class="form-control form-control-sm structure-file-val" accept=".cif,.cif,.poscar,.vasp,.xsf">
-            </div>
-            <div class="col-md-1 d-flex align-items-end">
+            <div class="col-md-3 d-flex align-items-end">
                 <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="removeDataRow(this)">×</button>
             </div>
         </div>
@@ -1620,30 +1533,31 @@ async function submitPaper() {
         const omega_log = row.querySelector('.omega-val').value;
         const n_ef = row.querySelector('.nef-val').value;
 
-        if (!pressure || !tc) {
+        if (!formula || !pressure || !tc) {
             isValidData = false;
             return;
         }
 
-        physicalData.push({
-            chemical_formula: formula || null,
+        const tcValue = parseFloat(tc);
+        const record = {
+            chemical_formula: formula,
             crystal_structure: structure || null,
-            tc_press: [parseFloat(pressure)],
-            tc: [parseFloat(tc)],
+            pressure_gpa: parseFloat(pressure),
             s_factor: calculateSFactor(tc, pressure),
-            lambda_val: lambda_val ? parseFloat(lambda_val) : null,
+            lambda_value: lambda_val ? parseFloat(lambda_val) : null,
             omega_log: omega_log ? parseFloat(omega_log) : null,
-            n_ef: n_ef ? parseFloat(n_ef) : null
-        });
+            n_ef_total: n_ef ? parseFloat(n_ef) : null
+        };
+        if (articleType.value === 'experimental') {
+            record.experimental_tc = tcValue;
+        } else {
+            record.mcmillan_tc = tcValue;
+        }
+        physicalData.push(record);
     });
 
     if (!isValidData || physicalData.length === 0) {
-        alert('请完整填写所有数据的压强和Tc');
-        return;
-    }
-
-    if (selectedFiles.length > 5) {
-        alert('最多允许上传5张文献截图');
+        alert('请完整填写所有数据的化学式、压强和Tc');
         return;
     }
 
@@ -1653,7 +1567,7 @@ async function submitPaper() {
     formData.append('element_symbols', JSON.stringify(elementSymbols.split('-')));
     formData.append('article_type', articleType.value);
     formData.append('superconductor_type', superconductorType);
-    formData.append('physical_data', JSON.stringify(physicalData));
+    formData.append('records', JSON.stringify(physicalData));
 
     const contributorName = document.getElementById('contributor-name-input').value.trim();
     if (contributorName) formData.append('contributor_name', contributorName);
@@ -1663,19 +1577,6 @@ async function submitPaper() {
 
     const notes = document.getElementById('notes-input').value.trim();
     if (notes) formData.append('notes', notes);
-
-    // 添加图片
-    selectedFiles.forEach(file => {
-        formData.append('images', file);
-    });
-
-    // 添加结构文件
-    dataRows.forEach((row) => {
-        const fileInput = row.querySelector('.structure-file-val');
-        if (fileInput && fileInput.files && fileInput.files[0]) {
-            formData.append('structure_files', fileInput.files[0]);
-        }
-    });
 
     // 获取提交按钮
     const submitBtn = document.querySelector('#uploadModal .btn-primary[onclick="submitPaper()"]');

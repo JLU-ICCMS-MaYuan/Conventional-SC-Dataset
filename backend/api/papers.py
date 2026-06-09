@@ -161,6 +161,8 @@ def _record_to_dict(record: models.SuperconductorRecord) -> dict[str, Any]:
 
 
 def _paper_to_dict(paper: models.Paper, include_records: bool = True) -> dict[str, Any]:
+    first_record = paper.records[0] if paper.records else None
+    first_superconductor = first_record.superconductor if first_record else None
     payload = {
         "id": paper.id,
         "doi": paper.doi,
@@ -176,6 +178,8 @@ def _paper_to_dict(paper: models.Paper, include_records: bool = True) -> dict[st
         "reviewed_by_user_id": paper.reviewed_by_user_id,
         "reviewed_at": paper.reviewed_at,
         "uploaded_by_user_id": paper.uploaded_by_user_id,
+        "chemical_formula": first_superconductor.chemical_formula if first_superconductor else None,
+        "compound_symbols": "-".join(first_superconductor.elements_list) if first_superconductor else None,
         "created_at": paper.created_at,
         "updated_at": paper.updated_at,
     }

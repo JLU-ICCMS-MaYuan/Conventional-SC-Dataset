@@ -50,7 +50,7 @@ class CompoundResponse(BaseModel):
 
 class CompoundSearchRequest(BaseModel):
     elements: List[str] = Field(..., description="选择的元素符号列表")
-    mode: str = Field("combination", description="筛选模式: only, combination, contains")
+    mode: str = Field("elements_combination_search", description="筛选模式")
     limit: int = Field(50, ge=1, le=200, description="返回数量限制")
     offset: int = Field(0, ge=0, description="偏移量")
 
@@ -146,7 +146,15 @@ class PaperModeSearchRequest(BaseModel):
 
     @validator('mode')
     def validate_mode_search_mode(cls, v):
-        allowed = {'only', 'combination', 'contains'}
+        allowed = {
+            'only',
+            'combination',
+            'contains',
+            'formula_search',
+            'elements_exact_search',
+            'elements_combination_search',
+            'elements_contained_search',
+        }
         if v not in allowed:
             raise ValueError(f"筛选模式必须是: {', '.join(allowed)}")
         return v

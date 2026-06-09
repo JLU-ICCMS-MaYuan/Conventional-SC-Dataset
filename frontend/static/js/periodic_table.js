@@ -142,7 +142,12 @@ const ELEMENTS_DATA = [
 // 全局变量
 let selectedElements = new Set();
 const MODE_STORAGE_KEY = 'element_selection_mode';
-let selectionMode = localStorage.getItem(MODE_STORAGE_KEY) || 'combination';
+const SEARCH_MODE_ALIASES = {
+    only: 'elements_exact_search',
+    combination: 'elements_combination_search',
+    contains: 'elements_contained_search',
+};
+let selectionMode = SEARCH_MODE_ALIASES[localStorage.getItem(MODE_STORAGE_KEY)] || localStorage.getItem(MODE_STORAGE_KEY) || 'elements_combination_search';
 
 // 初始化
 document.addEventListener('DOMContentLoaded', function() {
@@ -272,7 +277,7 @@ function initSelectionModeControls() {
     });
 
     if (!hasMatch) {
-        selectionMode = 'combination';
+        selectionMode = 'elements_combination_search';
         localStorage.setItem(MODE_STORAGE_KEY, selectionMode);
         const defaultRadio = document.getElementById('mode-combination');
         if (defaultRadio) defaultRadio.checked = true;

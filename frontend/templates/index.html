@@ -49,13 +49,13 @@
                         <div class="mb-3">
                             <label class="form-label text-muted" data-i18n="index.filter_label">筛选条件</label>
                             <div class="btn-group w-100" role="group" aria-label="元素筛选模式">
-                                <input type="radio" class="btn-check" name="selection-mode" id="mode-only" value="only">
+                                <input type="radio" class="btn-check" name="selection-mode" id="mode-only" value="elements_exact_search">
                                 <label class="btn btn-outline-primary" for="mode-only" data-i18n="index.mode_only">仅包含选择元素</label>
 
-                                <input type="radio" class="btn-check" name="selection-mode" id="mode-combination" value="combination" checked>
+                                <input type="radio" class="btn-check" name="selection-mode" id="mode-combination" value="elements_combination_search" checked>
                                 <label class="btn btn-outline-primary" for="mode-combination" data-i18n="index.mode_combination">选择元素的组合</label>
 
-                                <input type="radio" class="btn-check" name="selection-mode" id="mode-contains" value="contains">
+                                <input type="radio" class="btn-check" name="selection-mode" id="mode-contains" value="elements_contained_search">
                                 <label class="btn btn-outline-primary" for="mode-contains" data-i18n="index.mode_contains">包含所选元素</label>
                             </div>
                         </div>
