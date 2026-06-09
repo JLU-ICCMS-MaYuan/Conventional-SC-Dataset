@@ -87,3 +87,17 @@ def test_normalize_formula_keeps_sub_float_decimal_amounts():
     assert normalized == f"H{amount}"
     assert "e" not in normalized.lower()
     assert parse_formula_composition(normalized) == {"H": Decimal(amount)}
+
+
+def test_normalize_formula_keeps_many_significant_decimal_digits():
+    amount = "0.123456789012345678901234567890"
+    normalized, _, _, _ = normalize_formula(f"H{amount}")
+    assert normalized == f"H{amount.rstrip('0')}"
+    assert parse_formula_composition(normalized) == {"H": Decimal(amount)}
+
+
+def test_normalize_formula_does_not_round_near_integer_decimal_to_integer():
+    amount = "1.000000000000000000000000000001"
+    normalized, _, _, _ = normalize_formula(f"H{amount}")
+    assert normalized == f"H{amount}"
+    assert parse_formula_composition(normalized) == {"H": Decimal(amount)}

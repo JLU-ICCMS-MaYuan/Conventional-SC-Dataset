@@ -1,5 +1,5 @@
 import re
-from decimal import Decimal
+from decimal import Decimal, localcontext
 from typing import Iterable
 
 
@@ -44,24 +44,39 @@ def parse_formula_composition(formula: str) -> dict[str, Decimal]:
         amount = Decimal(amount_text) if amount_text else Decimal("1")
         if amount <= 0:
             raise ValueError(f"invalid chemical formula amount: {formula}")
-        composition[symbol] = composition.get(symbol, Decimal("0")) + amount
+        if symbol in composition:
+            with localcontext() as ctx:
+                ctx.prec = max(50, len(value) + 10)
+                composition[symbol] += amount
+        else:
+            composition[symbol] = amount
         cursor = match.end()
     if not composition:
         raise ValueError(f"invalid chemical formula: {formula}")
     return composition
 
 
+def _is_integral_decimal(amount: Decimal) -> bool:
+    exponent = amount.as_tuple().exponent
+    if exponent >= 0:
+        return True
+    fractional_digits = amount.as_tuple().digits[exponent:]
+    return all(digit == 0 for digit in fractional_digits)
+
+
 def _format_formula_amount(amount: Decimal) -> str:
-    if amount == amount.to_integral_value():
+    if _is_integral_decimal(amount):
         return str(int(amount))
-    return format(amount.normalize(), "f").rstrip("0").rstrip(".")
+    return format(amount, "f").rstrip("0").rstrip(".")
 
 
 def normalize_formula(formula: str) -> tuple[str, list[str], dict[str, Decimal], dict[str, Decimal]]:
     composition = parse_formula_composition(formula)
     elements = sorted(composition)
     normalized_parts = []
-    total = sum(composition.values())
+    with localcontext() as ctx:
+        ctx.prec = max(50, sum(len(str(value)) for value in composition.values()) + 10)
+        total = sum(composition.values(), Decimal("0"))
     if total <= 0:
         raise ValueError(f"invalid chemical formula total: {formula}")
     for symbol in elements:
