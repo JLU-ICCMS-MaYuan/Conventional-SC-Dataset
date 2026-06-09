@@ -34,7 +34,7 @@ def parse_formula_composition(formula: str) -> dict[str, Decimal]:
     if not formula or not formula.strip():
         raise ValueError("chemical formula is required")
     value = formula.strip()
-    composition: dict[str, float] = {}
+    composition: dict[str, Decimal] = {}
     cursor = 0
     while cursor < len(value):
         match = FORMULA_TOKEN_RE.match(value, cursor)
@@ -77,10 +77,10 @@ def normalize_formula(formula: str) -> tuple[str, list[str], dict[str, Decimal],
     with localcontext() as ctx:
         ctx.prec = max(50, sum(len(str(value)) for value in composition.values()) + 10)
         total = sum(composition.values(), Decimal("0"))
+        ratios = {symbol: composition[symbol] / total for symbol in elements}
     if total <= 0:
         raise ValueError(f"invalid chemical formula total: {formula}")
     for symbol in elements:
         amount = composition[symbol]
         normalized_parts.append(symbol if amount == 1 else f"{symbol}{_format_formula_amount(amount)}")
-    ratios = {symbol: composition[symbol] / total for symbol in elements}
     return "".join(normalized_parts), elements, composition, ratios
