@@ -1,6 +1,10 @@
+import os
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
+os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
 from backend.database import Base
 
