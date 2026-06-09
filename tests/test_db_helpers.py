@@ -48,6 +48,15 @@ def test_parse_formula_composition_rejects_zero_amounts():
     raise AssertionError("expected zero amount to raise ValueError")
 
 
+def test_parse_formula_composition_rejects_unknown_element_symbols():
+    for formula in ("Xx2", "Aa1"):
+        try:
+            parse_formula_composition(formula)
+        except ValueError:
+            continue
+        raise AssertionError(f"expected unknown element in {formula} to raise ValueError")
+
+
 def test_normalize_formula_sorts_symbols():
     normalized, elements, composition, ratios = normalize_formula("LaH10")
     assert normalized == "H10La"
