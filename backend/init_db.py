@@ -1,18 +1,9 @@
 """
 数据库初始化脚本
-创建所有表并填充118个元素数据
+填充118个周期表元素数据。表结构由 Alembic 迁移管理。
 """
-from backend.database import (
-    metadata_engine,
-    image_engine,
-    MetadataSessionLocal,
-    MetadataBase,
-    ImageBase,
-    METADATA_DATABASE_PATH,
-    IMAGE_DATABASE_PATH,
-)
-from backend.models import Element
-from sqlalchemy import text
+from backend.database import SessionLocal
+from backend.models import PeriodicTableElement
 
 
 # 118个元素数据（原子序数、符号、英文名、中文名）
@@ -138,93 +129,36 @@ ELEMENTS_DATA = [
 ]
 
 
-def init_database():
-    """初始化数据库：创建主库与图片库表，并填充元素数据"""
-    print("正在创建主数据库表...")
-    MetadataBase.metadata.create_all(bind=metadata_engine)
-    ensure_app_columns()
-    print("✓ 主数据库表创建完成")
-
-    print("正在创建图片数据库表...")
-    ImageBase.metadata.create_all(bind=image_engine)
-    ensure_image_indexes()
-    print("✓ 图片数据库表创建完成")
-
-    db = MetadataSessionLocal()
-
-    try:
-        existing_count = db.query(Element).count()
-        if existing_count > 0:
-            print(f"数据库中已有 {existing_count} 个元素，跳过填充")
-            return
-
-        print("正在填充118个元素数据...")
-        elements = []
-        for atomic_number, symbol, name, name_zh in ELEMENTS_DATA:
-            element = Element(
+def seed_periodic_table_elements(db):
+    """幂等填充周期表元素。"""
+    existing_symbols = {
+        symbol for (symbol,) in db.query(PeriodicTableElement.symbol).all()
+    }
+    rows = []
+    for atomic_number, symbol, english_name, chinese_name in ELEMENTS_DATA:
+        if symbol in existing_symbols:
+            continue
+        rows.append(
+            PeriodicTableElement(
                 atomic_number=atomic_number,
                 symbol=symbol,
-                name=name,
-                name_zh=name_zh
+                english_name=english_name,
+                chinese_name=chinese_name,
             )
-            elements.append(element)
+        )
 
-        db.bulk_save_objects(elements)
+    if rows:
+        db.add_all(rows)
         db.commit()
-        print(f"✓ 成功填充 {len(elements)} 个元素")
 
-    except Exception as e:
-        print(f"✗ 错误: {e}")
-        db.rollback()
+
+def init_database():
+    """初始化基础数据。表结构必须先通过 Alembic 迁移创建。"""
+    db = SessionLocal()
+    try:
+        seed_periodic_table_elements(db)
     finally:
         db.close()
-
-    print("\n数据库初始化完成！")
-    print(f"主数据库文件位置: {METADATA_DATABASE_PATH}")
-    print(f"图片数据库文件位置: {IMAGE_DATABASE_PATH}")
-
-
-def ensure_app_columns():
-    """为导入脚本生成的新库补齐网站业务字段。
-
-    SQLAlchemy 的 create_all 不会修改已有表结构，因此这里对 papers 和 paper_data 做幂等补列。
-    """
-    paper_columns = {
-        "contributor_name": "VARCHAR(100) DEFAULT 'Data Import'",
-        "contributor_affiliation": "VARCHAR(200) DEFAULT 'System'",
-        "notes": "TEXT",
-        "review_status": "VARCHAR(20) NOT NULL DEFAULT 'unreviewed'",
-        "reviewed_by": "INTEGER",
-        "reviewed_at": "DATETIME",
-        "review_comment": "TEXT",
-        "show_in_chart": "BOOLEAN NOT NULL DEFAULT 0",
-        "created_at": "DATETIME",
-    }
-    paper_data_columns = {
-        "tc": "TEXT",
-    }
-    with metadata_engine.begin() as conn:
-        existing_papers = {row[1] for row in conn.execute(text("PRAGMA table_info(papers)")).fetchall()}
-        for name, col_type in paper_columns.items():
-            if name not in existing_papers:
-                conn.execute(text(f'ALTER TABLE papers ADD COLUMN "{name}" {col_type}'))
-
-        existing_paper_data = {row[1] for row in conn.execute(text("PRAGMA table_info(paper_data)")).fetchall()}
-        for name, col_type in paper_data_columns.items():
-            if name not in existing_paper_data:
-                conn.execute(text(f'ALTER TABLE paper_data ADD COLUMN "{name}" {col_type}'))
-
-        conn.execute(text("UPDATE papers SET created_at = COALESCE(created_at, datetime('now'))"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_papers_review_status ON papers (review_status)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_papers_year ON papers (year)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_papers_doi ON papers (doi)"))
-
-
-def ensure_image_indexes():
-    """为图片库补充索引。"""
-    with image_engine.begin() as conn:
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_paper_images_paper_id ON paper_images (paper_id)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_paper_images_image_order ON paper_images (image_order)"))
 
 
 if __name__ == "__main__":
