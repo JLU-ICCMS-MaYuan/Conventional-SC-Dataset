@@ -8,6 +8,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -178,6 +179,15 @@ class SuperconductorRecord(Base):
 
 class SuperconductorStructure(Base):
     __tablename__ = "superconductors_structures"
+    __table_args__ = (
+        Index(
+            "ix_superconductors_structures_identity",
+            "superconductor_id",
+            "space_group_symbol",
+            "space_group_number",
+            "pressure_gpa",
+        ),
+    )
 
     id = Column(Integer, primary_key=True)
     superconductor_id = Column(Integer, ForeignKey("superconductors.id"), nullable=False, index=True)

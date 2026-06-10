@@ -130,3 +130,16 @@ def test_superconductors_structures_foreign_keys_are_declared():
 
     assert {fk.column.table.name for fk in structures.columns["superconductor_id"].foreign_keys} == {"superconductors"}
     assert {fk.column.table.name for fk in structures.columns["created_by_user_id"].foreign_keys} == {"users"}
+
+
+def test_superconductors_structures_identity_index_is_declared():
+    structures = Base.metadata.tables["superconductors_structures"]
+    indexes = {index.name: index for index in structures.indexes}
+
+    assert "ix_superconductors_structures_identity" in indexes
+    assert [column.name for column in indexes["ix_superconductors_structures_identity"].columns] == [
+        "superconductor_id",
+        "space_group_symbol",
+        "space_group_number",
+        "pressure_gpa",
+    ]
