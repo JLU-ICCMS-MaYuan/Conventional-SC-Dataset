@@ -12,7 +12,8 @@ echo "DATABASE_URL: ${DATABASE_URL:-使用 backend/database.py 默认 MySQL 地�
 if [ -z "$DATABASE_URL" ]; then
     echo "提示: 未设置 DATABASE_URL 时会连接 127.0.0.1:3306 的默认 MySQL。"
     echo "      这里的 127.0.0.1:3306 是 MySQL 数据库地址，不是 http_proxy/https_proxy。"
-    echo "      本地临时启动可用: DATABASE_URL=sqlite:///./data/local_dev.db ./start.sh"
+    echo "      本地临时启动可用: DATABASE_URL=sqlite:///$PWD/data/local_dev.db ./start.sh"
+    echo "      local_dev.db 不存在也没关系，首次启动会在 data/ 目录自动创建。"
 fi
 echo "======================================="
 
