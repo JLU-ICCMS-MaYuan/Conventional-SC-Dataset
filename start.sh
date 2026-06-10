@@ -7,6 +7,10 @@ echo "当前时间: $(date)"
 echo "工作目录: $(pwd)"
 echo "PORT环境变量: ${PORT}"
 echo "DATABASE_URL: ${DATABASE_URL:-使用 backend/database.py 默认 MySQL 地址}"
+if [ -z "$DATABASE_URL" ]; then
+    echo "提示: 未设置 DATABASE_URL 时会连接 127.0.0.1:3306 的默认 MySQL。"
+    echo "      本地临时启动可用: DATABASE_URL=sqlite:///./data/local_dev.db ./start.sh"
+fi
 echo "======================================="
 
 PYTHON_BIN="${PYTHON_BIN:-python3}"
