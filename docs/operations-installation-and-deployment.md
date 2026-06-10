@@ -8,7 +8,8 @@
 
 - Python 3.10+ 环境
 - 已安装 `requirements.txt` 中依赖
-- 可连接的 MySQL 数据库
+- 本地开发可直接使用 `start.sh` 自动创建的 SQLite 临时库
+- 生产或正式测试环境需要可连接的 MySQL 数据库
 - 能设置 JWT 与邮件相关环境变量
 
 ## 3. 本地开发启动
@@ -35,6 +36,8 @@ python -m backend.init_db
 ./start.sh
 ```
 
+未设置 `DATABASE_URL` 时，`start.sh` 会默认使用当前项目 `data/local_dev.db` 作为本地 SQLite 临时库，并自动创建缺失的数据库文件。需要连接 MySQL 时，再显式设置 `DATABASE_URL`。
+
 #### 直接使用 uvicorn
 ```bash
 uvicorn backend.main:app --host 0.0.0.0 --port 8000
@@ -50,7 +53,9 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 
 ## 4. 数据库
 
-当前系统默认使用 MySQL。表结构由 Alembic 管理，`backend.init_db` 只负责初始化 `periodic_table_elements` 基础元素数据。
+当前系统正式数据建议使用 MySQL。表结构由 Alembic 管理，`backend.init_db` 只负责初始化 `periodic_table_elements` 基础元素数据。
+
+本地直接执行 `./start.sh` 且未设置 `DATABASE_URL` 时，会使用 `data/local_dev.db` 作为 SQLite 临时开发库。这个库只用于本地启动和功能检查，不作为生产数据库。
 
 部署时需要保证：
 
