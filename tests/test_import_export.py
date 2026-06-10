@@ -100,3 +100,50 @@ def test_import_payload_rebuilds_systems_superconductors_and_records(db_session)
     assert superconductor.formula_normalized == "H10La"
     assert records[0].source_label == "Database A"
     assert records[1].paper_id == paper.id
+
+
+def test_import_export_round_trips_superconductor_structures(db_session):
+    payload = {
+        "schema_version": SCHEMA_VERSION,
+        "users": [
+            {
+                "email": "u@example.com",
+                "real_name": "Uploader",
+                "role": "user",
+                "is_approved": True,
+                "is_email_verified": True,
+            }
+        ],
+        "papers": [],
+        "superconductor_records": [],
+        "superconductors_structures": [
+            {
+                "chemical_formula": "LaH",
+                "pressure_gpa": 100.0,
+                "space_group_symbol": "P 1",
+                "space_group_number": 1,
+                "structure_format": "cif",
+                "structure_text": "data_LaH\n_cell_length_a 1\n",
+                "structure_hash": "abc123",
+                "atom_count": 2,
+                "elements_list": ["H", "La"],
+                "cell_parameters": {"a": 1.0},
+                "volume": 1.0,
+                "review_status": "approved",
+                "is_default": True,
+                "source_type": "import",
+                "source_label": "fixture",
+                "created_by_email": "u@example.com",
+            }
+        ],
+    }
+
+    result = import_payload(db_session, payload, clear_existing=True)
+    exported = build_export_payload(db_session)
+
+    assert result["superconductors_structures"] == 1
+    item = exported["superconductors_structures"][0]
+    assert item["chemical_formula"] == "LaH"
+    assert item["structure_format"] == "cif"
+    assert item["review_status"] == "approved"
+    assert item["is_default"] is True

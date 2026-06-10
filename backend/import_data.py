@@ -58,6 +58,7 @@ def _upsert_user(db: Session, item: dict[str, Any]) -> models.User:
 
 
 def _clear_business_data(db: Session) -> None:
+    db.query(models.SuperconductorStructure).delete()
     db.query(models.SuperconductorRecord).delete()
     db.query(models.Paper).delete()
     db.query(models.Superconductor).delete()
@@ -109,6 +110,38 @@ def _record_item(db: Session, item: dict[str, Any], paper_by_doi: dict[str, mode
     return record
 
 
+def _structure_item(
+    db: Session,
+    item: dict[str, Any],
+    user_by_email: dict[str, models.User],
+) -> models.SuperconductorStructure | None:
+    formula = item.get("chemical_formula")
+    if not formula:
+        return None
+    superconductor = crud.get_or_create_superconductor(db, formula)
+    created_by = user_by_email.get(item.get("created_by_email")) if item.get("created_by_email") else None
+    structure = models.SuperconductorStructure(
+        superconductor_id=superconductor.id,
+        pressure_gpa=item.get("pressure_gpa"),
+        space_group_symbol=item.get("space_group_symbol"),
+        space_group_number=item.get("space_group_number"),
+        structure_format=item.get("structure_format"),
+        structure_text=item.get("structure_text"),
+        structure_hash=item.get("structure_hash"),
+        atom_count=item.get("atom_count"),
+        elements_list=item.get("elements_list"),
+        cell_parameters=item.get("cell_parameters"),
+        volume=item.get("volume"),
+        review_status=item.get("review_status") or "pending",
+        is_default=bool(item.get("is_default", False)),
+        source_type=item.get("source_type") or "import",
+        source_label=item.get("source_label"),
+        created_by_user_id=created_by.id if created_by else None,
+    )
+    db.add(structure)
+    return structure
+
+
 def import_payload(db: Session, payload: dict[str, Any], clear_existing: bool = False) -> dict[str, int]:
     if payload.get("schema_version") != SCHEMA_VERSION:
         raise ValueError(f"unsupported schema_version: {payload.get('schema_version')}")
@@ -153,11 +186,17 @@ def import_payload(db: Session, payload: dict[str, Any], clear_existing: bool = 
         if _record_item(db, item, paper_by_doi):
             imported_records += 1
 
+    imported_structures = 0
+    for item in payload.get("superconductors_structures", []):
+        if _structure_item(db, item, user_by_email):
+            imported_structures += 1
+
     db.commit()
     return {
         "users": len(user_by_email) + (0 if SYSTEM_IMPORT_EMAIL in user_by_email else 1),
         "papers": len(paper_by_doi),
         "superconductor_records": imported_records,
+        "superconductors_structures": imported_structures,
     }
 
 
@@ -173,6 +212,7 @@ def import_all_data(input_file: str = "data/data_export.json", clear_existing: b
         print(f"   用户: {result['users']} 个")
         print(f"   文献: {result['papers']} 篇")
         print(f"   超导记录: {result['superconductor_records']} 条")
+        print(f"   晶体结构: {result.get('superconductors_structures', 0)} 条")
         return result
     except Exception:
         db.rollback()

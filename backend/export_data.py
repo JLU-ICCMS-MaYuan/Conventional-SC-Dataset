@@ -98,15 +98,41 @@ def _record_to_dict(record: models.SuperconductorRecord) -> dict[str, Any]:
     }
 
 
+def _structure_to_dict(structure: models.SuperconductorStructure) -> dict[str, Any]:
+    return {
+        "id": structure.id,
+        "chemical_formula": structure.superconductor.chemical_formula if structure.superconductor else None,
+        "pressure_gpa": structure.pressure_gpa,
+        "space_group_symbol": structure.space_group_symbol,
+        "space_group_number": structure.space_group_number,
+        "structure_format": structure.structure_format,
+        "structure_text": structure.structure_text,
+        "structure_hash": structure.structure_hash,
+        "atom_count": structure.atom_count,
+        "elements_list": structure.elements_list,
+        "cell_parameters": structure.cell_parameters,
+        "volume": structure.volume,
+        "review_status": structure.review_status,
+        "is_default": structure.is_default,
+        "source_type": structure.source_type,
+        "source_label": structure.source_label,
+        "created_by_email": structure.created_by_user.email if structure.created_by_user else None,
+        "created_at": _dt(structure.created_at),
+        "updated_at": _dt(structure.updated_at),
+    }
+
+
 def build_export_payload(db: Session) -> dict[str, Any]:
     users = db.query(models.User).order_by(models.User.id).all()
     papers = db.query(models.Paper).order_by(models.Paper.id).all()
     records = db.query(models.SuperconductorRecord).order_by(models.SuperconductorRecord.id).all()
+    structures = db.query(models.SuperconductorStructure).order_by(models.SuperconductorStructure.id).all()
     return {
         "schema_version": SCHEMA_VERSION,
         "users": [_user_to_dict(user) for user in users],
         "papers": [_paper_to_dict(paper) for paper in papers],
         "superconductor_records": [_record_to_dict(record) for record in records],
+        "superconductors_structures": [_structure_to_dict(structure) for structure in structures],
     }
 
 
@@ -122,6 +148,7 @@ def export_all_data(output_file: str = "data/data_export.json") -> dict[str, Any
         print(f"   用户: {len(payload['users'])} 个")
         print(f"   文献: {len(payload['papers'])} 篇")
         print(f"   超导记录: {len(payload['superconductor_records'])} 条")
+        print(f"   晶体结构: {len(payload.get('superconductors_structures', []))} 条")
         return payload
     finally:
         db.close()
