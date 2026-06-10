@@ -59,6 +59,23 @@ def _user(db_session):
     return user
 
 
+def _pending_superconductor(formula):
+    system = models.ChemicalSystem(
+        system_key=formula,
+        elements_list=["H", "La"],
+        element_count=2,
+    )
+    return models.Superconductor(
+        chemical_system=system,
+        chemical_formula=formula,
+        formula_normalized=formula,
+        display_name=formula,
+        elements_list=["H", "La"],
+        composition={"La": 1, "H": 1},
+        element_ratio={"La": 1, "H": 1},
+    )
+
+
 def test_validate_structure_payload_accepts_cif_and_poscar():
     cif_meta = validate_structure_payload("cif", CIF_TEXT)
     poscar_meta = validate_structure_payload("poscar", POSCAR_TEXT)
@@ -216,6 +233,45 @@ def test_approve_structure_clears_unflushed_same_identity_defaults(db_session, m
     assert first.is_default is False
     assert second.is_default is True
     assert second.review_status == "approved"
+
+
+def test_approve_structure_keeps_defaults_for_different_pending_parents(db_session):
+    user = _user(db_session)
+    first_superconductor = _pending_superconductor("PendingLaH")
+    second_superconductor = _pending_superconductor("PendingLaH2")
+    db_session.add_all([first_superconductor, second_superconductor])
+    first = create_structure(
+        db_session,
+        superconductor=first_superconductor,
+        pressure_gpa=100.0,
+        space_group_symbol="P 1",
+        space_group_number=1,
+        structure_format="cif",
+        structure_text=CIF_TEXT,
+        source_type="admin_upload",
+        source_label="first",
+        created_by_user=user,
+    )
+    second = create_structure(
+        db_session,
+        superconductor=second_superconductor,
+        pressure_gpa=100.0,
+        space_group_symbol="P 1",
+        space_group_number=1,
+        structure_format="poscar",
+        structure_text=POSCAR_TEXT,
+        source_type="admin_upload",
+        source_label="second",
+        created_by_user=user,
+    )
+
+    approve_structure(db_session, first)
+    approve_structure(db_session, second)
+    db_session.commit()
+
+    assert first.superconductor_id != second.superconductor_id
+    assert first.is_default is True
+    assert second.is_default is True
 
 
 def test_reject_structure_marks_rejected_and_clears_default(db_session):

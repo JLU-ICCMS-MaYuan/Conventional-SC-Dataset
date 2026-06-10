@@ -139,8 +139,13 @@ def _same_identity(
     left: models.SuperconductorStructure,
     right: models.SuperconductorStructure,
 ) -> bool:
+    if left.superconductor_id is None or right.superconductor_id is None:
+        same_superconductor = left.superconductor is right.superconductor
+    else:
+        same_superconductor = left.superconductor_id == right.superconductor_id
+
     return (
-        left.superconductor_id == right.superconductor_id
+        same_superconductor
         and left.pressure_gpa == right.pressure_gpa
         and left.space_group_symbol == right.space_group_symbol
         and left.space_group_number == right.space_group_number
