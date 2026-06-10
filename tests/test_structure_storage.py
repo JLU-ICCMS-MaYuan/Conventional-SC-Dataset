@@ -161,7 +161,7 @@ def test_approve_structure_sets_latest_default_for_same_identity(db_session):
     assert second.review_status == "approved"
 
 
-def test_approve_structure_clears_unflushed_same_identity_defaults(db_session):
+def test_approve_structure_clears_unflushed_same_identity_defaults(db_session, monkeypatch):
     user = _user(db_session)
     superconductor = crud.get_or_create_superconductor(db_session, "LaH")
     first = create_structure(
@@ -189,8 +189,15 @@ def test_approve_structure_clears_unflushed_same_identity_defaults(db_session):
         created_by_user=user,
     )
 
-    approve_structure(db_session, first)
-    approve_structure(db_session, second)
+    with monkeypatch.context() as context:
+        context.setattr(
+            db_session,
+            "flush",
+            lambda *args, **kwargs: pytest.fail("approve_structure must not flush manually"),
+        )
+        approve_structure(db_session, first)
+        approve_structure(db_session, second)
+
     db_session.commit()
 
     default_count = (

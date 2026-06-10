@@ -135,12 +135,35 @@ def _identity_filters(structure: models.SuperconductorStructure):
     )
 
 
+def _same_identity(
+    left: models.SuperconductorStructure,
+    right: models.SuperconductorStructure,
+) -> bool:
+    return (
+        left.superconductor_id == right.superconductor_id
+        and left.pressure_gpa == right.pressure_gpa
+        and left.space_group_symbol == right.space_group_symbol
+        and left.space_group_number == right.space_group_number
+    )
+
+
+def _clear_session_defaults(db: Session, structure: models.SuperconductorStructure) -> None:
+    candidates = list(db.identity_map.values()) + list(db.new)
+    for candidate in candidates:
+        if (
+            candidate is not structure
+            and isinstance(candidate, models.SuperconductorStructure)
+            and _same_identity(candidate, structure)
+        ):
+            candidate.is_default = False
+
+
 def approve_structure(db: Session, structure: models.SuperconductorStructure) -> models.SuperconductorStructure:
-    db.flush()
     db.query(models.SuperconductorStructure).filter(*_identity_filters(structure)).update(
         {"is_default": False},
         synchronize_session="fetch",
     )
+    _clear_session_defaults(db, structure)
     structure.review_status = APPROVED_STATUS
     structure.is_default = True
     db.add(structure)
