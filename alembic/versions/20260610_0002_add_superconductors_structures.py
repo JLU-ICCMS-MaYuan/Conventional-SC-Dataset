@@ -61,15 +61,4 @@ def upgrade():
 
 
 def downgrade():
-    op.drop_index("ix_superconductors_structures_identity", table_name="superconductors_structures")
-    op.drop_index("ix_superconductors_structures_created_by_user_id", table_name="superconductors_structures")
-    op.drop_index("ix_superconductors_structures_source_type", table_name="superconductors_structures")
-    op.drop_index("ix_superconductors_structures_is_default", table_name="superconductors_structures")
-    op.drop_index("ix_superconductors_structures_review_status", table_name="superconductors_structures")
-    op.drop_index("ix_superconductors_structures_structure_hash", table_name="superconductors_structures")
-    op.drop_index("ix_superconductors_structures_structure_format", table_name="superconductors_structures")
-    op.drop_index("ix_superconductors_structures_space_group_number", table_name="superconductors_structures")
-    op.drop_index("ix_superconductors_structures_space_group_symbol", table_name="superconductors_structures")
-    op.drop_index("ix_superconductors_structures_pressure_gpa", table_name="superconductors_structures")
-    op.drop_index("ix_superconductors_structures_superconductor_id", table_name="superconductors_structures")
     op.drop_table("superconductors_structures")

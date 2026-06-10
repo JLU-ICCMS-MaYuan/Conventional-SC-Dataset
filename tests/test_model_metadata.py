@@ -137,6 +137,7 @@ def test_superconductors_structures_identity_index_is_declared():
     indexes = {index.name: index for index in structures.indexes}
 
     assert "ix_superconductors_structures_identity" in indexes
+    assert indexes["ix_superconductors_structures_identity"].unique is False
     assert [column.name for column in indexes["ix_superconductors_structures_identity"].columns] == [
         "superconductor_id",
         "space_group_symbol",
