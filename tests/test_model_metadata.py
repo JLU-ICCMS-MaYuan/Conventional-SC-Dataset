@@ -1,6 +1,6 @@
 from backend import models  # noqa: F401
 from backend.database import Base
-from sqlalchemy import Boolean, Float, JSON, Text
+from sqlalchemy import Boolean, DateTime, Float, Integer, JSON, String, Text
 
 
 EXPECTED_TABLES = {
@@ -14,7 +14,7 @@ EXPECTED_TABLES = {
 }
 
 
-def test_dataset_metadata_defines_only_six_tables():
+def test_dataset_metadata_defines_expected_tables():
     assert set(Base.metadata.tables) == EXPECTED_TABLES
 
 
@@ -80,17 +80,49 @@ def test_superconductor_records_avoid_nullable_unique_identity_constraint():
 def test_superconductors_structures_table_contract():
     structures = Base.metadata.tables["superconductors_structures"]
 
+    assert set(structures.columns.keys()) == {
+        "id",
+        "superconductor_id",
+        "pressure_gpa",
+        "space_group_symbol",
+        "space_group_number",
+        "structure_format",
+        "structure_text",
+        "structure_hash",
+        "atom_count",
+        "elements_list",
+        "cell_parameters",
+        "volume",
+        "review_status",
+        "is_default",
+        "source_type",
+        "source_label",
+        "created_by_user_id",
+        "created_at",
+        "updated_at",
+    }
     assert structures.columns["superconductor_id"].nullable is False
     assert structures.columns["pressure_gpa"].nullable is False
     assert structures.columns["structure_format"].nullable is False
     assert structures.columns["structure_text"].nullable is False
     assert structures.columns["structure_hash"].nullable is False
     assert structures.columns["review_status"].nullable is False
+    assert structures.columns["review_status"].default.arg == "pending"
     assert structures.columns["is_default"].nullable is False
+    assert structures.columns["is_default"].default.arg is False
     assert structures.columns["source_type"].nullable is False
     assert isinstance(structures.columns["pressure_gpa"].type, Float)
+    assert isinstance(structures.columns["space_group_symbol"].type, String)
+    assert isinstance(structures.columns["space_group_number"].type, Integer)
     assert isinstance(structures.columns["structure_text"].type, Text)
+    assert isinstance(structures.columns["structure_hash"].type, String)
+    assert isinstance(structures.columns["atom_count"].type, Integer)
+    assert isinstance(structures.columns["elements_list"].type, JSON)
+    assert isinstance(structures.columns["cell_parameters"].type, JSON)
+    assert isinstance(structures.columns["volume"].type, Float)
     assert isinstance(structures.columns["is_default"].type, Boolean)
+    assert isinstance(structures.columns["created_at"].type, DateTime)
+    assert isinstance(structures.columns["updated_at"].type, DateTime)
 
 
 def test_superconductors_structures_foreign_keys_are_declared():
