@@ -8,19 +8,26 @@ echo "======================================="
 echo "当前时间: $(date)"
 echo "工作目录: $(pwd)"
 echo "PORT环境变量: ${PORT}"
-echo "DATABASE_URL: ${DATABASE_URL:-使用 backend/database.py 默认 MySQL 地址}"
+
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+DATA_DIR="${DATA_DIR:-data}"
+
+if [[ "$DATA_DIR" = /* ]]; then
+    LOCAL_DB_PATH="$DATA_DIR/local_dev.db"
+else
+    LOCAL_DB_PATH="$PWD/$DATA_DIR/local_dev.db"
+fi
+
 if [ -z "$DATABASE_URL" ]; then
-    echo "提示: 未设置 DATABASE_URL 时会连接 127.0.0.1:3306 的默认 MySQL。"
-    echo "      这里的 127.0.0.1:3306 是 MySQL 数据库地址，不是 http_proxy/https_proxy。"
-    echo "      本地临时启动可用: DATABASE_URL=sqlite:///$PWD/data/local_dev.db ./start.sh"
+    export DATABASE_URL="sqlite:///$LOCAL_DB_PATH"
+    echo "DATABASE_URL: 未设置，已自动使用本地 SQLite: $DATABASE_URL"
     echo "      local_dev.db 不存在也没关系，首次启动会在 data/ 目录自动创建。"
+else
+    echo "DATABASE_URL: $DATABASE_URL"
 fi
 echo "======================================="
 
-PYTHON_BIN="${PYTHON_BIN:-python3}"
-
 # 检查data目录。本地开发默认使用项目内 data/，云平台可通过 DATA_DIR 覆盖。
-DATA_DIR="${DATA_DIR:-data}"
 if [ -d "$DATA_DIR" ]; then
     echo "✅ $DATA_DIR 目录存在"
     ls -la "$DATA_DIR"
