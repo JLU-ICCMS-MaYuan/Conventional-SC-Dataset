@@ -54,6 +54,7 @@ AGENTS.md
 CLI_GUIDE.md
 INSTALL.md
 CLAUDE.md
+.worktrees/
 
 #数据库
 hydride_literature_image_ai.db
