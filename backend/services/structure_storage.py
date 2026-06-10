@@ -136,6 +136,7 @@ def _identity_filters(structure: models.SuperconductorStructure):
 
 
 def approve_structure(db: Session, structure: models.SuperconductorStructure) -> models.SuperconductorStructure:
+    db.flush()
     db.query(models.SuperconductorStructure).filter(*_identity_filters(structure)).update(
         {"is_default": False},
         synchronize_session="fetch",
@@ -169,6 +170,7 @@ def representative_structure_for(
             desc(models.SuperconductorStructure.is_default),
             models.SuperconductorStructure.pressure_gpa.asc(),
             models.SuperconductorStructure.created_at.desc(),
+            models.SuperconductorStructure.id.desc(),
         )
         .first()
     )
@@ -196,6 +198,7 @@ def default_structure_for_record(
         .order_by(
             desc(models.SuperconductorStructure.is_default),
             models.SuperconductorStructure.created_at.desc(),
+            models.SuperconductorStructure.id.desc(),
         )
         .first()
     )

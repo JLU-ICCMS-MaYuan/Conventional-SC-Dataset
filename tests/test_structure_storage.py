@@ -161,6 +161,56 @@ def test_approve_structure_sets_latest_default_for_same_identity(db_session):
     assert second.review_status == "approved"
 
 
+def test_approve_structure_clears_unflushed_same_identity_defaults(db_session):
+    user = _user(db_session)
+    superconductor = crud.get_or_create_superconductor(db_session, "LaH")
+    first = create_structure(
+        db_session,
+        superconductor=superconductor,
+        pressure_gpa=100.0,
+        space_group_symbol="P 1",
+        space_group_number=1,
+        structure_format="cif",
+        structure_text=CIF_TEXT,
+        source_type="admin_upload",
+        source_label="first",
+        created_by_user=user,
+    )
+    second = create_structure(
+        db_session,
+        superconductor=superconductor,
+        pressure_gpa=100.0,
+        space_group_symbol="P 1",
+        space_group_number=1,
+        structure_format="poscar",
+        structure_text=POSCAR_TEXT,
+        source_type="admin_upload",
+        source_label="second",
+        created_by_user=user,
+    )
+
+    approve_structure(db_session, first)
+    approve_structure(db_session, second)
+    db_session.commit()
+
+    default_count = (
+        db_session.query(models.SuperconductorStructure)
+        .filter(
+            models.SuperconductorStructure.superconductor_id == superconductor.id,
+            models.SuperconductorStructure.pressure_gpa == 100.0,
+            models.SuperconductorStructure.space_group_symbol == "P 1",
+            models.SuperconductorStructure.space_group_number == 1,
+            models.SuperconductorStructure.is_default.is_(True),
+        )
+        .count()
+    )
+
+    assert default_count == 1
+    assert first.is_default is False
+    assert second.is_default is True
+    assert second.review_status == "approved"
+
+
 def test_reject_structure_marks_rejected_and_clears_default(db_session):
     user = _user(db_session)
     superconductor = crud.get_or_create_superconductor(db_session, "LaH")
