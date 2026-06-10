@@ -29,5 +29,6 @@ python-jose[cryptography]==3.3.0  # JWT token
 python-dotenv==1.0.0  # 环境变量管理
 pytest==8.2.2
 openpyxl==3.1.2
+ase==3.22.1
 numpy==1.26.4  # pymatgen 依赖 NumPy < 2.0
 pymatgen==2023.9.25

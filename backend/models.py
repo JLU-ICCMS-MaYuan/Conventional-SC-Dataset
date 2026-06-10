@@ -63,6 +63,7 @@ class Superconductor(Base):
 
     chemical_system = relationship("ChemicalSystem", back_populates="superconductors")
     records = relationship("SuperconductorRecord", back_populates="superconductor")
+    structures = relationship("SuperconductorStructure", back_populates="superconductor")
 
 
 class User(Base):
@@ -92,6 +93,11 @@ class User(Base):
         "Paper",
         back_populates="reviewed_by_user",
         foreign_keys="Paper.reviewed_by_user_id",
+    )
+    created_structures = relationship(
+        "SuperconductorStructure",
+        back_populates="created_by_user",
+        foreign_keys="SuperconductorStructure.created_by_user_id",
     )
 
 
@@ -168,3 +174,34 @@ class SuperconductorRecord(Base):
 
     superconductor = relationship("Superconductor", back_populates="records")
     paper = relationship("Paper", back_populates="records")
+
+
+class SuperconductorStructure(Base):
+    __tablename__ = "superconductors_structures"
+
+    id = Column(Integer, primary_key=True)
+    superconductor_id = Column(Integer, ForeignKey("superconductors.id"), nullable=False, index=True)
+    pressure_gpa = Column(Float, nullable=False, index=True)
+    space_group_symbol = Column(String(100), index=True)
+    space_group_number = Column(Integer, index=True)
+    structure_format = Column(String(20), nullable=False, index=True)
+    structure_text = Column(Text, nullable=False)
+    structure_hash = Column(String(64), nullable=False, index=True)
+    atom_count = Column(Integer)
+    elements_list = Column(JSON)
+    cell_parameters = Column(JSON)
+    volume = Column(Float)
+    review_status = Column(String(50), default="pending", nullable=False, index=True)
+    is_default = Column(Boolean, default=False, nullable=False, index=True)
+    source_type = Column(String(100), nullable=False, index=True)
+    source_label = Column(String(255))
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    superconductor = relationship("Superconductor", back_populates="structures")
+    created_by_user = relationship(
+        "User",
+        back_populates="created_structures",
+        foreign_keys=[created_by_user_id],
+    )

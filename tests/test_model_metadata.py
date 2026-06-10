@@ -10,6 +10,7 @@ EXPECTED_TABLES = {
     "papers",
     "users",
     "superconductor_records",
+    "superconductors_structures",
 }
 
 
@@ -74,3 +75,26 @@ def test_superconductor_records_avoid_nullable_unique_identity_constraint():
     assert "uq_superconductor_record_identity" not in {
         constraint.name for constraint in records.constraints
     }
+
+
+def test_superconductors_structures_table_contract():
+    structures = Base.metadata.tables["superconductors_structures"]
+
+    assert structures.columns["superconductor_id"].nullable is False
+    assert structures.columns["pressure_gpa"].nullable is False
+    assert structures.columns["structure_format"].nullable is False
+    assert structures.columns["structure_text"].nullable is False
+    assert structures.columns["structure_hash"].nullable is False
+    assert structures.columns["review_status"].nullable is False
+    assert structures.columns["is_default"].nullable is False
+    assert structures.columns["source_type"].nullable is False
+    assert isinstance(structures.columns["pressure_gpa"].type, Float)
+    assert isinstance(structures.columns["structure_text"].type, Text)
+    assert isinstance(structures.columns["is_default"].type, Boolean)
+
+
+def test_superconductors_structures_foreign_keys_are_declared():
+    structures = Base.metadata.tables["superconductors_structures"]
+
+    assert {fk.column.table.name for fk in structures.columns["superconductor_id"].foreign_keys} == {"superconductors"}
+    assert {fk.column.table.name for fk in structures.columns["created_by_user_id"].foreign_keys} == {"users"}
