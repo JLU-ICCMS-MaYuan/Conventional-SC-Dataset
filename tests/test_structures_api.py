@@ -40,9 +40,38 @@ def _admin(db_session):
     return user
 
 
+def _ordinary_user(db_session, email="user@example.com"):
+    user = models.User(
+        email=email,
+        password_hash="!",
+        real_name="Regular User",
+        role="user",
+        is_approved=True,
+        is_email_verified=True,
+    )
+    db_session.add(user)
+    db_session.flush()
+    return user
+
+
 def _override_dependencies(db_session, user):
     app.dependency_overrides[get_db] = lambda: db_session
     app.dependency_overrides[get_current_user] = lambda: user
+
+
+async def _post_structure(client, formula="LaH"):
+    return await client.post(
+        "/api/structures/",
+        json={
+            "chemical_formula": formula,
+            "pressure_gpa": 100.0,
+            "space_group_symbol": "P 1",
+            "space_group_number": 1,
+            "structure_format": "cif",
+            "structure_text": CIF_TEXT,
+            "source_type": "admin_upload",
+        },
+    )
 
 
 def test_structure_upload_review_representative_and_raw_download(db_session):
@@ -129,6 +158,85 @@ def test_structure_by_record_matches_identity(db_session):
             by_record = await client.get(f"/api/structures/by-record/{record.id}")
             assert by_record.status_code == 200
             assert by_record.json()["id"] == structure_id
+
+    try:
+        anyio.run(run)
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_representative_unknown_formula_returns_404_without_creating_superconductor(db_session):
+    user = _ordinary_user(db_session)
+    db_session.commit()
+    before_count = db_session.query(models.Superconductor).count()
+    _override_dependencies(db_session, user)
+
+    async def run():
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            representative = await client.get(
+                "/api/structures/representative",
+                params={"formula": "MgB2"},
+            )
+            assert representative.status_code == 404
+
+    try:
+        anyio.run(run)
+    finally:
+        app.dependency_overrides.clear()
+
+    assert db_session.query(models.Superconductor).count() == before_count
+
+
+def test_non_admin_cannot_review_structure(db_session):
+    user = _ordinary_user(db_session)
+    crud.get_or_create_superconductor(db_session, "LaH")
+    db_session.commit()
+    _override_dependencies(db_session, user)
+
+    async def run():
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            created = await _post_structure(client)
+            assert created.status_code == 200
+            structure_id = created.json()["id"]
+
+            reviewed = await client.post(f"/api/structures/{structure_id}/review", json={"status": "approved"})
+            assert reviewed.status_code == 403
+
+    try:
+        anyio.run(run)
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_pending_raw_download_requires_creator_or_admin(db_session):
+    creator = _ordinary_user(db_session, email="creator@example.com")
+    other_user = _ordinary_user(db_session, email="other@example.com")
+    admin = _admin(db_session)
+    crud.get_or_create_superconductor(db_session, "LaH")
+    db_session.commit()
+    _override_dependencies(db_session, creator)
+
+    async def run():
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            created = await _post_structure(client)
+            assert created.status_code == 200
+            structure_id = created.json()["id"]
+
+            creator_raw = await client.get(f"/api/structures/{structure_id}/raw")
+            assert creator_raw.status_code == 200
+            assert "La1 La" in creator_raw.text
+
+            _override_dependencies(db_session, other_user)
+            other_raw = await client.get(f"/api/structures/{structure_id}/raw")
+            assert other_raw.status_code == 403
+
+            _override_dependencies(db_session, admin)
+            admin_raw = await client.get(f"/api/structures/{structure_id}/raw")
+            assert admin_raw.status_code == 200
+            assert "La1 La" in admin_raw.text
 
     try:
         anyio.run(run)
