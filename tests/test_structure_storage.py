@@ -5,7 +5,9 @@ from backend import crud, models
 from backend.services.structure_storage import (
     approve_structure,
     create_structure,
+    default_structure_for_record,
     representative_structure_for,
+    reject_structure,
     serialize_structure,
     validate_structure_payload,
 )
@@ -76,6 +78,22 @@ def test_validate_structure_payload_rejects_unknown_format():
     assert "cif" in exc.value.detail
 
 
+def test_validate_structure_payload_rejects_blank_text():
+    with pytest.raises(HTTPException) as exc:
+        validate_structure_payload("cif", "   ")
+
+    assert exc.value.status_code == 400
+    assert "blank" in exc.value.detail
+
+
+def test_validate_structure_payload_rejects_parse_failure():
+    with pytest.raises(HTTPException) as exc:
+        validate_structure_payload("cif", "not a valid cif")
+
+    assert exc.value.status_code == 400
+    assert "Unable to parse cif" in exc.value.detail
+
+
 def test_create_structure_starts_pending_and_serializes(db_session):
     user = _user(db_session)
     superconductor = crud.get_or_create_superconductor(db_session, "LaH")
@@ -99,6 +117,10 @@ def test_create_structure_starts_pending_and_serializes(db_session):
     assert payload["review_status"] == "pending"
     assert payload["is_default"] is False
     assert payload["structure_format"] == "cif"
+    assert "structure_text" not in payload
+
+    payload_with_text = serialize_structure(structure, include_text=True)
+    assert payload_with_text["structure_text"] == CIF_TEXT
 
 
 def test_approve_structure_sets_latest_default_for_same_identity(db_session):
@@ -139,6 +161,29 @@ def test_approve_structure_sets_latest_default_for_same_identity(db_session):
     assert second.review_status == "approved"
 
 
+def test_reject_structure_marks_rejected_and_clears_default(db_session):
+    user = _user(db_session)
+    superconductor = crud.get_or_create_superconductor(db_session, "LaH")
+    structure = create_structure(
+        db_session,
+        superconductor=superconductor,
+        pressure_gpa=100.0,
+        space_group_symbol="P 1",
+        space_group_number=1,
+        structure_format="cif",
+        structure_text=CIF_TEXT,
+        source_type="admin_upload",
+        source_label="manual",
+        created_by_user=user,
+    )
+    approve_structure(db_session, structure)
+
+    reject_structure(structure)
+
+    assert structure.review_status == "rejected"
+    assert structure.is_default is False
+
+
 def test_representative_structure_uses_lowest_pressure_default(db_session):
     user = _user(db_session)
     superconductor = crud.get_or_create_superconductor(db_session, "LaH")
@@ -173,3 +218,91 @@ def test_representative_structure_uses_lowest_pressure_default(db_session):
     representative = representative_structure_for(db_session, superconductor, "P 1")
 
     assert representative.id == low.id
+
+
+def test_default_structure_for_record_matches_record_identity(db_session):
+    user = _user(db_session)
+    superconductor = crud.get_or_create_superconductor(db_session, "LaH")
+    matching = create_structure(
+        db_session,
+        superconductor=superconductor,
+        pressure_gpa=100.0,
+        space_group_symbol="P 1",
+        space_group_number=1,
+        structure_format="cif",
+        structure_text=CIF_TEXT,
+        source_type="admin_upload",
+        source_label="matching",
+        created_by_user=user,
+    )
+    other_pressure = create_structure(
+        db_session,
+        superconductor=superconductor,
+        pressure_gpa=200.0,
+        space_group_symbol="P 1",
+        space_group_number=1,
+        structure_format="poscar",
+        structure_text=POSCAR_TEXT,
+        source_type="admin_upload",
+        source_label="other-pressure",
+        created_by_user=user,
+    )
+    approve_structure(db_session, matching)
+    approve_structure(db_session, other_pressure)
+    record = models.SuperconductorRecord(
+        superconductor_id=superconductor.id,
+        source_label="record",
+        pressure_gpa=100.0,
+        space_group_symbol="P 1",
+        space_group_number=1,
+    )
+    db_session.add(record)
+    db_session.commit()
+
+    default_structure = default_structure_for_record(db_session, record)
+
+    assert default_structure.id == matching.id
+
+
+def test_default_structure_for_record_matches_nullable_space_group_identity(db_session):
+    user = _user(db_session)
+    superconductor = crud.get_or_create_superconductor(db_session, "LaH")
+    nullable_match = create_structure(
+        db_session,
+        superconductor=superconductor,
+        pressure_gpa=100.0,
+        space_group_symbol=None,
+        space_group_number=None,
+        structure_format="cif",
+        structure_text=CIF_TEXT,
+        source_type="admin_upload",
+        source_label="nullable-match",
+        created_by_user=user,
+    )
+    non_nullable = create_structure(
+        db_session,
+        superconductor=superconductor,
+        pressure_gpa=100.0,
+        space_group_symbol="P 1",
+        space_group_number=1,
+        structure_format="poscar",
+        structure_text=POSCAR_TEXT,
+        source_type="admin_upload",
+        source_label="non-nullable",
+        created_by_user=user,
+    )
+    approve_structure(db_session, nullable_match)
+    approve_structure(db_session, non_nullable)
+    record = models.SuperconductorRecord(
+        superconductor_id=superconductor.id,
+        source_label="record",
+        pressure_gpa=100.0,
+        space_group_symbol=None,
+        space_group_number=None,
+    )
+    db_session.add(record)
+    db_session.commit()
+
+    default_structure = default_structure_for_record(db_session, record)
+
+    assert default_structure.id == nullable_match.id
