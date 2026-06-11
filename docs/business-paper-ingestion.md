@@ -51,26 +51,42 @@
 - 同一个化学式、压强、空间群下可以记录不同来源或方法给出的超导结果
 - 稳定性、能量凸包上方能量、赝势、k/q 网格、截断能、电子态密度等计算设置保存在 `superconductor_records`
 
-## 5. 图片处理
+## 5. 晶体结构存储
+
+当前晶体结构正文由 `superconductors_structures` 表保存，支持 `cif` 和 `poscar` 两种格式。上传结构时后端会使用 ASE 解析校验，解析失败不会写入数据库。
+
+结构存储粒度为“化学式 + 空间群 + 压强”。同一粒度下可以保存多个版本，管理员审核通过后，最新审核通过版本会成为该粒度下的默认结构。`superconductor_records.crystal_structure` 仍用于结构类型或空间群描述，不保存 CIF/POSCAR 正文。
+
+已落地的结构接口包括：
+
+- `POST /api/structures/`：登录用户上传结构，初始状态为 `pending`
+- `POST /api/structures/{structure_id}/review`：管理员或超级管理员审核结构
+- `GET /api/structures/by-record/{record_id}`：按超导记录的化学式、空间群和压强查找已审核默认结构
+- `GET /api/structures/representative`：按化学式和空间群查找代表结构
+- `GET /api/structures/{structure_id}/raw`：下载 CIF/POSCAR 原文；未审核结构仅创建者或管理员可下载
+
+代表结构选择只从 `approved` 结构中取值，优先默认结构，再按压强升序和创建时间倒序选择。
+
+## 6. 图片处理
 
 - 当前代码不再保存文献截图
 - `paper_images` 和图片 BLOB 路径已下线
 - 图片读取接口返回 410，表示该能力已停止提供
 
-## 6. 批量上传与导入
+## 7. 批量上传与导入
 
-### 6.1 首页快速上传
+### 7.1 首页快速上传
 - 入口位于首页
 - 接口：`POST /api/papers/batch-upload`
 - 当前接口保留入口，但新 MySQL 结构下的批量导入逻辑标记为未实现
 - 需要按新 `papers + superconductor_records` 结构重新设计导入字段
 
-### 6.2 JSON 导入导出
+### 7.2 JSON 导入导出
 
 #### 导出
 - 脚本：`python -m backend.export_data`
 - 当前导出 `mysql-redesign-v1` JSON
-- 导出内容包括 `users`、`papers` 和 `superconductor_records`
+- 导出内容包括 `users`、`papers`、`superconductor_records` 和 `superconductors_structures`
 - `chemical_systems` 与 `superconductors` 可由记录中的 `chemical_formula` 重建
 
 #### 导入
@@ -78,18 +94,19 @@
 - 当前支持导入 `mysql-redesign-v1` JSON
 - 可使用 `--clear` 清空业务数据后重建
 - 若导入文件没有可用上传用户，系统会创建 `import@example.local` 作为导入用户
+- 结构导入要求每条 `superconductors_structures` 包含 `chemical_formula`、`pressure_gpa`、`structure_format`、`structure_text` 和 `structure_hash`，缺失时会直接报错，不会静默丢弃
 
-### 6.3 ID 迁移
+### 7.3 ID 迁移
 - 旧 `migrate_ids` 脚本面向旧组合表，新 MySQL 结构不再依赖 `element_id_list`
 
-## 7. 采集模块与其他模块的关系
+## 8. 采集模块与其他模块的关系
 
 - 依赖认证模块控制谁能上传
 - 依赖元素组合模块决定文献归属到哪个体系
 - 依赖审核模块控制文献后续状态
 - 依赖图表模块决定是否在首页展示
 
-## 8. 边界与限制
+## 9. 边界与限制
 
 - 上传不是全文解析流程，当前主要依赖 DOI 元数据和手工补充字段
 - 批量导入并不等价于自动高质量清洗，仍依赖输入文件质量

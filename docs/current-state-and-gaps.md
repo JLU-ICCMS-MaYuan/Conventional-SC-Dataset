@@ -2,7 +2,7 @@
 
 ## 1. 结论摘要
 
-当前系统已经从旧 SQLite 形态切换为 MySQL 优先的六表结构。数据库层面的核心定位是“超导体结构化数据采集、审核、检索和图表展示”，不是全文文献平台，也不是学术互动社区。
+当前系统已经从旧 SQLite 形态切换为 MySQL 优先的结构化数据模型。数据库层面的核心定位是“超导体结构化数据采集、审核、检索、晶体结构存储和图表展示”，不是全文文献平台，也不是学术互动社区。
 
 当前已经落地的主流程：
 
@@ -11,6 +11,7 @@
 - 组合页文献浏览
 - 登录、邮箱验证、管理员审批
 - 单篇论文上传并写入多条超导记录
+- CIF/POSCAR 晶体结构存储、审核、代表结构查询和原文下载
 - 管理员审核论文
 - 基于 `superconductor_records.show_in_chart` 的图表展示控制
 - Alembic 管理 MySQL 表结构
@@ -30,6 +31,7 @@
 - `periodic_table_elements`
 - `chemical_systems`
 - `superconductors`
+- `superconductors_structures`
 - `papers`
 - `users`
 - `superconductor_records`
@@ -39,6 +41,7 @@
 - `periodic_table_elements` 保存 118 个元素基础信息
 - `chemical_systems` 保存排序后的元素体系，例如 `H-La`
 - `superconductors` 保存具体超导体化学式及标准化组成，例如 `LaH10`
+- `superconductors_structures` 保存 CIF/POSCAR 晶体结构正文、结构哈希、来源、审核状态和默认版本
 - `papers` 保存论文元数据、上传用户、审核用户和审核状态
 - `users` 保存普通用户、管理员、超级管理员账号，权限由 `role` 表示
 - `superconductor_records` 保存具体压强点、空间群、稳定性、Tc、赝势、计算设置和图表显示标记
@@ -86,6 +89,17 @@
 - `/api/papers/stats/chart-data` 兼容旧 P-Tc 接口
 
 Tc-Year 图只使用有关联论文年份的记录。
+
+### 3.5 晶体结构
+
+已支持：
+
+- `POST /api/structures/` 上传 CIF/POSCAR 结构并使用 ASE 校验
+- `POST /api/structures/{structure_id}/review` 审核结构并维护同一化学式、空间群和压强下的默认版本
+- `GET /api/structures/by-record/{record_id}` 按超导记录匹配已审核结构
+- `GET /api/structures/representative` 按化学式和空间群获取代表结构
+- `GET /api/structures/{structure_id}/raw` 下载结构原文
+- `mysql-redesign-v1` JSON 导入导出包含 `superconductors_structures`
 
 ## 4. 当前缺口
 

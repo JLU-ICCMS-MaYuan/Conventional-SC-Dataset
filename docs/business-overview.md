@@ -40,6 +40,7 @@ Conventional-SC-Dataset 是一个围绕“元素体系 - 超导体化学式 - �
 ### 3.3 文献采集模块
 - 负责 DOI 解析、超导记录录入、批量导入入口
 - 单篇上传写入 `papers` 与 `superconductor_records`
+- 晶体结构正文由 `superconductors_structures` 承接，按化学式、空间群和压强保存 CIF/POSCAR 结构
 - 当前不再保存文献截图或图片 BLOB
 - 依赖认证模块和元素组合模块
 
@@ -86,11 +87,15 @@ Conventional-SC-Dataset 是一个围绕“元素体系 - 超导体化学式 - �
 ### 5.5 实验预测
 - `/api/tc-predict/*`
 
+### 5.6 晶体结构
+- `/api/structures/*`
+
 ## 6. 当前系统的边界
 
 - 当前主数据源改为 MySQL 优先结构，表创建由 Alembic 迁移负责
-- 当前核心业务表为 `periodic_table_elements`、`chemical_systems`、`superconductors`、`papers`、`users`、`superconductor_records`
+- 当前核心业务表为 `periodic_table_elements`、`chemical_systems`、`superconductors`、`superconductors_structures`、`papers`、`users`、`superconductor_records`
 - 文献元数据依赖 DOI 解析接口，上传时并非全部字段都由用户手填
+- `superconductor_records` 保存压强点和超导物理参数；`superconductors_structures` 保存 CIF/POSCAR 结构正文、审核状态、来源和默认版本
 - Tc 预测模块不写库、不审核、不参与首页文献图表闭环
 - 规划中的互动评论、弹幕、点击图表跳转等功能当前代码未落地
 
