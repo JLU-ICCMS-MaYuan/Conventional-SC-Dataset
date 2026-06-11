@@ -1,3 +1,5 @@
+import pytest
+
 from backend import crud, models
 from backend.export_data import SCHEMA_VERSION, build_export_payload
 from backend.import_data import import_payload
@@ -144,6 +146,72 @@ def test_import_export_round_trips_superconductor_structures(db_session):
     assert result["superconductors_structures"] == 1
     item = exported["superconductors_structures"][0]
     assert item["chemical_formula"] == "LaH"
+    assert item["pressure_gpa"] == 100.0
+    assert item["space_group_symbol"] == "P 1"
+    assert item["space_group_number"] == 1
     assert item["structure_format"] == "cif"
+    assert item["structure_text"] == "data_LaH\n_cell_length_a 1\n"
+    assert item["structure_hash"] == "abc123"
+    assert item["atom_count"] == 2
+    assert item["elements_list"] == ["H", "La"]
+    assert item["cell_parameters"] == {"a": 1.0}
+    assert item["volume"] == 1.0
     assert item["review_status"] == "approved"
     assert item["is_default"] is True
+    assert item["source_type"] == "import"
+    assert item["source_label"] == "fixture"
+    assert item["created_by_email"] == "u@example.com"
+
+
+def test_import_payload_without_structures_is_backward_compatible(db_session):
+    payload = {
+        "schema_version": SCHEMA_VERSION,
+        "users": [],
+        "papers": [],
+        "superconductor_records": [],
+    }
+
+    result = import_payload(db_session, payload, clear_existing=True)
+
+    assert result["superconductors_structures"] == 0
+    assert build_export_payload(db_session)["superconductors_structures"] == []
+
+
+def test_import_payload_rejects_structure_missing_chemical_formula(db_session):
+    payload = {
+        "schema_version": SCHEMA_VERSION,
+        "users": [],
+        "papers": [],
+        "superconductor_records": [],
+        "superconductors_structures": [
+            {
+                "pressure_gpa": 100.0,
+                "structure_format": "cif",
+                "structure_text": "data_LaH\n",
+                "structure_hash": "abc123",
+            }
+        ],
+    }
+
+    with pytest.raises(ValueError, match=r"superconductors_structures\[0\] 缺少 chemical_formula"):
+        import_payload(db_session, payload, clear_existing=True)
+
+
+def test_import_payload_rejects_structure_missing_required_text(db_session):
+    payload = {
+        "schema_version": SCHEMA_VERSION,
+        "users": [],
+        "papers": [],
+        "superconductor_records": [],
+        "superconductors_structures": [
+            {
+                "chemical_formula": "LaH",
+                "pressure_gpa": 100.0,
+                "structure_format": "cif",
+                "structure_hash": "abc123",
+            }
+        ],
+    }
+
+    with pytest.raises(ValueError, match=r"superconductors_structures\[0\] 缺少 structure_text"):
+        import_payload(db_session, payload, clear_existing=True)

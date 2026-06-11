@@ -110,24 +110,38 @@ def _record_item(db: Session, item: dict[str, Any], paper_by_doi: dict[str, mode
     return record
 
 
+def _validate_structure_item(item: dict[str, Any], index: int) -> None:
+    required_fields = [
+        "chemical_formula",
+        "pressure_gpa",
+        "structure_format",
+        "structure_text",
+        "structure_hash",
+    ]
+    for field in required_fields:
+        value = item.get(field)
+        if value is None or value == "":
+            raise ValueError(f"superconductors_structures[{index}] 缺少 {field}")
+
+
 def _structure_item(
     db: Session,
     item: dict[str, Any],
+    index: int,
     user_by_email: dict[str, models.User],
-) -> models.SuperconductorStructure | None:
-    formula = item.get("chemical_formula")
-    if not formula:
-        return None
+) -> models.SuperconductorStructure:
+    _validate_structure_item(item, index)
+    formula = item["chemical_formula"]
     superconductor = crud.get_or_create_superconductor(db, formula)
     created_by = user_by_email.get(item.get("created_by_email")) if item.get("created_by_email") else None
     structure = models.SuperconductorStructure(
         superconductor_id=superconductor.id,
-        pressure_gpa=item.get("pressure_gpa"),
+        pressure_gpa=item["pressure_gpa"],
         space_group_symbol=item.get("space_group_symbol"),
         space_group_number=item.get("space_group_number"),
-        structure_format=item.get("structure_format"),
-        structure_text=item.get("structure_text"),
-        structure_hash=item.get("structure_hash"),
+        structure_format=item["structure_format"],
+        structure_text=item["structure_text"],
+        structure_hash=item["structure_hash"],
         atom_count=item.get("atom_count"),
         elements_list=item.get("elements_list"),
         cell_parameters=item.get("cell_parameters"),
@@ -145,6 +159,8 @@ def _structure_item(
 def import_payload(db: Session, payload: dict[str, Any], clear_existing: bool = False) -> dict[str, int]:
     if payload.get("schema_version") != SCHEMA_VERSION:
         raise ValueError(f"unsupported schema_version: {payload.get('schema_version')}")
+    for index, item in enumerate(payload.get("superconductors_structures", [])):
+        _validate_structure_item(item, index)
     if clear_existing:
         _clear_business_data(db)
 
@@ -187,9 +203,9 @@ def import_payload(db: Session, payload: dict[str, Any], clear_existing: bool = 
             imported_records += 1
 
     imported_structures = 0
-    for item in payload.get("superconductors_structures", []):
-        if _structure_item(db, item, user_by_email):
-            imported_structures += 1
+    for index, item in enumerate(payload.get("superconductors_structures", [])):
+        _structure_item(db, item, index, user_by_email)
+        imported_structures += 1
 
     db.commit()
     return {
