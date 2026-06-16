@@ -122,27 +122,24 @@ function formatRangeCell(values, unit = '') {
 }
 
 function renderPhysicalDataTable(dataRows) {
-    const completeRows = (dataRows || []).filter(d => Array.isArray(d.tc) && d.tc.length > 0 && Array.isArray(d.tc_press) && d.tc_press.length > 0);
-    if (completeRows.length === 0) {
+    const rows = (dataRows || []).filter(d => d != null && d.tc_max != null);
+    if (rows.length === 0) {
         return `<span class="text-muted">${I18N.t('compound.no_physical_data')}</span>`;
     }
 
-    const synthesizedText = (d) => {
-        if (d.article_type === 'experimental' || d.article_type === 'e') return I18N.t('common.yes');
-        if (d.article_type === 'theoretical' || d.article_type === 't') return I18N.t('common.no');
-        return 'null';
-    };
+    const articleLabel = (d) => d.article_type === 'e' ? I18N.t('common.yes') : (d.article_type === 't' ? I18N.t('common.no') : '—');
+    const f = (v, u) => v != null ? `${Number(v).toFixed(1)} ${u || ''}`.trim() : '—';
 
-    const rows = completeRows.map(d => `
+    const rowHtml = rows.map(d => `
         <tr>
-            <td>${d.chemical_formula || 'null'}</td>
-            <td>${d.crystal_structure || 'null'}</td>
-            <td>${synthesizedText(d)}</td>
-            <td>${formatRangeCell(d.tc, 'K')}</td>
-            <td>${formatRangeCell(d.tc_press, 'GPa')}</td>
-            <td>${formatDataCell(d.lambda_val)}</td>
-            <td>${formatDataCell(d.omega_log)}</td>
-            <td>${formatDataCell(d.n_ef)}</td>
+            <td>${d.chemical_formula || '—'}</td>
+            <td style="max-width:120px;white-space:normal;font-size:0.85rem;">${d.space_group_symbol || '—'}</td>
+            <td>${articleLabel(d)}</td>
+            <td>${f(d.tc_max, 'K')}</td>
+            <td>${f(d.pressure_gpa, 'GPa')}</td>
+            <td>${f(d.lambda_value)}</td>
+            <td>${f(d.omega_log)}</td>
+            <td>${f(d.n_ef_total)}</td>
         </tr>
     `).join('');
 
@@ -161,7 +158,7 @@ function renderPhysicalDataTable(dataRows) {
                         <th>N(E_F)</th>
                     </tr>
                 </thead>
-                <tbody>${rows}</tbody>
+                <tbody>${rowHtml}</tbody>
             </table>
         </div>
     `;
@@ -1097,32 +1094,50 @@ function renderEmptyState(customText) {
 // 渲染文献卡片（简化版，点击展开）
 function renderPaperCard(paper) {
     paperCache.set(paper.id, paper);
-    const authors = paper.authors ? JSON.parse(paper.authors) : [];
+    const authors = Array.isArray(paper.authors) ? paper.authors : (paper.authors ? JSON.parse(paper.authors) : []);
     const firstAuthor = authors.length > 0 ? authors[0] : '未知作者';
     const correspondingAuthor = authors.length > 0 ? authors[authors.length - 1] : '未知作者';
 
-    // 物理数据处理
-    const mainData = paper.data && paper.data.length > 0 ? paper.data[0] : null;
-    const tcSummary = mainData ? `${mainData.tc} K` : '未知';
+    // Tc 数据 — 按优先级取第一个有值的
+    const tcValue = paper.experimental_tc
+        || paper.anisotropic_eliashberg_tc
+        || paper.isotropic_eliashberg_tc
+        || paper.allen_dynes_tc
+        || paper.mcmillan_tc;
+    const hasTc = tcValue != null;
+    // 压强摘要
+    const pressures = Array.isArray(paper.pressures_gpa) && paper.pressures_gpa.length > 0
+        ? paper.pressures_gpa : [];
+    const pressureStr = pressures.length > 0
+        ? (pressures.length === 1 ? ` @ ${pressures[0]} GPa` : ` @ ${pressures[0]}–${pressures[pressures.length-1]} GPa`)
+        : '';
+    const tcSummary = hasTc ? `${Number(tcValue).toFixed(1)} K` : '';
+    const tcWithPressure = hasTc
+        ? `Tc: ${tcSummary}${pressureStr}`
+        : '';
 
-    const physicalDataHtml = renderPhysicalDataTable(paper.data);
+    const records = Array.isArray(paper.records) ? paper.records : [];
+    const physicalDataHtml = records.length > 0 ? renderPhysicalDataTable(records) : '';
+    const hasRecords = records.length > 0;
 
-    // 标签映射
-    const articleTypeBadge = paper.article_type === 'theoretical' ?
-        '<span class="badge bg-info">⚛️ 理论</span>' :
-        '<span class="badge bg-success">🔬 实验</span>';
+    // 文章类型标签 — 从聚合数组生成
+    const articleTypeMap = { e: '🔬 实验', t: '⚛️ 理论' };
+    const articleTypes = Array.isArray(paper.article_types) ? paper.article_types : [];
+    const articleTypeBadges = articleTypes.length > 0
+        ? articleTypes.map(t => `<span class="badge ${t === 'e' ? 'bg-success' : 'bg-info'}">${articleTypeMap[t] || t}</span>`).join(' ')
+        : '';
 
-    const scTypeBadges = {
-        'cuprate': '<span class="badge" style="background-color: rgba(255, 99, 132, 0.8);">🔴 铜基</span>',
-        'iron_based': '<span class="badge" style="background-color: rgba(75, 192, 192, 0.8);">🟤 铁基</span>',
-        'nickel_based': '<span class="badge" style="background-color: rgba(75, 239, 58, 0.8);">🟠 镍基</span>',
-        'hydride': '<span class="badge" style="background-color: rgba(153, 102, 255, 0.8);">💧 高压氢化物</span>',
-        'carbon': '<span class="badge" style="background-color: rgba(54, 162, 235, 0.8);">🔵 碳基</span>',
-        'organic': '<span class="badge" style="background-color: rgba(255, 206, 86, 0.8);">🟢 有机</span>',
-        'others': '<span class="badge" style="background-color: rgba(204, 70, 70, 0.8);">⚪ 其他超导</span>'
+    // 超导类型标签 — 从聚合数组生成
+    const scTypeMap = {
+        'h':  '<span class="badge" style="background-color: rgba(153, 102, 255, 0.8);">💧 高压氢化物</span>',
+        'c':  '<span class="badge" style="background-color: rgba(54, 162, 235, 0.8);">🔵 碳基</span>',
+        'cb': '<span class="badge" style="background-color: rgba(255, 99, 132, 0.8);">🔴 铜基</span>',
+        'ot': '<span class="badge" style="background-color: rgba(204, 70, 70, 0.8);">⚪ 其他超导</span>',
     };
-
-    const scTypeBadge = scTypeBadges[paper.superconductor_type] || legacyScTypeBadges[paper.superconductor_type] || scTypeBadges.others;
+    const scTypes = Array.isArray(paper.superconductor_types) ? paper.superconductor_types : [];
+    const scTypeBadges = scTypes.length > 0
+        ? scTypes.map(t => scTypeMap[t] || '').filter(Boolean).join(' ')
+        : '';
 
     // 审核状态徽章（从后端数据获取）
     const statusMap = {
@@ -1150,10 +1165,8 @@ function renderPaperCard(paper) {
                             ${firstAuthor} |
                             通讯: ${correspondingAuthor} |
                             ${paper.title} |
-                            ${paper.chemical_formula || '未知体系'} |
-                            Tc: ${tcSummary} |
-                            ${articleTypeBadge}
-                            ${scTypeBadge}
+                            ${paper.chemical_formula || '未知体系'}${tcWithPressure ? ` | ${tcWithPressure}` : ''} |
+                            ${articleTypeBadges} ${scTypeBadges}
                             ${reviewBadge}
                         </div>
                         <div>
@@ -1182,17 +1195,38 @@ function renderPaperCard(paper) {
                                 </div>
                             </p>
 
+                            <!-- 元数据块 -->
+                            <div class="row g-2 mb-3">
+                                ${articleTypes.length > 0 ? `
+                                <div class="col-auto"><span class="text-muted small">类型:</span> ${articleTypeBadges}</div>
+                                ` : ''}
+                                ${scTypes.length > 0 ? `
+                                <div class="col-auto"><span class="text-muted small">超导:</span> ${scTypeBadges}</div>
+                                ` : ''}
+                                ${paper.chemical_formula ? `
+                                <div class="col-auto"><span class="text-muted small">化学式:</span> <code>${paper.chemical_formula}</code></div>
+                                ` : ''}
+                                ${hasTc && pressures.length > 0 ? `
+                                <div class="col-auto"><span class="text-muted small">压强:</span> ${pressures.join(', ')} GPa</div>
+                                ` : ''}
+                                ${hasTc && Array.isArray(paper.space_groups) && paper.space_groups.length > 0 ? `
+                                <div class="col-auto"><span class="text-muted small">空间群:</span> ${paper.space_groups.join(', ')}</div>
+                                ` : ''}
+                            </div>
+
+                            ${hasRecords ? `
+                            <div class="mb-2">
+                                <strong>物理参数:</strong>
+                                ${physicalDataHtml}
+                            </div>
+                            ` : ''}
+
                             ${paper.abstract ? `
                                 <div class="mb-3">
                                     <strong>摘要:</strong>
                                     <p class="mt-2 mb-0">${paper.abstract}</p>
                                 </div>
                             ` : ''}
-
-                            <div class="mb-2">
-                                <strong>物理参数:</strong>
-                                ${physicalDataHtml}
-                            </div>
 
                             <div class="mt-3 text-muted small">
                                 贡献者: ${paper.contributor_name} (${paper.contributor_affiliation}) |
@@ -1289,7 +1323,7 @@ function viewImage(imageUrl) {
 
 function buildRISContent(paper) {
     const lines = ['TY  - JOUR'];
-    const authors = paper.authors ? JSON.parse(paper.authors) : [];
+    const authors = Array.isArray(paper.authors) ? paper.authors : (paper.authors ? JSON.parse(paper.authors) : []);
     authors.forEach(author => {
         if (author) {
             lines.push(`AU  - ${author}`);

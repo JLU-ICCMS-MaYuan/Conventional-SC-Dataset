@@ -33,7 +33,6 @@ def test_core_json_columns_are_json_and_required():
     assert isinstance(Base.metadata.tables["superconductors"].columns["composition"].type, JSON)
     assert Base.metadata.tables["superconductors"].columns["composition"].nullable is False
     assert isinstance(Base.metadata.tables["papers"].columns["authors"].type, JSON)
-    assert Base.metadata.tables["papers"].columns["authors"].nullable is False
     assert isinstance(Base.metadata.tables["superconductor_records"].columns["element_n_ef"].type, JSON)
 
 

@@ -142,6 +142,24 @@ def _record_to_dict(record: models.SuperconductorRecord) -> dict[str, Any]:
         "isotropic_eliashberg_tc": record.isotropic_eliashberg_tc,
         "anisotropic_eliashberg_tc": record.anisotropic_eliashberg_tc,
         "experimental_tc": record.experimental_tc,
+        "tc_max": max(
+            v for v in [
+                record.mcmillan_tc,
+                record.allen_dynes_tc,
+                record.isotropic_eliashberg_tc,
+                record.anisotropic_eliashberg_tc,
+                record.experimental_tc,
+            ] if v is not None
+        ) if any(
+            v is not None for v in [
+                record.mcmillan_tc,
+                record.allen_dynes_tc,
+                record.isotropic_eliashberg_tc,
+                record.anisotropic_eliashberg_tc,
+                record.experimental_tc,
+            ]
+        ) else None,
+        "article_type": record.article_type,
         "lambda_value": record.lambda_value,
         "omega_log": record.omega_log,
         "n_ef_total": record.n_ef_total,
@@ -184,6 +202,23 @@ def _paper_to_dict(paper: models.Paper, include_records: bool = True) -> dict[st
         "created_at": paper.created_at,
         "updated_at": paper.updated_at,
     }
+    # Tc 摘要 — 从任意 record 取第一个非空值
+    def _first_tc(attr: str):
+        for r in paper.records:
+            val = getattr(r, attr, None)
+            if val is not None:
+                return val
+        return None
+    payload["mcmillan_tc"] = _first_tc("mcmillan_tc")
+    payload["allen_dynes_tc"] = _first_tc("allen_dynes_tc")
+    payload["isotropic_eliashberg_tc"] = _first_tc("isotropic_eliashberg_tc")
+    payload["anisotropic_eliashberg_tc"] = _first_tc("anisotropic_eliashberg_tc")
+    payload["experimental_tc"] = _first_tc("experimental_tc")
+    # 聚合摘要 — 从所有 records 去重提取
+    payload["article_types"] = list({r.article_type for r in paper.records if r.article_type})
+    payload["superconductor_types"] = list({r.superconductor_type for r in paper.records if r.superconductor_type})
+    payload["pressures_gpa"] = sorted({r.pressure_gpa for r in paper.records if r.pressure_gpa is not None})
+    payload["space_groups"] = list({r.space_group_symbol for r in paper.records if r.space_group_symbol})
     if include_records:
         payload["records"] = [_record_to_dict(record) for record in paper.records]
     return payload
@@ -207,6 +242,15 @@ def _query_papers_for_superconductors(
         .join(models.SuperconductorRecord)
         .join(models.Superconductor)
         .filter(models.Superconductor.id.in_(superconductor_ids))
+        .filter(
+            or_(
+                models.SuperconductorRecord.mcmillan_tc.isnot(None),
+                models.SuperconductorRecord.allen_dynes_tc.isnot(None),
+                models.SuperconductorRecord.isotropic_eliashberg_tc.isnot(None),
+                models.SuperconductorRecord.anisotropic_eliashberg_tc.isnot(None),
+                models.SuperconductorRecord.experimental_tc.isnot(None),
+            )
+        )
         .distinct()
     )
     if keyword:
@@ -242,7 +286,7 @@ def _paginate(query, limit: int, offset: int) -> dict[str, Any]:
     page = (offset // page_size) + 1 if page_size else 1
     total_pages = (total + page_size - 1) // page_size if total > 0 else 0
     return {
-        "items": [_paper_to_dict(paper, include_records=False) for paper in items],
+        "items": [_paper_to_dict(paper, include_records=True) for paper in items],
         "total": total,
         "page": page,
         "page_size": page_size,
