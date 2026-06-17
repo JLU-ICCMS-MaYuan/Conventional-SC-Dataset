@@ -5,6 +5,8 @@ Paper and superconductor record APIs.
 from __future__ import annotations
 
 import json
+import time
+import threading
 from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
@@ -586,3 +588,132 @@ def get_tc_year_chart_data(db: Session = Depends(get_db)):
 @router.get("/stats/chart-data")
 def get_chart_data(db: Session = Depends(get_db)):
     return get_tc_pressure_chart_data(db)
+
+
+# ---------- 全数据库聚合搜索（带缓存）----------
+
+_search_cache: dict[str, dict[str, Any]] = {}
+_search_cache_lock = threading.Lock()
+_CACHE_TTL = 300  # 5 分钟
+
+
+def _build_cache_key(elements: list[str], mode: str) -> str:
+    return "-".join(sorted(elements)) + "|" + (mode or "contains")
+
+
+def _fetch_all_sources(elements: list[str], mode: str) -> list[dict]:
+    """取三源全量数据，合并为统一格式列表"""
+    items: list[dict] = []
+
+    # 1. 本地
+    from backend.database import SessionLocal
+    db = SessionLocal()
+    try:
+        from backend.repositories.superconductors import search_superconductors
+        result = search_superconductors(db, mode, elements=elements, limit=10000, offset=0)
+        if result.items:
+            query = _query_papers_for_superconductors(db, [r.id for r in result.items])
+            for paper in query.all():
+                d = _paper_to_dict(paper, include_records=True)
+                d["_source"] = "local"
+                items.append(d)
+    finally:
+        db.close()
+
+    # 2. Alexandria
+    try:
+        from backend.alexandria_import import query_by_elements
+        alex_mode = {"elements_exact_search": "only", "elements_combination_search": "combination", "elements_contained_search": "contains"}.get(mode, "contains")
+        alex_result = query_by_elements(elements=elements, mode=alex_mode, limit=10000, offset=0)
+        for m in (alex_result.get("items") or []):
+            m["_source"] = "alexandria"
+            items.append(m)
+    except Exception:
+        pass
+
+    # 3. HTSC-2025
+    try:
+        import requests as req
+        htsc_mode = {"elements_exact_search": "only", "elements_combination_search": "combination", "elements_contained_search": "contains"}.get(mode, "contains")
+        resp = req.post("http://127.0.0.1:8000/api/htsc2025/search", json={"elements": elements, "mode": htsc_mode, "limit": 10000, "offset": 0}, timeout=30)
+        if resp.status_code == 200:
+            data = resp.json()
+            for m in (data.get("items") or []):
+                m["_source"] = "htsc2025"
+                items.append(m)
+    except Exception:
+        pass
+
+    return items
+
+
+def _group_and_sort(items: list[dict]) -> list[dict]:
+    """按 compound 分组，组间按条目数降序，组内按 Tc 降序"""
+    grouped: dict[str, list[dict]] = {}
+    for item in items:
+        if item.get("_source") == "local":
+            key = item.get("compound_symbols") or item.get("chemical_formula") or "未知"
+        else:
+            key = "-".join(sorted(item.get("elements") or []))
+        grouped.setdefault(key, []).append(item)
+
+    # 组内按 Tc 降序
+    def _tc(item):
+        if item.get("_source") == "alexandria":
+            return item.get("tc_allen_dynes") or item.get("tc_max") or 0
+        if item.get("_source") == "htsc2025":
+            return item.get("tc") or 0
+        return item.get("experimental_tc") or item.get("anisotropic_eliashberg_tc") or item.get("isotropic_eliashberg_tc") or item.get("allen_dynes_tc") or item.get("mcmillan_tc") or 0
+
+    # 过滤无 Tc 的条目
+    for k in list(grouped.keys()):
+        grouped[k] = [item for item in grouped[k] if _tc(item) > 0]
+        if not grouped[k]:
+            del grouped[k]
+
+    for k in grouped:
+        grouped[k].sort(key=_tc, reverse=True)
+
+    # 组间按条目数降序
+    sorted_groups = sorted(grouped.items(), key=lambda kv: len(kv[1]), reverse=True)
+
+    # 展平
+    flat = []
+    for key, group_items in sorted_groups:
+        flat.append({"_type": "section", "key": key, "count": len(group_items)})
+        flat.extend(group_items)
+    return flat
+
+
+@router.post("/search/all")
+def search_all(request: schemas.PaperModeSearchRequest, db: Session = Depends(get_db)):
+    elements = request.elements or []
+    mode = request.mode or "elements_contained_search"
+    page = max(1, request.offset // request.limit + 1)
+    page_size = request.limit or 30
+
+    cache_key = _build_cache_key(elements, mode)
+
+    with _search_cache_lock:
+        entry = _search_cache.get(cache_key)
+        if entry and time.time() - entry["ts"] < _CACHE_TTL:
+            flat = entry["flat"]
+        else:
+            items = _fetch_all_sources(elements, mode)
+            flat = _group_and_sort(items)
+            _search_cache[cache_key] = {"flat": flat, "ts": time.time()}
+
+    start = (page - 1) * page_size
+    page_items = flat[start:start + page_size]
+    total = sum(1 for i in flat if i.get("_type") != "section")
+
+    return {
+        "items": page_items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": max(1, (total + page_size - 1) // page_size) if total > 0 else 0,
+        "has_prev": start > 0,
+        "has_next": start + page_size < len(flat),
+        "cached": cache_key in _search_cache,
+    }

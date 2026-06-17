@@ -65,6 +65,15 @@
                             <label class="btn btn-outline-secondary" for="status-needs-revision" onclick="filterByReviewStatus('needs_revision')">需修改</label>
                         </div>
                     </div>
+                    <div class="col-auto ms-auto">
+                        <h6 class="card-subtitle text-muted small mb-1">数据库选择</h6>
+                        <select class="form-select form-select-sm" id="db-select" onchange="onDatabaseChange()">
+                            <option value="all" selected>全部数据库</option>
+                            <option value="local">文献数据库</option>
+                            <option value="alexandria">Alexandria</option>
+                            <option value="htsc2025">HTSC-2025</option>
+                        </select>
+                    </div>
                 </div>
             </div>
         </div>
