@@ -671,11 +671,16 @@ def _group_and_sort(items: list[dict]) -> list[dict]:
         if not grouped[k]:
             del grouped[k]
 
+    # 排序优先级：来源（本地 > Alexandria > HTSC），再按 Tc 降序
+    _src_order = {"local": 0, "alexandria": 1, "htsc2025": 2}
     for k in grouped:
-        grouped[k].sort(key=_tc, reverse=True)
+        grouped[k].sort(key=lambda item: (_src_order.get(item.get("_source", ""), 3), -_tc(item)))
 
-    # 组间按条目数降序
-    sorted_groups = sorted(grouped.items(), key=lambda kv: len(kv[1]), reverse=True)
+    def _local_count(kv):
+        return sum(1 for item in kv[1] if item.get("_source") == "local")
+
+    # 组间：按本地条目数降序，相同则按最高 Tc 降序
+    sorted_groups = sorted(grouped.items(), key=lambda kv: (_local_count(kv), max((_tc(i) for i in kv[1]), default=0)), reverse=True)
 
     # 展平
     flat = []
