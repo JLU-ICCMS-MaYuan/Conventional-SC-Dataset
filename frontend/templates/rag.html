@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 文献助手 - 超导文献数据库</title>
+    <link href="/static/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark navbar-custom shadow-sm sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">超导文献数据库</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">首页</a></li>
+                    <li class="nav-item"><a class="nav-link active" href="/rag">AI 文献助手</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/tc-pre">Tc 预测 (实验)</a></li>
+                </ul>
+                <div class="d-flex align-items-center gap-2" id="user-nav">
+                    <div class="spinner-border spinner-border-sm text-light" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+                <button class="btn btn-outline-light btn-sm ms-2" onclick="I18N.toggle()" title="Switch Language">中/EN</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container py-4">
+        <header class="mb-4">
+            <h1 class="fw-bold">🤖 AI 文献助手</h1>
+            <p class="text-muted mb-0">基于氢化物超导文献 RAG 系统，提供文献搜索和非流式问答。</p>
+        </header>
+
+        <section id="rag-status" class="alert alert-secondary" role="status">
+            正在检查 AI 文献助手服务状态...
+        </section>
+
+        <div class="row g-4">
+            <section class="col-lg-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-light">
+                        <h2 class="h5 mb-0">自然语言问答</h2>
+                    </div>
+                    <div class="card-body">
+                        <label for="rag-question" class="form-label">问题</label>
+                        <textarea id="rag-question" class="form-control" rows="5" placeholder="例如：LaH10 的 Tc 和压力范围是什么？"></textarea>
+                        <button id="rag-chat-submit" class="btn btn-primary mt-3" type="button">提问</button>
+                        <div id="rag-chat-error" class="alert alert-danger mt-3 d-none"></div>
+                        <div id="rag-chat-result" class="mt-3"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="col-lg-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-light">
+                        <h2 class="h5 mb-0">文献 / 材料搜索</h2>
+                    </div>
+                    <div class="card-body">
+                        <label for="rag-search-query" class="form-label">搜索内容</label>
+                        <input id="rag-search-query" class="form-control" type="text" placeholder="例如：LaH10、La-H、hydride superconductors">
+                        <button id="rag-search-submit" class="btn btn-outline-primary mt-3" type="button">搜索</button>
+                        <div id="rag-search-error" class="alert alert-danger mt-3 d-none"></div>
+                        <div id="rag-search-result" class="mt-3"></div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script src="/static/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/i18n.js"></script>
+    <script src="/static/js/auth_state.js"></script>
+    <script src="/static/js/auth_helper.js"></script>
+    <script src="/static/js/rag.js"></script>
+</body>
+</html>
