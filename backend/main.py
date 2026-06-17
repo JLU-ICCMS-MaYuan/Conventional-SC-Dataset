@@ -177,6 +177,15 @@ def tc_prediction_page():
     return {"error": "页面不存在"}
 
 
+@app.get("/rag")
+def rag_page():
+    """AI 文献助手页面"""
+    page_file = TEMPLATES_DIR / "rag.html"
+    if page_file.exists():
+        return FileResponse(page_file)
+    return {"error": "页面不存在"}
+
+
 # 健康检查端点
 @app.get("/health")
 def health_check():
