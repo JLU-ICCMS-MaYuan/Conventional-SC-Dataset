@@ -1,76 +1,76 @@
-# RAG HTTP Integration Design
+# RAG HTTP 集成设计
 
-Date: 2026-06-17
+日期：2026-06-17
 
-## Summary
+## 摘要
 
-SC-Wiki will integrate `../Conventional-SC-Dataset-talk` as an external RAG capability through HTTP. SC-Wiki will add an independent `/rag` page and a thin backend proxy under `/api/rag/*`. The talk project remains a separately running FastAPI service that owns RAG search, question answering, SQLite/Chroma access, and LLM calls.
+SC-Wiki 将通过 HTTP 方式接入相邻项目 `../Conventional-SC-Dataset-talk` 的 RAG 能力。SC-Wiki 新增独立 `/rag` 页面，并在后端新增 `/api/rag/*` 薄代理接口。talk 项目保持独立 FastAPI 服务，继续负责 RAG 搜索、问答、SQLite/Chroma 访问和 LLM 调用。
 
-The first version is public, non-streaming, and failure-tolerant. It supports both search and Q&A, but does not persist chat history or merge the two codebases.
+第一版公开访问、非流式输出，并支持服务不可用时友好降级。第一版同时支持搜索和问答，但不持久化聊天历史，也不合并两个代码库。
 
-## Goals
+## 目标
 
-- Add an “AI 文献助手” entry point on the SC-Wiki home page.
-- Add a standalone `/rag` page in SC-Wiki.
-- Let the SC-Wiki frontend call only SC-Wiki APIs, not the talk service directly.
-- Proxy search and non-streaming chat requests from SC-Wiki to the talk service.
-- Degrade gracefully when the talk service is unavailable.
+- 在 SC-Wiki 首页增加“AI 文献助手”入口。
+- 在 SC-Wiki 中新增独立 `/rag` 页面。
+- SC-Wiki 前端只调用 SC-Wiki 自身 API，不直接访问 talk 服务。
+- 由 SC-Wiki 后端代理搜索和非流式问答请求到 talk 服务。
+- talk 服务不可用时，SC-Wiki 页面和接口能够友好降级。
 
-## Non-goals
+## 非目标
 
-- No streaming/SSE output in the first version.
-- No multi-turn chat memory.
-- No login requirement, quota, audit log, or usage tracking.
-- No SC-Wiki database persistence for RAG questions or answers.
-- No direct SC-Wiki connection to the talk service SQLite database or Chroma directory.
-- No code-level merge of `hydride_rag` into SC-Wiki.
+- 第一版不支持流式/SSE 输出。
+- 不支持多轮聊天记忆。
+- 不做登录限制、额度、审计日志或使用统计。
+- 不把 RAG 问题或答案写入 SC-Wiki 数据库。
+- 不让 SC-Wiki 直接连接 talk 服务的 SQLite 数据库或 Chroma 目录。
+- 不把 `hydride_rag` 代码级合并到 SC-Wiki。
 
-## Architecture
+## 架构
 
-The integration has three boundaries:
+集成边界分为三层：
 
-1. **SC-Wiki frontend**
-   - Adds a home-page button linking to `/rag`.
-   - Adds a new `/rag` page using the existing Bootstrap/static-JS style.
-   - Calls `/api/rag/health`, `/api/rag/search`, and `/api/rag/chat`.
+1. **SC-Wiki 前端**
+   - 在首页增加入口按钮，跳转到 `/rag`。
+   - 新增 `/rag` 页面，保持现有 Bootstrap 和静态 JS 风格。
+   - 调用 `/api/rag/health`、`/api/rag/search`、`/api/rag/chat`。
 
-2. **SC-Wiki backend proxy**
-   - Adds `backend/api/rag.py` and registers it in `backend/main.py`.
-   - Uses `httpx` to call the talk service.
-   - Normalizes configuration, validation, timeouts, connection failures, and non-2xx responses.
+2. **SC-Wiki 后端代理**
+   - 新增 `backend/api/rag.py`，并在 `backend/main.py` 注册路由。
+   - 使用 `httpx` 调用 talk 服务。
+   - 统一处理配置、输入校验、超时、连接失败和非 2xx 响应。
 
-3. **Conventional-SC-Dataset-talk service**
-   - Runs independently, for example:
+3. **Conventional-SC-Dataset-talk 服务**
+   - 独立运行，例如：
      ```bash
      uvicorn hydride_rag.api.app:app --host 0.0.0.0 --port 8001
      ```
-   - Owns RAG search, RAG chat, SQLite/Chroma access, and LLM behavior.
+   - 负责 RAG 搜索、RAG 问答、SQLite/Chroma 访问和 LLM 行为。
 
-SC-Wiki is the product shell and proxy. The talk service is the RAG provider.
+SC-Wiki 是产品入口和代理层；talk 服务是 RAG 能力提供方。
 
-## Configuration
+## 配置
 
-SC-Wiki adds these environment variables:
+SC-Wiki 新增环境变量：
 
 ```bash
 RAG_SERVICE_URL=http://127.0.0.1:8001
 RAG_SERVICE_TIMEOUT=30
 ```
 
-Defaults:
+默认值：
 
-- `RAG_SERVICE_URL`: `http://127.0.0.1:8001`
-- `RAG_SERVICE_TIMEOUT`: `30` seconds
+- `RAG_SERVICE_URL`：`http://127.0.0.1:8001`
+- `RAG_SERVICE_TIMEOUT`：`30` 秒
 
-The configured URL is only used server-side by SC-Wiki. The browser should not need to know the talk service address.
+服务地址只在 SC-Wiki 服务端使用，浏览器不需要知道 talk 服务地址。
 
-## SC-Wiki Backend API
+## SC-Wiki 后端 API
 
 ### `GET /api/rag/health`
 
-Checks whether the talk service is reachable.
+检查 talk 服务是否可访问。
 
-Success response:
+成功响应：
 
 ```json
 {
@@ -79,7 +79,7 @@ Success response:
 }
 ```
 
-Unavailable response:
+不可用响应：
 
 ```json
 {
@@ -89,18 +89,18 @@ Unavailable response:
 }
 ```
 
-This endpoint should not return 500 just because the talk service is down.
+该接口不应因为 talk 服务关闭而返回 500。
 
 ### `GET /api/rag/search?q=LaH10&top_k=10`
 
-Proxies search to the talk service.
+代理搜索请求到 talk 服务。
 
-Validation:
+校验规则：
 
-- `q` must be non-empty after trimming.
-- `top_k` should be constrained to a small range, such as 1-20.
+- `q` 去除首尾空白后不能为空。
+- `top_k` 限制在较小范围内，例如 1-20。
 
-Response shape:
+响应形态：
 
 ```json
 {
@@ -117,13 +117,13 @@ Response shape:
 }
 ```
 
-The proxy should preserve the talk service payload inside `data` rather than re-model every RAG field.
+代理层应将 talk 服务返回内容保留在 `data` 字段中，不重新建模所有 RAG 字段。
 
 ### `POST /api/rag/chat`
 
-Proxies non-streaming chat to the talk service.
+代理非流式问答请求到 talk 服务。
 
-Request:
+请求：
 
 ```json
 {
@@ -131,11 +131,11 @@ Request:
 }
 ```
 
-Validation:
+校验规则：
 
-- `question` must be non-empty after trimming.
+- `question` 去除首尾空白后不能为空。
 
-Response shape:
+响应形态：
 
 ```json
 {
@@ -152,86 +152,86 @@ Response shape:
 }
 ```
 
-The current talk service exposes this through `POST /api/chat` and returns `answer`, `chunks_used`, `citations`, `model`, `source`, optional `papers`, and optional `top10`. The SC-Wiki frontend should render `citations` as sources. SC-Wiki should not generate or alter answers; answer generation remains the talk service responsibility.
+当前 talk 服务通过 `POST /api/chat` 提供该能力，返回 `answer`、`chunks_used`、`citations`、`model`、`source`、可选 `papers` 和可选 `top10`。SC-Wiki 前端应把 `citations` 作为来源信息展示。SC-Wiki 不生成或改写答案，答案生成仍由 talk 服务负责。
 
-## Data Flow
+## 数据流
 
 ```text
-User opens /rag
-  -> frontend calls /api/rag/health
-  -> SC-Wiki backend calls talk health/API endpoint
-  -> frontend shows connected or unavailable state
+用户打开 /rag
+  -> 前端调用 /api/rag/health
+  -> SC-Wiki 后端调用 talk 健康检查或 API 入口
+  -> 前端展示已连接或不可用状态
 
-User searches or asks a question
-  -> frontend calls /api/rag/search or /api/rag/chat
-  -> SC-Wiki backend validates input
-  -> SC-Wiki backend calls talk service with httpx
-  -> talk service queries SQLite/Chroma/LLM
-  -> SC-Wiki wraps the result
-  -> frontend renders answer, result groups, or friendly error
+用户搜索或提问
+  -> 前端调用 /api/rag/search 或 /api/rag/chat
+  -> SC-Wiki 后端校验输入
+  -> SC-Wiki 后端使用 httpx 调用 talk 服务
+  -> talk 服务查询 SQLite/Chroma/LLM
+  -> SC-Wiki 包装结果
+  -> 前端渲染答案、结果分组或友好错误提示
 ```
 
-## UI Design
+## UI 设计
 
-### Home page
+### 首页
 
-Add an always-visible button near existing home-page actions:
+在首页现有操作按钮附近增加一个始终可见的入口：
 
 ```text
 🤖 AI 文献助手
 ```
 
-The button links to `/rag`. It is not hidden when the talk service is unavailable; availability is explained on the `/rag` page.
+按钮跳转到 `/rag`。talk 服务不可用时也不隐藏该按钮；可用性说明放在 `/rag` 页面内展示。
 
-### `/rag` page
+### `/rag` 页面
 
-The page follows existing Bootstrap styling and reuses common scripts where appropriate, including language/login-state helpers if already loaded by nearby templates.
+页面沿用现有 Bootstrap 风格，并在合适时复用已有通用脚本，例如语言切换和登录态辅助脚本。
 
-Sections:
+页面分区：
 
-1. **Service status**
-   - On load, call `/api/rag/health`.
-   - If available, show a lightweight connected state.
-   - If unavailable, show a warning alert: “AI 文献助手服务暂不可用，请稍后再试。”
-   - Disable search and chat submit buttons when unavailable. Inputs remain editable.
+1. **服务状态**
+   - 页面加载后调用 `/api/rag/health`。
+   - 可用时显示轻量连接状态。
+   - 不可用时显示 warning 提示：“AI 文献助手服务暂不可用，请稍后再试。”
+   - 不可用时禁用搜索和提问按钮，但输入框仍可编辑。
 
-2. **Natural-language Q&A**
-   - A textarea for the question.
-   - A submit button.
-   - Non-streaming loading state while waiting.
-   - Render the returned answer.
-   - If sources/citations are present, render them below the answer.
+2. **自然语言问答**
+   - 一个用于输入问题的 textarea。
+   - 一个提交按钮。
+   - 等待响应期间显示非流式 loading 状态。
+   - 渲染返回的答案。
+   - 如果存在来源或引用信息，在答案下方展示。
 
-3. **Search**
-   - A single input supporting formula, element system, paper keyword, or natural language.
-   - First version uses a fixed `top_k=10` to avoid unnecessary UI complexity.
-   - Render result groups if present:
+3. **搜索**
+   - 一个搜索输入框，支持化学式、元素体系、论文关键词或自然语言。
+   - 第一版固定使用 `top_k=10`，避免不必要的 UI 复杂度。
+   - 按返回字段分组渲染结果：
      - `superconductors`
      - `papers`
      - `chunks`
-   - Missing groups render as empty states rather than errors.
+   - 缺失的结果分组显示为空状态，不视为错误。
 
-Search and Q&A are independent. Searching does not automatically ask a question.
+搜索和问答相互独立。执行搜索不会自动触发问答。
 
-## Error Handling
+## 错误处理
 
-The SC-Wiki proxy normalizes these cases:
+SC-Wiki 代理层统一处理以下情况：
 
-1. **Connection failure / talk service down**
-   - Health returns `available: false`.
-   - Search/chat return 503 with a JSON error.
+1. **连接失败 / talk 服务未启动**
+   - 健康检查返回 `available: false`。
+   - 搜索/问答返回 503 和 JSON 错误。
 
-2. **Timeout**
-   - Use `RAG_SERVICE_TIMEOUT`.
-   - Return 504 with message: “AI 文献助手响应超时，请稍后重试”。
+2. **超时**
+   - 使用 `RAG_SERVICE_TIMEOUT`。
+   - 返回 504，消息为：“AI 文献助手响应超时，请稍后重试”。
 
-3. **Empty input**
-   - Return 400 for empty search query or empty question.
-   - The frontend also validates before submitting.
+3. **空输入**
+   - 搜索 query 或问答 question 为空时返回 400。
+   - 前端提交前也做一次校验。
 
-4. **Talk service non-2xx response**
-   - Do not pass through an HTML error page.
-   - Return a normalized JSON object:
+4. **talk 服务返回非 2xx**
+   - 不透传 HTML 错误页面。
+   - 返回统一 JSON：
      ```json
      {
        "ok": false,
@@ -240,39 +240,39 @@ The SC-Wiki proxy normalizes these cases:
      }
      ```
 
-5. **Unexpected response shape**
-   - Frontend uses defensive rendering.
-   - Missing `answer`, `sources`, `superconductors`, `papers`, or `chunks` does not crash the page.
+5. **返回结构不符合预期**
+   - 前端防御式渲染。
+   - 缺失 `answer`、`sources`、`superconductors`、`papers` 或 `chunks` 不会导致页面崩溃。
 
-## Testing Strategy
+## 测试策略
 
-Back-end tests should focus on the SC-Wiki proxy contract, not RAG answer quality.
+后端测试聚焦 SC-Wiki 代理契约，不测试 RAG 答案质量。
 
-Recommended backend tests:
+建议后端测试：
 
 - `GET /api/rag/health`
-  - available talk service returns `available: true`.
-  - unavailable talk service returns `available: false`, not 500.
+  - talk 服务可用时返回 `available: true`。
+  - talk 服务不可用时返回 `available: false`，而不是 500。
 - `GET /api/rag/search`
-  - empty query returns 400.
-  - normal proxy response returns `ok: true`.
-  - connection failure returns 503.
-  - timeout returns 504.
+  - 空查询返回 400。
+  - 正常代理响应返回 `ok: true`。
+  - 连接失败返回 503。
+  - 超时返回 504。
 - `POST /api/rag/chat`
-  - empty question returns 400.
-  - normal proxy response returns `ok: true`.
-  - connection failure/timeout returns expected status and message.
+  - 空问题返回 400。
+  - 正常代理响应返回 `ok: true`。
+  - 连接失败或超时返回预期状态码和消息。
 
-Manual/frontend checks:
+手动/前端检查：
 
-- Home page shows “AI 文献助手” and navigates to `/rag`.
-- `/rag` opens when the talk service is down and shows a disabled, friendly unavailable state.
-- With the talk service running locally, search and chat render returned data.
+- 首页显示“AI 文献助手”，并能跳转到 `/rag`。
+- talk 服务关闭时，`/rag` 仍能打开，并显示禁用状态和友好不可用提示。
+- 本地启动 talk 服务后，搜索和问答能渲染返回数据。
 
-## Implementation Notes
+## 实施注意事项
 
-- Keep proxy logic small and isolated in `backend/api/rag.py`.
-- Register the router in `backend/main.py` alongside existing API routers.
-- Add a `frontend/templates/rag.html` page and a focused `frontend/static/js/rag.js` script.
-- Avoid adding new persistent tables or migrations for the first version.
-- Avoid importing `hydride_rag` from SC-Wiki; communicate over HTTP only.
+- 代理逻辑保持小而独立，集中在 `backend/api/rag.py`。
+- 在 `backend/main.py` 中像现有 API 模块一样注册 router。
+- 新增 `frontend/templates/rag.html` 页面和聚焦的 `frontend/static/js/rag.js` 脚本。
+- 第一版不增加持久化表或迁移。
+- 不从 SC-Wiki 导入 `hydride_rag`；只通过 HTTP 通信。
