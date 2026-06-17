@@ -184,10 +184,10 @@
                 <div class="modal-body">
                     <ul class="nav nav-tabs" role="tablist">
                         <li class="nav-item">
-                            <a class="nav-link active" data-bs-toggle="tab" href="#basicInfo">基本信息</a>
+                            <a class="nav-link active" data-bs-toggle="tab" href="#basicInfo">信息</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" data-bs-toggle="tab" href="#imageManagement">图片管理</a>
+                            <a class="nav-link" data-bs-toggle="tab" href="#detailInfo">详细信息</a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" data-bs-toggle="tab" href="#reviewSection">文献审核</a>
@@ -195,96 +195,97 @@
                     </ul>
 
                     <div class="tab-content mt-3">
-                        <!-- 基本信息标签页 -->
+                        <!-- 信息标签页（可编辑基础字段） -->
                         <div class="tab-pane fade show active" id="basicInfo">
                             <form id="editPaperForm">
                                 <input type="hidden" id="editPaperId">
-
                                 <div class="mb-3">
-                                    <label class="form-label">DOI <small class="text-muted">(只读)</small></label>
-                                    <input type="text" class="form-control" id="editDoi" readonly>
+                                    <label class="form-label">DOI</label>
+                                    <input type="text" class="form-control" id="editDoi">
                                 </div>
-
                                 <div class="mb-3">
-                                    <label class="form-label">标题 <span class="text-danger">*</span></label>
-                                    <input type="text" class="form-control" id="editTitle" required>
+                                    <label class="form-label">标题</label>
+                                    <input type="text" class="form-control" id="editTitle">
                                 </div>
-
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">期刊</label>
                                         <input type="text" class="form-control" id="editJournal">
                                     </div>
-                                    <div class="col-md-3 mb-3">
+                                    <div class="col-md-2 mb-3">
                                         <label class="form-label">年份</label>
-                                        <input type="number" class="form-control" id="editYear" min="1900" max="2100">
+                                        <input type="number" class="form-control" id="editYear">
                                     </div>
-                                    <div class="col-md-3 mb-3">
+                                    <div class="col-md-2 mb-3">
                                         <label class="form-label">卷号</label>
                                         <input type="text" class="form-control" id="editVolume">
                                     </div>
+                                    <div class="col-md-2 mb-3">
+                                        <label class="form-label">页码</label>
+                                        <input type="text" class="form-control" id="editPages">
+                                    </div>
                                 </div>
-
                                 <div class="mb-3">
-                                    <label class="form-label">作者</label>
+                                    <label class="form-label">作者（逗号分隔）</label>
                                     <textarea class="form-control" id="editAuthors" rows="2"></textarea>
                                 </div>
-
+                                <div class="mb-3">
+                                    <label class="form-label">摘要</label>
+                                    <textarea class="form-control" id="editAbstract" rows="3"></textarea>
+                                </div>
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">文章类型</label>
                                         <select class="form-select" id="editArticleType">
-                                            <option value="theoretical">理论</option>
-                                            <option value="experimental">实验</option>
+                                            <option value="e">实验</option>
+                                            <option value="t">理论</option>
                                         </select>
                                     </div>
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">超导体类型</label>
                                         <select class="form-select" id="editSuperconductorType">
-                                            <option value="cuprate">铜基</option>
-                                            <option value="iron_based">铁基</option>
-                                            <option value="nickel_based">镍基</option>
-                                            <option value="hydride">高压氢化物</option>
-                                            <option value="carbon">碳基</option>
-                                            <option value="organic">有机</option>
-                                            <option value="others">其他超导</option>
+                                            <option value="h">高压氢化物</option>
+                                            <option value="c">碳基</option>
+                                            <option value="cb">铜基</option>
+                                            <option value="ot">其他超导</option>
                                         </select>
                                     </div>
                                 </div>
-
                                 <div class="mb-3">
-                                    <label class="form-label">化合物与物理数据 <span class="text-danger">*</span></label>
-                                    <div id="editDataPointsContainer">
-                                        <!-- 动态数据行 -->
-                                    </div>
+                                    <label class="form-label">化合物与物理数据</label>
+                                    <div id="editDataPointsContainer"></div>
                                     <button type="button" class="btn btn-outline-primary btn-sm mt-1" onclick="addEditDataRow()">+ 添加一组数据</button>
                                 </div>
-
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">贡献者</label>
-                                        <input type="text" class="form-control" id="editContributorName">
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">贡献者单位</label>
-                                        <input type="text" class="form-control" id="editContributorAffiliation">
-                                    </div>
-                                </div>
-
                                 <div class="mb-3">
                                     <label class="form-label">备注</label>
-                                    <textarea class="form-control" id="editNotes" rows="3"></textarea>
+                                    <textarea class="form-control" id="editNotes" rows="2"></textarea>
                                 </div>
+                                <div class="row mb-3 text-muted small">
+                                    <div class="col-md-4">记录数：<span id="detailRecordCount">-</span></div>
+                                    <div class="col-md-4">贡献者：<span id="detailUploader">-</span></div>
+                                    <div class="col-md-4">创建时间：<span id="detailCreatedAt">-</span></div>
+                                </div>
+                                <div class="form-check mb-3">
+                                    <input type="checkbox" class="form-check-input" id="editShowInChart">
+                                    <label class="form-check-label" for="editShowInChart">显示在图表中</label>
+                                </div>
+                                <button type="button" class="btn btn-primary" onclick="savePaperEdits()">💾 保存修改</button>
                             </form>
                         </div>
 
-                        <!-- 图片管理标签页 -->
-                        <div class="tab-pane fade" id="imageManagement">
-                            <div class="alert alert-info">
-                                <strong>提示：</strong>文献至少需要保留一张图片。最多支持5张图片。
-                            </div>
-                            <div id="imagesList" class="row">
-                                <!-- 动态加载图片列表 -->
+                        <!-- 详细信息标签页（records 全字段表格） -->
+                        <div class="tab-pane fade" id="detailInfo">
+                            <div id="recordsDetailTable" class="table-responsive" style="max-height:500px;overflow-y:auto;">
+                                <table class="table table-sm table-bordered small mb-0">
+                                    <thead class="table-light"><tr><th>#</th>
+                                        <th>化学式</th><th>来源</th><th>P(GPa)</th><th>空间群</th><th>晶体结构</th>
+                                        <th>McMillan</th><th>Allen-Dynes</th><th>Eliash(iso)</th><th>Eliash(aniso)</th><th>实验Tc</th>
+                                        <th>λ</th><th>ω_log</th><th>N(Ef)</th><th>Ef(eV)</th>
+                                        <th>稳定</th><th>动稳</th><th>E_hull</th><th>图表</th><th>类型</th><th>超导类型</th>
+                                        <th>S</th><th>方法</th><th>备注</th>
+                                    </tr></thead>
+                                    <tbody id="recordsTableBody"></tbody>
+                                </table>
                             </div>
                         </div>
 
@@ -327,6 +328,6 @@
     <script src="/static/js/bootstrap.bundle.min.js"></script>
     <script src="/static/js/i18n.js"></script>
     <script src="/static/js/auth_state.js"></script>
-    <script src="/static/js/admin_papers.js"></script>
+    <script src="/static/js/admin_papers.js?v=20260617"></script>
 </body>
 </html>

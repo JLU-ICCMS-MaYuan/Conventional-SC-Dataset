@@ -90,12 +90,15 @@ def _record_to_dict(record: models.SuperconductorRecord) -> dict:
     return {
         "id": record.id,
         "superconductor_id": record.superconductor_id,
+        "paper_id": record.paper_id,
         "chemical_formula": record.superconductor.chemical_formula if record.superconductor else None,
         "source_label": record.source_label,
         "pressure_gpa": record.pressure_gpa,
         "space_group_symbol": record.space_group_symbol,
         "space_group_number": record.space_group_number,
         "crystal_structure": record.crystal_structure,
+        "thermodynamically_stable": record.thermodynamically_stable,
+        "dynamically_stable": record.dynamically_stable,
         "energy_above_hull": record.energy_above_hull,
         "mcmillan_tc": record.mcmillan_tc,
         "allen_dynes_tc": record.allen_dynes_tc,
@@ -106,13 +109,34 @@ def _record_to_dict(record: models.SuperconductorRecord) -> dict:
         "omega_log": record.omega_log,
         "n_ef_total": record.n_ef_total,
         "element_n_ef": record.element_n_ef,
+        "pseudopotential_type": record.pseudopotential_type,
+        "pseudopotential_name": record.pseudopotential_name,
+        "exchange_correlation_functional": record.exchange_correlation_functional,
+        "calculation_code": record.calculation_code,
+        "k_grid": record.k_grid,
+        "q_grid": record.q_grid,
+        "energy_cutoff_value": record.energy_cutoff_value,
+        "energy_cutoff_unit": record.energy_cutoff_unit,
         "show_in_chart": record.show_in_chart,
+        "article_type": record.article_type,
+        "superconductor_type": record.superconductor_type,
+        "s_factor": record.s_factor,
+        "method": record.method,
+        "note": record.note,
+        "created_at": record.created_at.isoformat() if record.created_at else None,
+        "updated_at": record.updated_at.isoformat() if record.updated_at else None,
     }
 
 
 def _paper_to_dict(paper: models.Paper, include_records: bool = False) -> dict:
     reviewer = paper.reviewed_by_user
     uploader = paper.uploaded_by_user
+    first_record = paper.records[0] if paper.records else None
+    first_sc = first_record.superconductor if first_record else None
+    # 聚合 records 中的类型信息
+    article_types = list({r.article_type for r in paper.records if r.article_type})
+    sc_types = list({r.superconductor_type for r in paper.records if r.superconductor_type})
+    s_factors = [r.s_factor for r in paper.records if r.s_factor is not None]
     payload = {
         "id": paper.id,
         "doi": paper.doi,
@@ -134,6 +158,10 @@ def _paper_to_dict(paper: models.Paper, include_records: bool = False) -> dict:
         "updated_at": paper.updated_at.isoformat() if paper.updated_at else None,
         "record_count": len(paper.records),
         "show_in_chart": any(record.show_in_chart for record in paper.records),
+        "compound_symbols": "-".join(first_sc.elements_list) if first_sc else None,
+        "article_types": article_types,
+        "superconductor_types": sc_types,
+        "s_factor": round(sum(s_factors) / len(s_factors), 2) if s_factors else None,
     }
     if include_records:
         payload["records"] = [_record_to_dict(record) for record in paper.records]
@@ -350,9 +378,27 @@ async def update_paper(
     paper = db.query(models.Paper).filter(models.Paper.id == paper_id).first()
     if not paper:
         raise HTTPException(status_code=404, detail="文献不存在")
-    for field in ("doi", "title", "authors", "journal", "volume", "pages", "year", "abstract", "review_comment"):
+    for field in ("doi", "title", "authors", "journal", "volume", "pages", "year", "abstract", "review_comment", "review_status", "show_in_chart"):
         if field in payload:
             setattr(paper, field, payload[field])
+    if "records" in payload and isinstance(payload["records"], list):
+        for rd in payload["records"]:
+            rid = rd.get("id")
+            if rid:
+                rec = db.query(models.SuperconductorRecord).filter_by(id=rid, paper_id=paper.id).first()
+                if rec:
+                    for rf in ("chemical_formula", "source_label", "pressure_gpa", "space_group_symbol",
+                               "space_group_number", "crystal_structure", "thermodynamically_stable",
+                               "dynamically_stable", "energy_above_hull", "mcmillan_tc", "allen_dynes_tc",
+                               "isotropic_eliashberg_tc", "anisotropic_eliashberg_tc", "experimental_tc",
+                               "lambda_value", "omega_log", "n_ef_total", "element_n_ef",
+                               "pseudopotential_type", "pseudopotential_name",
+                               "exchange_correlation_functional", "calculation_code",
+                               "k_grid", "q_grid", "energy_cutoff_value", "energy_cutoff_unit",
+                               "show_in_chart", "article_type", "superconductor_type",
+                               "s_factor", "method", "note"):
+                        if rf in rd:
+                            setattr(rec, rf, rd[rf])
     db.commit()
     return {"message": "文献信息已更新", "paper": _paper_to_dict(paper, include_records=True)}
 

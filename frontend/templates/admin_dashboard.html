@@ -933,7 +933,7 @@
                     throw new Error(data.detail || '加载失败');
                 }
 
-                renderPapers(Array.isArray(data.papers) ? data.papers : [], data.total || 0);
+                renderPapers(Array.isArray(data.items) ? data.items : (Array.isArray(data.papers) ? data.papers : []), data.total || 0);
             } catch (error) {
                 console.error('加载文献失败:', error);
                 clearDashboardPagination();
