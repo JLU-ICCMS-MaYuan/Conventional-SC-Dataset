@@ -22,10 +22,10 @@ class PaperChunk(Base):
     )
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False, comment="块编号，从 0 开始")
     section_name: Mapped[str | None] = mapped_column(
-        String(100), nullable=True, comment="所属章节名，如 Introduction / Results / Methods"
+        String(500), nullable=True, comment="所属章节名，如 Introduction / Results / Methods"
     )
     heading: Mapped[str | None] = mapped_column(
-        String(200), nullable=True, comment="小节标题原文"
+        String(500), nullable=True, comment="小节标题原文"
     )
     content: Mapped[str] = mapped_column(
         Text, nullable=False, comment="块文本内容"
