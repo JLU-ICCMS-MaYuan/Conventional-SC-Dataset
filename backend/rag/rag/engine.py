@@ -178,9 +178,9 @@ async def ask(
                 if intent["intent"] == "numeric_compare":
                     op = intent.get("operator", ">") or ">"
                     val = intent.get("value", "0") or "0"
-                    kg_results = kg_query(predicate, operator=op, value=val)
+                    kg_results = await kg_query(predicate, operator=op, value=val)
                 else:
-                    kg_results = kg_query(predicate, operator=">", value="0")
+                    kg_results = await kg_query(predicate, operator=">", value="0")
                 if intent["intent"] == "property_query" and intent["subjects"]:
                     kg_results = [r for r in kg_results if r["subject"] == intent["subjects"][0]]
                 kg_results.sort(
@@ -189,7 +189,7 @@ async def ask(
                 )
             elif intent["subjects"]:
                 for subj in intent["subjects"]:
-                    props = get_all_properties(subj)
+                    props = await get_all_properties(subj)
                     for p in props:
                         kg_results.append({
                             "subject": subj,
@@ -332,9 +332,9 @@ async def ask_stream(
                 if intent["intent"] == "numeric_compare":
                     op = intent.get("operator", ">") or ">"
                     val = intent.get("value", "0") or "0"
-                    kg_results = kg_query(predicate, operator=op, value=val)
+                    kg_results = await kg_query(predicate, operator=op, value=val)
                 else:
-                    kg_results = kg_query(predicate, operator=">", value="0")
+                    kg_results = await kg_query(predicate, operator=">", value="0")
                 if intent["intent"] == "property_query" and intent["subjects"]:
                     kg_results = [r for r in kg_results if r["subject"] == intent["subjects"][0]]
                 kg_results.sort(
@@ -343,7 +343,7 @@ async def ask_stream(
                 )
             elif intent["subjects"]:
                 for subj in intent["subjects"]:
-                    props = get_all_properties(subj)
+                    props = await get_all_properties(subj)
                     for p in props:
                         kg_results.append({"subject": subj, "predicate": p["predicate"], "object": p["object"]})
         except Exception:
