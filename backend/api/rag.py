@@ -1,49 +1,33 @@
-"""RAG service proxy APIs."""
+"""Internal RAG APIs for SC-Wiki."""
 
 from __future__ import annotations
 
-import os
-from typing import Any
+import json
+import tempfile
+from pathlib import Path
+from typing import Any, Literal
 
-import httpx
-from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+import anyio
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
+
+from backend.rag import service
 
 
 router = APIRouter(prefix="/api/rag", tags=["rag"])
 
-DEFAULT_RAG_SERVICE_URL = "http://127.0.0.1:8001"
-DEFAULT_RAG_SERVICE_TIMEOUT = 30.0
+
+class RagMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
 
 
-def _rag_service_url() -> str:
-    return os.environ.get("RAG_SERVICE_URL", DEFAULT_RAG_SERVICE_URL).rstrip("/")
-
-
-def _rag_timeout() -> float:
-    raw = os.environ.get("RAG_SERVICE_TIMEOUT")
-    if not raw:
-        return DEFAULT_RAG_SERVICE_TIMEOUT
-    try:
-        value = float(raw)
-    except ValueError:
-        return DEFAULT_RAG_SERVICE_TIMEOUT
-    return value if value > 0 else DEFAULT_RAG_SERVICE_TIMEOUT
-
-
-async def _request_talk_json(
-    method: str,
-    path: str,
-    *,
-    params: dict[str, Any] | None = None,
-    json: dict[str, Any] | None = None,
-) -> Any:
-    url = f"{_rag_service_url()}{path}"
-    timeout = httpx.Timeout(_rag_timeout())
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.request(method, url, params=params, json=json)
-        response.raise_for_status()
-        return response.json()
+class RagChatRequest(BaseModel):
+    question: str = Field(..., min_length=1, max_length=1000)
+    top_k: int = Field(15, ge=1, le=50)
+    rerank_top_k: int = Field(5, ge=1, le=20)
+    history: list[RagMessage] = Field(default_factory=list)
 
 
 def _service_error(status_code: int, message: str, detail: str | None = None) -> HTTPException:
@@ -53,56 +37,83 @@ def _service_error(status_code: int, message: str, detail: str | None = None) ->
     return HTTPException(status_code=status_code, detail=payload)
 
 
-def _handle_proxy_error(exc: Exception) -> HTTPException:
-    if isinstance(exc, httpx.TimeoutException):
-        return _service_error(504, "AI 文献助手响应超时，请稍后重试")
-    if isinstance(exc, httpx.HTTPStatusError):
-        return _service_error(
-            502,
-            "AI 文献助手返回错误",
-            f"talk service returned HTTP {exc.response.status_code} while handling {exc.request.url.path}",
-        )
-    if isinstance(exc, httpx.HTTPError):
-        return _service_error(503, "AI 文献助手服务暂不可用")
+def _map_internal_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, service.RagDataUnavailableError):
+        return _service_error(503, "AI 文献助手数据不可用")
+    if isinstance(exc, service.RagChatUnavailableError):
+        return _service_error(503, "LLM 问答未配置")
+    if isinstance(exc, service.RagNotFoundError):
+        return _service_error(404, str(exc) or "资源不存在")
+    if isinstance(exc, service.RagInternalError):
+        return _service_error(502, "AI 文献助手返回错误", str(exc))
     return _service_error(502, "AI 文献助手返回错误", str(exc))
 
 
-class RagChatRequest(BaseModel):
-    question: str
+def _history_dicts(messages: list[RagMessage]) -> list[dict[str, str]]:
+    return [{"role": item.role, "content": item.content} for item in messages if item.content.strip()]
+
+
+async def _call_service(func, *args, **kwargs):
+    try:
+        return await func(*args, **kwargs)
+    except TypeError as exc:
+        unexpected_mode = "unexpected keyword argument 'mode'" in str(exc)
+        unexpected_chat_args = (
+            "unexpected keyword argument 'top_k'" in str(exc)
+            or "unexpected keyword argument 'rerank_top_k'" in str(exc)
+            or "unexpected keyword argument 'history'" in str(exc)
+        )
+        if "mode" in kwargs and unexpected_mode:
+            kwargs.pop("mode")
+            return await func(*args, **kwargs)
+        if unexpected_chat_args:
+            return await func(*args)
+        raise
+
+
+def _sse(event_type: str, data: Any) -> str:
+    return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
 @router.get("/health")
 async def rag_health():
+    return service.health()
+
+
+@router.get("/stats")
+async def rag_stats():
     try:
-        await _request_talk_json("GET", "/api/health")
-    except Exception:
-        return {
-            "available": False,
-            "service_url_configured": bool(_rag_service_url()),
-            "message": "AI 文献助手服务暂不可用",
-        }
-    return {
-        "available": True,
-        "service_url_configured": bool(_rag_service_url()),
-    }
+        data = await service.stats()
+    except Exception as exc:
+        raise _map_internal_error(exc) from exc
+    return {"ok": True, "data": data}
+
+
+@router.get("/search/detect")
+async def rag_detect_search_mode(q: str = Query(...)):
+    query = q.strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="搜索内容不能为空")
+    try:
+        data = service.detect_search_mode(query)
+    except Exception as exc:
+        raise _map_internal_error(exc) from exc
+    return {"ok": True, "data": data}
 
 
 @router.get("/search")
 async def rag_search(
     q: str = Query(...),
-    top_k: int = Query(10, ge=1, le=20),
+    mode: str | None = Query(None),
+    top_k: int = Query(10, ge=1, le=50),
 ):
     query = q.strip()
     if not query:
         raise HTTPException(status_code=400, detail="搜索内容不能为空")
     try:
-        data = await _request_talk_json(
-            "GET",
-            "/api/search",
-            params={"q": query, "top_k": top_k},
-        )
+        data = await _call_service(service.search, query, mode=mode, top_k=top_k)
     except Exception as exc:
-        raise _handle_proxy_error(exc) from exc
+        raise _map_internal_error(exc) from exc
     return {"ok": True, "data": data}
 
 
@@ -112,11 +123,108 @@ async def rag_chat(request: RagChatRequest):
     if not question:
         raise HTTPException(status_code=400, detail="问题不能为空")
     try:
-        data = await _request_talk_json(
-            "POST",
-            "/api/chat",
-            json={"question": question},
+        data = await _call_service(
+            service.chat,
+            question,
+            top_k=request.top_k,
+            rerank_top_k=request.rerank_top_k,
+            history=_history_dicts(request.history),
         )
     except Exception as exc:
-        raise _handle_proxy_error(exc) from exc
+        raise _map_internal_error(exc) from exc
+    return {"ok": True, "data": data}
+
+
+@router.post("/chat/stream")
+async def rag_chat_stream(request: RagChatRequest):
+    question = request.question.strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="问题不能为空")
+
+    async def event_generator():
+        try:
+            async for event in service.chat_stream(
+                question,
+                top_k=request.top_k,
+                rerank_top_k=request.rerank_top_k,
+                history=_history_dicts(request.history),
+            ):
+                yield _sse(event.get("type", "message"), event.get("data"))
+            yield _sse("end", {"ok": True})
+        except Exception as exc:
+            mapped = _map_internal_error(exc)
+            yield _sse("error", mapped.detail)
+            yield _sse("end", {"ok": False})
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@router.get("/papers")
+async def rag_papers(
+    keyword: str | None = Query(None),
+    limit: int = Query(20, ge=1, le=100),
+):
+    try:
+        data = await service.list_papers(keyword=keyword.strip() if keyword else None, limit=limit)
+    except Exception as exc:
+        raise _map_internal_error(exc) from exc
+    return {"ok": True, "data": data}
+
+
+@router.get("/papers/{paper_id}")
+async def rag_paper_detail(paper_id: int):
+    try:
+        data = await service.paper_detail(paper_id)
+    except Exception as exc:
+        raise _map_internal_error(exc) from exc
+    return {"ok": True, "data": data}
+
+
+@router.get("/superconductors")
+async def rag_superconductors(
+    formula: str | None = Query(None),
+    elements: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+):
+    try:
+        data = await service.search_superconductors(
+            formula=formula.strip() if formula else None,
+            elements=elements.strip() if elements else None,
+            limit=limit,
+        )
+    except Exception as exc:
+        raise _map_internal_error(exc) from exc
+    return {"ok": True, "data": data}
+
+
+@router.get("/superconductors/{superconductor_id}")
+async def rag_superconductor_detail(superconductor_id: int):
+    try:
+        data = await service.superconductor_detail(superconductor_id)
+    except Exception as exc:
+        raise _map_internal_error(exc) from exc
+    return {"ok": True, "data": data}
+
+
+@router.post("/upload-pdf")
+async def rag_upload_pdf(file: UploadFile = File(...)):
+    filename = file.filename or "uploaded.pdf"
+    if not filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="只支持 PDF 文件")
+
+    suffix = Path(filename).suffix or ".pdf"
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            temp_path = Path(tmp.name)
+            while chunk := await file.read(1024 * 1024):
+                tmp.write(chunk)
+        data = await service.upload_pdf(temp_path, filename)
+    except Exception as exc:
+        raise _map_internal_error(exc) from exc
+    finally:
+        if temp_path is not None:
+            await anyio.Path(temp_path).unlink(missing_ok=True)
+        await file.close()
+
     return {"ok": True, "data": data}

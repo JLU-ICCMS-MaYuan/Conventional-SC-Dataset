@@ -6,6 +6,26 @@
     <title>AI 文献助手 - 超导文献数据库</title>
     <link href="/static/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .rag-stat-card { min-height: 92px; }
+        .rag-chat-box {
+            min-height: 360px;
+            max-height: 560px;
+            overflow-y: auto;
+            background: #fafafa;
+            line-height: 1.7;
+        }
+        .rag-answer { white-space: pre-wrap; }
+        .rag-citation-badge {
+            display: inline-block;
+            max-width: 280px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+        .rag-record-table { min-width: 560px; }
+    </style>
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark navbar-custom shadow-sm sticky-top">
@@ -33,44 +53,89 @@
     <main class="container py-4">
         <header class="mb-4">
             <h1 class="fw-bold">🤖 AI 文献助手</h1>
-            <p class="text-muted mb-0">基于氢化物超导文献 RAG 系统，提供文献搜索和非流式问答。</p>
+            <p class="text-muted mb-0">基于氢化物超导文献 RAG 系统，提供统计、PDF 摄入、文献搜索和流式连续对话。</p>
         </header>
 
         <section id="rag-status" class="alert alert-secondary" role="status">
             正在检查 AI 文献助手服务状态...
         </section>
 
+        <section class="row g-3 mb-4" id="rag-stats">
+            <div class="col-6 col-md-4 col-xl-2"><div class="card rag-stat-card shadow-sm"><div class="card-body text-center"><div class="h3 mb-0" id="rag-stat-papers">-</div><div class="text-muted small">论文</div></div></div></div>
+            <div class="col-6 col-md-4 col-xl-2"><div class="card rag-stat-card shadow-sm"><div class="card-body text-center"><div class="h3 mb-0" id="rag-stat-superconductors">-</div><div class="text-muted small">超导体</div></div></div></div>
+            <div class="col-6 col-md-4 col-xl-2"><div class="card rag-stat-card shadow-sm"><div class="card-body text-center"><div class="h3 mb-0" id="rag-stat-records">-</div><div class="text-muted small">数据记录</div></div></div></div>
+            <div class="col-6 col-md-4 col-xl-2"><div class="card rag-stat-card shadow-sm"><div class="card-body text-center"><div class="h3 mb-0" id="rag-stat-chunks">-</div><div class="text-muted small">文本块</div></div></div></div>
+            <div class="col-6 col-md-4 col-xl-2"><div class="card rag-stat-card shadow-sm"><div class="card-body text-center"><div class="h3 mb-0" id="rag-stat-chroma">-</div><div class="text-muted small">Chroma</div></div></div></div>
+            <div class="col-6 col-md-4 col-xl-2"><div class="card rag-stat-card shadow-sm"><div class="card-body text-center"><div class="h3 mb-0" id="rag-stat-systems">-</div><div class="text-muted small">元素体系</div></div></div></div>
+        </section>
+
         <div class="row g-4">
-            <section class="col-lg-6">
-                <div class="card shadow-sm h-100">
-                    <div class="card-header bg-light">
-                        <h2 class="h5 mb-0">自然语言问答</h2>
+            <section class="col-lg-8">
+                <div class="card shadow-sm h-100" id="rag-chat-container">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <h2 class="h5 mb-0">流式连续对话</h2>
+                        <button id="rag-chat-clear" class="btn btn-sm btn-outline-secondary" type="button">清空上下文</button>
                     </div>
                     <div class="card-body">
+                        <div id="rag-chat-status" class="alert alert-info py-2 d-none"></div>
+                        <div id="rag-chat-box" class="border rounded p-3 rag-chat-box mb-3">
+                            <div class="text-muted text-center py-5">💬 输入问题与文献对话，例如“LaH10 的超导温度是多少？”</div>
+                        </div>
                         <label for="rag-question" class="form-label">问题</label>
-                        <textarea id="rag-question" class="form-control" rows="5" placeholder="例如：LaH10 的 Tc 和压力范围是什么？"></textarea>
-                        <button id="rag-chat-submit" class="btn btn-primary mt-3" type="button">提问</button>
+                        <div class="input-group">
+                            <input id="rag-question" class="form-control" type="text" placeholder="例如：哪些氢化物 Tc 超过 200K？">
+                            <button id="rag-chat-submit" class="btn btn-primary" type="button">提问</button>
+                        </div>
                         <div id="rag-chat-error" class="alert alert-danger mt-3 d-none"></div>
-                        <div id="rag-chat-result" class="mt-3"></div>
                     </div>
                 </div>
             </section>
 
-            <section class="col-lg-6">
-                <div class="card shadow-sm h-100">
+            <section class="col-lg-4">
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-light">
+                        <h2 class="h5 mb-0">PDF 上传摄入</h2>
+                    </div>
+                    <div class="card-body">
+                        <input id="rag-pdf-input" class="form-control" type="file" accept=".pdf">
+                        <button id="rag-upload-submit" class="btn btn-warning mt-3" type="button">上传并提取</button>
+                        <div id="rag-upload-status" class="alert alert-secondary mt-3 d-none"></div>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm">
                     <div class="card-header bg-light">
                         <h2 class="h5 mb-0">文献 / 材料搜索</h2>
                     </div>
                     <div class="card-body">
                         <label for="rag-search-query" class="form-label">搜索内容</label>
                         <input id="rag-search-query" class="form-control" type="text" placeholder="例如：LaH10、La-H、hydride superconductors">
+                        <label for="rag-search-mode" class="form-label mt-3">搜索模式</label>
+                        <select id="rag-search-mode" class="form-select">
+                            <option value="">自动检测</option>
+                            <option value="formula">化学式</option>
+                            <option value="elements_exact">元素体系</option>
+                            <option value="elements_combination">元素组合</option>
+                            <option value="elements_contained">包含元素</option>
+                            <option value="semantic">语义搜索</option>
+                            <option value="paper">论文搜索</option>
+                        </select>
                         <button id="rag-search-submit" class="btn btn-outline-primary mt-3" type="button">搜索</button>
+                        <div class="form-text mt-2">支持化学式、元素体系和自然语言搜索。</div>
                         <div id="rag-search-error" class="alert alert-danger mt-3 d-none"></div>
-                        <div id="rag-search-result" class="mt-3"></div>
                     </div>
                 </div>
             </section>
         </div>
+
+        <section class="card shadow-sm mt-4">
+            <div class="card-header bg-light">
+                <h2 class="h5 mb-0">搜索结果</h2>
+            </div>
+            <div class="card-body">
+                <div id="rag-search-result" class="text-muted">暂无搜索结果。</div>
+            </div>
+        </section>
     </main>
 
     <script src="/static/js/bootstrap.bundle.min.js"></script>

@@ -11,6 +11,9 @@ def test_rag_page_route_returns_html():
             response = await client.get("/rag")
         assert response.status_code == 200
         assert "AI 文献助手" in response.text
+        assert "流式连续对话" in response.text
+        assert "PDF 上传摄入" in response.text
+        assert "rag-stats" in response.text
         assert "/static/js/rag.js" in response.text
 
     anyio.run(run)

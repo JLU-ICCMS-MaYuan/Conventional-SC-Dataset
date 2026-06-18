@@ -12,6 +12,8 @@ Chroma 是一个本地向量数据库：
 
 from __future__ import annotations
 
+import chromadb
+
 from backend.rag.config import settings as rag_settings
 from chromadb.config import Settings
 

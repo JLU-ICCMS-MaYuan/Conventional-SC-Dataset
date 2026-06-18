@@ -8,13 +8,13 @@ knowledge_graph.py — 知识图谱查询模块。
 from __future__ import annotations
 
 import sqlite3
-from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parents[2] / "dev.db"
+from backend.rag.config import get_rag_settings
 
 
 def _conn():
-    c = sqlite3.connect(str(DB_PATH))
+    db_path = get_rag_settings().data_root / "dev.db"
+    c = sqlite3.connect(str(db_path))
     c.row_factory = sqlite3.Row
     return c
 

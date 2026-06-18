@@ -11,6 +11,10 @@ pymysql==1.1.0
 
 # HTTP客户端
 httpx==0.26.0
+openai>=1.0
+chromadb>=0.5
+aiosqlite>=0.20
+asyncmy>=0.2
 
 # 数据验证
 pydantic==2.5.3
