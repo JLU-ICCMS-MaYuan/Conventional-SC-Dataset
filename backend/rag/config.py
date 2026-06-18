@@ -42,6 +42,9 @@ class RagSettings(BaseSettings):
     def database_url(self) -> str:
         if self.rag_database_url:
             return self.rag_database_url
+        env_url = os.environ.get("RAG_DATABASE_URL")
+        if env_url:
+            return env_url
         db_path = self.data_root / "dev.db"
         return f"sqlite+aiosqlite:///{db_path}"
 
@@ -53,6 +56,31 @@ class RagSettings(BaseSettings):
         if env_path:
             return Path(env_path).expanduser().resolve()
         return self.data_root / "chroma_db"
+
+    @property
+    def database_available(self) -> bool:
+        from urllib.parse import urlparse
+
+        url = urlparse(self.database_url)
+        if url.scheme and url.scheme.startswith("mysql"):
+            try:
+                import pymysql
+
+                conn = pymysql.connect(
+                    host=url.hostname or "127.0.0.1",
+                    port=url.port or 3306,
+                    user=url.username or "",
+                    password=url.password or "",
+                    database=(url.path or "/").lstrip("/") or "",
+                    connect_timeout=3,
+                )
+                conn.close()
+                return True
+            except Exception:
+                return False
+        # SQLite fallback
+        db_path = self.data_root / "dev.db"
+        return db_path.exists()
 
     @property
     def chat_configured(self) -> bool:
