@@ -201,16 +201,6 @@ async def startup_event():
     print("🚀 正在启动超导文献数据库服务...")
     print("=" * 60)
 
-    # 自动初始化数据库
-    try:
-        from backend.init_db import init_database
-        print("正在初始化数据库...")
-        init_database()
-        print("✓ 数据库初始化完成")
-    except Exception as e:
-        print(f"⚠️  数据库初始化失败: {e}")
-        print("应用将继续启动，但可能无法正常工作")
-
     print("=" * 60)
     print("✅ 超导文献数据库服务启动成功！")
     print("=" * 60)

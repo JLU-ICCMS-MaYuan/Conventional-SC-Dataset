@@ -55,6 +55,7 @@ CLI_GUIDE.md
 INSTALL.md
 CLAUDE.md
 .worktrees/
+.claude
 
 #数据库
 hydride_literature_image_ai.db

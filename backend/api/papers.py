@@ -9,7 +9,7 @@ import time
 import threading
 from typing import Annotated, Any, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -22,109 +22,10 @@ from backend.chart_rules import (
 from backend.database import get_db
 from backend.db_helpers import build_system_key
 from backend.repositories.superconductors import search_superconductors
-from backend.security import get_current_user
 from backend.utils.citation import generate_aps_citation, generate_bibtex_citation
-from backend.utils.doi_resolver import get_doi_metadata, validate_doi
 
 
 router = APIRouter(prefix="/api/papers", tags=["papers"])
-
-
-def _is_admin(user: models.User) -> bool:
-    return user.role in {"admin", "superadmin"}
-
-
-def _parse_json(value: str | None, default: Any) -> Any:
-    if value is None or value == "":
-        return default
-    try:
-        return json.loads(value)
-    except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=400, detail=f"JSON 格式错误: {exc.msg}") from exc
-
-
-def _first_number(value: Any) -> float | None:
-    if value is None or value == "":
-        return None
-    if isinstance(value, list):
-        return _first_number(value[0]) if value else None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _record_payloads(records: str | None, physical_data: str | None, defaults: dict[str, Any]) -> list[dict[str, Any]]:
-    raw_items = _parse_json(records, None)
-    if raw_items is None:
-        raw_items = _parse_json(physical_data, None)
-    if not isinstance(raw_items, list) or not raw_items:
-        raise HTTPException(status_code=400, detail="records 必须是非空 JSON 数组")
-
-    normalized: list[dict[str, Any]] = []
-    for raw in raw_items:
-        if not isinstance(raw, dict):
-            raise HTTPException(status_code=400, detail="records 中的每一项都必须是对象")
-        item = {**defaults, **raw}
-        formula = item.get("chemical_formula")
-        if not formula:
-            raise HTTPException(status_code=400, detail="每条记录都必须提供 chemical_formula")
-        pressure = _first_number(item.get("pressure_gpa", item.get("tc_press")))
-        if pressure is None:
-            raise HTTPException(status_code=400, detail=f"{formula} 缺少 pressure_gpa")
-
-        tc_value = _first_number(item.get("tc"))
-        if tc_value is not None:
-            if item.get("article_type") == "experimental":
-                item.setdefault("experimental_tc", tc_value)
-            else:
-                item.setdefault("mcmillan_tc", tc_value)
-
-        item["chemical_formula"] = formula
-        item["pressure_gpa"] = pressure
-        item.setdefault("space_group_symbol", item.get("crystal_structure"))
-        normalized.append(item)
-    return normalized
-
-
-def _create_record(db: Session, paper: models.Paper, item: dict[str, Any]) -> models.SuperconductorRecord:
-    superconductor = crud.get_or_create_superconductor(db, item["chemical_formula"])
-    record = models.SuperconductorRecord(
-        superconductor_id=superconductor.id,
-        paper_id=paper.id,
-        source_label=item.get("source_label") or "paper",
-        pressure_gpa=item["pressure_gpa"],
-        space_group_symbol=item.get("space_group_symbol"),
-        space_group_number=item.get("space_group_number"),
-        crystal_structure=item.get("crystal_structure"),
-        thermodynamically_stable=item.get("thermodynamically_stable"),
-        dynamically_stable=item.get("dynamically_stable"),
-        energy_above_hull=item.get("energy_above_hull"),
-        mcmillan_tc=item.get("mcmillan_tc"),
-        allen_dynes_tc=item.get("allen_dynes_tc"),
-        isotropic_eliashberg_tc=item.get("isotropic_eliashberg_tc"),
-        anisotropic_eliashberg_tc=item.get("anisotropic_eliashberg_tc"),
-        experimental_tc=item.get("experimental_tc"),
-        lambda_value=item.get("lambda_value"),
-        omega_log=item.get("omega_log"),
-        n_ef_total=item.get("n_ef_total"),
-        element_n_ef=item.get("element_n_ef"),
-        pseudopotential_type=item.get("pseudopotential_type"),
-        pseudopotential_name=item.get("pseudopotential_name"),
-        exchange_correlation_functional=item.get("exchange_correlation_functional"),
-        calculation_code=item.get("calculation_code"),
-        k_grid=item.get("k_grid"),
-        q_grid=item.get("q_grid"),
-        energy_cutoff_value=item.get("energy_cutoff_value"),
-        energy_cutoff_unit=item.get("energy_cutoff_unit"),
-        show_in_chart=bool(item.get("show_in_chart", False)),
-        s_factor=item.get("s_factor"),
-        method=item.get("method"),
-        note=item.get("note"),
-    )
-    db.add(record)
-    return record
-
 
 def _record_to_dict(record: models.SuperconductorRecord) -> dict[str, Any]:
     return {
@@ -310,97 +211,6 @@ def get_user_ranking(db: Session = Depends(get_db)):
     ]
     rankings.sort(key=lambda item: item["count"], reverse=True)
     return rankings[:20]
-
-
-@router.post("/")
-async def create_paper(
-    doi: str = Form(...),
-    title: Optional[str] = Form(None),
-    authors: str = Form("[]"),
-    journal: Optional[str] = Form(None),
-    volume: Optional[str] = Form(None),
-    pages: Optional[str] = Form(None),
-    year: Optional[int] = Form(None),
-    abstract: Optional[str] = Form(None),
-    records: Optional[str] = Form(None),
-    physical_data: Optional[str] = Form(None),
-    chemical_formula: Optional[str] = Form(None),
-    crystal_structure: Optional[str] = Form(None),
-    article_type: Optional[str] = Form(None),
-    superconductor_type: Optional[str] = Form(None),
-    notes: Optional[str] = Form(None),
-    db: Session = Depends(get_db),
-    current_user: Annotated[models.User, Depends(get_current_user)] = None,
-):
-    if not current_user:
-        raise HTTPException(status_code=401, detail="请先登录后再上传文献")
-    if db.query(models.Paper).filter(models.Paper.doi == doi).first():
-        raise HTTPException(status_code=400, detail=f"文献 {doi} 已存在")
-
-    metadata = None
-    if title is None:
-        if not _is_admin(current_user) and not await validate_doi(doi):
-            raise HTTPException(status_code=400, detail=f"DOI {doi} 无效或不存在，请检查格式")
-        metadata = await get_doi_metadata(doi)
-        if not metadata and not _is_admin(current_user):
-            raise HTTPException(status_code=500, detail="无法获取文献元数据，请稍后重试")
-        metadata = metadata or {}
-
-    authors_list = _parse_json(authors, None)
-    if authors_list is None:
-        authors_list = metadata.get("authors", []) if metadata else []
-    if not isinstance(authors_list, list):
-        raise HTTPException(status_code=400, detail="authors 必须是 JSON 数组")
-
-    defaults = {
-        "chemical_formula": chemical_formula,
-        "crystal_structure": crystal_structure,
-        "article_type": article_type,
-        "superconductor_type": superconductor_type,
-        "note": notes,
-    }
-    record_items = _record_payloads(records, physical_data, defaults)
-
-    paper = models.Paper(
-        doi=doi,
-        title=title or metadata.get("title") or f"Manual Entry: {doi}",
-        journal=journal or (metadata.get("journal") if metadata else None),
-        volume=volume or (metadata.get("volume") if metadata else None),
-        pages=pages or (metadata.get("pages") if metadata else None),
-        year=year or (metadata.get("year") if metadata else None),
-        abstract=abstract or (metadata.get("abstract") if metadata else None),
-        authors=authors_list,
-        uploaded_by_user_id=current_user.id,
-        review_status="pending",
-    )
-
-    try:
-        db.add(paper)
-        db.flush()
-        for item in record_items:
-            _create_record(db, paper, item)
-        db.commit()
-        db.refresh(paper)
-    except Exception:
-        db.rollback()
-        raise
-
-    return _paper_to_dict(paper)
-
-
-@router.post("/batch-upload")
-async def batch_upload_papers(
-    file: UploadFile = File(...),
-    current_user: Annotated[models.User, Depends(get_current_user)] = None,
-):
-    if not current_user:
-        raise HTTPException(status_code=401, detail="请先登录后再进行批量上传")
-    raise HTTPException(status_code=501, detail="批量导入将按新 MySQL 结构重新实现")
-
-
-@router.get("/batch-upload-example")
-def get_batch_upload_example():
-    raise HTTPException(status_code=501, detail="批量上传示例需按新 superconductor_records 格式重新生成")
 
 
 @router.get("/compound/{element_symbols}")
@@ -633,14 +443,17 @@ def _fetch_all_sources(elements: list[str], mode: str) -> list[dict]:
 
     # 3. HTSC-2025
     try:
-        import requests as req
+        from backend.api.htsc2025 import _entry_matches, _load_dataset
+
         htsc_mode = {"elements_exact_search": "only", "elements_combination_search": "combination", "elements_contained_search": "contains"}.get(mode, "contains")
-        resp = req.post("http://127.0.0.1:8000/api/htsc2025/search", json={"elements": elements, "mode": htsc_mode, "limit": 10000, "offset": 0}, timeout=30)
-        if resp.status_code == 200:
-            data = resp.json()
-            for m in (data.get("items") or []):
-                m["_source"] = "htsc2025"
-                items.append(m)
+        query_set = set(elements)
+        data = _load_dataset()
+        for item in (data.get("records") or []):
+            entry_elements = set(item.get("elements") or [])
+            if _entry_matches(entry_elements, query_set, htsc_mode):
+                copied = dict(item)
+                copied["_source"] = "htsc2025"
+                items.append(copied)
     except Exception:
         pass
 
