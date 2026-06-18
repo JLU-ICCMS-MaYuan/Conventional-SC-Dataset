@@ -13,7 +13,7 @@ from backend.rag.config import get_rag_settings
 
 
 class RagDataUnavailableError(RuntimeError):
-    """Raised when the RAG SQLite/Chroma data files are unavailable."""
+    """Raised when the RAG database or Chroma data is unavailable."""
 
 
 class RagChatUnavailableError(RuntimeError):
@@ -28,13 +28,6 @@ class RagNotFoundError(RuntimeError):
     """Raised when a requested RAG resource does not exist."""
 
 
-def _sqlite_path_from_url(database_url: str) -> Path | None:
-    prefix = "sqlite+aiosqlite:///"
-    if not database_url.startswith(prefix):
-        return None
-    return Path(database_url.removeprefix(prefix))
-
-
 def _loads_json(value: str | None, fallback: Any) -> Any:
     if not value:
         return fallback
@@ -46,8 +39,7 @@ def _loads_json(value: str | None, fallback: Any) -> Any:
 
 def health() -> dict[str, Any]:
     settings = get_rag_settings()
-    db_path = _sqlite_path_from_url(settings.database_url) or (settings.data_root / "dev.db")
-    database_available = db_path.exists()
+    database_available = settings.database_available
     chroma_available = settings.chroma_path.exists()
     chat_available = settings.chat_configured
     available = database_available and chroma_available
