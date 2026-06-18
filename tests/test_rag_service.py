@@ -6,8 +6,11 @@ from backend.rag.config import get_rag_settings
 from backend.rag import service
 
 
-def test_health_reports_missing_data(monkeypatch, tmp_path):
-    monkeypatch.setenv("RAG_DATA_ROOT", str(tmp_path / "missing-talk"))
+def test_health_reports_missing_data_when_mysql_unreachable(monkeypatch):
+    monkeypatch.setenv("RAG_DATABASE_URL", "mysql+asyncmy://nobody:bad@127.0.0.1:3306/nonexistent_db")
+    monkeypatch.setenv("RAG_CHROMA_PATH", "/nonexistent/chroma")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "")  # 覆盖 .env 中的 Key
+    monkeypatch.setenv("OPENAI_API_KEY", "")
     get_rag_settings.cache_clear()
 
     status = service.health()
@@ -20,12 +23,14 @@ def test_health_reports_missing_data(monkeypatch, tmp_path):
 
 
 def test_health_reports_search_available_without_llm(monkeypatch, tmp_path):
-    data_root = tmp_path / "talk"
-    data_root.mkdir()
-    (data_root / "dev.db").write_bytes(b"")
-    (data_root / "chroma_db").mkdir()
-    monkeypatch.setenv("RAG_DATA_ROOT", str(data_root))
-    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setenv(
+        "RAG_DATABASE_URL",
+        "mysql+asyncmy://work:12345678@127.0.0.1:3306/superconductor_dataset?charset=utf8mb4",
+    )
+    chroma_dir = tmp_path / "chroma_db"
+    chroma_dir.mkdir()
+    monkeypatch.setenv("RAG_CHROMA_PATH", str(chroma_dir))
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "")  # 覆盖 .env 中的 Key
     get_rag_settings.cache_clear()
 
     status = service.health()
@@ -39,7 +44,8 @@ def test_health_reports_search_available_without_llm(monkeypatch, tmp_path):
 
 @pytest.mark.asyncio
 async def test_search_raises_when_data_missing(monkeypatch, tmp_path):
-    monkeypatch.setenv("RAG_DATA_ROOT", str(tmp_path / "missing-talk"))
+    monkeypatch.setenv("RAG_DATABASE_URL", "mysql+asyncmy://nobody:bad@127.0.0.1:3306/nonexistent_db")
+    monkeypatch.setenv("RAG_CHROMA_PATH", "/nonexistent/chroma")
     get_rag_settings.cache_clear()
 
     with pytest.raises(service.RagDataUnavailableError):
@@ -48,12 +54,14 @@ async def test_search_raises_when_data_missing(monkeypatch, tmp_path):
 
 @pytest.mark.asyncio
 async def test_chat_raises_when_llm_missing(monkeypatch, tmp_path):
-    data_root = tmp_path / "talk"
-    data_root.mkdir()
-    (data_root / "dev.db").write_bytes(b"")
-    (data_root / "chroma_db").mkdir()
-    monkeypatch.setenv("RAG_DATA_ROOT", str(data_root))
-    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setenv(
+        "RAG_DATABASE_URL",
+        "mysql+asyncmy://work:12345678@127.0.0.1:3306/superconductor_dataset?charset=utf8mb4",
+    )
+    chroma_dir = tmp_path / "chroma_db"
+    chroma_dir.mkdir()
+    monkeypatch.setenv("RAG_CHROMA_PATH", str(chroma_dir))
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "")  # 覆盖 .env 中的 Key
     get_rag_settings.cache_clear()
 
     with pytest.raises(service.RagChatUnavailableError):
@@ -62,11 +70,13 @@ async def test_chat_raises_when_llm_missing(monkeypatch, tmp_path):
 
 @pytest.mark.asyncio
 async def test_chat_passes_history_and_ranking(monkeypatch, tmp_path):
-    data_root = tmp_path / "talk"
-    data_root.mkdir()
-    (data_root / "dev.db").write_bytes(b"")
-    (data_root / "chroma_db").mkdir()
-    monkeypatch.setenv("RAG_DATA_ROOT", str(data_root))
+    monkeypatch.setenv(
+        "RAG_DATABASE_URL",
+        "mysql+asyncmy://work:12345678@127.0.0.1:3306/superconductor_dataset?charset=utf8mb4",
+    )
+    chroma_dir = tmp_path / "chroma_db"
+    chroma_dir.mkdir()
+    monkeypatch.setenv("RAG_CHROMA_PATH", str(chroma_dir))
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
     get_rag_settings.cache_clear()
 
@@ -93,11 +103,13 @@ async def test_chat_passes_history_and_ranking(monkeypatch, tmp_path):
 
 @pytest.mark.asyncio
 async def test_chat_stream_passes_history(monkeypatch, tmp_path):
-    data_root = tmp_path / "talk"
-    data_root.mkdir()
-    (data_root / "dev.db").write_bytes(b"")
-    (data_root / "chroma_db").mkdir()
-    monkeypatch.setenv("RAG_DATA_ROOT", str(data_root))
+    monkeypatch.setenv(
+        "RAG_DATABASE_URL",
+        "mysql+asyncmy://work:12345678@127.0.0.1:3306/superconductor_dataset?charset=utf8mb4",
+    )
+    chroma_dir = tmp_path / "chroma_db"
+    chroma_dir.mkdir()
+    monkeypatch.setenv("RAG_CHROMA_PATH", str(chroma_dir))
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
     get_rag_settings.cache_clear()
 
@@ -123,41 +135,43 @@ async def test_chat_stream_passes_history(monkeypatch, tmp_path):
     assert events == [{"type": "token", "data": "ok"}]
 
 
-
-def test_knowledge_graph_uses_configured_rag_data_root(monkeypatch, tmp_path):
+@pytest.mark.asyncio
+async def test_knowledge_graph_query_async(monkeypatch, tmp_path):
     data_root = tmp_path / "talk"
     data_root.mkdir()
     db_path = data_root / "dev.db"
+    db_url = f"sqlite+aiosqlite:///{db_path}"
 
     import sqlite3
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(str(db_path))
     conn.executescript("""
-        create table papers (id integer primary key, title text, review_status text);
-        create table superconductors (id integer primary key, chemical_formula text);
-        create table superconductor_records (
-            id integer primary key,
-            superconductor_id integer,
-            paper_id integer,
-            allen_dynes_tc real,
-            experimental_tc real,
-            pressure_gpa real,
-            lambda_value real,
-            omega_log real,
-            space_group_symbol text
+        CREATE TABLE papers (id INTEGER PRIMARY KEY, title TEXT, review_status TEXT);
+        CREATE TABLE superconductors (id INTEGER PRIMARY KEY, chemical_formula TEXT);
+        CREATE TABLE superconductor_records (
+            id INTEGER PRIMARY KEY,
+            superconductor_id INTEGER,
+            paper_id INTEGER,
+            allen_dynes_tc REAL
         );
-        insert into papers values (1, 'Configured DB Paper', 'approved');
-        insert into superconductors values (1, 'TestH10');
-        insert into superconductor_records values (1, 1, 1, 321.0, null, 200.0, 2.5, 100.0, 'Fm-3m');
+        INSERT INTO papers VALUES (1, 'Configured DB Paper', 'approved');
+        INSERT INTO superconductors VALUES (1, 'TestH10');
+        INSERT INTO superconductor_records VALUES (1, 1, 1, 321.0);
     """)
     conn.commit()
     conn.close()
 
-    monkeypatch.setenv("RAG_DATA_ROOT", str(data_root))
-    get_rag_settings.cache_clear()
+    # 重写 database 模块的全局 session factory，指向测试 SQLite
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-    import backend.rag.knowledge_graph as kg
+    test_engine = create_async_engine(db_url, echo=False)
+    test_factory = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
 
-    rows = kg.query("超导温度(AD)", operator=">", value="300")
+    monkeypatch.setattr("backend.rag.database.async_session_factory", test_factory)
+    monkeypatch.setattr("backend.rag.knowledge_graph.async_session_factory", test_factory)
+
+    from backend.rag import knowledge_graph as kg
+
+    rows = await kg.query("超导温度(AD)", operator=">", value="300")
 
     assert rows == [{
         "subject": "TestH10",
@@ -166,3 +180,5 @@ def test_knowledge_graph_uses_configured_rag_data_root(monkeypatch, tmp_path):
         "paper_id": 1,
         "paper_title": "Configured DB Paper",
     }]
+
+    await test_engine.dispose()
