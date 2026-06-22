@@ -74,23 +74,32 @@ const RagPage: React.FC = () => {
     const question = input.trim()
     if (!question || loading) return
 
+    // ensure active conversation exists
     let cid = activeId
-    if (!cid) { newChat(); return }
-    const conv = convs.find((c) => c.id === cid)
-    if (!conv) return
+    let history: RagMessage[] = []
+    if (!cid) {
+      const c: Conversation = { id: uid(), title: question.slice(0, 20), messages: [], createdAt: Date.now() }
+      setConvs((prev) => { saveConversations([c, ...prev]); return [c, ...prev] })
+      cid = c.id
+      setActiveId(cid)
+    } else {
+      const conv = convs.find((c) => c.id === cid)
+      if (!conv) return
+      history = conv.messages
+    }
 
+    // we must read the fresh conv after potential creation above
+    // since React state updates are async, use the values we already have
     const userMsg: RagMessage = { role: 'user', content: question }
-    const updated = [...conv.messages, userMsg]
-    const newConvs = convs.map((c) => c.id === cid ? { ...c, messages: updated, title: conv.messages.length === 0 ? question.slice(0, 20) : c.title } : c)
-    setConvs(newConvs)
     setInput('')
     setLoading(true)
 
+    setConvs((prev) => prev.map((c) => c.id === cid ? { ...c, messages: [...c.messages, userMsg, { role: 'assistant' as const, content: '' }], title: c.messages.length === 0 ? question.slice(0, 20) : c.title } : c))
+
     let fullAnswer = ''
-    setConvs((prev) => prev.map((c) => c.id === cid ? { ...c, messages: [...updated, { role: 'assistant', content: '' }] } : c))
 
     try {
-      const response = await api.postStream('/api/rag/chat/stream', { question, top_k: 15, rerank_top_k: 5, history: conv.messages })
+      const response = await api.postStream('/api/rag/chat/stream', { question, top_k: 15, rerank_top_k: 5, history })
       if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`)
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
