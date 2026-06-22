@@ -40,11 +40,13 @@ const RagPage: React.FC = () => {
   const [activeId, setActiveId] = useState<string>(() => convs[0]?.id || '')
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [streaming, setStreaming] = useState(false)
   const [sourceOpen, setSourceOpen] = useState(true)
   const [papers, setPapers] = useState<Record<string, PaperInfo>>({})
 
   const chatBoxRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const streamingElRef = useRef<HTMLDivElement | null>(null)
 
   const messages = convs.find((c) => c.id === activeId)?.messages || []
 
@@ -93,6 +95,7 @@ const RagPage: React.FC = () => {
     const userMsg: RagMessage = { role: 'user', content: question }
     setInput('')
     setLoading(true)
+    setStreaming(false)
 
     setConvs((prev) => prev.map((c) => c.id === cid ? { ...c, messages: [...c.messages, userMsg, { role: 'assistant' as const, content: '' }], title: c.messages.length === 0 ? question.slice(0, 20) : c.title } : c))
 
@@ -122,7 +125,14 @@ const RagPage: React.FC = () => {
           try {
             const data = JSON.parse(dataLines.join('\n'))
             if (eventType === 'token') {
-              fullAnswer += typeof data === 'string' ? data : String(data || '')
+              const t = typeof data === 'string' ? data : String(data || '')
+              fullAnswer += t
+              setStreaming(true)
+              // direct DOM update to bypass React 18 batching
+              if (streamingElRef.current) {
+                streamingElRef.current.textContent += t
+              }
+              // also update React state in background
               setConvs((prev) => prev.map((c) => {
                 if (c.id !== cid) return c
                 const msgs = [...c.messages]
@@ -144,7 +154,7 @@ const RagPage: React.FC = () => {
         msgs[msgs.length - 1] = { role: 'assistant', content: `❌ ${err.message}` }
         return { ...c, messages: msgs }
       }))
-    } finally { setLoading(false) }
+    } finally { setLoading(false); setStreaming(false) }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -220,13 +230,18 @@ const RagPage: React.FC = () => {
                 </div>
               ))}
 
-              {loading && (
+              {loading && !streaming && (
                 <div style={s.rowLeft}>
                   <div style={s.bubbleAI}>
                     <span style={s.dot} />
                     <span style={{ ...s.dot, animationDelay: '0.2s' }} />
                     <span style={{ ...s.dot, animationDelay: '0.4s' }} />
                   </div>
+                </div>
+              )}
+              {loading && streaming && (
+                <div style={s.rowLeft}>
+                  <div ref={streamingElRef} style={s.bubbleAI} />
                 </div>
               )}
             </div>
