@@ -81,6 +81,7 @@ export function useStreamingChat() {
     } : c))
 
     let fullAnswer = ''
+    let firstToken = true
 
     try {
       const response = await api.postStream('/api/rag/chat/stream', {
@@ -111,7 +112,10 @@ export function useStreamingChat() {
             if (eventType === 'token') {
               const t = typeof data === 'string' ? data : String(data || '')
               fullAnswer += t
-              if (streamRef.current) streamRef.current.textContent += t
+              if (streamRef.current) {
+                if (firstToken) { streamRef.current.innerHTML = ''; firstToken = false }
+                streamRef.current.textContent += t
+              }
             } else if (eventType === 'done' && data.papers) {
               setPapers((prev) => ({ ...prev, ...data.papers }))
             } else if (eventType === 'error') {
