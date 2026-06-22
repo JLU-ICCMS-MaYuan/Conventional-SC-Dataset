@@ -1,7 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Container, Form, Button, Spinner, Alert, Row, Col, Card } from 'react-bootstrap'
-import ChatMessage from '../components/ChatMessage'
-import NavBar from '../components/NavBar'
 import { api } from '../lib/api'
 
 interface RagMessage {
@@ -9,35 +6,23 @@ interface RagMessage {
   content: string
 }
 
-interface RagStats {
-  papers: number
-  superconductors: number
-  records: number
-  chunks: number
-  chroma_chunks: number
-}
+const VITE_LOGO = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E⚛️%3C/text%3E%3C/svg%3E`
 
 const RagPage: React.FC = () => {
   const [messages, setMessages] = useState<RagMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [stats, setStats] = useState<RagStats | null>(null)
-  const [healthMsg, setHealthMsg] = useState('')
+  const [showEmpty, setShowEmpty] = useState(true)
   const chatBoxRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    api.get('/api/rag/health').then((d: any) => {
-      setHealthMsg(d.message || '')
-    }).catch(() => setHealthMsg('AI 文献助手不可用'))
-
-    api.get('/api/rag/stats').then((d: any) => {
-      if (d.data) setStats(d.data)
-    }).catch(() => {})
-  }, [])
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     chatBoxRef.current?.scrollTo(0, chatBoxRef.current.scrollHeight)
   }, [messages])
+
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [])
 
   const handleSend = async () => {
     const question = input.trim()
@@ -46,6 +31,7 @@ const RagPage: React.FC = () => {
     const userMsg: RagMessage = { role: 'user', content: question }
     setMessages((prev) => [...prev, userMsg])
     setInput('')
+    setShowEmpty(false)
     setLoading(true)
 
     let fullAnswer = ''
@@ -63,8 +49,8 @@ const RagPage: React.FC = () => {
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
-      const assistantMsg: RagMessage = { role: 'assistant', content: '' }
-      setMessages((prev) => [...prev, assistantMsg])
+
+      setMessages((prev) => [...prev, { role: 'assistant', content: '' }])
 
       while (true) {
         const { done, value } = await reader.read()
@@ -95,9 +81,7 @@ const RagPage: React.FC = () => {
             } else if (eventType === 'error') {
               throw new Error(data.message || 'AI 错误')
             }
-          } catch {
-            // 跳过无法解析的行
-          }
+          } catch { /* skip */ }
         }
       }
 
@@ -119,80 +103,204 @@ const RagPage: React.FC = () => {
     }
   }
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
+    }
+  }
+
   return (
-    <>
-      <NavBar />
-      <Container className="py-4" style={{ maxWidth: 800 }}>
-        {healthMsg && (
-          <Alert variant={healthMsg.includes('已就绪') ? 'success' : 'warning'} className="mb-3 py-2 text-center small">
-            {healthMsg}
-          </Alert>
-        )}
+    <div style={styles.wrapper}>
+      {/* Header */}
+      <header style={styles.header}>
+        <a href="/" style={styles.logoLink}>
+          <img src={VITE_LOGO} alt="SC-Wiki" style={styles.logo} />
+          <span style={styles.brand}>SC-Wiki AI</span>
+        </a>
+        <span style={styles.headerTag}>超导文献助手</span>
+      </header>
 
-        {stats && (
-          <Row className="g-2 mb-4 text-center">
-            {[
-              { label: '论文', value: stats.papers },
-              { label: '超导体', value: stats.superconductors },
-              { label: '记录', value: stats.records },
-              { label: '片段', value: stats.chunks },
-            ].map((s) => (
-              <Col key={s.label} xs={3}>
-                <Card className="shadow-sm h-100">
-                  <Card.Body className="py-2">
-                    <div className="fs-5 fw-bold">{s.value?.toLocaleString() ?? '-'}</div>
-                    <small className="text-muted">{s.label}</small>
-                  </Card.Body>
-                </Card>
-              </Col>
-            ))}
-          </Row>
-        )}
-
-        <div
-          ref={chatBoxRef}
-          className="border rounded-3 bg-white p-3 mb-3"
-          style={{ minHeight: 400, maxHeight: '60vh', overflowY: 'auto' }}
-        >
-          {messages.length === 0 && (
-            <div className="text-center text-muted py-5">
-              <p className="fs-5">💬 AI 文献助手</p>
-              <p>基于 638 篇超导论文，问任何关于氢化物超导的问题</p>
+      {/* Chat area */}
+      <div ref={chatBoxRef} style={styles.chatArea}>
+        <div style={styles.chatInner}>
+          {showEmpty && (
+            <div style={styles.emptyState}>
+              <div style={styles.emptyTitle}>⚛️ 氢化物超导文献助手</div>
+              <div style={styles.emptySubtitle}>
+                基于 638 篇超导论文、1012 种超导体、4709 条数据记录<br />
+                可以问任何关于超导材料的问题
+              </div>
+              <div style={styles.suggestions}>
+                {[
+                  'LaH10 的超导温度是多少？',
+                  'Tc 超过 200K 的超导体有哪些？',
+                  '介绍一下笼状氢化物的结构特征',
+                ].map((s) => (
+                  <button
+                    key={s}
+                    style={styles.suggestionBtn}
+                    onClick={() => { setInput(s); handleSend(); }}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
+
           {messages.map((msg, i) => (
-            <ChatMessage key={i} role={msg.role} content={msg.content} />
+            <div key={i} style={msg.role === 'user' ? styles.userRow : styles.assistantRow}>
+              <div style={msg.role === 'user' ? styles.userBubble : styles.assistantBubble}>
+                {msg.role === 'user' ? (
+                  msg.content
+                ) : (
+                  <div
+                    style={styles.answer}
+                    dangerouslySetInnerHTML={{
+                      __html: msg.content
+                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                        .replace(/\[来源(\d+)\]/g, '<sup class="text-primary">[$1]</sup>')
+                        .replace(/\n/g, '<br/>')
+                    }}
+                  />
+                )}
+              </div>
+            </div>
           ))}
+
           {loading && (
-            <div className="d-flex justify-content-start mb-3">
-              <Card bg="light" className="shadow-sm" style={{ borderRadius: 16 }}>
-                <Card.Body className="py-2 px-4">
-                  <Spinner animation="border" size="sm" className="me-2" />
-                  思考中...
-                </Card.Body>
-              </Card>
+            <div style={styles.assistantRow}>
+              <div style={styles.assistantBubble}>
+                <div style={styles.typing}>
+                  <span style={{ ...styles.dot, animationDelay: '0s' }} />
+                  <span style={{ ...styles.dot, animationDelay: '0.2s' }} />
+                  <span style={{ ...styles.dot, animationDelay: '0.4s' }} />
+                </div>
+              </div>
             </div>
           )}
         </div>
+      </div>
 
-        <Form
-          onSubmit={(e) => { e.preventDefault(); handleSend() }}
-          className="d-flex gap-2"
-        >
-          <Form.Control
+      {/* Input area */}
+      <div style={styles.inputArea}>
+        <div style={styles.inputWrapper}>
+          <input
+            ref={inputRef}
+            style={styles.input}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="问一个超导问题，例如「LaH10 的 Tc 是多少？」"
+            onKeyDown={handleKeyDown}
+            placeholder="问一个超导问题..."
             disabled={loading}
-            style={{ borderRadius: 24 }}
           />
-          <Button type="submit" disabled={loading || !input.trim()} style={{ borderRadius: 24 }}>
-            发送
-          </Button>
-        </Form>
-      </Container>
-    </>
+          <button
+            style={{ ...styles.sendBtn, opacity: input.trim() && !loading ? 1 : 0.4 }}
+            onClick={handleSend}
+            disabled={!input.trim() || loading}
+          >
+            ↑
+          </button>
+        </div>
+        <div style={styles.disclaimer}>
+          SC-Wiki AI 基于 RAG 检索，回答仅供参考
+        </div>
+      </div>
+
+      {/* CSS keyframes */}
+      <style>{`
+        @keyframes blink {
+          0%, 60%, 100% { opacity: 0.3; transform: scale(0.8); }
+          30% { opacity: 1; transform: scale(1); }
+        }
+      `}</style>
+    </div>
   )
+}
+
+const styles: Record<string, React.CSSProperties> = {
+  wrapper: {
+    display: 'flex', flexDirection: 'column', height: '100vh',
+    backgroundColor: '#fafafa', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+  },
+  header: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    padding: '12px 20px', backgroundColor: '#fff',
+    borderBottom: '1px solid #f0f0f0',
+  },
+  logoLink: {
+    display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', color: '#1a1a1a',
+  },
+  logo: { width: 28, height: 28 },
+  brand: { fontSize: 16, fontWeight: 600 },
+  headerTag: { fontSize: 12, color: '#999' },
+  chatArea: {
+    flex: 1, overflowY: 'auto', padding: '20px 0',
+  },
+  chatInner: {
+    maxWidth: 720, margin: '0 auto', padding: '0 20px',
+  },
+  emptyState: {
+    textAlign: 'center', paddingTop: '16vh',
+  },
+  emptyTitle: {
+    fontSize: 24, fontWeight: 600, color: '#1a1a1a', marginBottom: 12,
+  },
+  emptySubtitle: {
+    fontSize: 14, color: '#999', lineHeight: 1.8, marginBottom: 32,
+  },
+  suggestions: {
+    display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 8,
+  },
+  suggestionBtn: {
+    padding: '8px 16px', borderRadius: 20, border: '1px solid #e5e5e5',
+    backgroundColor: '#fff', color: '#666', fontSize: 13, cursor: 'pointer',
+  },
+  userRow: {
+    display: 'flex', justifyContent: 'flex-end', marginBottom: 16,
+  },
+  assistantRow: {
+    display: 'flex', justifyContent: 'flex-start', marginBottom: 16,
+  },
+  userBubble: {
+    maxWidth: '75%', padding: '12px 18px', borderRadius: 18,
+    backgroundColor: '#4d6bfe', color: '#fff', fontSize: 14, lineHeight: 1.7,
+  },
+  assistantBubble: {
+    maxWidth: '85%', padding: '12px 18px', borderRadius: 18,
+    backgroundColor: '#fff', color: '#1a1a1a', fontSize: 14, lineHeight: 1.9,
+    border: '1px solid #f0f0f0',
+  },
+  answer: {},
+  typing: {
+    display: 'flex', gap: 4, padding: '4px 0',
+  },
+  dot: {
+    width: 6, height: 6, borderRadius: '50%', backgroundColor: '#999',
+    animation: 'blink 1.2s infinite',
+  },
+  inputArea: {
+    padding: '16px 20px 24px', backgroundColor: '#fafafa',
+  },
+  inputWrapper: {
+    maxWidth: 720, margin: '0 auto', display: 'flex', alignItems: 'center',
+    backgroundColor: '#fff', borderRadius: 24, border: '1px solid #e5e5e5',
+    padding: '4px 4px 4px 18px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+  },
+  input: {
+    flex: 1, border: 'none', outline: 'none', fontSize: 14, padding: '8px 0',
+    backgroundColor: 'transparent', color: '#1a1a1a',
+  },
+  sendBtn: {
+    width: 36, height: 36, borderRadius: '50%', border: 'none',
+    backgroundColor: '#4d6bfe', color: '#fff', fontSize: 18, cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    transition: 'all 0.2s', flexShrink: 0,
+  },
+  disclaimer: {
+    textAlign: 'center', fontSize: 11, color: '#bbb', marginTop: 12,
+  },
 }
 
 export default RagPage
