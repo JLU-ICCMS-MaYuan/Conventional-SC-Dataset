@@ -52,7 +52,15 @@ Conventional-SC-Dataset 是一个围绕“元素体系 - 超导体化学式 - �
 - 首页图表依赖数据库中已有文献和图表显示标记
 - Tc 预测模块是独立实验能力，不依赖数据库持久化
 
-### 3.6 运维支撑模块
+### 3.6 AI 文献助手（RAG）模块
+- React 前端（Vite 构建，部署到 `frontend/templates/rag.html` + `frontend/static/assets/`）
+- 三栏布局：对话列表 | 流式聊天 | 文献来源
+- 支持 LaTeX 公式渲染（KaTeX）、顺序引用编号 [1] [2] [3]
+- 后端 SSE 流式输出，逐 token 渲染
+- 对话和引用文献元数据持久化到 localStorage
+- RAG 引擎支持意图解析 → KG + 语义检索 → LLM 融合回答
+
+### 3.7 运维支撑模块
 - 负责初始化、导入导出、迁移、部署、备份
 - 为其他所有模块提供环境和数据基础
 
@@ -67,6 +75,7 @@ Conventional-SC-Dataset 是一个围绕“元素体系 - 超导体化学式 - �
 | `/admin/dashboard` | `frontend/templates/admin_dashboard.html` | 管理后台脚本 | 文献审核 |
 | `/admin/superadmin` | `frontend/templates/superadmin_dashboard.html` | 管理后台脚本 | 管理员审批与权限管理 |
 | `/admin/papers` | `frontend/templates/admin_papers.html` | `admin_papers.js` | 全局文献管理 |
+| `/rag` | `frontend/templates/rag.html` | React 构建产物 (`frontend/static/assets/`) | AI 文献助手 |
 | `/tc-pre` | `frontend/templates/tc_pre.html` | `tc_pre.js` | 实验预测 |
 
 ## 5. API 分层
@@ -87,7 +96,18 @@ Conventional-SC-Dataset 是一个围绕“元素体系 - 超导体化学式 - �
 ### 5.5 实验预测
 - `/api/tc-predict/*`
 
-### 5.6 晶体结构
+### 5.6 RAG 文献助手
+- `/api/rag/*`
+  - `GET /health` — 健康检查
+  - `GET /stats` — 数据库统计
+  - `GET /search` — 文献搜索
+  - `POST /chat` — 非流式问答
+  - `POST /chat/stream` — SSE 流式问答
+  - `GET /papers`、`/papers/{id}` — 论文查询
+  - `GET /superconductors`、`/superconductors/{id}` — 超导体查询
+  - `POST /upload-pdf` — PDF 上传摄入
+
+### 5.7 晶体结构
 - `/api/structures/*`
 
 ## 6. 当前系统的边界

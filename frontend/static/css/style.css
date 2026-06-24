@@ -272,6 +272,10 @@ body {
     color: #000 !important;
 }
 
+.navbar-custom .nav-link.active {
+    font-weight: 600;
+}
+
 /* 针对按钮的黑色边框处理 */
 .navbar-custom .btn-outline-light {
     color: #000 !important;

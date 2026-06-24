@@ -1,11 +1,50 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useMemo } from 'react'
+import 'bootstrap/dist/css/bootstrap.min.css'
+import 'katex/dist/katex.min.css'
 import { useStreamingChat } from '../hooks/useStreamingChat'
+import { useAuth } from '../context/AuthContext'
+import { renderMath } from '../utils/math'
+
+/** 从消息内容中构建 PID → 顺序编号的映射（按首次出现顺序） */
+function buildCitationMap(content: string): Map<string, number> {
+  const map = new Map<string, number>()
+  let n = 1
+  for (const m of content.matchAll(/\[PID_(\d+)\]/g)) {
+    if (!map.has(m[1])) map.set(m[1], n++)
+  }
+  return map
+}
+
+/** 获取按引用顺序排列的 paper ID 列表 */
+function citationOrder(content: string): string[] {
+  const ids: string[] = []
+  for (const m of content.matchAll(/\[PID_(\d+)\]/g)) {
+    if (!ids.includes(m[1])) ids.push(m[1])
+  }
+  return ids
+}
+
+/** 将助手消息转换为 HTML，[PID_xxx] 映射为顺序编号 [1] [2] ... */
+function renderMessage(content: string): string {
+  const withMath = renderMath(content)
+  const cMap = buildCitationMap(content)
+  return withMath
+    .replace(/\[PID_(\d+)\]/g, (_: string, pid: string) =>
+      `<sup class="cite-ref">[${cMap.get(pid) || pid}]</sup>`)
+    .replace(/\[来源(\d+)\]（paper_id=(\d+)）/g, (_: string, _s: string, pid: string) =>
+      `<sup class="cite-ref">[${cMap.get(pid) || pid}]</sup>`)
+    .replace(/\[来源(\d+)\]/g, '<sup class="cite-ref cite-muted">[$1]</sup>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n/g, '<br/>')
+}
 
 const RagPage: React.FC = () => {
   const {
-    convs, activeId, messages, loading, papers, streamRef,
-    newConversation, switchConversation, send,
+    convs, activeId, messages, loading, papers, top10, streamRef,
+    newConversation, switchConversation, deleteConversation, send,
   } = useStreamingChat()
+
+  const { user, loading: authLoading, logout } = useAuth()
 
   const [input, setInput] = useState('')
   const [sourceOpen, setSourceOpen] = useState(true)
@@ -22,23 +61,45 @@ const RagPage: React.FC = () => {
 
   const loadSuggest = (q: string) => { setInput(q); send(q) }
 
-  const citationIds = () => {
+  /** 最后一条助手消息中的引用顺序 */
+  const citedOrder = useMemo(() => {
     const last = [...messages].reverse().find((m) => m.role === 'assistant')
-    if (!last) return []
-    return [...new Set(Array.from(last.content.matchAll(/\[PID_(\d+)\]/g), (m) => m[1]))]
-  }
+    return last ? citationOrder(last.content) : []
+  }, [messages])
+
+  const hasRightContent = top10.length > 0 || citedOrder.length > 0
 
   return (
     <div style={st.wrapper}>
-      <header style={st.topbar}>
-        <a href="/" style={st.brand}>⚛️ 超导文献数据库</a>
-        <nav style={{ display: 'flex', gap: 20 }}>
-          <a href="/" style={st.nav}>首页</a>
-          <a href="/rag" style={{ ...st.nav, fontWeight: 600, color: '#4d6bfe' }}>AI 助手</a>
-          <a href="/tc-pre" style={st.nav}>Tc 预测</a>
-          <a href="/login" style={st.nav}>登录</a>
-        </nav>
-      </header>
+      {/* 导航栏 — 与原前端 Bootstrap navbar 一致 */}
+      <nav className="navbar navbar-expand navbar-dark navbar-custom shadow-sm sticky-top" style={{ zIndex: 100 }}>
+        <div className="container-fluid">
+          <a className="navbar-brand fw-bold" href="/">超导文献数据库</a>
+          <ul className="navbar-nav me-auto">
+            <li className="nav-item"><a className="nav-link" href="/">首页</a></li>
+            <li className="nav-item"><a className="nav-link active" href="/rag">AI 文献助手</a></li>
+            <li className="nav-item"><a className="nav-link" href="/tc-pre">Tc 预测 (实验)</a></li>
+          </ul>
+          <div className="d-flex align-items-center gap-2">
+            {authLoading ? (
+              <div className="spinner-border spinner-border-sm text-light" role="status">
+                <span className="visually-hidden">Loading...</span>
+              </div>
+            ) : user ? (
+              <div className="btn-group">
+                <span className="btn btn-outline-light btn-sm disabled">{user.username}</span>
+                <button className="btn btn-outline-light btn-sm" onClick={logout}>退出</button>
+              </div>
+            ) : (
+              <div className="btn-group">
+                <a className="btn btn-outline-light btn-sm" href="/login">立即登录</a>
+                <a className="btn btn-light btn-sm" href="/register">注册</a>
+              </div>
+            )}
+            <button className="btn btn-outline-light btn-sm ms-2" title="Switch Language">中/EN</button>
+          </div>
+        </div>
+      </nav>
 
       <div style={st.body}>
         <aside style={st.left}>
@@ -46,9 +107,11 @@ const RagPage: React.FC = () => {
           <div style={{ overflowY: 'auto', flex: 1 }}>
             {convs.map((c) => (
               <div key={c.id} onClick={() => switchConversation(c.id)}
-                style={{ ...st.hItem, backgroundColor: c.id === activeId ? '#f0f0f0' : 'transparent' }}>
+                style={{ ...st.hItem, backgroundColor: c.id === activeId ? '#f0f0f0' : 'transparent', position: 'relative' }}>
                 <div style={st.hTitle}>{c.title}</div>
                 <div style={st.hDate}>{new Date(c.createdAt).toLocaleDateString()}</div>
+                <button onClick={(e) => { e.stopPropagation(); deleteConversation(c.id) }}
+                  className="conv-del-btn" title="删除对话">×</button>
               </div>
             ))}
           </div>
@@ -70,11 +133,7 @@ const RagPage: React.FC = () => {
               {messages.map((msg, i) => (
                 <div key={i} style={msg.role === 'user' ? st.rowR : st.rowL}>
                   <div style={msg.role === 'user' ? st.bubbleU : st.bubbleA}
-                    dangerouslySetInnerHTML={msg.role === 'assistant' ? { __html:
-                      msg.content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                        .replace(/\[PID_(\d+)\]/g, '<sup class="text-primary">[📄$1]</sup>')
-                        .replace(/\n/g, '<br/>')
-                    } : undefined}>
+                    dangerouslySetInnerHTML={msg.role === 'assistant' ? { __html: renderMessage(msg.content) } : undefined}>
                     {msg.role === 'user' ? msg.content : undefined}
                   </div>
                 </div>
@@ -110,34 +169,85 @@ const RagPage: React.FC = () => {
               <button onClick={() => setSourceOpen(false)} style={st.closeBtn}>×</button>
             </div>
             <div style={{ overflowY: 'auto', flex: 1, padding: 12 }}>
-              {citationIds().length === 0 && <div style={{ color: '#999', fontSize: 13 }}>暂无引用</div>}
-              {citationIds().map((id) => {
-                const p = papers[id]
-                if (!p) return null
-                return (
-                  <div key={id} style={st.pCard}>
-                    <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>{p.title || `Paper #${id}`}</div>
-                    {p.journal && <div style={{ fontSize: 12, color: '#666' }}>{p.journal}{p.year ? ` (${p.year})` : ''}</div>}
-                    {p.doi && <a href={`https://doi.org/${p.doi}`} target="_blank" style={{ fontSize: 11, color: '#4d6bfe' }}>{p.doi}</a>}
+              {!hasRightContent && !loading && <div style={{ color: '#999', fontSize: 13 }}>发送问题后此处将显示引用来源</div>}
+
+              {/* Top 10 结构化数据表格 */}
+              {top10.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8, color: '#333' }}>🏆 Top 结果</div>
+                  <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '2px solid #e5e5e5', textAlign: 'left' }}>
+                        <th style={{ padding: '4px 6px' }}>化合物</th>
+                        <th style={{ padding: '4px 6px' }}>数值</th>
+                        <th style={{ padding: '4px 6px' }}>文献</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {top10.map((r: any, i: number) => (
+                        <tr key={i} style={{ borderBottom: '1px solid #f5f5f5' }}>
+                          <td style={{ padding: '4px 6px', fontWeight: 500 }}>{r.subject}</td>
+                          <td style={{ padding: '4px 6px', color: '#4d6bfe' }}>{r.object}</td>
+                          <td style={{ padding: '4px 6px' }}>
+                            {r.paper_id ? <span style={st.pidBadge}>[{citedOrder.indexOf(String(r.paper_id)) + 1 || '?'}]</span> : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* 论文引用卡片（按出现顺序编号） */}
+              {citedOrder.length > 0 && (
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8, color: '#333' }}>
+                    📄 引用文献
                   </div>
-                )
-              })}
+                  {citedOrder.map((pid, i) => {
+                    const p = papers[pid]
+                    if (!p) return null
+                    return (
+                      <div key={pid} style={st.pCard}>
+                        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>
+                          <span style={{ color: '#4d6bfe', marginRight: 6 }}>[{i + 1}]</span>
+                          {p.title || `Paper #${pid}`}
+                        </div>
+                        {p.journal && <div style={{ fontSize: 12, color: '#666', marginLeft: 24 }}>{p.journal}{p.year ? ` (${p.year})` : ''}</div>}
+                        {p.doi && <a href={`https://doi.org/${p.doi}`} target="_blank" style={{ fontSize: 11, color: '#4d6bfe', marginLeft: 24 }}>{p.doi}</a>}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </aside>
         )}
         {!sourceOpen && <button onClick={() => setSourceOpen(true)} style={st.openSrc}>📚</button>}
       </div>
 
-      <style>{`@keyframes blink{0%,60%,100%{opacity:.3;transform:scale(.8)}30%{opacity:1;transform:scale(1)}}`}</style>
+      <style>{`
+        @keyframes blink{0%,60%,100%{opacity:.3;transform:scale(.8)}30%{opacity:1;transform:scale(1)}}
+        sup.cite-ref { font-size:11px; color:#4d6bfe; cursor:pointer; margin:0 1px; }
+        sup.cite-ref:hover { text-decoration:underline; }
+        sup.cite-muted { color:#999; }
+        .conv-del-btn { position:absolute; right:6px; top:50%; transform:translateY(-50%); width:22px; height:22px; border-radius:50%; border:none; background:transparent; color:#ccc; font-size:16px; cursor:pointer; line-height:20px; text-align:center; transition:all .15s; }
+        .conv-del-btn:hover { color:#e55; background:#fff0f0; }
+        /* 与原前端一致的毛玻璃导航栏 */
+        .navbar-custom { background-color:rgba(255,255,255,0.7) !important; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); }
+        .navbar-custom .navbar-brand, .navbar-custom .nav-link { color:#000 !important; }
+        .navbar-custom .nav-link.active { font-weight:600; }
+        .navbar-custom .btn-outline-light { color:#000 !important; border-color:#000 !important; }
+        .navbar-custom .btn-outline-light:hover { background-color:#000 !important; color:#fff !important; }
+        /* Bootstrap 重置 — 避免与现有样式冲突 */
+        body { background:#fafafa; }
+      `}</style>
     </div>
   )
 }
 
 const st: Record<string, React.CSSProperties> = {
   wrapper: { height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', backgroundColor: '#fafafa' },
-  topbar: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', height: 52, backgroundColor: '#fff', borderBottom: '1px solid #f0f0f0', flexShrink: 0 },
-  brand: { fontWeight: 700, fontSize: 15, color: '#1a1a1a', textDecoration: 'none' },
-  nav: { fontSize: 13, color: '#666', textDecoration: 'none' },
   body: { flex: 1, display: 'flex', overflow: 'hidden' },
   left: { width: 230, flexShrink: 0, backgroundColor: '#fff', borderRight: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', padding: 12 },
   newBtn: { width: '100%', padding: '8px 0', borderRadius: 8, border: '1px solid #e5e5e5', backgroundColor: '#fff', fontSize: 13, cursor: 'pointer', marginBottom: 12, color: '#333' },
@@ -156,10 +266,11 @@ const st: Record<string, React.CSSProperties> = {
   inputWrap: { maxWidth: 720, margin: '0 auto', display: 'flex', alignItems: 'center', backgroundColor: '#fff', borderRadius: 24, border: '1px solid #e5e5e5', padding: '4px 4px 4px 16px', boxShadow: '0 2px 8px rgba(0,0,0,.04)' },
   input_: { flex: 1, border: 'none', outline: 'none', fontSize: 14, padding: '8px 0', backgroundColor: 'transparent' },
   sendBtn: { width: 34, height: 34, borderRadius: '50%', border: 'none', backgroundColor: '#4d6bfe', color: '#fff', fontSize: 16, cursor: 'pointer', flexShrink: 0, transition: 'opacity .2s' },
-  right: { width: 260, flexShrink: 0, backgroundColor: '#fff', borderLeft: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column' },
+  right: { width: 300, flexShrink: 0, backgroundColor: '#fff', borderLeft: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column' },
   srcHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 12px 8px', fontWeight: 600, fontSize: 13, borderBottom: '1px solid #f0f0f0' },
   closeBtn: { background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#999' },
   pCard: { padding: '8px 0', borderBottom: '1px solid #f5f5f5' },
+  pidBadge: { display: 'inline-block', padding: '1px 6px', borderRadius: 4, backgroundColor: '#eef0ff', color: '#4d6bfe', fontSize: 11, fontWeight: 500 },
   openSrc: { position: 'absolute' as const, right: 16, bottom: 100, width: 40, height: 40, borderRadius: '50%', border: '1px solid #e5e5e5', backgroundColor: '#fff', fontSize: 18, cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,.08)' },
 }
 

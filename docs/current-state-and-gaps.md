@@ -20,7 +20,6 @@
 当前仍未落地或需要重写的能力：
 
 - 新结构下的批量导入
-- 旧 AI 论文双库入口
 - 图片存储与图片展示
 - 点赞、评论、弹幕、热度排序等互动能力
 
@@ -100,6 +99,20 @@ Tc-Year 图只使用有关联论文年份的记录。
 - `GET /api/structures/representative` 按化学式和空间群获取代表结构
 - `GET /api/structures/{structure_id}/raw` 下载结构原文
 - `mysql-redesign-v1` JSON 导入导出包含 `superconductors_structures`
+
+### 3.6 AI 文献助手（RAG）
+
+已支持：
+
+- React 前端三栏布局：对话历史、流式聊天、文献来源
+- SSE 流式问答（`POST /api/rag/chat/stream`）
+- 意图解析 → 知识图谱查询 + Chroma 语义检索 → LLM 融合回答
+- LaTeX 公式渲染（KaTeX）
+- 引用文献顺序编号 [1] [2] [3]，右侧栏对应展示论文标题/期刊/年份/DOI
+- 对话和引用元数据持久化到 localStorage
+- 多轮对话历史和对话管理（新建/切换/删除）
+- RAG 数据存储：SQLite `dev.db` + ChromaDB 向量库，与主 MySQL 业务库分离
+
 
 ## 4. 当前缺口
 

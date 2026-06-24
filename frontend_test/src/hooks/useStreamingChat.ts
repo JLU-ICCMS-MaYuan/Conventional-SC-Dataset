@@ -1,5 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { api } from '../lib/api'
+import { renderMath } from '../utils/math'
+import 'katex/dist/katex.min.css'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -20,6 +22,11 @@ interface PaperInfo {
   year?: number
 }
 
+interface CachedMeta {
+  papers: Record<string, PaperInfo>
+  top10: any[]
+}
+
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
 
 function load(): Conversation[] {
@@ -29,11 +36,27 @@ function save(list: Conversation[]) {
   localStorage.setItem('rag_conversations', JSON.stringify(list))
 }
 
+/** 按对话 ID 存取 papers + top10 */
+function metaKey(cid: string) { return `rag_meta_${cid}` }
+function loadMeta(cid: string): CachedMeta {
+  try { return JSON.parse(localStorage.getItem(metaKey(cid)) || '{"papers":{},"top10":[]}') } catch { return { papers: {}, top10: [] } }
+}
+function saveMeta(cid: string, meta: CachedMeta) {
+  localStorage.setItem(metaKey(cid), JSON.stringify(meta))
+}
+
 export function useStreamingChat() {
   const [convs, setConvs] = useState<Conversation[]>(load)
   const [activeId, setActiveId] = useState<string>(() => convs[0]?.id || '')
   const [loading, setLoading] = useState(false)
-  const [papers, setPapers] = useState<Record<string, PaperInfo>>({})
+  const [papers, setPapers] = useState<Record<string, PaperInfo>>(() => {
+    const cid = convs[0]?.id
+    return cid ? loadMeta(cid).papers : {}
+  })
+  const [top10, setTop10] = useState<any[]>(() => {
+    const cid = convs[0]?.id
+    return cid ? loadMeta(cid).top10 : []
+  })
   const streamRef = useRef<HTMLDivElement | null>(null)
 
   const messages = convs.find((c) => c.id === activeId)?.messages || []
@@ -45,12 +68,36 @@ export function useStreamingChat() {
     setConvs((prev) => [c, ...prev])
     setActiveId(c.id)
     setPapers({})
+    setTop10([])
   }, [])
 
   const switchConversation = useCallback((id: string) => {
     setActiveId(id)
-    setPapers({})
+    const m = loadMeta(id)
+    setPapers(m.papers)
+    setTop10(m.top10)
   }, [])
+
+  const deleteConversation = useCallback((id: string) => {
+    setConvs((prev) => {
+      const next = prev.filter((c) => c.id !== id)
+      save(next)
+      if (activeId === id) {
+        const nid = next[0]?.id || ''
+        setActiveId(nid)
+        if (nid) {
+          const m = loadMeta(nid)
+          setPapers(m.papers)
+          setTop10(m.top10)
+        } else {
+          setPapers({})
+          setTop10([])
+        }
+      }
+      return next
+    })
+    try { localStorage.removeItem(metaKey(id)) } catch { /* ignore */ }
+  }, [activeId])
 
   const send = useCallback(async (question: string) => {
     const q = question.trim()
@@ -73,6 +120,7 @@ export function useStreamingChat() {
     const userMsg: Message = { role: 'user', content: q }
     setLoading(true)
     setPapers({})
+    setTop10([])
 
     setConvs((prev) => prev.map((c) => c.id === cid ? {
       ...c,
@@ -82,6 +130,8 @@ export function useStreamingChat() {
 
     let fullAnswer = ''
     let firstToken = true
+    let receivedPapers: Record<string, PaperInfo> = {}
+    let receivedTop10: any[] = []
 
     try {
       const response = await api.postStream('/api/rag/chat/stream', {
@@ -114,10 +164,19 @@ export function useStreamingChat() {
               fullAnswer += t
               if (streamRef.current) {
                 if (firstToken) { streamRef.current.innerHTML = ''; firstToken = false }
-                streamRef.current.textContent += t
+                const cMap = new Map<string, number>()
+                let cn = 1
+                streamRef.current.innerHTML = renderMath(fullAnswer)
+                  .replace(/\[PID_(\d+)\]/g, (_s: string, pid: string) => {
+                    if (!cMap.has(pid)) cMap.set(pid, cn++)
+                    return `<sup class="cite-ref">[${cMap.get(pid)}]</sup>`
+                  })
+                  .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                  .replace(/\n/g, '<br/>')
               }
-            } else if (eventType === 'done' && data.papers) {
-              setPapers((prev) => ({ ...prev, ...data.papers }))
+            } else if (eventType === 'done') {
+              if (data.papers) { receivedPapers = data.papers; setPapers(data.papers) }
+              if (data.top10) { receivedTop10 = data.top10; setTop10(data.top10) }
             } else if (eventType === 'error') {
               throw new Error(data.message || 'AI 错误')
             }
@@ -134,7 +193,7 @@ export function useStreamingChat() {
       setLoading(false)
     }
 
-    // 完成后一次性写入 React state
+    // 完成后写入 React state + 持久化 papers/top10
     setConvs((prev) => prev.map((c) => c.id === cid ? {
       ...c,
       messages: c.messages.map((m, i) =>
@@ -143,10 +202,11 @@ export function useStreamingChat() {
           : m
       ),
     } : c))
+    if (cid) saveMeta(cid, { papers: receivedPapers, top10: receivedTop10 })
   }, [activeId, convs, loading])
 
   return {
-    convs, activeId, messages, loading, papers, streamRef,
-    newConversation, switchConversation, send,
+    convs, activeId, messages, loading, papers, top10, streamRef,
+    newConversation, switchConversation, deleteConversation, send,
   }
 }

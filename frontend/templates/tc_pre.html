@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark navbar-custom shadow-sm">
+    <nav class="navbar navbar-expand-lg navbar-dark navbar-custom shadow-sm sticky-top">
         <div class="container-fluid">
             <a class="navbar-brand fw-bold" href="/" data-i18n="nav.title">超导文献数据库</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#tcNav">
@@ -17,12 +17,20 @@
             <div class="collapse navbar-collapse" id="tcNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="/" data-i18n="tcpre.nav_element_table">元素周期表</a>
+                        <a class="nav-link" href="/">首页</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/rag">AI 文献助手</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link active" aria-current="page" href="/tc-pre" data-i18n="tcpre.title">Tc 预测 (实验)</a>
                     </li>
                 </ul>
+                <div class="d-flex align-items-center gap-2" id="user-nav">
+                    <div class="spinner-border spinner-border-sm text-light" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
                 <button class="btn btn-outline-light btn-sm ms-2" onclick="I18N.toggle()" data-i18n="common.language">中/EN</button>
             </div>
         </div>
