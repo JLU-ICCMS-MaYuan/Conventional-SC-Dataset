@@ -1,7 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { api } from '../lib/api'
-import { renderMath } from '../utils/math'
-import 'katex/dist/katex.min.css'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -163,16 +161,9 @@ export function useStreamingChat() {
               const t = typeof data === 'string' ? data : String(data || '')
               fullAnswer += t
               if (streamRef.current) {
-                if (firstToken) { streamRef.current.innerHTML = ''; firstToken = false }
-                const cMap = new Map<string, number>()
-                let cn = 1
-                streamRef.current.innerHTML = renderMath(fullAnswer)
-                  .replace(/\[PID_(\d+)\]/g, (_s: string, pid: string) => {
-                    if (!cMap.has(pid)) cMap.set(pid, cn++)
-                    return `<sup class="cite-ref">[${cMap.get(pid)}]</sup>`
-                  })
-                  .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                  .replace(/\n/g, '<br/>')
+                if (firstToken) { streamRef.current.textContent = ''; firstToken = false }
+                // 流式时用纯文本（快），完成后才由 React 渲染 LaTeX
+                streamRef.current.textContent += t
               }
             } else if (eventType === 'done') {
               if (data.papers) { receivedPapers = data.papers; setPapers(data.papers) }
