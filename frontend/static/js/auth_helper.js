@@ -32,7 +32,7 @@ function renderLoggedInNav(container, user) {
         adminLinks += `<li><a class="dropdown-item" href="#" onclick="switchPage('/admin/papers'); return false;">📄 文献管理</a></li>`;
     }
     if (isSuperAdmin) {
-        adminLinks += `<li><a class="dropdown-item" href="#" onclick="switchPage('/admin/dashboard'); return false;">👥 用户管理</a></li>`;
+        adminLinks += `<li><a class="dropdown-item" href="#" onclick="switchPage('/admin/users'); return false;">👥 用户管理</a></li>`;
     }
     if (adminLinks) {
         adminLinks += '<li><hr class="dropdown-divider"></li>';

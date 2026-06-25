@@ -867,7 +867,7 @@
             const state = window.authState.get();
             if (!state || !state.token || !state.user) {
                 alert('请先登录');
-                window.location.href = '/admin/login';
+                window.location.href = '/login';
                 return false;
             }
 
@@ -879,7 +879,8 @@
 
             token = state.token;
             currentUser = state.user;
-            document.getElementById('userName').textContent = currentUser.real_name;
+            var userNameEl = document.getElementById('userName');
+            if (userNameEl) userNameEl.textContent = currentUser.real_name;
             return true;
         }
 
@@ -888,7 +889,7 @@
             if (window.authState) {
                 window.authState.clear();
             }
-            window.location.href = '/admin/login';
+            window.location.href = '/';
         }
 
         // 加载未审核文献

@@ -5,7 +5,7 @@ Admin APIs for users, paper review, and chart visibility.
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -463,6 +463,111 @@ async def batch_delete_papers(
         db.delete(paper)
     db.commit()
     return {"message": "批量删除完成", "deleted": len(papers)}
+
+
+def _record_to_item(record: models.SuperconductorRecord) -> dict:
+    """将超导记录转为前端展示用的字典"""
+    paper = record.paper
+    sc = record.superconductor
+    return {
+        "id": record.id,
+        "paper_id": record.paper_id,
+        "paper_title": paper.title if paper else None,
+        "paper_doi": paper.doi if paper else None,
+        "paper_year": paper.year if paper else None,
+        "chemical_formula": sc.chemical_formula if sc else None,
+        "compound_symbols": "-".join(sc.elements_list) if sc else None,
+        "pressure_gpa": record.pressure_gpa,
+        "space_group_symbol": record.space_group_symbol,
+        "space_group_number": record.space_group_number,
+        "crystal_structure": record.crystal_structure,
+        "mcmillan_tc": record.mcmillan_tc,
+        "allen_dynes_tc": record.allen_dynes_tc,
+        "isotropic_eliashberg_tc": record.isotropic_eliashberg_tc,
+        "anisotropic_eliashberg_tc": record.anisotropic_eliashberg_tc,
+        "experimental_tc": record.experimental_tc,
+        "lambda_value": record.lambda_value,
+        "omega_log": record.omega_log,
+        "n_ef_total": record.n_ef_total,
+        "thermodynamically_stable": record.thermodynamically_stable,
+        "dynamically_stable": record.dynamically_stable,
+        "energy_above_hull": record.energy_above_hull,
+        "show_in_chart": record.show_in_chart,
+        "article_type": record.article_type,
+        "superconductor_type": record.superconductor_type,
+        "calculation_code": record.calculation_code,
+        "method": record.method,
+        "note": record.note,
+        "review_status": paper.review_status if paper else None,
+    }
+
+
+@router.get("/records/all", summary="获取所有超导数据（支持筛选）")
+async def get_all_records(
+    review_status: Optional[str] = Query(None),
+    article_type: Optional[str] = Query(None),
+    superconductor_type: Optional[str] = Query(None),
+    show_in_chart: Optional[str] = Query(None),
+    year_min: Optional[int] = Query(None),
+    year_max: Optional[int] = Query(None),
+    keyword: Optional[str] = Query(None),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_admin),
+):
+    query = db.query(models.SuperconductorRecord).join(models.Paper)
+
+    if review_status:
+        query = query.filter(models.Paper.review_status == review_status)
+    if article_type:
+        query = query.filter(models.SuperconductorRecord.article_type == article_type)
+    if superconductor_type:
+        query = query.filter(models.SuperconductorRecord.superconductor_type == superconductor_type)
+    if show_in_chart:
+        query = query.filter(models.SuperconductorRecord.show_in_chart == (show_in_chart.lower() == "true"))
+    if year_min:
+        query = query.filter(models.Paper.year >= year_min)
+    if year_max:
+        query = query.filter(models.Paper.year <= year_max)
+    if keyword:
+        kw = f"%{keyword}%"
+        query = query.join(models.Superconductor).filter(
+            or_(
+                models.Paper.title.ilike(kw),
+                models.Paper.doi.ilike(kw),
+                models.Superconductor.chemical_formula.ilike(kw),
+            )
+        )
+
+    total = query.count()
+    records = query.order_by(models.SuperconductorRecord.id.desc()).offset(offset).limit(limit).all()
+    items = [_record_to_item(r) for r in records]
+
+    return {
+        "items": items,
+        "total": total,
+        "page_size": limit,
+    }
+
+
+class BatchRecordIdsRequest(BaseModel):
+    record_ids: list[int]
+
+
+@router.post("/records/batch-chart-visibility", summary="批量设置超导数据图表显示")
+async def batch_record_chart_visibility(
+    request: dict,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_superadmin),
+):
+    record_ids = request.get("record_ids", [])
+    show = request.get("show", True)
+    updated = db.query(models.SuperconductorRecord).filter(
+        models.SuperconductorRecord.id.in_(record_ids)
+    ).update({models.SuperconductorRecord.show_in_chart: show}, synchronize_session=False)
+    db.commit()
+    return {"message": "已更新", "updated_count": updated}
 
 
 @router.get("/papers/{paper_id}/images", summary="获取文献的所有图片")

@@ -6,6 +6,28 @@
     <title data-i18n="compound.page_title">元素组合 - 超导文献数据库</title>
     <link href="/static/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        /* 卡片淡入动画 */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .paper-card { animation: fadeInUp 0.4s ease both; }
+        .paper-card:nth-child(1)  { animation-delay: 0.00s; }
+        .paper-card:nth-child(2)  { animation-delay: 0.03s; }
+        .paper-card:nth-child(3)  { animation-delay: 0.06s; }
+        .paper-card:nth-child(4)  { animation-delay: 0.09s; }
+        .paper-card:nth-child(5)  { animation-delay: 0.12s; }
+        .paper-card:nth-child(6)  { animation-delay: 0.15s; }
+        .paper-card:nth-child(7)  { animation-delay: 0.18s; }
+        .paper-card:nth-child(8)  { animation-delay: 0.21s; }
+        .paper-card:nth-child(9)  { animation-delay: 0.24s; }
+        .paper-card:nth-child(10) { animation-delay: 0.27s; }
+        .paper-card:nth-child(n+11) { animation-delay: 0.30s; }
+
+        /* 筛选卡片和统计区淡入 */
+        .card.mb-3, .card.mb-4 { animation: fadeInUp 0.5s ease both; }
+    </style>
 </head>
 <body>
     <!-- 导航栏 -->

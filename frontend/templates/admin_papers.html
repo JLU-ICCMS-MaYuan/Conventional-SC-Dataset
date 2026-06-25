@@ -93,10 +93,10 @@
                     <input type="text" class="form-control" id="filterKeyword" placeholder="搜索标题、DOI、化学式...">
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label" data-i18n="compound.database">数据库</label>
-                    <select class="form-select" id="filterDatabase" onchange="loadPapers()">
-                        <option value="local" data-i18n="compound.local_db">本地数据库</option>
-                        <option value="ai" data-i18n="compound.ai_db">AI筛选</option>
+                    <label class="form-label">数据类型</label>
+                    <select class="form-select" id="filterDataType" onchange="loadPapers()">
+                        <option value="papers">文献</option>
+                        <option value="records">超导数据</option>
                     </select>
                 </div>
                 <div class="col-md-3 d-flex align-items-end">
@@ -234,9 +234,8 @@
                                     <textarea class="form-control" id="editNotes" rows="2"></textarea>
                                 </div>
                                 <div class="row mb-3 text-muted small">
-                                    <div class="col-md-4">记录数：<span id="detailRecordCount">-</span></div>
-                                    <div class="col-md-4">贡献者：<span id="detailUploader">-</span></div>
-                                    <div class="col-md-4">创建时间：<span id="detailCreatedAt">-</span></div>
+                                    <div class="col-md-6">贡献者：<span id="detailUploader">-</span></div>
+                                    <div class="col-md-6">创建时间：<span id="detailCreatedAt">-</span></div>
                                 </div>
                                 <div class="form-check mb-3">
                                     <input type="checkbox" class="form-check-input" id="editShowInChart">
@@ -255,7 +254,7 @@
                                         <th>McMillan</th><th>Allen-Dynes</th><th>Eliash(iso)</th><th>Eliash(aniso)</th><th>实验Tc</th>
                                         <th>λ</th><th>ω_log</th><th>N(Ef)</th><th>Ef(eV)</th>
                                         <th>稳定</th><th>动稳</th><th>E_hull</th><th>图表</th><th>类型</th><th>超导类型</th>
-                                        <th>S</th><th>方法</th><th>备注</th>
+                                        <th>方法</th><th>备注</th>
                                     </tr></thead>
                                     <tbody id="recordsTableBody"></tbody>
                                 </table>
@@ -301,6 +300,6 @@
     <script src="/static/js/bootstrap.bundle.min.js"></script>
     <script src="/static/js/i18n.js"></script>
     <script src="/static/js/auth_state.js"></script>
-    <script src="/static/js/admin_papers.js?v=20260617"></script>
+    <script src="/static/js/admin_papers.js?v=20260625-7"></script>
 </body>
 </html>

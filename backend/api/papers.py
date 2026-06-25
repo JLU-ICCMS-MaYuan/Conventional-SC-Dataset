@@ -376,11 +376,15 @@ def export_papers(export_data: schemas.ExportFormat, db: Session = Depends(get_d
 
 @router.get("/stats/tc-pressure")
 def get_tc_pressure_chart_data(db: Session = Depends(get_db)):
-    rows = db.query(models.SuperconductorRecord).join(models.SuperconductorRecord.superconductor).all()
+    rows = db.query(models.SuperconductorRecord).join(models.SuperconductorRecord.superconductor).outerjoin(models.SuperconductorRecord.paper).all()
     return [
         {
             "x": row.pressure_gpa,
             "y": representative_tc(row),
+            "type": "experimental" if (row.article_type == "e") else "theoretical",
+            "year": row.paper.year if row.paper else None,
+            "label": row.superconductor.chemical_formula,
+            "sc_type": row.superconductor_type or "others",
             "formula": row.superconductor.chemical_formula,
             "space_group": row.space_group_symbol,
             "source_label": row.source_label,

@@ -17,9 +17,9 @@ const LEGACY_SUPER_TYPES = {
     'unknown': 'others'
 };
 
-function getSelectedDatabase() {
-    const el = document.getElementById('filterDatabase');
-    return el ? el.value : 'local';
+function getSelectedDataType() {
+    const el = document.getElementById('filterDataType');
+    return el ? el.value : 'papers';
 }
 
 function normalizeSuperconductorType(value) {
@@ -129,7 +129,7 @@ function checkAuth() {
     const state = window.authState.get();
     if (!state || !state.token || !state.user) {
         alert('请先登录');
-        window.location.href = '/admin/login';
+        window.location.href = '/login';
         return false;
     }
 
@@ -141,7 +141,8 @@ function checkAuth() {
 
     token = state.token;
     currentUser = state.user;
-    document.getElementById('userName').textContent = currentUser.real_name;
+    var userNameEl = document.getElementById('userName');
+    if (userNameEl) userNameEl.textContent = currentUser.real_name;
 
     document.querySelectorAll('#batchStatusSelect option[data-superadmin-only="true"]').forEach(option => {
         if (currentUser.is_superadmin) {
@@ -160,9 +161,8 @@ function logout() {
     if (window.authState) {
         window.authState.clear();
     }
-    window.location.href = '/admin/login';
+    window.location.href = '/';
 }
-
 // ========== 加载文献列表 ==========
 
 async function loadPapers(page = 0) {
@@ -193,8 +193,11 @@ async function loadPapers(page = 0) {
         if (value) queryParams.append(key, value);
     }
 
+    const dataType = getSelectedDataType();
+    const apiUrl = dataType === 'records' ? '/api/admin/records/all' : '/api/admin/papers/all';
+
     try {
-        const response = await fetch(`/api/admin/papers/all?${queryParams}`, {
+        const response = await fetch(`${apiUrl}?${queryParams}`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
@@ -206,10 +209,14 @@ async function loadPapers(page = 0) {
 
         const data = await response.json();
         totalPapers = data.total;
-        renderPapers(data.items || data.papers || []);
+        if (dataType === 'records') {
+            renderRecords(data.items || []);
+        } else {
+            renderPapers(data.items || data.papers || []);
+        }
         renderPagination();
     } catch (error) {
-        console.error('加载文献失败:', error);
+        console.error('加载失败:', error);
         document.getElementById('papersList').innerHTML = `
             <div class="alert alert-danger">加载失败: ${error.message}</div>
         `;
@@ -244,8 +251,6 @@ function renderPapers(papers) {
                         <th>标题</th>
                         <th>元素组合</th>
                         <th>年份</th>
-                        <th>数据点</th>
-                        <th>s_factor</th>
                         <th>类型</th>
                         <th>图表</th>
                         <th>审核状态</th>
@@ -304,13 +309,6 @@ function renderPapers(papers) {
                 </td>
                 <td><span class="badge bg-info">${paper.compound_symbols}</span></td>
                 <td>${paper.year || '-'}</td>
-                <td>${renderPhysicalDataTable(paper)}</td>
-                <td>
-                    <small>
-                        ${(paper.s_factor !== undefined && paper.s_factor !== null) ?
-                        Number(paper.s_factor).toFixed(2) : '-'}
-                    </small>
-                </td>
                 <td>
                     <small>${articleTypeLabel} / ${scLabel}</small>
                 </td>
@@ -320,7 +318,6 @@ function renderPapers(papers) {
                         '<span class="badge bg-secondary">隐藏</span>'}
                 </td>
                 <td>${reviewBadge}</td>
-                <td><span class="badge bg-info">${paper.record_count || 0} 条记录</span></td>
                 <td>
                     <div class="btn-group btn-group-sm">
                         <a href="https://doi.org/${paper.doi}" target="_blank" class="btn btn-outline-primary">原文</a>
@@ -344,6 +341,113 @@ function renderPapers(papers) {
     updateBatchActionsVisibility();
     updateSelectAllCheckbox();
 }
+
+
+// ========== 超导数据列表渲染 ==========
+
+function renderRecords(records) {
+    const container = document.getElementById('papersList');
+
+    if (records.length === 0) {
+        container.innerHTML = `<div class="alert alert-info text-center"><h4>没有找到匹配的超导数据</h4><p class="mb-0">请尝试调整筛选条件</p></div>`;
+        updateBatchActionsVisibility();
+        return;
+    }
+
+    var allChecked = records.every(function(r) { return selectedPapers.has(r.id); });
+
+    let html = `<div class="table-responsive"><table class="table table-hover"><thead><tr>
+        <th width="30"><input type="checkbox" class="paper-checkbox" ${allChecked ? 'checked' : ''} onchange="toggleSelectAllRecords()"></th>
+        <th>化学式</th><th>文献</th><th>P(GPa)</th><th>空间群</th>
+        <th>Tc<sub>exp</sub></th><th>Tc<sub>McM</sub></th><th>Tc<sub>AD</sub></th><th>Tc<sub>El(iso)</sub></th>
+        <th>λ</th><th>ω<sub>log</sub></th><th>s_factor</th><th>图表</th><th>审核</th>
+    </tr></thead><tbody>`;
+
+    const scTypeMap = {
+        'h': '高压氢化物', 'c': '碳基', 'cb': '铜基', 'ot': '其他',
+        'hydride': '高压氢化物', 'carbon': '碳基', 'cuprate': '铜基', 'organic': '有机', 'others': '其他'
+    };
+
+    records.forEach(r => {
+        const formula = r.chemical_formula || '-';
+        const paperTitle = r.paper_title ? r.paper_title.substring(0, 60) : '';
+        const paperInfo = r.paper_title
+            ? '<small class="text-muted">' + escapeHtml(paperTitle) + (r.paper_title.length > 60 ? '...' : '') + '</small><br><small>DOI: ' + (r.paper_doi || '-') + '</small>'
+            : '<small class="text-muted">-</small>';
+        const pressure = r.pressure_gpa != null ? Number(r.pressure_gpa).toFixed(1) + ' GPa' : '-';
+        const scType = (r.superconductor_type && scTypeMap[r.superconductor_type]) || r.superconductor_type || '-';
+        var isSel = selectedPapers.has(r.id);
+
+        html += '<tr>' +
+            '<td><input type="checkbox" class="paper-checkbox" ' + (isSel ? 'checked' : '') + ' onchange="toggleRecordSelection(' + r.id + ')"></td>' +
+            '<td><strong>' + escapeHtml(formula) + '</strong>' +
+            (r.superconductor_type ? '<br><small>' + scType + '</small>' : '') +
+            (r.crystal_structure ? '<br><small class="text-muted">' + escapeHtml(r.crystal_structure) + '</small>' : '') + '</td>' +
+            '<td>' + paperInfo + '</td>' +
+            '<td>' + pressure + '</td>' +
+            '<td>' + escapeHtml(r.space_group_symbol || '-') + '</td>' +
+            '<td><strong>' + (r.experimental_tc != null ? Number(r.experimental_tc).toFixed(1) + ' K' : '-') + '</strong></td>' +
+            '<td>' + (r.mcmillan_tc != null ? Number(r.mcmillan_tc).toFixed(1) : '-') + '</td>' +
+            '<td>' + (r.allen_dynes_tc != null ? Number(r.allen_dynes_tc).toFixed(1) : '-') + '</td>' +
+            '<td>' + (r.isotropic_eliashberg_tc != null ? Number(r.isotropic_eliashberg_tc).toFixed(1) : '-') + '</td>' +
+            '<td>' + (r.lambda_value != null ? Number(r.lambda_value).toFixed(3) : '-') + '</td>' +
+            '<td>' + (r.omega_log != null ? Number(r.omega_log).toFixed(1) : '-') + '</td>' +
+            '<td>' + getFactorDisplay(r) + '</td>' +
+            '<td>' + (r.show_in_chart ? '<span class="badge bg-success">显示</span>' : '<span class="badge bg-secondary">隐藏</span>') + '</td>' +
+            '<td>' + getReviewBadge(r.review_status) + '</td>' +
+            '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+    updateBatchActionsVisibility();
+    updateSelectAllCheckbox();
+}
+
+function toggleSelectAllRecords() {
+    var checkboxes = document.querySelectorAll('#papersList .paper-checkbox');
+    var allChecked = document.querySelector('#papersList thead .paper-checkbox').checked;
+    checkboxes.forEach(function(cb) {
+        cb.checked = allChecked;
+        var id = parseInt(cb.getAttribute('onchange')?.toString().match(/\d+/)?.[0]);
+        if (id) {
+            if (allChecked) selectedPapers.add(id); else selectedPapers.delete(id);
+        }
+    });
+    updateBatchActionsVisibility();
+}
+
+function toggleRecordSelection(id) {
+    if (selectedPapers.has(id)) selectedPapers.delete(id); else selectedPapers.add(id);
+    updateBatchActionsVisibility();
+}
+
+function getReviewBadge(status) {
+    const map = {
+        'pending': '<span class="badge bg-warning">未审核</span>',
+        'approved': '<span class="badge bg-success">已通过</span>',
+        'rejected': '<span class="badge bg-danger">已拒绝</span>',
+        'needs_revision': '<span class="badge bg-info">需修改</span>'
+    };
+    return map[status] || '<span class="badge bg-secondary">未知</span>';
+}
+
+function calcSFactor(tcValue, pressureValue) {
+    var tc = parseFloat(tcValue);
+    var p = parseFloat(pressureValue);
+    if (!isFinite(tc) || !isFinite(p)) return null;
+    return tc / Math.sqrt(1521 + p * p);
+}
+
+function getFactorDisplay(r) {
+    var val = r.s_factor;
+    if (val != null) return Number(val).toFixed(2);
+    // 用实验Tc计算回退
+    var tc = r.experimental_tc || r.allen_dynes_tc || r.mcmillan_tc || r.isotropic_eliashberg_tc;
+    var s = calcSFactor(tc, r.pressure_gpa);
+    return s != null ? '<span class="text-warning">' + s.toFixed(2) + '</span>' : '-';
+}
+
 
 // 渲染分页
 function renderPagination() {
@@ -435,8 +539,28 @@ function clearSelection() {
 function updateBatchActionsVisibility() {
     const batchActions = document.getElementById('batchActions');
     const selectedCount = document.getElementById('selectedCount');
+    const batchSelect = document.getElementById('batchStatusSelect');
+    var isRecords = getSelectedDataType() === 'records';
 
     selectedCount.textContent = selectedPapers.size;
+
+    // 根据数据类型切换批量操作选项
+    if (isRecords) {
+        batchSelect.innerHTML = `
+            <option value="chart_show">显示在图表</option>
+            <option value="chart_hide">从图表隐藏</option>
+        `;
+    } else {
+        batchSelect.innerHTML = `
+            <option value="approved">通过</option>
+            <option value="rejected">拒绝</option>
+            <option value="needs_revision">需修改</option>
+            <option value="pending">撤回审核</option>
+            <option value="chart_show">显示在图表</option>
+            <option value="chart_hide">从图表隐藏</option>
+            <option value="delete">删除</option>
+        `;
+    }
 
     if (selectedPapers.size > 0) {
         batchActions.classList.add('active');
@@ -446,8 +570,9 @@ function updateBatchActionsVisibility() {
 }
 
 function updateSelectAllCheckbox() {
-    const checkboxes = document.querySelectorAll('.paper-checkbox[data-paper-id]');
-    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+    var isRecords = getSelectedDataType() === 'records';
+    var checkboxes = document.querySelectorAll('#papersList tbody .paper-checkbox');
+    var allChecked = checkboxes.length > 0 && Array.from(checkboxes).every(function(cb) { return cb.checked; });
 
     const selectAllMain = document.getElementById('selectAll');
     const selectAllTable = document.getElementById('selectAllTable');
@@ -519,15 +644,19 @@ async function batchChartVisibility(show) {
         return;
     }
 
+    const isRecords = getSelectedDataType() === 'records';
+    const apiUrl = isRecords ? '/api/admin/records/batch-chart-visibility' : '/api/admin/papers/batch-chart-visibility';
+    const bodyKey = isRecords ? 'record_ids' : 'paper_ids';
+
     try {
-        const response = await fetch(`/api/admin/papers/batch-chart-visibility`, {
+        const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                paper_ids: Array.from(selectedPapers),
+                [bodyKey]: Array.from(selectedPapers),
                 show
             })
         });
@@ -706,7 +835,6 @@ async function openEditModal(paperId) {
 
         // 摘要信息
         const setHtml = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val !== null && val !== undefined ? val : '-'; };
-        setHtml('detailRecordCount', paper.record_count);
         setHtml('detailUploader', paper.uploader_name || '-');
         setHtml('detailCreatedAt', paper.created_at ? new Date(paper.created_at).toLocaleString('zh-CN') : '-');
 
@@ -753,7 +881,6 @@ async function openEditModal(paperId) {
                     <td>${r.show_in_chart ? '✅' : '—'}</td>
                     <td>${r.article_type === 'e' ? '实验' : (r.article_type === 't' ? '理论' : '-')}</td>
                     <td>${escapeHtml(r.superconductor_type)}</td>
-                    <td>${r.s_factor != null ? Number(r.s_factor).toFixed(2) : '-'}</td>
                     <td>${escapeHtml(r.method)}</td>
                     <td>${escapeHtml(r.note)}</td>
                 </tr>

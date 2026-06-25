@@ -173,6 +173,15 @@ def admin_papers_page():
     return {"error": "页面不存在"}
 
 
+@app.get("/admin/users")
+def admin_users_page():
+    """返回用户管理页面"""
+    users_file = TEMPLATES_DIR / "admin_users.html"
+    if users_file.exists():
+        return FileResponse(users_file)
+    return {"error": "页面不存在"}
+
+
 @app.get("/tc-pre")
 def tc_prediction_page():
     """Tc 预测实验页面"""
