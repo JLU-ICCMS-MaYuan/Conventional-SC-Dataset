@@ -469,7 +469,7 @@ function renderAlexandriaCard(item) {
                                         ['Tc<sub>El</sub>', item.tc_eliashberg != null ? item.tc_eliashberg.toFixed(2) + ' K' : '—'],
                                         ['λ', lambdaStr],
                                         ['ω<sub>log</sub>', item.wlog != null ? item.wlog.toFixed(2) + ' K' : '—'],
-                                        ['N(E<sub>f</sub>)', item.dos_ef != null ? item.dos_ef.toFixed(3) : '—'],
+                                        ['费米能级', item.dos_ef != null ? item.dos_ef.toFixed(3) + ' eV' : '—'],
                                     ].map(([label, val]) =>
                                         `<div class="col-4 p-1"><div class="bg-light rounded p-1"><div class="text-muted" style="font-size:0.65rem;">${label}</div><strong style="font-size:0.8rem;">${val}</strong></div></div>`
                                     ).join('')}
@@ -496,7 +496,7 @@ async function loadTestDatabase(container) {
     container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-3">加载中...</p></div>';
 
     const [aiPapers, alexMaterials] = await Promise.all([
-        fetchTestAIPapers(),
+        Promise.resolve([]),
         fetchTestAlexandriaMaterials(elements),
     ]);
 
@@ -578,35 +578,6 @@ async function loadTestDatabase(container) {
             : viewMode === 'contains' ? I18N.t('index.mode_contains')
             : I18N.t('index.mode_combination');
         sub.innerHTML = `${I18N.t('compound.test_db')} · ${modeLabel} · ${elements.join('-')} · ${totalCount} 条结果`;
-    }
-}
-
-async function fetchTestAIPapers() {
-    const savedDb = currentDatabase;
-    currentDatabase = 'ai';
-    try {
-        let payload;
-        if (viewMode === 'only') {
-            const qs = buildQueryString(currentSearchParams);
-            const resp = await fetch(`/api/ai/papers/compound/${elementSymbols}?${qs}`);
-            payload = normalizePaperListPayload(await resp.json());
-        } else {
-            const body = { elements: getSelectedElementsFromPath(), mode: _alexMode(viewMode),
-                keyword: currentSearchParams.keyword || '',
-                year_min: currentSearchParams.yearMin ? parseInt(currentSearchParams.yearMin) : null,
-                year_max: currentSearchParams.yearMax ? parseInt(currentSearchParams.yearMax) : null,
-                limit: ONLY_MODE_PAGE_SIZE, offset: 0, page: 1 };
-            const resp = await fetch('/api/ai/papers/search-by-mode', {
-                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
-            });
-            payload = normalizePaperListPayload(await resp.json());
-        }
-        return payload.items || [];
-    } catch (e) {
-        console.error('AI 文献加载失败:', e);
-        return [];
-    } finally {
-        currentDatabase = savedDb;
     }
 }
 
@@ -2006,7 +1977,7 @@ function renderAlexandriaCard(item) {
                                         ['Tc<sub>El</sub>', item.tc_eliashberg != null ? item.tc_eliashberg.toFixed(2) + ' K' : '—'],
                                         ['λ', lambdaStr],
                                         ['ω<sub>log</sub>', item.wlog != null ? item.wlog.toFixed(2) + ' K' : '—'],
-                                        ['N(E<sub>f</sub>)', item.dos_ef != null ? item.dos_ef.toFixed(3) : '—'],
+                                        ['费米能级', item.dos_ef != null ? item.dos_ef.toFixed(3) + ' eV' : '—'],
                                     ].map(([label, val]) =>
                                         `<div class="col-4 p-1"><div class="bg-light rounded p-1"><div class="text-muted" style="font-size:0.65rem;">${label}</div><strong style="font-size:0.8rem;">${val}</strong></div></div>`
                                     ).join('')}
@@ -2033,7 +2004,7 @@ async function loadTestDatabase(container) {
     container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-3">加载中...</p></div>';
 
     const [aiPapers, alexMaterials] = await Promise.all([
-        fetchTestAIPapers(),
+        Promise.resolve([]),
         fetchTestAlexandriaMaterials(elements),
     ]);
 
@@ -2115,35 +2086,6 @@ async function loadTestDatabase(container) {
             : viewMode === 'contains' ? I18N.t('index.mode_contains')
             : I18N.t('index.mode_combination');
         sub.innerHTML = `${I18N.t('compound.test_db')} · ${modeLabel} · ${elements.join('-')} · ${totalCount} 条结果`;
-    }
-}
-
-async function fetchTestAIPapers() {
-    const savedDb = currentDatabase;
-    currentDatabase = 'ai';
-    try {
-        let payload;
-        if (viewMode === 'only') {
-            const qs = buildQueryString(currentSearchParams);
-            const resp = await fetch(`/api/ai/papers/compound/${elementSymbols}?${qs}`);
-            payload = normalizePaperListPayload(await resp.json());
-        } else {
-            const body = { elements: getSelectedElementsFromPath(), mode: _alexMode(viewMode),
-                keyword: currentSearchParams.keyword || '',
-                year_min: currentSearchParams.yearMin ? parseInt(currentSearchParams.yearMin) : null,
-                year_max: currentSearchParams.yearMax ? parseInt(currentSearchParams.yearMax) : null,
-                limit: ONLY_MODE_PAGE_SIZE, offset: 0, page: 1 };
-            const resp = await fetch('/api/ai/papers/search-by-mode', {
-                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
-            });
-            payload = normalizePaperListPayload(await resp.json());
-        }
-        return payload.items || [];
-    } catch (e) {
-        console.error('AI 文献加载失败:', e);
-        return [];
-    } finally {
-        currentDatabase = savedDb;
     }
 }
 

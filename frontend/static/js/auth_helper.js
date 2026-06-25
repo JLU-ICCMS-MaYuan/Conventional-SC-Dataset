@@ -17,11 +17,26 @@ function initUserNavbar() {
     } else {
         renderLoggedOutNav(userNav);
     }
+
+    // 同步更新管理员导航标签
+    if (window.updateAdminNav) {
+        window.updateAdminNav();
+    }
 }
 
 function renderLoggedInNav(container, user) {
     const isAdmin = Boolean(user.is_admin);
-    const dashboardLink = isAdmin ? `<li><a class="dropdown-item" href="/admin/dashboard">${I18N.t('admin.dashboard')}</a></li>` : '';
+    const isSuperAdmin = Boolean(user.is_superadmin);
+    let adminLinks = '';
+    if (isAdmin || isSuperAdmin) {
+        adminLinks += `<li><a class="dropdown-item" href="#" onclick="switchPage('/admin/papers'); return false;">📄 文献管理</a></li>`;
+    }
+    if (isSuperAdmin) {
+        adminLinks += `<li><a class="dropdown-item" href="#" onclick="switchPage('/admin/dashboard'); return false;">👥 用户管理</a></li>`;
+    }
+    if (adminLinks) {
+        adminLinks += '<li><hr class="dropdown-divider"></li>';
+    }
 
     container.innerHTML = `
         <div class="dropdown">
@@ -29,7 +44,7 @@ function renderLoggedInNav(container, user) {
                 👤 ${user.real_name}
             </button>
             <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="userDropdown">
-                ${dashboardLink}
+                ${adminLinks}
                 <li><a class="dropdown-item text-danger" href="#" onclick="handleLogout()">${I18N.t('common.logout')}</a></li>
             </ul>
         </div>

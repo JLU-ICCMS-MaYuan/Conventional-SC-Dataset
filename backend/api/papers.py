@@ -182,8 +182,24 @@ def _query_papers_for_superconductors(
     return query
 
 
-def _paginate(query, limit: int, offset: int) -> dict[str, Any]:
-    total = query.count()
+# 简单的内存缓存：key → (total, timestamp)
+_count_cache: dict[str, tuple[int, float]] = {}
+import time as _time
+
+def _paginate(query, limit: int, offset: int, *, cache_key: str | None = None) -> dict[str, Any]:
+    if cache_key is None:
+        cache_key = str(query.statement.compile(compile_kwargs={"literal_binds": True}))
+    if cache_key in _count_cache:
+        total, ts = _count_cache[cache_key]
+        if _time.time() - ts < 30:
+            pass
+        else:
+            del _count_cache[cache_key]
+            total = query.count()
+            _count_cache[cache_key] = (total, _time.time())
+    else:
+        total = query.count()
+        _count_cache[cache_key] = (total, _time.time())
     items = query.offset(offset).limit(limit).all()
     page_size = limit
     page = (offset // page_size) + 1 if page_size else 1

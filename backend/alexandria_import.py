@@ -14,10 +14,12 @@ ALEXANDRIA_DIR = os.path.join(
     "data", "alexandria"
 )
 DB_PATH = os.path.join(ALEXANDRIA_DIR, "alexandria.db")
+QUERY_DB_PATH = os.path.join(ALEXANDRIA_DIR, "alexandria_short.db")  # 精简库，无 data 大字段
 
 
 # 只读连接缓存（线程安全，WAL 模式支持并发读）
 _read_conn: Optional[sqlite3.Connection] = None
+_full_conn: Optional[sqlite3.Connection] = None   # 完整库下载用
 
 
 def get_conn() -> sqlite3.Connection:
@@ -31,14 +33,25 @@ def get_conn() -> sqlite3.Connection:
 
 
 def get_read_conn() -> sqlite3.Connection:
-    """获取只读连接（用于 API 查询，缓存复用）"""
+    """获取只读连接（用于 API 查询，使用精简库）"""
     global _read_conn
     if _read_conn is None:
-        _read_conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        _read_conn = sqlite3.connect(QUERY_DB_PATH, check_same_thread=False)
         _read_conn.execute("PRAGMA journal_mode=WAL")     # WAL 模式支持并发读
         _read_conn.execute("PRAGMA cache_size=-200000")    # 200MB 缓存
         _read_conn.execute("PRAGMA temp_store=MEMORY")
     return _read_conn
+
+
+def get_full_conn() -> sqlite3.Connection:
+    """获取完整库连接（下载原始 JSON 用）"""
+    global _full_conn
+    if _full_conn is None:
+        _full_conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        _full_conn.execute("PRAGMA journal_mode=WAL")
+        _full_conn.execute("PRAGMA cache_size=-200000")
+        _full_conn.execute("PRAGMA temp_store=MEMORY")
+    return _full_conn
 
 
 def create_tables(conn: sqlite3.Connection):
@@ -62,7 +75,14 @@ def create_tables(conn: sqlite3.Connection):
             e_above_hull REAL,
             e_form      REAL,
             energy_total REAL,
-            data        TEXT NOT NULL       -- 完整原始 JSON
+            tc_mcmillan REAL,
+            tc_allen_dynes REAL,
+            tc_eliashberg REAL,
+            wlog        REAL,
+            integral_a2f REAL,
+            stress_xx   REAL,
+            stress_yy   REAL,
+            stress_zz   REAL
         );
 
         CREATE INDEX idx_entries_formula ON entries(formula);
@@ -95,6 +115,11 @@ def _extract_tc_max(tc_data) -> Optional[float]:
 def _extract_meta(d: Dict) -> Dict:
     """提取建索引所需的元数据字段"""
     tc = d.get("tc", {}) or {}
+    def _arr7(key):
+        """取第7个值（mu* = 0.12）"""
+        vals = tc.get(key)
+        return vals[6] if isinstance(vals, list) and len(vals) > 6 and vals[6] is not None else None
+    stress = d.get("stress", []) or []
     return {
         "mat_id":       d.get("mat_id"),
         "formula":      d.get("formula"),
@@ -109,6 +134,14 @@ def _extract_meta(d: Dict) -> Dict:
         "e_above_hull": d.get("e_above_hull"),
         "e_form":       d.get("e_form"),
         "energy_total": d.get("energy_total"),
+        "tc_mcmillan":  _arr7("TcMcMillan"),
+        "tc_allen_dynes": _arr7("TcAllenDynes"),
+        "tc_eliashberg": _arr7("TcEliashberg"),
+        "wlog":         tc.get("wlog[K]"),
+        "integral_a2f": tc.get("integral_a2F"),
+        "stress_xx":    stress[0] if len(stress) > 0 else None,
+        "stress_yy":    stress[1] if len(stress) > 1 else None,
+        "stress_zz":    stress[2] if len(stress) > 2 else None,
     }
 
 
@@ -137,7 +170,9 @@ def import_file(conn: sqlite3.Connection, filepath: str, filename: str) -> int:
             meta["lambda_val"], meta["tc_max"], meta["imag"],
             meta["band_gap"], meta["dos_ef"],
             meta["e_above_hull"], meta["e_form"], meta["energy_total"],
-            raw_json,
+            meta["tc_mcmillan"], meta["tc_allen_dynes"], meta["tc_eliashberg"],
+            meta["wlog"], meta["integral_a2f"],
+            meta["stress_xx"], meta["stress_yy"], meta["stress_zz"],
         ))
 
     # 批量插入 entries（分步，每步提交一次释放内存）
@@ -149,8 +184,10 @@ def import_file(conn: sqlite3.Connection, filepath: str, filename: str) -> int:
             INSERT OR IGNORE INTO entries
                 (mat_id, filename, formula, elements, nsites, spg,
                  lambda_val, tc_max, imag, band_gap, dos_ef,
-                 e_above_hull, e_form, energy_total, data)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                 e_above_hull, e_form, energy_total,
+                 tc_mcmillan, tc_allen_dynes, tc_eliashberg,
+                 wlog, integral_a2f, stress_xx, stress_yy, stress_zz)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, batch)
         conn.commit()
         total += len(batch)
@@ -282,21 +319,24 @@ def query_by_elements(elements: List[str], mode: str = "contains",
             """
             sub_params = elements + [n]
         elif mode == "combination":
+            # 包含所有查询元素（可含更多）：在 element_idx 上 GROUP BY 筛选
             sub_sql = f"""
                 INSERT INTO _q (entry_id)
-                SELECT e.id FROM entries e
-                WHERE (SELECT COUNT(*) FROM element_idx WHERE entry_id = e.id AND element IN ({placeholders})) = ?
-                  AND (SELECT COUNT(*) FROM element_idx WHERE entry_id = e.id) <= ?
+                SELECT entry_id FROM element_idx
+                WHERE element IN ({placeholders})
+                GROUP BY entry_id HAVING COUNT(DISTINCT element) = ?
             """
-            sub_params = elements + [n, n]
+            sub_params = elements + [n]
         elif mode == "only":
+            # 精确匹配查询元素：元素总数 == 查询元素数，且无非查询元素
             sub_sql = f"""
                 INSERT INTO _q (entry_id)
-                SELECT e.id FROM entries e
-                WHERE (SELECT COUNT(*) FROM element_idx WHERE entry_id = e.id AND element IN ({placeholders})) = ?
-                  AND (SELECT COUNT(*) FROM element_idx WHERE entry_id = e.id) = ?
+                SELECT entry_id FROM element_idx
+                GROUP BY entry_id
+                HAVING COUNT(DISTINCT element) = ?
+                   AND SUM(CASE WHEN element IN ({placeholders}) THEN 0 ELSE 1 END) = 0
             """
-            sub_params = elements + [n, n]
+            sub_params = [n] + elements
         else:
             return {"items": [], "total": 0}
     else:
@@ -344,14 +384,9 @@ def query_by_elements(elements: List[str], mode: str = "contains",
     data_sql = f"""
         SELECT e.id, e.mat_id, e.formula, e.elements, e.nsites, e.spg,
                e.lambda_val, e.tc_max, e.imag, e.band_gap, e.dos_ef,
-               json_extract(e.data, '$.tc.TcMcMillan[5]') as tc_mcmillan,
-               json_extract(e.data, '$.tc.TcAllenDynes[5]') as tc_allen_dynes,
-               json_extract(e.data, '$.tc.TcEliashberg[5]') as tc_eliashberg,
-               json_extract(e.data, '$."tc"."wlog[K]"') as wlog,
-               json_extract(e.data, '$.tc.integral_a2F') as integral_a2f,
-               json_extract(e.data, '$.stress[0]') as sxx,
-               json_extract(e.data, '$.stress[1]') as syy,
-               json_extract(e.data, '$.stress[2]') as szz
+               e.tc_mcmillan, e.tc_allen_dynes, e.tc_eliashberg,
+               e.wlog, e.integral_a2f,
+               e.stress_xx as sxx, e.stress_yy as syy, e.stress_zz as szz
         FROM _q q JOIN entries e ON e.id = q.entry_id
         {where_extra}
         ORDER BY e.tc_max DESC NULLS LAST

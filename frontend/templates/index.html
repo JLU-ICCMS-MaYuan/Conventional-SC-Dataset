@@ -26,6 +26,8 @@
                     <a class="nav-link" href="#" data-page="/compound" style="display:none;" onclick="return switchPage(this.dataset.url)">化合物</a>
                     <a class="nav-link" href="#" data-page="/rag" onclick="return switchPage('/rag')">AI 文献助手</a>
                     <a class="nav-link" href="#" data-page="/tc-pre" onclick="return switchPage('/tc-pre')">Tc 预测</a>
+                    <a class="nav-link admin-only" href="#" data-page="/admin/papers" style="display:none;" data-role="admin" onclick="return switchPage('/admin/papers')">文献管理</a>
+                    <a class="nav-link admin-only" href="#" data-page="/admin/dashboard" style="display:none;" data-role="superadmin" onclick="return switchPage('/admin/dashboard')">用户管理</a>
                     <span class="nav-slider"></span>
                 </div>
                 <div class="d-flex align-items-center gap-2" id="user-nav">
@@ -76,9 +78,11 @@
                 }
                 // 更新 active：匹配当前 iframe URL
                 var isCompound = frameUrl.indexOf('/compound/') === 0;
+                var isAdmin = frameUrl.indexOf('/admin/') === 0;
                 document.querySelectorAll('#navTabs .nav-link').forEach(function(l) {
                     l.classList.remove('active');
                     if (l.dataset.page === '/compound' && isCompound) l.classList.add('active');
+                    else if (isAdmin && l.dataset.page === frameUrl) l.classList.add('active');
                     else if (l.dataset.page === frameUrl) l.classList.add('active');
                 });
             } catch(e) {}
@@ -86,6 +90,33 @@
         });
         document.addEventListener('DOMContentLoaded', updateNavSlider);
         window.addEventListener('resize', updateNavSlider);
+
+        /* ====== 管理员导航控制 ====== */
+        function updateAdminNav() {
+            var state = window.authState ? window.authState.get() : null;
+            var isAdmin = state && state.user && state.user.is_admin;
+            var isSuperAdmin = state && state.user && state.user.is_superadmin;
+
+            document.querySelectorAll('#navTabs .admin-only').forEach(function(link) {
+                var role = link.dataset.role;
+                if (role === 'superadmin' && isSuperAdmin) {
+                    link.style.display = '';
+                } else if (role === 'admin' && (isAdmin || isSuperAdmin)) {
+                    link.style.display = '';
+                } else {
+                    link.style.display = 'none';
+                }
+            });
+            updateNavSlider();
+        }
+
+        // 页面初始化和 auth 变化时更新
+        document.addEventListener('DOMContentLoaded', function() {
+            // 等待 auth_state 加载后更新（延迟一点确保 authState 已就绪）
+            setTimeout(updateAdminNav, 200);
+        });
+        // 暴露给 auth_helper 在登录/登出后调用
+        window.updateAdminNav = updateAdminNav;
     </script>
 </body>
 </html>

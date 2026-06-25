@@ -231,8 +231,8 @@ def get_alexandria_material(mat_id: str):
 @router.get("/material/{mat_id}/download")
 def download_alexandria_material(mat_id: str):
     """下载材料完整原始数据（含 force_constants 和 dyns，文件较大）"""
-    from backend.alexandria_import import get_read_conn
-    conn = get_read_conn()
+    from backend.alexandria_import import get_full_conn
+    conn = get_full_conn()
     row = conn.execute(
         "SELECT data FROM entries WHERE mat_id = ?", (mat_id,)
     ).fetchone()
