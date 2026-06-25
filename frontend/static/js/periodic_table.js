@@ -167,17 +167,20 @@ function renderPeriodicTable() {
 
     // 创建网格（包含空白格子）
     const grid = [];
+    let gi = 0;
     for (let row = 1; row <= maxRow; row++) {
         for (let col = 1; col <= maxCol; col++) {
             const element = ELEMENTS_DATA.find(e => e.row === row && e.col === col);
             if (element) {
-                grid.push(createElementDiv(element));
+                const div = createElementDiv(element);
+                div.style.setProperty('--i', gi);
+                grid.push(div);
             } else {
-                // 空白格子
                 const emptyDiv = document.createElement('div');
                 emptyDiv.className = 'element empty';
                 grid.push(emptyDiv);
             }
+            gi++;
         }
     }
 
@@ -230,11 +233,15 @@ function updateSelectedDisplay() {
         display.textContent = I18N.t('index.none_selected');
         display.className = 'badge bg-secondary';
         btn.disabled = true;
+        btn.className = 'btn btn-outline-primary';
     } else {
         const sortedElements = Array.from(selectedElements).sort();
         display.textContent = sortedElements.join(', ');
-        display.className = 'badge bg-primary';
+        display.className = 'badge';
+        display.style.background = '#4d6bfe';
+        display.style.color = '#fff';
         btn.disabled = false;
+        btn.className = 'btn btn-enter';
     }
 }
 

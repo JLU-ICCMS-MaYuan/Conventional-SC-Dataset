@@ -56,14 +56,19 @@ if STATIC_DIR.exists():
 @app.get("/")
 def read_root():
     """返回主页"""
-    index_file = TEMPLATES_DIR / "index.html"
-    if index_file.exists():
-        return FileResponse(index_file)
-    return {
-        "message": "超导文献数据库 API",
-        "version": "1.0.0",
-        "docs": "/docs"
-    }
+    f = TEMPLATES_DIR / "index.html"
+    if f.exists():
+        return FileResponse(f)
+    return {"error": "页面不存在"}
+
+
+@app.get("/elements")
+def elements_page():
+    """元素周期表内容页（iframe 内嵌用）"""
+    f = TEMPLATES_DIR / "elements.html"
+    if f.exists():
+        return FileResponse(f)
+    return {"error": "页面不存在"}
 
 
 # 元素周期表页面
@@ -181,6 +186,15 @@ def tc_prediction_page():
 def rag_page():
     """AI 文献助手页面"""
     page_file = TEMPLATES_DIR / "rag.html"
+    if page_file.exists():
+        return FileResponse(page_file)
+    return {"error": "页面不存在"}
+
+
+@app.get("/merged")
+def merged_page():
+    """三合一页面"""
+    page_file = TEMPLATES_DIR / "merged.html"
     if page_file.exists():
         return FileResponse(page_file)
     return {"error": "页面不存在"}

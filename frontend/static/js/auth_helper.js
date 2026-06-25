@@ -40,7 +40,7 @@ function renderLoggedOutNav(container) {
     container.innerHTML = `
         <div class="btn-group">
             <a href="/login" class="btn btn-outline-light">${I18N.t('login.submit')}</a>
-            <a href="/register" class="btn btn-light">${I18N.t('register.title')}</a>
+            <a href="/register" class="btn btn-outline-light">${I18N.t('register.title')}</a>
         </div>
     `;
 }

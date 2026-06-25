@@ -3,40 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="view-transition" content="same-origin" />
     <title data-i18n="tcpre.page_title">Tc 预测实验页</title>
     <link href="/static/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark navbar-custom shadow-sm sticky-top">
-        <div class="container-fluid">
-            <a class="navbar-brand fw-bold" href="/" data-i18n="nav.title">超导文献数据库</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#tcNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="tcNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="/">首页</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/rag">AI 文献助手</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link active" aria-current="page" href="/tc-pre" data-i18n="tcpre.title">Tc 预测 (实验)</a>
-                    </li>
-                </ul>
-                <div class="d-flex align-items-center gap-2" id="user-nav">
-                    <div class="spinner-border spinner-border-sm text-light" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                </div>
-                <button class="btn btn-outline-light btn-sm ms-2" onclick="I18N.toggle()" data-i18n="common.language">中/EN</button>
-            </div>
-        </div>
-    </nav>
-
-    <main class="container py-4">
+    <main class="container py-4" style="animation: elementFadeIn 0.5s ease both;">
         <div class="row justify-content-center">
             <div class="col-lg-8">
                 <div class="card shadow-sm mb-4">
@@ -84,5 +57,19 @@
     <script src="/static/js/bootstrap.bundle.min.js"></script>
     <script src="/static/js/i18n.js"></script>
     <script src="/static/js/tc_pre.js" defer></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const nav = document.getElementById('navTabs');
+            const slider = nav?.querySelector('.nav-slider');
+            if (!slider) return;
+            const active = nav.querySelector('.nav-link.active');
+            if (active) {
+                const cr = nav.getBoundingClientRect();
+                const ar = active.getBoundingClientRect();
+                slider.style.left = (ar.left - cr.left) + 'px';
+                slider.style.width = ar.width + 'px';
+            }
+        });
+    </script>
 </body>
 </html>

@@ -89,33 +89,6 @@
 </head>
 <body>
     <!-- 导航栏 -->
-    <nav class="navbar navbar-expand-lg navbar-dark navbar-custom sticky-top">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="/" data-i18n="nav.title">超导文献数据库</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link active" href="/admin/dashboard" data-i18n="admin.review_papers">审核文献</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/papers" data-i18n="admin.global_management">全局管理</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/superadmin" data-i18n="admin.superadmin">超级管理员</a>
-                    </li>
-                </ul>
-                <div class="d-flex align-items-center text-white">
-                    <span class="me-3"><span data-i18n="common.welcome">欢迎，</span><span id="userName"></span></span>
-                    <button class="btn btn-outline-light btn-sm me-2" onclick="logout()" data-i18n="common.logout">退出</button>
-                    <button class="btn btn-outline-light btn-sm" onclick="I18N.toggle()" data-i18n="common.language">中/EN</button>
-                </div>
-            </div>
-        </div>
-    </nav>
-
     <div class="container mt-4">
         <div class="d-flex align-items-center justify-content-between mb-3">
             <h2 class="mb-0" data-i18n="admin.pending_review">待审核文献列表</h2>

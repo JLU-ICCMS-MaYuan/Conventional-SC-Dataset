@@ -70,3 +70,4 @@ frontend/static/assets/
 *-snapshot.yml
 *-page.yml
 *-current.yml
+.superpowers/

@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect, useMemo } from 'react'
 import 'bootstrap/dist/css/bootstrap.min.css'
 import 'katex/dist/katex.min.css'
 import { useStreamingChat } from '../hooks/useStreamingChat'
-import { useAuth } from '../context/AuthContext'
 import { renderMath } from '../utils/math'
 
 /** 从消息内容中构建 PID → 顺序编号的映射（按首次出现顺序） */
@@ -44,8 +43,6 @@ const RagPage: React.FC = () => {
     newConversation, switchConversation, deleteConversation, send,
   } = useStreamingChat()
 
-  const { user, loading: authLoading, logout } = useAuth()
-
   const [input, setInput] = useState('')
   const [sourceOpen, setSourceOpen] = useState(true)
   const chatBoxRef = useRef<HTMLDivElement>(null)
@@ -71,36 +68,6 @@ const RagPage: React.FC = () => {
 
   return (
     <div style={st.wrapper}>
-      {/* 导航栏 — 与原前端 Bootstrap navbar 一致 */}
-      <nav className="navbar navbar-expand navbar-dark navbar-custom shadow-sm sticky-top" style={{ zIndex: 100 }}>
-        <div className="container-fluid">
-          <a className="navbar-brand fw-bold" href="/">超导文献数据库</a>
-          <ul className="navbar-nav me-auto">
-            <li className="nav-item"><a className="nav-link" href="/">首页</a></li>
-            <li className="nav-item"><a className="nav-link active" href="/rag">AI 文献助手</a></li>
-            <li className="nav-item"><a className="nav-link" href="/tc-pre">Tc 预测 (实验)</a></li>
-          </ul>
-          <div className="d-flex align-items-center gap-2">
-            {authLoading ? (
-              <div className="spinner-border spinner-border-sm text-light" role="status">
-                <span className="visually-hidden">Loading...</span>
-              </div>
-            ) : user ? (
-              <div className="btn-group">
-                <span className="btn btn-outline-light btn-sm disabled">{user.username}</span>
-                <button className="btn btn-outline-light btn-sm" onClick={logout}>退出</button>
-              </div>
-            ) : (
-              <div className="btn-group">
-                <a className="btn btn-outline-light btn-sm" href="/login">立即登录</a>
-                <a className="btn btn-light btn-sm" href="/register">注册</a>
-              </div>
-            )}
-            <button className="btn btn-outline-light btn-sm ms-2" title="Switch Language">中/EN</button>
-          </div>
-        </div>
-      </nav>
-
       <div style={st.body}>
         <aside style={st.left}>
           <button style={st.newBtn} onClick={newConversation}>+ 新对话</button>
@@ -247,7 +214,7 @@ const RagPage: React.FC = () => {
 }
 
 const st: Record<string, React.CSSProperties> = {
-  wrapper: { height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', backgroundColor: '#fafafa' },
+  wrapper: { height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', backgroundColor: '#fafafa', animation: 'elementFadeIn 0.5s ease both' },
   body: { flex: 1, display: 'flex', overflow: 'hidden' },
   left: { width: 230, flexShrink: 0, backgroundColor: '#fff', borderRight: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', padding: 12 },
   newBtn: { width: '100%', padding: '8px 0', borderRadius: 8, border: '1px solid #e5e5e5', backgroundColor: '#fff', fontSize: 13, cursor: 'pointer', marginBottom: 12, color: '#333' },

@@ -24,6 +24,8 @@ _engine_kw = {"echo": settings.debug}
 if not re.search(r"sqlite", settings.database_url, re.I):
     _engine_kw["pool_size"] = 5
     _engine_kw["max_overflow"] = 10
+    _engine_kw["pool_pre_ping"] = True
+    _engine_kw["pool_recycle"] = 3600
 
 engine = create_async_engine(settings.database_url, **_engine_kw)
 
