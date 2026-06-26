@@ -387,10 +387,10 @@ async def ask_stream(
         yield {
             "type": "brainstorm_suggest",
             "data": {
-                "message": "这个问题涉及研究方向探索，适合用**头脑风暴模式**深入分析。我会逐步帮你澄清方向、探索路径、收敛到可行方案。\n\n需要我进入头脑风暴模式吗？"
+                "message": "这个问题适合用头脑风暴模式深入分析，回复「好的」进入。"
             }
         }
-        return
+        # 不 return — 继续走普通模式先给出回答，同时前端展示建议提示
 
     if bs_session is not None:
         # ── Brainstorm 子 Agent 管线 ──

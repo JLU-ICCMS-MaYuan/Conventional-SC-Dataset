@@ -64,6 +64,7 @@ export function useStreamingChat() {
     const cid = convs[0]?.id
     return cid ? loadMeta(cid).top10 : []
   })
+  const [suggestMessage, setSuggestMessage] = useState<string>('')
   const streamRef = useRef<HTMLDivElement | null>(null)
 
   const [brainstorm, setBrainstorm] = useState<BrainstormState>(() => {
@@ -136,6 +137,7 @@ export function useStreamingChat() {
 
     const userMsg: Message = { role: 'user', content: q }
     setLoading(true)
+    setSuggestMessage('')
     setPapers({})
     setTop10([])
 
@@ -178,7 +180,7 @@ export function useStreamingChat() {
           try {
             const data = JSON.parse(dataLines.join('\n'))
             if (eventType === 'brainstorm_suggest') {
-              // AI suggests brainstorm mode — message is handled via token streaming below
+              setSuggestMessage(data.message || '')
             } else if (eventType === 'brainstorm_enter') {
               setBrainstorm({ active: true, phase: data.phase, phaseLabel: data.label, totalPhases: data.total || 5, statusMessage: '正在准备...' })
             } else if (eventType === 'brainstorm_status' || eventType === 'status') {
@@ -233,6 +235,7 @@ export function useStreamingChat() {
 
   return {
     convs, activeId, messages, loading, papers, top10, streamRef, brainstorm,
+    suggestMessage, setSuggestMessage,
     newConversation, switchConversation, deleteConversation, send,
   }
 }

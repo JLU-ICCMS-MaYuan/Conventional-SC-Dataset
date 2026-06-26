@@ -40,6 +40,7 @@ function renderMessage(content: string): string {
 const RagPage: React.FC = () => {
   const {
     convs, activeId, messages, loading, papers, top10, streamRef, brainstorm,
+    suggestMessage, setSuggestMessage,
     newConversation, switchConversation, deleteConversation, send,
   } = useStreamingChat()
 
@@ -146,6 +147,15 @@ const RagPage: React.FC = () => {
             <div style={st.normalStatus}>
               <span style={st.bsStatusDot} />
               {brainstorm.statusMessage}
+            </div>
+          )}
+
+          {/* Brainstorm 建议提示 */}
+          {!brainstorm.active && suggestMessage && !loading && (
+            <div style={st.suggestBar}>
+              <span>💡 {suggestMessage}</span>
+              <button onClick={() => { setSuggestMessage(''); send('好的') }} style={st.suggestBtn}>好的</button>
+              <button onClick={() => setSuggestMessage('')} style={st.suggestDismiss}>✕</button>
             </div>
           )}
 
@@ -286,6 +296,9 @@ const st: Record<string, React.CSSProperties> = {
   bsStatus: { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 20px 8px', fontSize: 12, color: '#999', backgroundColor: '#fff' } as React.CSSProperties,
   bsStatusDot: { display: 'inline-block', width: 6, height: 6, borderRadius: '50%', backgroundColor: '#4d6bfe', animation: 'blink 1.2s infinite' } as React.CSSProperties,
   normalStatus: { display: 'flex', alignItems: 'center', gap: 8, padding: '4px 20px', fontSize: 12, color: '#999' } as React.CSSProperties,
+  suggestBar: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '8px 20px', margin: '0 20px', fontSize: 13, color: '#333', backgroundColor: '#f0f4ff', borderRadius: 12, border: '1px solid #d0d9ff' } as React.CSSProperties,
+  suggestBtn: { padding: '4px 14px', borderRadius: 14, border: 'none', backgroundColor: '#4d6bfe', color: '#fff', fontSize: 12, cursor: 'pointer', fontWeight: 500 } as React.CSSProperties,
+  suggestDismiss: { background: 'none', border: 'none', fontSize: 14, cursor: 'pointer', color: '#999', padding: 0 } as React.CSSProperties,
   bsExitBtn: { marginTop: 8, padding: '4px 12px', borderRadius: 12, border: '1px solid #e55', backgroundColor: '#fff', color: '#e55', fontSize: 12, cursor: 'pointer' } as React.CSSProperties,
 }
 
