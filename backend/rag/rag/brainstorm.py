@@ -278,15 +278,18 @@ async def run_brainstorm_subagent(
     session: BrainstormSession,
     user_message: str,
     db_context: str,
-) -> dict[str, Any]:
-    """Brainstorm 子 Agent 内部循环。
+):
+    """Brainstorm 子 Agent 内部循环（async generator）。
 
     子 Agent 拥有工具 [search_kg, search_rag]，最多 3 轮 Function Calling。
     收集足够信息后生成当前阶段的回答。
 
-    Returns:
-        {"phase": int, "content": str, "search_results": str, "is_complete": bool}
+    Yields:
+        {"type": "brainstorm_status", "data": {"action": str, "message": str}}  — 状态更新
+        {"type": "result", "data": {"phase": int, "content": str, "search_results": str, "is_complete": bool}}  — 最终结果
     """
+    from typing import AsyncIterator
+
     client = OpenAI(api_key=settings.deepseek_api_key, base_url=settings.deepseek_base_url)
 
     system_prompt = session.build_phase_prompt(
@@ -303,6 +306,8 @@ async def run_brainstorm_subagent(
     search_results_parts: list[str] = []
 
     for _round in range(max_rounds):
+        yield {"type": "brainstorm_status", "data": {"action": "thinking", "message": "正在思考分析..."}}
+
         response = client.chat.completions.create(
             model=settings.deepseek_model,
             messages=messages,
@@ -323,8 +328,10 @@ async def run_brainstorm_subagent(
                     func_args = {}
 
                 if func_name == "search_kg":
+                    yield {"type": "brainstorm_status", "data": {"action": "searching_kg", "message": "正在查询超导材料结构化数据..."}}
                     result = await _execute_kg_search(func_args)
                 elif func_name == "search_rag":
+                    yield {"type": "brainstorm_status", "data": {"action": "searching_rag", "message": "正在检索相关文献..."}}
                     result = await _execute_rag_search(func_args)
                 else:
                     result = json.dumps({"error": f"未知工具: {func_name}"})
@@ -336,17 +343,25 @@ async def run_brainstorm_subagent(
                     "tool_call_id": tool_call.id,
                     "content": result,
                 })
+
+            yield {"type": "brainstorm_status", "data": {"action": "analyzing", "message": "正在分析检索结果..."}}
         else:
             # 没有工具调用，获取文本回答
+            yield {"type": "brainstorm_status", "data": {"action": "generating", "message": "正在生成回答..."}}
             content = choice.message.content or ""
-            return {
-                "phase": int(session.phase),
-                "content": content,
-                "search_results": "\n".join(search_results_parts),
-                "is_complete": session.check_advance(content),
+            yield {
+                "type": "result",
+                "data": {
+                    "phase": int(session.phase),
+                    "content": content,
+                    "search_results": "\n".join(search_results_parts),
+                    "is_complete": session.check_advance(content),
+                }
             }
+            return
 
     # 超过最大轮数，强制生成回答
+    yield {"type": "brainstorm_status", "data": {"action": "generating", "message": "正在汇总生成回答..."}}
     final_response = client.chat.completions.create(
         model=settings.deepseek_model,
         messages=messages + [{"role": "user", "content": "请基于已收集的信息，输出你当前阶段的回答。"}],
@@ -355,11 +370,14 @@ async def run_brainstorm_subagent(
     )
     content = final_response.choices[0].message.content or ""
 
-    return {
-        "phase": int(session.phase),
-        "content": content,
-        "search_results": "\n".join(search_results_parts),
-        "is_complete": session.check_advance(content),
+    yield {
+        "type": "result",
+        "data": {
+            "phase": int(session.phase),
+            "content": content,
+            "search_results": "\n".join(search_results_parts),
+            "is_complete": session.check_advance(content),
+        }
     }
 
 

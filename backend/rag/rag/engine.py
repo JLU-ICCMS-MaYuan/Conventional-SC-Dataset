@@ -415,12 +415,23 @@ async def ask_stream(
             # 更新阶段数据
             bs_session.collected_info.append(f"用户: {question}")
 
-            # 运行子 Agent
-            result = await run_brainstorm_subagent(
+            # 运行子 Agent（async generator，实时 yield 状态事件）
+            result = None
+            async for event in run_brainstorm_subagent(
                 session=bs_session,
                 user_message=question,
                 db_context=db_ctx,
-            )
+            ):
+                if event["type"] == "brainstorm_status":
+                    # 转发状态事件给前端
+                    yield {"type": "brainstorm_status", "data": event["data"]}
+                elif event["type"] == "result":
+                    result = event["data"]
+
+            if result is None:
+                yield {"type": "token", "data": "抱歉，头脑风暴分析出现问题。"}
+                yield {"type": "done", "data": {"citations": [], "answer": "", "source": "brainstorm", "papers": {}, "top10": []}}
+                return
 
             # 流式输出子 Agent 回答
             for char in result["content"]:
