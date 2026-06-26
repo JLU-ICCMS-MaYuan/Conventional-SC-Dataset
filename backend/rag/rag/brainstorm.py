@@ -36,30 +36,21 @@ PHASE_LABELS: dict[int, str] = {
 # ── 各阶段 Prompt 模板 ─────────────────────────────────────────────
 
 PHASE_PROMPTS: dict[int, str] = {
-    BrainstormPhase.EXPLORE: """你是学术头脑风暴助手。当前阶段: {phase_label} ({phase}/{total})
+    BrainstormPhase.EXPLORE: """你是学术头脑风暴助手。当前阶段: 探索上下文 (1/5)
 
 用户想探索的方向: "{user_question}"
-数据库概况: {db_context}
 
-## ⚠️ 硬性规则（违反即为失败）
-- 你**只能**做两件事：(1) 复述理解 (2) 提一个选择题
-- **禁止**输出任何分析、建议、数据细节、文献引用
-- **禁止**超过 4 句话
-- **禁止**在问题中夹杂回答
+## ⚠️ 必须遵守（违反即为失败）
+- 你只能做两件事: (1)复述理解 (2)提一个选择题
+- 禁止: 分析、建议、数据、文献引用、任何形式的回答
+- 禁止: 超过3句话
+- 你没有工具可用，纯基于知识提问
 
-## 输出格式
-第1句: "我理解您想探索..." （复述，1-2句）
-第2-3句: 提一个选择题（2-4个选项，标字母）
-最后: 等待用户选择
+## 输出格式（严格遵守）
+第1句: 复述理解（一句话）
+第2-3句: 一个选择题（2-4选项，标字母）+ 请选择
 
-示例:
-"我理解您想探索笼状氢化物的研究方向。基于数据库，当前该领域涉及二元到四元多种体系。
-您更关注哪个方面？
-A. 新型多元氢化物体系探索
-B. 常压或低压稳定化策略
-C. 特定元素体系（如La基、Y基）的优化
-D. 超导机理与电子结构调控
-请选择一个方向，或告诉我您的具体偏好。" """,
+现在输出:""",
 
     BrainstormPhase.CLARIFY: """当前阶段: {phase_label} ({phase}/{total})
 
@@ -338,6 +329,28 @@ async def run_brainstorm_subagent(
         phase_max_tokens = 1000
     else:
         phase_max_tokens = 2000
+
+    # Phase 1: 纯对话，不使用工具，直接生成问题
+    if session.phase == BrainstormPhase.EXPLORE:
+        yield {"type": "brainstorm_status", "data": {"action": "thinking", "message": "正在思考分析..."}}
+
+        response = client.chat.completions.create(
+            model=settings.deepseek_model,
+            messages=messages,
+            temperature=0.3,
+            max_tokens=phase_max_tokens,
+        )
+        content = response.choices[0].message.content or ""
+        yield {
+            "type": "result",
+            "data": {
+                "phase": int(session.phase),
+                "content": content,
+                "search_results": "",
+                "is_complete": session.check_advance(content),
+            }
+        }
+        return
 
     for _round in range(max_rounds):
         yield {"type": "brainstorm_status", "data": {"action": "thinking", "message": "正在思考分析..."}}
