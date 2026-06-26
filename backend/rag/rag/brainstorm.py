@@ -38,69 +38,94 @@ PHASE_LABELS: dict[int, str] = {
 PHASE_PROMPTS: dict[int, str] = {
     BrainstormPhase.EXPLORE: """你是学术头脑风暴助手。当前阶段: {phase_label} ({phase}/{total})
 
-用户问题: "{user_question}"
+用户想探索的方向: "{user_question}"
 数据库概况: {db_context}
 
-你的任务:
-1. 用1-2句话总结你对用户探索方向的理解
-2. 提出一个关键澄清问题（只提一个），帮助缩小范围
-   - 优先使用选择题（2-4个选项）
-   - 选项应基于专业知识 + 数据库实际情况
+## ⚠️ 硬性规则（违反即为失败）
+- 你**只能**做两件事：(1) 复述理解 (2) 提一个选择题
+- **禁止**输出任何分析、建议、数据细节、文献引用
+- **禁止**超过 4 句话
+- **禁止**在问题中夹杂回答
 
-先复述理解，再提问。只输出这些。""",
+## 输出格式
+第1句: "我理解您想探索..." （复述，1-2句）
+第2-3句: 提一个选择题（2-4个选项，标字母）
+最后: 等待用户选择
+
+示例:
+"我理解您想探索笼状氢化物的研究方向。基于数据库，当前该领域涉及二元到四元多种体系。
+您更关注哪个方面？
+A. 新型多元氢化物体系探索
+B. 常压或低压稳定化策略
+C. 特定元素体系（如La基、Y基）的优化
+D. 超导机理与电子结构调控
+请选择一个方向，或告诉我您的具体偏好。" """,
 
     BrainstormPhase.CLARIFY: """当前阶段: {phase_label} ({phase}/{total})
 
 已收集信息:
 {collected_info}
 
-逐一追问关键问题。每个问题:
-- 一次只问一个
-- 优先选择题（2-4个选项）
-- 基于已回答问题逐步深入
-- 当你认为信息足够（通常3-5轮）后，输出 [PHASE_COMPLETE] 结束该阶段
+## ⚠️ 硬性规则
+- **每次只问一个问题**，选择题优先
+- **禁止**一次性问多个问题
+- **禁止**长篇分析或给出结论
+- 信息足够时输出 [PHASE_COMPLETE] 结束该阶段
+- 最多追问 {max_clarify} 轮
 
-本轮不要问之前已经问过的问题。""",
+请基于用户已有回答，提出下一个澄清问题。""",
 
     BrainstormPhase.PROPOSE: """当前阶段: {phase_label} ({phase}/{total})
 
-基于已收集的需求:
+基于用户需求:
 {collected_info}
 
-检索结果:
+已检索到的数据与文献:
 {search_results}
 
-提出2-3个具体可行的思路/方向。每条包含:
-1. 思路标题（一句话）
-2. 可行性评估（高/中/低，基于数据库实际数据）
-3. 关键文献支撑（标注 [PID_xxx]）
-4. 推荐理由
+## ⚠️ 硬性规则
+- 提出 **恰好 2-3 条**具体可行的思路
+- 每条 **限制 3-4 句话**：标题 + 可行性 + 支撑 + 理由
+- 推荐一条并说明原因
+- **最后必须询问用户选择哪条**，不要自己展开分析
 
-推荐其中一条并说明原因。最后询问用户选择哪条深入。""",
+格式:
+### 路径 1: [标题]
+可行性: 高/中/低 | 支撑: [PID_xxx] | 理由: [一句话]
+
+### 路径 2: [标题]
+...
+
+**推荐:** 路径 X，因为...
+
+请选择一条深入，或告诉我您的偏好。""",
 
     BrainstormPhase.PRESENT: """当前阶段: {phase_label} ({phase}/{total})
 
 已选定路径: {selected_path}
 
-将选定路径分为以下小节，逐节呈现:
+## ⚠️ 硬性规则
+- 当前只呈现**第 {present_section} 节**（共 {total_sections} 节）
+- **禁止**一次性呈现所有小节
+- **禁止**跳到下一节
+
+小节顺序:
 1. 背景与研究现状
 2. 候选材料/方法
 3. 预期挑战与风险
 4. 下一步具体建议
 
-每节呈现后等待用户确认，再继续下一节。
-用户说"好的"、"继续"、"下一节"时前进到下一节。
-当前正在呈现第 {present_section}/{total_sections} 节。""",
+呈现完本节后等待用户确认。用户说"好的"/"继续"时前进。""",
 
     BrainstormPhase.SUMMARIZE: """当前阶段: {phase_label} ({phase}/{total})
 
-汇总本次头脑风暴:
-- 讨论的问题与选定方向
-- 关键结论
-- 推荐的下一步行动
-- 相关文献列表
+汇总本次头脑风暴的全部内容:
+- 讨论的核心问题与选定的方向
+- 各阶段关键结论
+- 推荐的下一步具体行动
+- 引用文献列表
 
-输出结构化总结后加 [BRAINSTORM_END] 退出头脑风暴模式。只输出总结，不要加额外说明。""",
+输出后加 [BRAINSTORM_END] 退出。总结要精炼，要点式呈现。""",
 }
 
 # ── 子 Agent Tool 定义 ─────────────────────────────────────────────
@@ -219,6 +244,7 @@ class BrainstormSession:
             phase_label=self.phase_label,
             phase=int(self.phase),
             total=5,
+            max_clarify=self.max_clarify_rounds,
             user_question=self.user_question or user_message,
             db_context=db_context or "暂无数据库信息",
             collected_info="\n".join(f"- {info}" for info in self.collected_info) if self.collected_info else "暂无",
@@ -305,6 +331,14 @@ async def run_brainstorm_subagent(
     max_rounds = settings.brainstorm_max_agent_rounds
     search_results_parts: list[str] = []
 
+    # 早期阶段限制输出长度，防止 LLM 跳到分析模式
+    if session.phase <= BrainstormPhase.CLARIFY:
+        phase_max_tokens = 400
+    elif session.phase == BrainstormPhase.PROPOSE:
+        phase_max_tokens = 1000
+    else:
+        phase_max_tokens = 2000
+
     for _round in range(max_rounds):
         yield {"type": "brainstorm_status", "data": {"action": "thinking", "message": "正在思考分析..."}}
 
@@ -313,7 +347,7 @@ async def run_brainstorm_subagent(
             messages=messages,
             tools=BRAINSTORM_TOOLS,
             temperature=0.3,
-            max_tokens=2000,
+            max_tokens=phase_max_tokens,
         )
 
         choice = response.choices[0]
@@ -366,7 +400,7 @@ async def run_brainstorm_subagent(
         model=settings.deepseek_model,
         messages=messages + [{"role": "user", "content": "请基于已收集的信息，输出你当前阶段的回答。"}],
         temperature=0.3,
-        max_tokens=2000,
+        max_tokens=phase_max_tokens,
     )
     content = final_response.choices[0].message.content or ""
 
