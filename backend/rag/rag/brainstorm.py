@@ -61,26 +61,33 @@ PHASE_PROMPTS: dict[int, str] = {
 - 禁止在探索阶段就进行分析或提议
 - 禁止输出超过 4 句话
 - 你没有检索工具可用
+- 你的输出会在遇到第一个空行时被截断，所以第一段就是全部输出
 
-## 输出格式
+## 正确示例
+"您想探索笼状氢化物的研究方向。数据库中有15篇论文、8种超导体。\n您更关注哪个方面？\nA. 稀土基体系\nB. 碱土金属体系\nC. 三元体系"
 
-复述理解 → 数据库概况 → 一个选择题 → 等待用户选择""",
+## 错误示例（禁止）
+"您想探索笼状氢化物的研究方向。以下是我的分析：\n### 1. 背景\n笼状氢化物是..." ← 禁止！出现分析段落""",
 
     BrainstormPhase.CLARIFY: """当前阶段: {phase_label} (第{phase}步/共{total}步)
 
 ## 已收集的用户需求
 {collected_info}
 
-## 规则（superpowers:brainstorming 模式）
+## 规则
+- 只输出一个追问，禁止任何分析
+- 优先选择题（2-4 个选项）
+- 信息足够后只输出 [PHASE_COMPLETE]
+- 你的输出会在遇到第一个空行时被截断
 
-- **一次只问一个问题**，优先选择题
-- 逐步深入，直到信息足够（通常 3-5 轮）
-- **禁止**: 一次性问多个问题、跳到分析、给出结论
-- 信息足够后输出 [PHASE_COMPLETE]
+## 正确示例
+"明白了，您关注稀土基体系。请问您更看重哪个指标？\nA. Tc 尽可能高（>250K）\nB. 稳定压力尽可能低（<100GPa）"
+
+## 错误示例（禁止）
+"好的。基于您的选择，以下是分析：\n### 方向1\n..." ← 禁止！
 
 ## 本轮任务
-
-基于已有回答，提出下一个澄清问题。不要问之前已经问过的。""",
+只输出一个问题。""",
 
     BrainstormPhase.PROPOSE: """当前阶段: {phase_label} (第{phase}步/共{total}步)
 
@@ -409,12 +416,18 @@ async def run_brainstorm_subagent(
     if session.phase in no_tool_phases:
         yield {"type": "brainstorm_status", "data": {"action": "thinking", "message": "正在思考分析..."}}
 
-        response = client.chat.completions.create(
-            model=settings.deepseek_model,
-            messages=messages,
-            temperature=0.3,
-            max_tokens=phase_max_tokens,
-        )
+        # Phase 1-2: stop sequences 防止 LLM 跳到分析模式
+        create_kwargs: dict = {
+            "model": settings.deepseek_model,
+            "messages": messages,
+            "temperature": 0.3,
+            "max_tokens": phase_max_tokens,
+        }
+        if session.phase <= BrainstormPhase.CLARIFY:
+            create_kwargs["stop"] = ["\n\n", "###", "- ", "1.", "首先", "以下", "根据"]
+            create_kwargs["max_tokens"] = 200  # 极短输出
+
+        response = client.chat.completions.create(**create_kwargs)
         content = response.choices[0].message.content or ""
 
         # Phase 5 (DOCUMENT) 和 Phase 6 (REVIEW): 保存计划书
