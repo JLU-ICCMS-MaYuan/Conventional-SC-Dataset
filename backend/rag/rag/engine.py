@@ -14,7 +14,13 @@ from typing import Any
 from openai import OpenAI
 
 from backend.rag.config import settings
-from backend.rag.rag.prompts import build_rag_prompt, is_greeting, build_fusion_prompt
+from backend.rag.rag.prompts import build_rag_prompt, is_greeting, build_fusion_prompt, MAIN_AGENT_SYSTEM_PROMPT
+from backend.rag.rag.brainstorm import (
+    BrainstormSession,
+    BrainstormPhase,
+    PHASE_LABELS,
+    run_brainstorm_subagent,
+)
 from backend.rag.rag.reranker import rerank_chunks
 from backend.rag.search.engine import search_semantic_only
 
@@ -23,6 +29,28 @@ GREETING_RESPONSE = "你好！我是氢化物超导文献助手，可以问我�
 
 def _format_db_context(papers: int, superconductors: int, records: int) -> str:
     return f"当前数据库包含 {papers} 篇论文、{superconductors} 种超导体、{records} 条超导数据记录。"
+
+
+def _try_restore_bs_session(history: list[dict] | None) -> BrainstormSession | None:
+    """尝试从对话历史的最后一条 done 事件恢复 brainstorm session。
+
+    前端在 done 事件中会收到 brainstorm 字段，下次请求时以特殊格式传入 history。
+    简化实现：检测 history 最后一条消息是否包含 brainstorm 元信息。
+    """
+    if not history:
+        return None
+    # 检查最后一条 assistant 消息是否包含 [BRAINSTORM_SESSION] 开头的元信息
+    for h in reversed(history):
+        if h["role"] == "assistant":
+            content = h.get("content", "")
+            if content.startswith("[BRAINSTORM_SESSION]"):
+                try:
+                    data = json.loads(content[len("[BRAINSTORM_SESSION]"):])
+                    return BrainstormSession.from_dict(data)
+                except (json.JSONDecodeError, KeyError):
+                    return None
+            break
+    return None
 
 
 def _group_kg_results(results: list[dict]) -> list[dict]:
@@ -141,6 +169,44 @@ numeric_compare 时额外输出 operator（">"|"<"|">="|"<="）和 value（数�
             "operator": None,
             "value": None,
         }
+
+
+def _detect_explorative_intent(question: str) -> bool:
+    """检测用户问题是否需要 Brainstorm 模式。
+
+    使用 LLM 判断（非关键词匹配），返回 bool。
+    """
+    client = OpenAI(api_key=settings.deepseek_api_key, base_url=settings.deepseek_base_url)
+
+    prompt = f"""判断以下用户问题是否属于探索性/开放性研究讨论，需要交互式头脑风暴引导。
+
+探索性特征（满足任一即为 True）：
+- 研究方向探索（"有什么方向"、"潜力"、"idea"、"课题"、"热点"、"前沿"）
+- 综述/比较（"对比"、"哪个更好"、"发展趋势"、"优缺点"）
+- 方法论/怎么做（"怎么做"、"如何设计"、"从哪入手"、"方案"）
+- 用户明确请求（"brainstorm"、"头脑风暴"、"帮我分析"）
+
+非探索性特征（返回 False）：
+- 事实性数据查询（"LaH10的Tc是多少"）
+- 简单检索（"有哪些超导体"）
+- 文献查找（"关于H3S的论文"）
+
+只返回 JSON: {{"explorative": true}} 或 {{"explorative": false}}
+
+问题: {question}"""
+
+    try:
+        resp = client.chat.completions.create(
+            model=settings.deepseek_model,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            temperature=0,
+            max_tokens=50,
+        )
+        result = json.loads(resp.choices[0].message.content)
+        return result.get("explorative", False)
+    except Exception:
+        return False
 
 
 async def ask(
@@ -316,6 +382,95 @@ async def ask_stream(
         yield {"type": "done", "data": {"citations": [], "answer": GREETING_RESPONSE, "source": "greeting"}}
         return
 
+    # ── Brainstorm: 数据库上下文（提前获取，brainstorm 管线也需要） ──
+    from sqlalchemy import select, func as sa_func
+    from backend.rag.database import async_session_factory
+    from backend.rag.models import Paper, Superconductor, SuperconductorRecord
+    async with async_session_factory() as sess:
+        p_cnt = (await sess.execute(sa_func.count(Paper.id))).scalar() or 0
+        r_cnt = (await sess.execute(sa_func.count(SuperconductorRecord.id))).scalar() or 0
+        s_cnt = (await sess.execute(sa_func.count(Superconductor.id))).scalar() or 0
+    db_ctx = _format_db_context(papers=p_cnt, superconductors=s_cnt, records=r_cnt)
+
+    # ── Brainstorm: 检测并路由 ──
+    # 尝试从 history 恢复 session
+    bs_session: BrainstormSession | None = _try_restore_bs_session(history)
+
+    # 没有活跃 session 时检测是否需要
+    if bs_session is None and _detect_explorative_intent(question):
+        yield {
+            "type": "brainstorm_suggest",
+            "data": {
+                "message": "这个问题涉及研究方向探索，适合用**头脑风暴模式**深入分析。我会逐步帮你澄清方向、探索路径、收敛到可行方案。\n\n需要我进入头脑风暴模式吗？"
+            }
+        }
+
+    if bs_session is not None:
+        # ── Brainstorm 子 Agent 管线 ──
+        if bs_session.check_exit(question):
+            yield {"type": "brainstorm_exit", "data": {"reason": "user_abort"}}
+            # Fall through to normal mode
+        else:
+            # 发出阶段事件
+            yield {
+                "type": "brainstorm_enter",
+                "data": {
+                    "phase": int(bs_session.phase),
+                    "total": 5,
+                    "label": bs_session.phase_label,
+                }
+            }
+
+            # 更新阶段数据
+            bs_session.collected_info.append(f"用户: {question}")
+
+            # 运行子 Agent
+            result = await run_brainstorm_subagent(
+                session=bs_session,
+                user_message=question,
+                db_context=db_ctx,
+            )
+
+            # 流式输出子 Agent 回答
+            for char in result["content"]:
+                yield {"type": "token", "data": char}
+
+            # 推进阶段
+            if result["is_complete"]:
+                if bs_session.phase == BrainstormPhase.SUMMARIZE:
+                    yield {"type": "brainstorm_exit", "data": {"reason": "completed"}}
+                    # 在 done 事件中包含 brainstorm session 用于前端恢复
+                    done_data = {
+                        "citations": [], "answer": result["content"],
+                        "source": "brainstorm", "papers": {}, "top10": [],
+                        "brainstorm": bs_session.to_dict(),
+                    }
+                    # 在 answer 前加上 session 元信息供下次恢复
+                    done_data["answer"] = f"[BRAINSTORM_SESSION]{json.dumps(bs_session.to_dict(), ensure_ascii=False)}\n\n{result['content']}"
+                    yield {"type": "done", "data": done_data}
+                    return
+
+                bs_session.advance_phase()
+                yield {
+                    "type": "brainstorm_phase",
+                    "data": {
+                        "phase": int(bs_session.phase),
+                        "label": bs_session.phase_label,
+                    }
+                }
+
+            # done 事件包含 brainstorm session
+            done_data = {
+                "citations": [], "answer": result["content"],
+                "source": f"brainstorm_phase_{int(bs_session.phase)}",
+                "papers": {}, "top10": [],
+                "brainstorm": bs_session.to_dict(),
+            }
+            done_data["answer"] = f"[BRAINSTORM_SESSION]{json.dumps(bs_session.to_dict(), ensure_ascii=False)}\n\n{result['content']}"
+            yield {"type": "done", "data": done_data}
+            return
+
+    # ── 普通模式（以下为现有逻辑，不变） ──
     # ── 1. 意图解析 ──
     intent = _extract_intent(question)
 
@@ -371,15 +526,7 @@ async def ask_stream(
         yield {"type": "done", "data": {"citations": [], "answer": "抱歉，在已有文献中没有找到与您问题相关的信息。", "source": "rag"}}
         return
 
-    # ── 3. Prompt ──
-    from sqlalchemy import select, func as sa_func
-    from backend.rag.database import async_session_factory
-    from backend.rag.models import Paper, Superconductor, SuperconductorRecord
-    async with async_session_factory() as sess:
-        p_cnt = (await sess.execute(sa_func.count(Paper.id))).scalar() or 0
-        r_cnt = (await sess.execute(sa_func.count(SuperconductorRecord.id))).scalar() or 0
-        s_cnt = (await sess.execute(sa_func.count(Superconductor.id))).scalar() or 0
-    db_ctx = _format_db_context(papers=p_cnt, superconductors=s_cnt, records=r_cnt)
+    # ── 3. Prompt（db_ctx 已在 brainstorm 检测阶段获取） ──
 
     if grouped_kg and rag_chunks:
         prompt = build_fusion_prompt(question, kg_results=grouped_kg, rag_chunks=rag_chunks,
