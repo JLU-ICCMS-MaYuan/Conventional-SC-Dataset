@@ -123,7 +123,7 @@ const RagPage: React.FC = () => {
             <>
               <div style={st.bsBar}>
                 <div style={st.bsDots}>
-                  {[1,2,3,4,5].map(p => (
+                  {[1,2,3,4,5,6].map(p => (
                     <div key={p} style={{
                       ...st.bsDot,
                       backgroundColor: p <= brainstorm.phase ? '#4d6bfe' : '#e5e5e5',

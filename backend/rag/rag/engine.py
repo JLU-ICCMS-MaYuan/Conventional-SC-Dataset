@@ -427,7 +427,7 @@ async def ask_stream(
                 "type": "brainstorm_enter",
                 "data": {
                     "phase": int(bs_session.phase),
-                    "total": 5,
+                    "total": 6,
                     "label": bs_session.phase_label,
                 }
             }
@@ -460,7 +460,7 @@ async def ask_stream(
 
             # 推进阶段
             if result["is_complete"]:
-                if bs_session.phase == BrainstormPhase.SUMMARIZE:
+                if bs_session.phase == BrainstormPhase.REVIEW:
                     yield {"type": "brainstorm_exit", "data": {"reason": "completed"}}
                     # 在 done 事件中包含 brainstorm session 用于前端恢复
                     # No answer overwrite needed — brainstorm field handles session persistence
