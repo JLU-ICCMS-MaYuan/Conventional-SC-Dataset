@@ -181,7 +181,7 @@ export function useStreamingChat() {
               // AI suggests brainstorm mode — message is handled via token streaming below
             } else if (eventType === 'brainstorm_enter') {
               setBrainstorm({ active: true, phase: data.phase, phaseLabel: data.label, totalPhases: data.total || 5, statusMessage: '正在准备...' })
-            } else if (eventType === 'brainstorm_status') {
+            } else if (eventType === 'brainstorm_status' || eventType === 'status') {
               setBrainstorm(prev => ({ ...prev, statusMessage: data.message || '' }))
             } else if (eventType === 'brainstorm_phase') {
               setBrainstorm(prev => ({ ...prev, phase: data.phase, phaseLabel: data.label }))

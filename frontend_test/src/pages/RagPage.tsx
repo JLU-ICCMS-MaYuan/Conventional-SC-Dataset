@@ -141,6 +141,14 @@ const RagPage: React.FC = () => {
             </>
           )}
 
+          {/* 普通模式状态提示 */}
+          {!brainstorm.active && loading && brainstorm.statusMessage && (
+            <div style={st.normalStatus}>
+              <span style={st.bsStatusDot} />
+              {brainstorm.statusMessage}
+            </div>
+          )}
+
           <div style={st.inputBar}>
             <div style={st.inputWrap}>
               <input ref={inputRef} style={st.input_} value={input}
@@ -277,6 +285,7 @@ const st: Record<string, React.CSSProperties> = {
   bsLabel: { color: '#666', fontWeight: 500 } as React.CSSProperties,
   bsStatus: { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 20px 8px', fontSize: 12, color: '#999', backgroundColor: '#fff' } as React.CSSProperties,
   bsStatusDot: { display: 'inline-block', width: 6, height: 6, borderRadius: '50%', backgroundColor: '#4d6bfe', animation: 'blink 1.2s infinite' } as React.CSSProperties,
+  normalStatus: { display: 'flex', alignItems: 'center', gap: 8, padding: '4px 20px', fontSize: 12, color: '#999' } as React.CSSProperties,
   bsExitBtn: { marginTop: 8, padding: '4px 12px', borderRadius: 12, border: '1px solid #e55', backgroundColor: '#fff', color: '#e55', fontSize: 12, cursor: 'pointer' } as React.CSSProperties,
 }
 

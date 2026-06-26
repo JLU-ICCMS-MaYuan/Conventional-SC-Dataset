@@ -423,7 +423,8 @@ async def ask_stream(
                 db_context=db_ctx,
             ):
                 if event["type"] == "brainstorm_status":
-                    # 转发状态事件给前端
+                    # 转发状态事件给前端（同时发两种类型保证兼容）
+                    yield {"type": "status", "data": event["data"]}
                     yield {"type": "brainstorm_status", "data": event["data"]}
                 elif event["type"] == "result":
                     result = event["data"]
@@ -470,8 +471,9 @@ async def ask_stream(
             yield {"type": "done", "data": done_data}
             return
 
-    # ── 普通模式（以下为现有逻辑，不变） ──
+    # ── 普通模式 ──
     # ── 1. 意图解析 ──
+    yield {"type": "status", "data": {"action": "analyzing_intent", "message": "正在分析问题意图..."}}
     intent = _extract_intent(question)
 
     # ── 2. 并行 KG + RAG ──
@@ -481,6 +483,7 @@ async def ask_stream(
     rag_chunks: list[dict] = []
 
     if intent["intent"] in ("list_overview", "numeric_compare", "property_query"):
+        yield {"type": "status", "data": {"action": "searching_kg", "message": "正在查询超导材料结构化数据..."}}
         try:
             if intent["predicates"]:
                 predicate = intent["predicates"][0]
@@ -511,6 +514,7 @@ async def ask_stream(
                        and intent["intent"] in ("list_overview", "numeric_compare")
                        and kg_results)
     if not is_numeric_only:
+        yield {"type": "status", "data": {"action": "searching_rag", "message": "正在检索相关文献..."}}
         search_result = await search_semantic_only(question, top_k=top_k)
         chunks = search_result.get("chunks", [])
         if chunks:
@@ -550,6 +554,7 @@ async def ask_stream(
         return
 
     # ── 4. LLM 流式生成 ──
+    yield {"type": "status", "data": {"action": "generating", "message": "正在生成回答..."}}
     client = OpenAI(api_key=settings.deepseek_api_key, base_url=settings.deepseek_base_url)
 
     full_answer = ""
