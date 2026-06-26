@@ -234,10 +234,17 @@ class BrainstormSession:
         return any(kw in user_response for kw in exit_keywords)
 
     def check_advance(self, user_response: str) -> bool:
-        """检查是否推进到下一阶段。"""
+        """检查是否推进到下一阶段。
+
+        注意：此方法在 run_brainstorm_subagent 中被调用时，
+        user_response 是 LLM 的输出内容（非用户输入）。
+        EXPLORE 阶段 LLM 输出的是探索问题（用户尚未回答），
+        PROPOSE 阶段 LLM 输出的是路径提议（用户尚未选择），
+        因此这两个阶段应返回 False，由用户的下一条消息触发推进。
+        """
         if self.phase == BrainstormPhase.EXPLORE:
-            # Phase 1: 用户回答澄清问题后推进
-            return True
+            # Phase 1: LLM 生成探索问题，用户尚未回答，不推进
+            return False
         elif self.phase == BrainstormPhase.CLARIFY:
             # Phase 2: [PHASE_COMPLETE] 或达到最大轮数
             if "[PHASE_COMPLETE]" in user_response:
@@ -246,8 +253,8 @@ class BrainstormSession:
                 return True
             return False
         elif self.phase == BrainstormPhase.PROPOSE:
-            # Phase 3: 用户选择了路径（关键词匹配 + 允许 "1"/"2"/"3"）
-            return True  # LLM 会在这个阶段检查，会话层信任 LLM
+            # Phase 3: LLM 生成路径提议，用户尚未选择，不推进
+            return False
         elif self.phase == BrainstormPhase.PRESENT:
             # Phase 4: 确认推进：第4节完成后推进
             if self.present_section >= self.total_sections:
@@ -258,12 +265,8 @@ class BrainstormSession:
         return False
 
     def advance_phase(self):
-        """推进到下一阶段。Phase 2→3 时检查是否达到最大轮数。"""
-        if self.phase == BrainstormPhase.CLARIFY:
-            next_phase = BrainstormPhase(self.phase + 1)
-        else:
-            next_phase = BrainstormPhase(self.phase + 1)
-        self.phase = next_phase
+        """推进到下一阶段。"""
+        self.phase = BrainstormPhase(self.phase + 1)
         # Phase 4 进入时重置 section 计数
         if self.phase == BrainstormPhase.PRESENT:
             self.present_section = 1
@@ -313,7 +316,10 @@ async def run_brainstorm_subagent(
             # 处理工具调用
             for tool_call in choice.message.tool_calls:
                 func_name = tool_call.function.name
-                func_args = json.loads(tool_call.function.arguments)
+                try:
+                    func_args = json.loads(tool_call.function.arguments)
+                except json.JSONDecodeError:
+                    func_args = {}
 
                 if func_name == "search_kg":
                     result = await _execute_kg_search(func_args)
@@ -324,11 +330,7 @@ async def run_brainstorm_subagent(
 
                 search_results_parts.append(f"[{func_name}] {result[:500]}")
 
-                messages.append({
-                    "role": "assistant",
-                    "content": None,
-                    "tool_calls": [tool_call],
-                })
+                messages.append(choice.message)
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tool_call.id,
