@@ -29,6 +29,10 @@ class RagSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
+    # Brainstorm 配置
+    brainstorm_max_clarify_rounds: int = 5
+    brainstorm_max_agent_rounds: int = 3
+
     @property
     def data_root(self) -> Path:
         if self.rag_data_root is not None:
