@@ -14,7 +14,7 @@ from typing import Any
 from openai import OpenAI
 
 from backend.rag.config import settings
-from backend.rag.rag.prompts import build_rag_prompt, is_greeting, build_fusion_prompt, MAIN_AGENT_SYSTEM_PROMPT
+from backend.rag.rag.prompts import build_rag_prompt, is_greeting, build_fusion_prompt
 from backend.rag.rag.brainstorm import (
     BrainstormSession,
     BrainstormPhase,
@@ -32,24 +32,10 @@ def _format_db_context(papers: int, superconductors: int, records: int) -> str:
 
 
 def _try_restore_bs_session(history: list[dict] | None) -> BrainstormSession | None:
-    """尝试从对话历史的最后一条 done 事件恢复 brainstorm session。
+    """尝试从对话历史恢复 brainstorm session。
 
-    前端在 done 事件中会收到 brainstorm 字段，下次请求时以特殊格式传入 history。
-    简化实现：检测 history 最后一条消息是否包含 brainstorm 元信息。
+    首次实现返回 None，session 恢复由前端通过 localStorage 管理。
     """
-    if not history:
-        return None
-    # 检查最后一条 assistant 消息是否包含 [BRAINSTORM_SESSION] 开头的元信息
-    for h in reversed(history):
-        if h["role"] == "assistant":
-            content = h.get("content", "")
-            if content.startswith("[BRAINSTORM_SESSION]"):
-                try:
-                    data = json.loads(content[len("[BRAINSTORM_SESSION]"):])
-                    return BrainstormSession.from_dict(data)
-                except (json.JSONDecodeError, KeyError):
-                    return None
-            break
     return None
 
 
@@ -404,12 +390,17 @@ async def ask_stream(
                 "message": "这个问题涉及研究方向探索，适合用**头脑风暴模式**深入分析。我会逐步帮你澄清方向、探索路径、收敛到可行方案。\n\n需要我进入头脑风暴模式吗？"
             }
         }
+        return
 
     if bs_session is not None:
         # ── Brainstorm 子 Agent 管线 ──
         if bs_session.check_exit(question):
             yield {"type": "brainstorm_exit", "data": {"reason": "user_abort"}}
-            # Fall through to normal mode
+            done_msg = "已退出头脑风暴模式。有新的问题可以直接问我。"
+            for char in done_msg:
+                yield {"type": "token", "data": char}
+            yield {"type": "done", "data": {"citations": [], "answer": done_msg, "source": "brainstorm_exit", "papers": {}, "top10": []}}
+            return
         else:
             # 发出阶段事件
             yield {
@@ -440,13 +431,12 @@ async def ask_stream(
                 if bs_session.phase == BrainstormPhase.SUMMARIZE:
                     yield {"type": "brainstorm_exit", "data": {"reason": "completed"}}
                     # 在 done 事件中包含 brainstorm session 用于前端恢复
+                    # No answer overwrite needed — brainstorm field handles session persistence
                     done_data = {
                         "citations": [], "answer": result["content"],
                         "source": "brainstorm", "papers": {}, "top10": [],
                         "brainstorm": bs_session.to_dict(),
                     }
-                    # 在 answer 前加上 session 元信息供下次恢复
-                    done_data["answer"] = f"[BRAINSTORM_SESSION]{json.dumps(bs_session.to_dict(), ensure_ascii=False)}\n\n{result['content']}"
                     yield {"type": "done", "data": done_data}
                     return
 
@@ -459,14 +449,13 @@ async def ask_stream(
                     }
                 }
 
-            # done 事件包含 brainstorm session
+            # done 事件包含 brainstorm session（brainstorm 字段供前端持久化）
             done_data = {
                 "citations": [], "answer": result["content"],
                 "source": f"brainstorm_phase_{int(bs_session.phase)}",
                 "papers": {}, "top10": [],
                 "brainstorm": bs_session.to_dict(),
             }
-            done_data["answer"] = f"[BRAINSTORM_SESSION]{json.dumps(bs_session.to_dict(), ensure_ascii=False)}\n\n{result['content']}"
             yield {"type": "done", "data": done_data}
             return
 
