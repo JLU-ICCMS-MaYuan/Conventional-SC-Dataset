@@ -314,6 +314,7 @@ async def run_brainstorm_subagent(
         choice = response.choices[0]
         if choice.finish_reason == "tool_calls" and choice.message.tool_calls:
             # 处理工具调用
+            messages.append(choice.message)
             for tool_call in choice.message.tool_calls:
                 func_name = tool_call.function.name
                 try:
@@ -330,7 +331,6 @@ async def run_brainstorm_subagent(
 
                 search_results_parts.append(f"[{func_name}] {result[:500]}")
 
-                messages.append(choice.message)
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tool_call.id,
