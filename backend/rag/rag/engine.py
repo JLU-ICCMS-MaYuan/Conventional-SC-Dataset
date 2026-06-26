@@ -31,11 +31,31 @@ def _format_db_context(papers: int, superconductors: int, records: int) -> str:
     return f"当前数据库包含 {papers} 篇论文、{superconductors} 种超导体、{records} 条超导数据记录。"
 
 
-def _try_restore_bs_session(history: list[dict] | None) -> BrainstormSession | None:
-    """尝试从对话历史恢复 brainstorm session。
+def _try_restore_bs_session(history: list[dict] | None, user_message: str = "") -> BrainstormSession | None:
+    """尝试从对话历史恢复或新建 brainstorm session。
 
-    首次实现返回 None，session 恢复由前端通过 localStorage 管理。
+    两种情况触发：
+    1. 用户明确请求: brainstorm、头脑风暴
+    2. 用户确认邀请: 上轮 AI 发了 brainstorm_suggest，本轮用户说好的/是/可以/进入
     """
+    # 用户明确请求 brainstorm
+    explicit_triggers = {"brainstorm", "头脑风暴"}
+    if any(t in user_message.lower() for t in explicit_triggers):
+        return BrainstormSession(user_question=user_message)
+
+    # 用户确认邀请
+    confirm_keywords = {"好的", "是", "可以", "进入", "行", "好", "yes", "ok", "要", "需要"}
+    is_confirm = any(kw in user_message for kw in confirm_keywords)
+
+    if is_confirm and history:
+        # 检查上轮 AI 是否发了 brainstorm 邀请
+        for h in reversed(history):
+            if h["role"] == "assistant":
+                content = h.get("content", "")
+                if "头脑风暴" in content and ("进入" in content or "适合" in content):
+                    return BrainstormSession(user_question=user_message)
+                break
+
     return None
 
 
@@ -380,7 +400,7 @@ async def ask_stream(
 
     # ── Brainstorm: 检测并路由 ──
     # 尝试从 history 恢复 session
-    bs_session: BrainstormSession | None = _try_restore_bs_session(history)
+    bs_session: BrainstormSession | None = _try_restore_bs_session(history, question)
 
     # 没有活跃 session 时检测是否需要
     if bs_session is None and _detect_explorative_intent(question):
