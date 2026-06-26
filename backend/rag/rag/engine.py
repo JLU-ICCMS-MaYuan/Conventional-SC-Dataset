@@ -36,25 +36,33 @@ def _try_restore_bs_session(history: list[dict] | None, user_message: str = "") 
 
     两种情况触发：
     1. 用户明确请求: brainstorm、头脑风暴
-    2. 用户确认邀请: 上轮 AI 发了 brainstorm_suggest，本轮用户说好的/是/可以/进入
+    2. 用户确认邀请: 对话中有 AI 回复 + 本轮用户说确认词
+       （brainstorm_suggest 是 SSE 事件未写入 history，故放宽检测）
     """
     # 用户明确请求 brainstorm
     explicit_triggers = {"brainstorm", "头脑风暴"}
     if any(t in user_message.lower() for t in explicit_triggers):
         return BrainstormSession(user_question=user_message)
 
-    # 用户确认邀请
+    # 用户确认邀请：有对话历史 + 本轮是确认词 → 进入 brainstorm
     confirm_keywords = {"好的", "是", "可以", "进入", "行", "好", "yes", "ok", "要", "需要"}
-    is_confirm = any(kw in user_message for kw in confirm_keywords)
+    if not history or len(history) < 2:
+        return None
 
-    if is_confirm and history:
-        # 检查上轮 AI 是否发了 brainstorm 邀请
-        for h in reversed(history):
-            if h["role"] == "assistant":
-                content = h.get("content", "")
-                if "头脑风暴" in content and ("进入" in content or "适合" in content):
-                    return BrainstormSession(user_question=user_message)
+    is_confirm = any(kw in user_message for kw in confirm_keywords)
+    if not is_confirm:
+        return None
+
+    # 检查上轮是否有 AI 回复（说明刚才有正常对话，用户可能在响应 brainstorm 邀请）
+    has_assistant = any(h["role"] == "assistant" for h in history[-4:])
+    if has_assistant:
+        # 从历史中提取原始问题（用户上一条非确认消息）
+        original_question = user_message
+        for h in reversed(history[:-1]):  # 跳过最后一条（当前消息）
+            if h["role"] == "user":
+                original_question = h["content"]
                 break
+        return BrainstormSession(user_question=original_question)
 
     return None
 
