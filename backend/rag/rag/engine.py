@@ -31,20 +31,37 @@ def _format_db_context(papers: int, superconductors: int, records: int) -> str:
     return f"当前数据库包含 {papers} 篇论文、{superconductors} 种超导体、{records} 条超导数据记录。"
 
 
+BS_SESSION_MARKER = "<!--BS:"
+
 def _try_restore_bs_session(history: list[dict] | None, user_message: str = "") -> BrainstormSession | None:
     """尝试从对话历史恢复或新建 brainstorm session。
 
-    两种情况触发：
-    1. 用户明确请求: brainstorm、头脑风暴
-    2. 用户确认邀请: 对话中有 AI 回复 + 本轮用户说确认词
-       （brainstorm_suggest 是 SSE 事件未写入 history，故放宽检测）
+    三种情况触发：
+    1. 上轮 AI 回答中嵌入了 session 元信息（<!--BS:json-->）→ 恢复
+    2. 用户明确请求: brainstorm、头脑风暴
+    3. 用户确认邀请: 对话中有 AI 回复 + 本轮用户说确认词
     """
-    # 用户明确请求 brainstorm
+    # 1. 从历史恢复活跃 session（上轮 AI 回答中嵌入了 session 状态）
+    if history:
+        for h in reversed(history):
+            if h["role"] == "assistant":
+                content = h.get("content", "")
+                if BS_SESSION_MARKER in content:
+                    try:
+                        start = content.index(BS_SESSION_MARKER) + len(BS_SESSION_MARKER)
+                        end = content.index("-->", start)
+                        data = json.loads(content[start:end])
+                        return BrainstormSession.from_dict(data)
+                    except (json.JSONDecodeError, ValueError, KeyError):
+                        pass
+                break
+
+    # 2. 用户明确请求 brainstorm
     explicit_triggers = {"brainstorm", "头脑风暴"}
     if any(t in user_message.lower() for t in explicit_triggers):
         return BrainstormSession(user_question=user_message)
 
-    # 用户确认邀请：有对话历史 + 本轮是确认词 → 进入 brainstorm
+    # 3. 用户确认邀请：有对话历史 + 本轮是确认词
     confirm_keywords = {"好的", "是", "可以", "进入", "行", "好", "yes", "ok", "要", "需要"}
     if not history or len(history) < 2:
         return None
@@ -53,12 +70,10 @@ def _try_restore_bs_session(history: list[dict] | None, user_message: str = "") 
     if not is_confirm:
         return None
 
-    # 检查上轮是否有 AI 回复（说明刚才有正常对话，用户可能在响应 brainstorm 邀请）
     has_assistant = any(h["role"] == "assistant" for h in history[-4:])
     if has_assistant:
-        # 从历史中提取原始问题（用户上一条非确认消息）
         original_question = user_message
-        for h in reversed(history[:-1]):  # 跳过最后一条（当前消息）
+        for h in reversed(history[:-1]):
             if h["role"] == "user":
                 original_question = h["content"]
                 break
@@ -470,10 +485,11 @@ async def ask_stream(
             if result["is_complete"]:
                 if bs_session.phase == BrainstormPhase.REVIEW:
                     yield {"type": "brainstorm_exit", "data": {"reason": "completed"}}
-                    # 在 done 事件中包含 brainstorm session 用于前端恢复
-                    # No answer overwrite needed — brainstorm field handles session persistence
+                    # 嵌入 session 状态到 answer 以支持跨请求恢复
+                    bs_json = json.dumps(bs_session.to_dict(), ensure_ascii=False)
+                    answer_with_session = f"{BS_SESSION_MARKER}{bs_json}-->\n\n{result['content']}"
                     done_data = {
-                        "citations": [], "answer": result["content"],
+                        "citations": [], "answer": answer_with_session,
                         "source": "brainstorm", "papers": {}, "top10": [],
                         "brainstorm": bs_session.to_dict(),
                     }
@@ -489,9 +505,11 @@ async def ask_stream(
                     }
                 }
 
-            # done 事件包含 brainstorm session（brainstorm 字段供前端持久化）
+            # done 事件: 嵌入 session 到 answer 以支持跨请求恢复
+            bs_json = json.dumps(bs_session.to_dict(), ensure_ascii=False)
+            answer_with_session = f"{BS_SESSION_MARKER}{bs_json}-->\n\n{result['content']}"
             done_data = {
-                "citations": [], "answer": result["content"],
+                "citations": [], "answer": answer_with_session,
                 "source": f"brainstorm_phase_{int(bs_session.phase)}",
                 "papers": {}, "top10": [],
                 "brainstorm": bs_session.to_dict(),
