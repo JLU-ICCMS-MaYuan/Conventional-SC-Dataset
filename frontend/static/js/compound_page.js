@@ -181,7 +181,6 @@ document.addEventListener('DOMContentLoaded', function() {
     loadPapers();
     loadCrystalStructures();
 
-    const uploadBtn = document.getElementById('open-upload-btn');
     const state = getAuthState();
 
     if (state && state.user && state.user.is_admin) {
@@ -189,18 +188,12 @@ document.addEventListener('DOMContentLoaded', function() {
         if (adminOnlyLabel) adminOnlyLabel.style.display = 'inline-block';
     }
 
-    if (uploadBtn) {
-        uploadBtn.addEventListener('click', function() {
-            const auth = getAuthState();
-            const token = auth && auth.token;
-            if (!token) {
-                if (confirm('只有注册用户可以上传文献。是否立即前往登录/注册？')) {
-                    window.location.href = '/login';
-                }
-            } else {
-                uploadModal.show();
-            }
-        });
+    // ?upload=1 自动弹出上传框
+    if (urlParams.get('upload') === '1') {
+        const auth = getAuthState();
+        if (auth && auth.token) {
+            uploadModal.show();
+        }
     }
 });
 

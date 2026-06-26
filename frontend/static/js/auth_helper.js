@@ -29,10 +29,10 @@ function renderLoggedInNav(container, user) {
     const isSuperAdmin = Boolean(user.is_superadmin);
     let adminLinks = '';
     if (isAdmin || isSuperAdmin) {
-        adminLinks += `<li><a class="dropdown-item" href="#" onclick="switchPage('/admin/papers'); return false;">📄 文献管理</a></li>`;
+        adminLinks += `<li><a class="dropdown-item" href="#" onclick="switchPage('/admin/papers'); return false;">文献管理</a></li>`;
     }
     if (isSuperAdmin) {
-        adminLinks += `<li><a class="dropdown-item" href="#" onclick="switchPage('/admin/users'); return false;">👥 用户管理</a></li>`;
+        adminLinks += `<li><a class="dropdown-item" href="#" onclick="switchPage('/admin/users'); return false;">用户管理</a></li>`;
     }
     if (adminLinks) {
         adminLinks += '<li><hr class="dropdown-divider"></li>';
@@ -41,7 +41,7 @@ function renderLoggedInNav(container, user) {
     container.innerHTML = `
         <div class="dropdown">
             <button class="btn btn-outline-light dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                👤 ${user.real_name}
+                ${user.real_name}
             </button>
             <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="userDropdown">
                 ${adminLinks}
