@@ -25,6 +25,7 @@ interface BrainstormState {
   phase: number
   phaseLabel: string
   totalPhases: number
+  statusMessage: string
 }
 
 interface CachedMeta {
@@ -67,7 +68,7 @@ export function useStreamingChat() {
 
   const [brainstorm, setBrainstorm] = useState<BrainstormState>(() => {
     const cid = convs[0]?.id
-    const defaultBs: BrainstormState = { active: false, phase: 1, phaseLabel: '', totalPhases: 5 }
+    const defaultBs: BrainstormState = { active: false, phase: 1, phaseLabel: '', totalPhases: 5, statusMessage: '' }
     return cid ? (loadMeta(cid).brainstorm || defaultBs) : defaultBs
   })
 
@@ -81,7 +82,7 @@ export function useStreamingChat() {
     setActiveId(c.id)
     setPapers({})
     setTop10([])
-    setBrainstorm({ active: false, phase: 1, phaseLabel: '', totalPhases: 5 })
+    setBrainstorm({ active: false, phase: 1, phaseLabel: '', totalPhases: 5, statusMessage: '' })
   }, [])
 
   const switchConversation = useCallback((id: string) => {
@@ -89,7 +90,7 @@ export function useStreamingChat() {
     const m = loadMeta(id)
     setPapers(m.papers)
     setTop10(m.top10)
-    setBrainstorm(m.brainstorm || { active: false, phase: 1, phaseLabel: '', totalPhases: 5 })
+    setBrainstorm(m.brainstorm || { active: false, phase: 1, phaseLabel: '', totalPhases: 5, statusMessage: '' })
   }, [])
 
   const deleteConversation = useCallback((id: string) => {
@@ -103,11 +104,11 @@ export function useStreamingChat() {
           const m = loadMeta(nid)
           setPapers(m.papers)
           setTop10(m.top10)
-          setBrainstorm(m.brainstorm || { active: false, phase: 1, phaseLabel: '', totalPhases: 5 })
+          setBrainstorm(m.brainstorm || { active: false, phase: 1, phaseLabel: '', totalPhases: 5, statusMessage: '' })
         } else {
           setPapers({})
           setTop10([])
-          setBrainstorm({ active: false, phase: 1, phaseLabel: '', totalPhases: 5 })
+          setBrainstorm({ active: false, phase: 1, phaseLabel: '', totalPhases: 5, statusMessage: '' })
         }
       }
       return next
@@ -179,11 +180,13 @@ export function useStreamingChat() {
             if (eventType === 'brainstorm_suggest') {
               // AI suggests brainstorm mode — message is handled via token streaming below
             } else if (eventType === 'brainstorm_enter') {
-              setBrainstorm({ active: true, phase: data.phase, phaseLabel: data.label, totalPhases: data.total || 5 })
+              setBrainstorm({ active: true, phase: data.phase, phaseLabel: data.label, totalPhases: data.total || 5, statusMessage: '正在准备...' })
+            } else if (eventType === 'brainstorm_status') {
+              setBrainstorm(prev => ({ ...prev, statusMessage: data.message || '' }))
             } else if (eventType === 'brainstorm_phase') {
               setBrainstorm(prev => ({ ...prev, phase: data.phase, phaseLabel: data.label }))
             } else if (eventType === 'brainstorm_exit') {
-              setBrainstorm({ active: false, phase: 1, phaseLabel: '', totalPhases: 5 })
+              setBrainstorm({ active: false, phase: 1, phaseLabel: '', totalPhases: 5, statusMessage: '' })
             } else if (eventType === 'token') {
               const t = typeof data === 'string' ? data : String(data || '')
               fullAnswer += t
@@ -196,7 +199,7 @@ export function useStreamingChat() {
               if (data.papers) { receivedPapers = data.papers; setPapers(data.papers) }
               if (data.top10) { receivedTop10 = data.top10; setTop10(data.top10) }
               if (data.brainstorm) {
-                const bs: BrainstormState = { active: true, phase: data.brainstorm.phase, phaseLabel: data.brainstorm.phase_label || '', totalPhases: 5 }
+                const bs: BrainstormState = { active: true, phase: data.brainstorm.phase, phaseLabel: data.brainstorm.phase_label || '', totalPhases: 5, statusMessage: '' }
                 setBrainstorm(bs)
                 finalBrainstorm = bs
               }

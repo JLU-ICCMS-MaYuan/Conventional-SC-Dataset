@@ -119,18 +119,26 @@ const RagPage: React.FC = () => {
           </div>
 
           {brainstorm.active && (
-            <div style={st.bsBar}>
-              <div style={st.bsDots}>
-                {[1,2,3,4,5].map(p => (
-                  <div key={p} style={{
-                    ...st.bsDot,
-                    backgroundColor: p <= brainstorm.phase ? '#4d6bfe' : '#e5e5e5',
-                    transition: 'background-color 0.3s',
-                  }} />
-                ))}
+            <>
+              <div style={st.bsBar}>
+                <div style={st.bsDots}>
+                  {[1,2,3,4,5].map(p => (
+                    <div key={p} style={{
+                      ...st.bsDot,
+                      backgroundColor: p <= brainstorm.phase ? '#4d6bfe' : '#e5e5e5',
+                      transition: 'background-color 0.3s',
+                    }} />
+                  ))}
+                </div>
+                <span style={st.bsLabel}>🧠 {brainstorm.phaseLabel} ({brainstorm.phase}/{brainstorm.totalPhases})</span>
               </div>
-              <span style={st.bsLabel}>🧠 {brainstorm.phaseLabel} ({brainstorm.phase}/{brainstorm.totalPhases})</span>
-            </div>
+              {brainstorm.statusMessage && (
+                <div style={st.bsStatus}>
+                  <span style={st.bsStatusDot} />
+                  {brainstorm.statusMessage}
+                </div>
+              )}
+            </>
           )}
 
           <div style={st.inputBar}>
@@ -267,6 +275,8 @@ const st: Record<string, React.CSSProperties> = {
   bsDots: { display: 'flex', gap: 6 } as React.CSSProperties,
   bsDot: { width: 8, height: 8, borderRadius: '50%' } as React.CSSProperties,
   bsLabel: { color: '#666', fontWeight: 500 } as React.CSSProperties,
+  bsStatus: { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 20px 8px', fontSize: 12, color: '#999', backgroundColor: '#fff' } as React.CSSProperties,
+  bsStatusDot: { display: 'inline-block', width: 6, height: 6, borderRadius: '50%', backgroundColor: '#4d6bfe', animation: 'blink 1.2s infinite' } as React.CSSProperties,
   bsExitBtn: { marginTop: 8, padding: '4px 12px', borderRadius: 12, border: '1px solid #e55', backgroundColor: '#fff', color: '#e55', fontSize: 12, cursor: 'pointer' } as React.CSSProperties,
 }
 
