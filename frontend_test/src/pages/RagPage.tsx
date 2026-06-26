@@ -39,7 +39,7 @@ function renderMessage(content: string): string {
 
 const RagPage: React.FC = () => {
   const {
-    convs, activeId, messages, loading, papers, top10, streamRef,
+    convs, activeId, messages, loading, papers, top10, streamRef, brainstorm,
     newConversation, switchConversation, deleteConversation, send,
   } = useStreamingChat()
 
@@ -118,6 +118,21 @@ const RagPage: React.FC = () => {
             </div>
           </div>
 
+          {brainstorm.active && (
+            <div style={st.bsBar}>
+              <div style={st.bsDots}>
+                {[1,2,3,4,5].map(p => (
+                  <div key={p} style={{
+                    ...st.bsDot,
+                    backgroundColor: p <= brainstorm.phase ? '#4d6bfe' : '#e5e5e5',
+                    transition: 'background-color 0.3s',
+                  }} />
+                ))}
+              </div>
+              <span style={st.bsLabel}>🧠 {brainstorm.phaseLabel} ({brainstorm.phase}/{brainstorm.totalPhases})</span>
+            </div>
+          )}
+
           <div style={st.inputBar}>
             <div style={st.inputWrap}>
               <input ref={inputRef} style={st.input_} value={input}
@@ -126,6 +141,15 @@ const RagPage: React.FC = () => {
               <button style={{ ...st.sendBtn, opacity: input.trim() && !loading ? 1 : 0.3 }}
                 onClick={handleSend} disabled={!input.trim() || loading}>↑</button>
             </div>
+            {brainstorm.active && (
+              <button
+                onClick={() => send('退出')}
+                style={st.bsExitBtn}
+                title="退出头脑风暴模式"
+              >
+                退出头脑风暴
+              </button>
+            )}
           </div>
         </main>
 
@@ -239,6 +263,11 @@ const st: Record<string, React.CSSProperties> = {
   pCard: { padding: '8px 0', borderBottom: '1px solid #f5f5f5' },
   pidBadge: { display: 'inline-block', padding: '1px 6px', borderRadius: 4, backgroundColor: '#eef0ff', color: '#4d6bfe', fontSize: 11, fontWeight: 500 },
   openSrc: { position: 'absolute' as const, right: 16, bottom: 100, width: 40, height: 40, borderRadius: '50%', border: '1px solid #e5e5e5', backgroundColor: '#fff', fontSize: 18, cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,.08)' },
+  bsBar: { display: 'flex', alignItems: 'center', gap: 12, padding: '8px 20px', backgroundColor: '#fff', borderBottom: '1px solid #f0f0f0', fontSize: 13 } as React.CSSProperties,
+  bsDots: { display: 'flex', gap: 6 } as React.CSSProperties,
+  bsDot: { width: 8, height: 8, borderRadius: '50%' } as React.CSSProperties,
+  bsLabel: { color: '#666', fontWeight: 500 } as React.CSSProperties,
+  bsExitBtn: { marginTop: 8, padding: '4px 12px', borderRadius: 12, border: '1px solid #e55', backgroundColor: '#fff', color: '#e55', fontSize: 12, cursor: 'pointer' } as React.CSSProperties,
 }
 
 export default RagPage
