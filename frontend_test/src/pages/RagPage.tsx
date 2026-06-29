@@ -44,7 +44,7 @@ const RagPage: React.FC = () => {
   } = useStreamingChat()
 
   const [input, setInput] = useState('')
-  const [exploreMode, setThinkMode] = useState(false)
+  const [exploreMode, setExploreMode] = useState(false)
   const [sourceOpen, setSourceOpen] = useState(true)
   const chatBoxRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
