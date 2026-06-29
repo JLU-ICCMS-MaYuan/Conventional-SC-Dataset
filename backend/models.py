@@ -31,8 +31,6 @@ class PeriodicTableElement(Base):
     period_number = Column(Integer)
     group_number = Column(Integer)
     category = Column(String(100))
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 class ChemicalSystem(Base):
@@ -106,15 +104,15 @@ class Paper(Base):
     __tablename__ = "papers"
 
     id = Column(Integer, primary_key=True)
-    doi = Column(String(255), unique=True, index=True, nullable=False)
-    title = Column(Text, nullable=False)
+    doi = Column(String(255), unique=True, index=True, nullable=True)
+    title = Column(Text, nullable=True)
     journal = Column(String(255))
     volume = Column(String(100))
     pages = Column(String(100))
     year = Column(Integer, index=True)
     abstract = Column(Text)
-    authors = Column(JSON, nullable=False)
-    uploaded_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    authors = Column(JSON, nullable=True)
+    uploaded_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     reviewed_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     review_status = Column(String(50), default="pending", nullable=False, index=True)
     reviewed_at = Column(DateTime(timezone=True))
@@ -167,6 +165,8 @@ class SuperconductorRecord(Base):
     energy_cutoff_value = Column(Float)
     energy_cutoff_unit = Column(String(50))
     show_in_chart = Column(Boolean, default=False, nullable=False, index=True)
+    article_type = Column(String(10))
+    superconductor_type = Column(String(10))
     s_factor = Column(Float)
     method = Column(String(255))
     note = Column(Text)

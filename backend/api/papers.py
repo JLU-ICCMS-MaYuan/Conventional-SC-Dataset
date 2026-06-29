@@ -5,9 +5,11 @@ Paper and superconductor record APIs.
 from __future__ import annotations
 
 import json
+import time
+import threading
 from typing import Annotated, Any, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -20,109 +22,10 @@ from backend.chart_rules import (
 from backend.database import get_db
 from backend.db_helpers import build_system_key
 from backend.repositories.superconductors import search_superconductors
-from backend.security import get_current_user
 from backend.utils.citation import generate_aps_citation, generate_bibtex_citation
-from backend.utils.doi_resolver import get_doi_metadata, validate_doi
 
 
 router = APIRouter(prefix="/api/papers", tags=["papers"])
-
-
-def _is_admin(user: models.User) -> bool:
-    return user.role in {"admin", "superadmin"}
-
-
-def _parse_json(value: str | None, default: Any) -> Any:
-    if value is None or value == "":
-        return default
-    try:
-        return json.loads(value)
-    except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=400, detail=f"JSON 格式错误: {exc.msg}") from exc
-
-
-def _first_number(value: Any) -> float | None:
-    if value is None or value == "":
-        return None
-    if isinstance(value, list):
-        return _first_number(value[0]) if value else None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _record_payloads(records: str | None, physical_data: str | None, defaults: dict[str, Any]) -> list[dict[str, Any]]:
-    raw_items = _parse_json(records, None)
-    if raw_items is None:
-        raw_items = _parse_json(physical_data, None)
-    if not isinstance(raw_items, list) or not raw_items:
-        raise HTTPException(status_code=400, detail="records 必须是非空 JSON 数组")
-
-    normalized: list[dict[str, Any]] = []
-    for raw in raw_items:
-        if not isinstance(raw, dict):
-            raise HTTPException(status_code=400, detail="records 中的每一项都必须是对象")
-        item = {**defaults, **raw}
-        formula = item.get("chemical_formula")
-        if not formula:
-            raise HTTPException(status_code=400, detail="每条记录都必须提供 chemical_formula")
-        pressure = _first_number(item.get("pressure_gpa", item.get("tc_press")))
-        if pressure is None:
-            raise HTTPException(status_code=400, detail=f"{formula} 缺少 pressure_gpa")
-
-        tc_value = _first_number(item.get("tc"))
-        if tc_value is not None:
-            if item.get("article_type") == "experimental":
-                item.setdefault("experimental_tc", tc_value)
-            else:
-                item.setdefault("mcmillan_tc", tc_value)
-
-        item["chemical_formula"] = formula
-        item["pressure_gpa"] = pressure
-        item.setdefault("space_group_symbol", item.get("crystal_structure"))
-        normalized.append(item)
-    return normalized
-
-
-def _create_record(db: Session, paper: models.Paper, item: dict[str, Any]) -> models.SuperconductorRecord:
-    superconductor = crud.get_or_create_superconductor(db, item["chemical_formula"])
-    record = models.SuperconductorRecord(
-        superconductor_id=superconductor.id,
-        paper_id=paper.id,
-        source_label=item.get("source_label") or "paper",
-        pressure_gpa=item["pressure_gpa"],
-        space_group_symbol=item.get("space_group_symbol"),
-        space_group_number=item.get("space_group_number"),
-        crystal_structure=item.get("crystal_structure"),
-        thermodynamically_stable=item.get("thermodynamically_stable"),
-        dynamically_stable=item.get("dynamically_stable"),
-        energy_above_hull=item.get("energy_above_hull"),
-        mcmillan_tc=item.get("mcmillan_tc"),
-        allen_dynes_tc=item.get("allen_dynes_tc"),
-        isotropic_eliashberg_tc=item.get("isotropic_eliashberg_tc"),
-        anisotropic_eliashberg_tc=item.get("anisotropic_eliashberg_tc"),
-        experimental_tc=item.get("experimental_tc"),
-        lambda_value=item.get("lambda_value"),
-        omega_log=item.get("omega_log"),
-        n_ef_total=item.get("n_ef_total"),
-        element_n_ef=item.get("element_n_ef"),
-        pseudopotential_type=item.get("pseudopotential_type"),
-        pseudopotential_name=item.get("pseudopotential_name"),
-        exchange_correlation_functional=item.get("exchange_correlation_functional"),
-        calculation_code=item.get("calculation_code"),
-        k_grid=item.get("k_grid"),
-        q_grid=item.get("q_grid"),
-        energy_cutoff_value=item.get("energy_cutoff_value"),
-        energy_cutoff_unit=item.get("energy_cutoff_unit"),
-        show_in_chart=bool(item.get("show_in_chart", False)),
-        s_factor=item.get("s_factor"),
-        method=item.get("method"),
-        note=item.get("note"),
-    )
-    db.add(record)
-    return record
-
 
 def _record_to_dict(record: models.SuperconductorRecord) -> dict[str, Any]:
     return {
@@ -142,6 +45,24 @@ def _record_to_dict(record: models.SuperconductorRecord) -> dict[str, Any]:
         "isotropic_eliashberg_tc": record.isotropic_eliashberg_tc,
         "anisotropic_eliashberg_tc": record.anisotropic_eliashberg_tc,
         "experimental_tc": record.experimental_tc,
+        "tc_max": max(
+            v for v in [
+                record.mcmillan_tc,
+                record.allen_dynes_tc,
+                record.isotropic_eliashberg_tc,
+                record.anisotropic_eliashberg_tc,
+                record.experimental_tc,
+            ] if v is not None
+        ) if any(
+            v is not None for v in [
+                record.mcmillan_tc,
+                record.allen_dynes_tc,
+                record.isotropic_eliashberg_tc,
+                record.anisotropic_eliashberg_tc,
+                record.experimental_tc,
+            ]
+        ) else None,
+        "article_type": record.article_type,
         "lambda_value": record.lambda_value,
         "omega_log": record.omega_log,
         "n_ef_total": record.n_ef_total,
@@ -184,6 +105,23 @@ def _paper_to_dict(paper: models.Paper, include_records: bool = True) -> dict[st
         "created_at": paper.created_at,
         "updated_at": paper.updated_at,
     }
+    # Tc 摘要 — 从任意 record 取第一个非空值
+    def _first_tc(attr: str):
+        for r in paper.records:
+            val = getattr(r, attr, None)
+            if val is not None:
+                return val
+        return None
+    payload["mcmillan_tc"] = _first_tc("mcmillan_tc")
+    payload["allen_dynes_tc"] = _first_tc("allen_dynes_tc")
+    payload["isotropic_eliashberg_tc"] = _first_tc("isotropic_eliashberg_tc")
+    payload["anisotropic_eliashberg_tc"] = _first_tc("anisotropic_eliashberg_tc")
+    payload["experimental_tc"] = _first_tc("experimental_tc")
+    # 聚合摘要 — 从所有 records 去重提取
+    payload["article_types"] = list({r.article_type for r in paper.records if r.article_type})
+    payload["superconductor_types"] = list({r.superconductor_type for r in paper.records if r.superconductor_type})
+    payload["pressures_gpa"] = sorted({r.pressure_gpa for r in paper.records if r.pressure_gpa is not None})
+    payload["space_groups"] = list({r.space_group_symbol for r in paper.records if r.space_group_symbol})
     if include_records:
         payload["records"] = [_record_to_dict(record) for record in paper.records]
     return payload
@@ -207,6 +145,15 @@ def _query_papers_for_superconductors(
         .join(models.SuperconductorRecord)
         .join(models.Superconductor)
         .filter(models.Superconductor.id.in_(superconductor_ids))
+        .filter(
+            or_(
+                models.SuperconductorRecord.mcmillan_tc.isnot(None),
+                models.SuperconductorRecord.allen_dynes_tc.isnot(None),
+                models.SuperconductorRecord.isotropic_eliashberg_tc.isnot(None),
+                models.SuperconductorRecord.anisotropic_eliashberg_tc.isnot(None),
+                models.SuperconductorRecord.experimental_tc.isnot(None),
+            )
+        )
         .distinct()
     )
     if keyword:
@@ -235,14 +182,30 @@ def _query_papers_for_superconductors(
     return query
 
 
-def _paginate(query, limit: int, offset: int) -> dict[str, Any]:
-    total = query.count()
+# 简单的内存缓存：key → (total, timestamp)
+_count_cache: dict[str, tuple[int, float]] = {}
+import time as _time
+
+def _paginate(query, limit: int, offset: int, *, cache_key: str | None = None) -> dict[str, Any]:
+    if cache_key is None:
+        cache_key = str(query.statement.compile(compile_kwargs={"literal_binds": True}))
+    if cache_key in _count_cache:
+        total, ts = _count_cache[cache_key]
+        if _time.time() - ts < 30:
+            pass
+        else:
+            del _count_cache[cache_key]
+            total = query.count()
+            _count_cache[cache_key] = (total, _time.time())
+    else:
+        total = query.count()
+        _count_cache[cache_key] = (total, _time.time())
     items = query.offset(offset).limit(limit).all()
     page_size = limit
     page = (offset // page_size) + 1 if page_size else 1
     total_pages = (total + page_size - 1) // page_size if total > 0 else 0
     return {
-        "items": [_paper_to_dict(paper, include_records=False) for paper in items],
+        "items": [_paper_to_dict(paper, include_records=True) for paper in items],
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -264,97 +227,6 @@ def get_user_ranking(db: Session = Depends(get_db)):
     ]
     rankings.sort(key=lambda item: item["count"], reverse=True)
     return rankings[:20]
-
-
-@router.post("/")
-async def create_paper(
-    doi: str = Form(...),
-    title: Optional[str] = Form(None),
-    authors: str = Form("[]"),
-    journal: Optional[str] = Form(None),
-    volume: Optional[str] = Form(None),
-    pages: Optional[str] = Form(None),
-    year: Optional[int] = Form(None),
-    abstract: Optional[str] = Form(None),
-    records: Optional[str] = Form(None),
-    physical_data: Optional[str] = Form(None),
-    chemical_formula: Optional[str] = Form(None),
-    crystal_structure: Optional[str] = Form(None),
-    article_type: Optional[str] = Form(None),
-    superconductor_type: Optional[str] = Form(None),
-    notes: Optional[str] = Form(None),
-    db: Session = Depends(get_db),
-    current_user: Annotated[models.User, Depends(get_current_user)] = None,
-):
-    if not current_user:
-        raise HTTPException(status_code=401, detail="请先登录后再上传文献")
-    if db.query(models.Paper).filter(models.Paper.doi == doi).first():
-        raise HTTPException(status_code=400, detail=f"文献 {doi} 已存在")
-
-    metadata = None
-    if title is None:
-        if not _is_admin(current_user) and not await validate_doi(doi):
-            raise HTTPException(status_code=400, detail=f"DOI {doi} 无效或不存在，请检查格式")
-        metadata = await get_doi_metadata(doi)
-        if not metadata and not _is_admin(current_user):
-            raise HTTPException(status_code=500, detail="无法获取文献元数据，请稍后重试")
-        metadata = metadata or {}
-
-    authors_list = _parse_json(authors, None)
-    if authors_list is None:
-        authors_list = metadata.get("authors", []) if metadata else []
-    if not isinstance(authors_list, list):
-        raise HTTPException(status_code=400, detail="authors 必须是 JSON 数组")
-
-    defaults = {
-        "chemical_formula": chemical_formula,
-        "crystal_structure": crystal_structure,
-        "article_type": article_type,
-        "superconductor_type": superconductor_type,
-        "note": notes,
-    }
-    record_items = _record_payloads(records, physical_data, defaults)
-
-    paper = models.Paper(
-        doi=doi,
-        title=title or metadata.get("title") or f"Manual Entry: {doi}",
-        journal=journal or (metadata.get("journal") if metadata else None),
-        volume=volume or (metadata.get("volume") if metadata else None),
-        pages=pages or (metadata.get("pages") if metadata else None),
-        year=year or (metadata.get("year") if metadata else None),
-        abstract=abstract or (metadata.get("abstract") if metadata else None),
-        authors=authors_list,
-        uploaded_by_user_id=current_user.id,
-        review_status="pending",
-    )
-
-    try:
-        db.add(paper)
-        db.flush()
-        for item in record_items:
-            _create_record(db, paper, item)
-        db.commit()
-        db.refresh(paper)
-    except Exception:
-        db.rollback()
-        raise
-
-    return _paper_to_dict(paper)
-
-
-@router.post("/batch-upload")
-async def batch_upload_papers(
-    file: UploadFile = File(...),
-    current_user: Annotated[models.User, Depends(get_current_user)] = None,
-):
-    if not current_user:
-        raise HTTPException(status_code=401, detail="请先登录后再进行批量上传")
-    raise HTTPException(status_code=501, detail="批量导入将按新 MySQL 结构重新实现")
-
-
-@router.get("/batch-upload-example")
-def get_batch_upload_example():
-    raise HTTPException(status_code=501, detail="批量上传示例需按新 superconductor_records 格式重新生成")
 
 
 @router.get("/compound/{element_symbols}")
@@ -504,11 +376,15 @@ def export_papers(export_data: schemas.ExportFormat, db: Session = Depends(get_d
 
 @router.get("/stats/tc-pressure")
 def get_tc_pressure_chart_data(db: Session = Depends(get_db)):
-    rows = db.query(models.SuperconductorRecord).join(models.SuperconductorRecord.superconductor).all()
+    rows = db.query(models.SuperconductorRecord).join(models.SuperconductorRecord.superconductor).outerjoin(models.SuperconductorRecord.paper).all()
     return [
         {
             "x": row.pressure_gpa,
             "y": representative_tc(row),
+            "type": "experimental" if (row.article_type == "e") else "theoretical",
+            "year": row.paper.year if row.paper else None,
+            "label": row.superconductor.chemical_formula,
+            "sc_type": row.superconductor_type or "others",
             "formula": row.superconductor.chemical_formula,
             "space_group": row.space_group_symbol,
             "source_label": row.source_label,
@@ -542,3 +418,140 @@ def get_tc_year_chart_data(db: Session = Depends(get_db)):
 @router.get("/stats/chart-data")
 def get_chart_data(db: Session = Depends(get_db)):
     return get_tc_pressure_chart_data(db)
+
+
+# ---------- 全数据库聚合搜索（带缓存）----------
+
+_search_cache: dict[str, dict[str, Any]] = {}
+_search_cache_lock = threading.Lock()
+_CACHE_TTL = 300  # 5 分钟
+
+
+def _build_cache_key(elements: list[str], mode: str) -> str:
+    return "-".join(sorted(elements)) + "|" + (mode or "contains")
+
+
+def _fetch_all_sources(elements: list[str], mode: str) -> list[dict]:
+    """取三源全量数据，合并为统一格式列表"""
+    items: list[dict] = []
+
+    # 1. 本地
+    from backend.database import SessionLocal
+    db = SessionLocal()
+    try:
+        from backend.repositories.superconductors import search_superconductors
+        result = search_superconductors(db, mode, elements=elements, limit=10000, offset=0)
+        if result.items:
+            query = _query_papers_for_superconductors(db, [r.id for r in result.items])
+            for paper in query.all():
+                d = _paper_to_dict(paper, include_records=True)
+                d["_source"] = "local"
+                items.append(d)
+    finally:
+        db.close()
+
+    # 2. Alexandria
+    try:
+        from backend.alexandria_import import query_by_elements
+        alex_mode = {"elements_exact_search": "only", "elements_combination_search": "combination", "elements_contained_search": "contains"}.get(mode, "contains")
+        alex_result = query_by_elements(elements=elements, mode=alex_mode, limit=10000, offset=0)
+        for m in (alex_result.get("items") or []):
+            m["_source"] = "alexandria"
+            items.append(m)
+    except Exception:
+        pass
+
+    # 3. HTSC-2025
+    try:
+        from backend.api.htsc2025 import _entry_matches, _load_dataset
+
+        htsc_mode = {"elements_exact_search": "only", "elements_combination_search": "combination", "elements_contained_search": "contains"}.get(mode, "contains")
+        query_set = set(elements)
+        data = _load_dataset()
+        for item in (data.get("records") or []):
+            entry_elements = set(item.get("elements") or [])
+            if _entry_matches(entry_elements, query_set, htsc_mode):
+                copied = dict(item)
+                copied["_source"] = "htsc2025"
+                items.append(copied)
+    except Exception:
+        pass
+
+    return items
+
+
+def _group_and_sort(items: list[dict]) -> list[dict]:
+    """按 compound 分组，组间按条目数降序，组内按 Tc 降序"""
+    grouped: dict[str, list[dict]] = {}
+    for item in items:
+        if item.get("_source") == "local":
+            key = item.get("compound_symbols") or item.get("chemical_formula") or "未知"
+        else:
+            key = "-".join(sorted(item.get("elements") or []))
+        grouped.setdefault(key, []).append(item)
+
+    # 组内按 Tc 降序
+    def _tc(item):
+        if item.get("_source") == "alexandria":
+            return item.get("tc_allen_dynes") or item.get("tc_max") or 0
+        if item.get("_source") == "htsc2025":
+            return item.get("tc") or 0
+        return item.get("experimental_tc") or item.get("anisotropic_eliashberg_tc") or item.get("isotropic_eliashberg_tc") or item.get("allen_dynes_tc") or item.get("mcmillan_tc") or 0
+
+    # 过滤无 Tc 的条目
+    for k in list(grouped.keys()):
+        grouped[k] = [item for item in grouped[k] if _tc(item) > 0]
+        if not grouped[k]:
+            del grouped[k]
+
+    # 排序优先级：来源（本地 > Alexandria > HTSC），再按 Tc 降序
+    _src_order = {"local": 0, "alexandria": 1, "htsc2025": 2}
+    for k in grouped:
+        grouped[k].sort(key=lambda item: (_src_order.get(item.get("_source", ""), 3), -_tc(item)))
+
+    def _local_count(kv):
+        return sum(1 for item in kv[1] if item.get("_source") == "local")
+
+    # 组间：按本地条目数降序，相同则按最高 Tc 降序
+    sorted_groups = sorted(grouped.items(), key=lambda kv: (_local_count(kv), max((_tc(i) for i in kv[1]), default=0)), reverse=True)
+
+    # 展平
+    flat = []
+    for key, group_items in sorted_groups:
+        flat.append({"_type": "section", "key": key, "count": len(group_items)})
+        flat.extend(group_items)
+    return flat
+
+
+@router.post("/search/all")
+def search_all(request: schemas.PaperModeSearchRequest, db: Session = Depends(get_db)):
+    elements = request.elements or []
+    mode = request.mode or "elements_contained_search"
+    page = max(1, request.offset // request.limit + 1)
+    page_size = request.limit or 30
+
+    cache_key = _build_cache_key(elements, mode)
+
+    with _search_cache_lock:
+        entry = _search_cache.get(cache_key)
+        if entry and time.time() - entry["ts"] < _CACHE_TTL:
+            flat = entry["flat"]
+        else:
+            items = _fetch_all_sources(elements, mode)
+            flat = _group_and_sort(items)
+            _search_cache[cache_key] = {"flat": flat, "ts": time.time()}
+
+    start = (page - 1) * page_size
+    page_items = flat[start:start + page_size]
+    total = sum(1 for i in flat if i.get("_type") != "section")
+
+    return {
+        "items": page_items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": max(1, (total + page_size - 1) // page_size) if total > 0 else 0,
+        "has_prev": start > 0,
+        "has_next": start + page_size < len(flat),
+        "cached": cache_key in _search_cache,
+    }

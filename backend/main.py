@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pathlib import Path
 
-from backend.api import elements, compounds, papers, admin, auth_routes, tc_predict, alexandria, htsc2025, structures
+from backend.api import elements, compounds, papers, admin, auth_routes, tc_predict, alexandria, htsc2025, structures, rag
 
 # 创建FastAPI应用
 app = FastAPI(
@@ -40,6 +40,7 @@ app.include_router(tc_predict.router)  # Tc 预测 API
 app.include_router(alexandria.router)  # Alexandria 数据库 API
 app.include_router(htsc2025.router)  # HTSC-2025 数据集 API
 app.include_router(structures.router)  # 晶体结构 API
+app.include_router(rag.router)  # RAG 代理 API
 
 # 挂载静态文件目录
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -55,14 +56,19 @@ if STATIC_DIR.exists():
 @app.get("/")
 def read_root():
     """返回主页"""
-    index_file = TEMPLATES_DIR / "index.html"
-    if index_file.exists():
-        return FileResponse(index_file)
-    return {
-        "message": "超导文献数据库 API",
-        "version": "1.0.0",
-        "docs": "/docs"
-    }
+    f = TEMPLATES_DIR / "index.html"
+    if f.exists():
+        return FileResponse(f)
+    return {"error": "页面不存在"}
+
+
+@app.get("/elements")
+def elements_page():
+    """元素周期表内容页（iframe 内嵌用）"""
+    f = TEMPLATES_DIR / "elements.html"
+    if f.exists():
+        return FileResponse(f)
+    return {"error": "页面不存在"}
 
 
 # 元素周期表页面
@@ -167,10 +173,37 @@ def admin_papers_page():
     return {"error": "页面不存在"}
 
 
+@app.get("/admin/users")
+def admin_users_page():
+    """返回用户管理页面"""
+    users_file = TEMPLATES_DIR / "admin_users.html"
+    if users_file.exists():
+        return FileResponse(users_file)
+    return {"error": "页面不存在"}
+
+
 @app.get("/tc-pre")
 def tc_prediction_page():
     """Tc 预测实验页面"""
     page_file = TEMPLATES_DIR / "tc_pre.html"
+    if page_file.exists():
+        return FileResponse(page_file)
+    return {"error": "页面不存在"}
+
+
+@app.get("/rag")
+def rag_page():
+    """AI 文献助手页面"""
+    page_file = TEMPLATES_DIR / "rag.html"
+    if page_file.exists():
+        return FileResponse(page_file)
+    return {"error": "页面不存在"}
+
+
+@app.get("/merged")
+def merged_page():
+    """三合一页面"""
+    page_file = TEMPLATES_DIR / "merged.html"
     if page_file.exists():
         return FileResponse(page_file)
     return {"error": "页面不存在"}
@@ -190,16 +223,6 @@ async def startup_event():
     print("=" * 60)
     print("🚀 正在启动超导文献数据库服务...")
     print("=" * 60)
-
-    # 自动初始化数据库
-    try:
-        from backend.init_db import init_database
-        print("正在初始化数据库...")
-        init_database()
-        print("✓ 数据库初始化完成")
-    except Exception as e:
-        print(f"⚠️  数据库初始化失败: {e}")
-        print("应用将继续启动，但可能无法正常工作")
 
     print("=" * 60)
     print("✅ 超导文献数据库服务启动成功！")

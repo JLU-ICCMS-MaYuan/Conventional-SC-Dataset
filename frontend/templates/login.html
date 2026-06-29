@@ -110,14 +110,11 @@
                         window.authState.save(data.access_token, data.user);
                     }
 
-                    let redirectUrl = '/';
-                    if (data.user.is_admin) {
-                        redirectUrl = data.user.is_superadmin ? '/admin/superadmin' : '/admin/dashboard';
-                    } else if (isAdminMode) {
+                    if (isAdminMode && !data.user.is_admin) {
                         alert('This account does not have admin permissions. Redirecting to user home.');
                     }
 
-                    window.location.href = redirectUrl;
+                    window.location.href = '/';
                 } catch (error) {
                     console.error('Login failed:', error);
                     errorAlert.textContent = error.message;

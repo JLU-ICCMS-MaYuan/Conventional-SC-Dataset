@@ -48,6 +48,7 @@ bak
 tmp/
 temp/
 *.tmp
+frontend_test
 
 #AI
 AGENTS.md
@@ -55,8 +56,18 @@ CLI_GUIDE.md
 INSTALL.md
 CLAUDE.md
 .worktrees/
+.claude
 
-#数据库
+# 数据库
 hydride_literature_image_ai.db
-data/local_dev.db
-data/alexandria/
+data/
+
+# React 构建产物
+frontend/static/assets/
+
+# 测试截图 & 快照
+*.png
+*-snapshot.yml
+*-page.yml
+*-current.yml
+.superpowers/

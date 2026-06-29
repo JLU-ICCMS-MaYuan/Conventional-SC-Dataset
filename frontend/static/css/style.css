@@ -1,8 +1,177 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   CSS Variables & Reset
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+    /* 间距 */
+    --space-xs: 4px;
+    --space-sm: 8px;
+    --space-md: 16px;
+    --space-lg: 24px;
+    --space-xl: 40px;
+    /* 圆角 */
+    --radius: 8px;
+    /* 配色 */
+    --primary: #4d6bfe;
+    --primary-hover: #3b5de7;
+    --text: #1a1a1a;
+    --text-secondary: #555;
+    --text-muted: #888;
+    --bg: #fafafa;
+    --card-bg: #fff;
+    --border: #e5e5e5;
+    /* 动画 */
+    --transition: 0.2s ease;
+
+    /* 图表配色 */
+    --sc-color-cuprate: rgba(255, 99, 132, 0.8);
+    --sc-color-iron: rgba(75, 192, 192, 0.8);
+    --sc-color-nickel: rgba(75, 239, 58, 0.8);
+    --sc-color-hydride: rgba(153, 102, 255, 0.8);
+    --sc-color-carbon: rgba(54, 162, 235, 0.8);
+    --sc-color-organic: rgba(255, 206, 86, 0.8);
+    --sc-color-others: rgba(204, 70, 70, 0.8);
+    --sc-color-unknown: rgba(201, 203, 207, 0.8);
+    --sc-shape-experimental: rectRot;
+    --sc-shape-theoretical: triangle;
+}
+
 /* 全局样式 */
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #f8f9fa;
+    background-color: var(--bg);
+    color: var(--text);
     padding-bottom: 50px;
+    line-height: 1.6;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    line-height: 1.4;
+    color: var(--text);
+}
+h1 { font-size: 2rem; }
+h2 { font-size: 1.5rem; }
+
+/* 通用卡片样式 */
+.card {
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+}
+
+/* Apple 风格导航条 */
+.nav-underline {
+    position: relative;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 28px;
+}
+.nav-underline .nav-link {
+    font-size: 0.9rem;
+    color: var(--text-muted) !important;
+    padding: 8px 0;
+    transition: color 0.2s ease;
+    background: none !important;
+    border: none !important;
+}
+.nav-underline .nav-link:hover {
+    color: var(--text) !important;
+}
+.nav-underline .nav-link.active {
+    color: var(--text) !important;
+    font-weight: 500;
+}
+.nav-slider {
+    position: absolute;
+    bottom: 0;
+    height: 2px;
+    background: var(--text);
+    border-radius: 1px;
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 10;
+    pointer-events: none;
+}
+
+/* Apple 风格 Tabs + 滑动胶囊（页面内使用） */
+.apple-tabs {
+    position: relative;
+    display: inline-flex;
+    gap: 4px;
+    background: #e8e8ed;
+    border-radius: 20px;
+    padding: 4px;
+}
+.apple-tab {
+    font-size: 0.9rem;
+    color: var(--text);
+    cursor: pointer;
+    padding: 8px 28px;
+    border: none;
+    background: none;
+    border-radius: 16px;
+    user-select: none;
+    transition: color 0.25s ease;
+    position: relative;
+    z-index: 2;
+    white-space: nowrap;
+}
+.apple-tab-slider {
+    position: absolute;
+    top: 4px;
+    left: 0;
+    height: calc(100% - 8px);
+    background: var(--primary);
+    border-radius: 16px;
+    transition: left 0.35s cubic-bezier(0.4, 0, 0.2, 1), width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 1;
+    pointer-events: none;
+}
+.apple-tab:hover {
+    color: var(--text);
+}
+.btn-check:checked + .apple-tab {
+    color: #fff;
+}
+
+#selected-elements {
+    transition: all 0.3s ease;
+}
+
+/* 按钮主色统一 */
+.btn-primary {
+    background-color: var(--primary);
+    border-color: var(--primary);
+    transition: all var(--transition);
+}
+.btn-primary:hover {
+    background-color: var(--primary-hover);
+    border-color: var(--primary-hover);
+    transform: translateY(-1px);
+}
+.btn-outline-primary {
+    color: var(--primary);
+    border-color: var(--primary);
+}
+.btn-outline-primary:hover {
+    background-color: var(--primary);
+    border-color: var(--primary);
+}
+.btn-outline-primary:disabled {
+    color: #a0b4ff;
+    border-color: #c8d4ff;
+}
+
+/* 进入页面按钮三态 */
+.btn-enter {
+    background: #6b8bfe;
+    border-color: #6b8bfe;
+    color: #fff;
+    transition: all var(--transition);
+}
+.btn-enter:hover {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+    transform: translateY(-1px);
 }
 
 /* 元素周期表容器 */
@@ -33,6 +202,12 @@ body {
     transition: all 0.2s ease;
     background-color: white;
     user-select: none;
+    animation: elementFadeIn 0.4s ease both;
+    animation-delay: calc(var(--i, 0) * 0.002s);
+}
+@keyframes elementFadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 .element:hover {
@@ -153,11 +328,12 @@ body {
     border: none;
     cursor: default;
     pointer-events: none;
+    animation: none;
 }
 
 /* 元素组合页面样式 */
 .compound-header {
-    background-color: #f8f9fa;
+    background-color: var(--bg);
     color: #000;
     padding: 40px 0;
     margin-bottom: 30px;
@@ -192,14 +368,14 @@ body {
 }
 
 .paper-image-thumbnail:hover {
-    border-color: #0d6efd;
+    border-color: var(--primary);
     transform: scale(1.05);
 }
 
 .citation-box {
-    background-color: #f8f9fa;
+    background-color: var(--bg);
     padding: 15px;
-    border-radius: 4px;
+    border-radius: var(--radius);
     font-family: 'Courier New', monospace;
     font-size: 14px;
     margin-top: 10px;
@@ -272,6 +448,10 @@ body {
     color: #000 !important;
 }
 
+.navbar-custom .nav-link.active {
+    font-weight: 600;
+}
+
 /* 针对按钮的黑色边框处理 */
 .navbar-custom .btn-outline-light {
     color: #000 !important;
@@ -296,7 +476,7 @@ body {
     overflow: hidden;
     border-radius: 8px;
     border: 1px solid #dee2e6;
-    background-color: #fff;
+    background-color: var(--card-bg);
     transition: all 0.3s ease;
 }
 
@@ -314,7 +494,7 @@ body {
 }
 
 /* 响应式调整 */
-@media (max-width: 1200px) {
+@media (max-width: 1160px) {
     #periodic-table {
         grid-template-columns: repeat(18, 50px);
     }
@@ -333,20 +513,28 @@ body {
     }
 }
 
-/* 图表主题配置 (CSS变量) */
-:root {
-    --sc-color-cuprate: rgba(255, 99, 132, 0.8);
-    --sc-color-iron: rgba(75, 192, 192, 0.8);
-    --sc-color-nickel: rgba(75, 239, 58, 0.8);
-    --sc-color-hydride: rgba(153, 102, 255, 0.8);
-    --sc-color-carbon: rgba(54, 162, 235, 0.8);
-    --sc-color-organic: rgba(255, 206, 86, 0.8);
-    --sc-color-others: rgba(204, 70, 70, 0.8);
-    --sc-color-unknown: rgba(201, 203, 207, 0.8);
 
-    --sc-shape-experimental: rectRot;
-    --sc-shape-theoretical: triangle;
+/* ═══════════════════════════════════════════════════════════════════════════
+   动态效果
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* 滚动淡入 */
+.animate-on-scroll {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
 }
+.animate-on-scroll.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+.animate-on-scroll:nth-child(1) { transition-delay: 0s; }
+.animate-on-scroll:nth-child(2) { transition-delay: 0.1s; }
+.animate-on-scroll:nth-child(3) { transition-delay: 0.2s; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   响应式
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 @media (max-width: 768px) {
     #periodic-table {

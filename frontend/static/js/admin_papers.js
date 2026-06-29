@@ -17,9 +17,9 @@ const LEGACY_SUPER_TYPES = {
     'unknown': 'others'
 };
 
-function getSelectedDatabase() {
-    const el = document.getElementById('filterDatabase');
-    return el ? el.value : 'local';
+function getSelectedDataType() {
+    const el = document.getElementById('filterDataType');
+    return el ? el.value : 'papers';
 }
 
 function normalizeSuperconductorType(value) {
@@ -59,7 +59,8 @@ function formatRangeValue(values, suffix = '') {
 }
 
 function renderPhysicalDataTable(paper) {
-    const rows = Array.isArray(paper.data) && paper.data.length > 0 ? paper.data : [paper];
+    const records = Array.isArray(paper.records) && paper.records.length > 0 ? paper.records : [];
+    const rows = records.length > 0 ? records : [paper];
     return `
         <div class="table-responsive">
             <table class="table table-sm table-bordered align-middle mb-0">
@@ -67,25 +68,25 @@ function renderPhysicalDataTable(paper) {
                     <tr>
                         <th>化学式</th>
                         <th>空间群</th>
-                        <th>是否实验合成</th>
+                        <th>合成</th>
                         <th>Tc</th>
-                        <th>P</th>
+                        <th>P(GPa)</th>
                         <th>λ</th>
                         <th>ω_log</th>
-                        <th>N(EF)</th>
+                        <th>N(Ef)</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${rows.map(item => `
+                    ${rows.map(r => `
                         <tr>
-                            <td>${formatDataValue(item.chemical_formula || paper.chemical_formula)}</td>
-                            <td>${formatDataValue(item.crystal_structure || paper.crystal_structure)}</td>
-                            <td>${synthesizedLabel(item.article_type || paper.article_type)}</td>
-                            <td>${formatRangeValue(item.tc, ' K')}</td>
-                            <td>${formatRangeValue(item.tc_press, ' GPa')}</td>
-                            <td>${formatDataValue(item.lambda_val)}</td>
-                            <td>${formatDataValue(item.omega_log)}</td>
-                            <td>${formatDataValue(item.n_ef)}</td>
+                            <td>${formatDataValue(r.chemical_formula || paper.chemical_formula)}</td>
+                            <td>${formatDataValue(r.space_group_symbol)}</td>
+                            <td>${synthesizedLabel(r.article_type)}</td>
+                            <td>${formatDataValue(r.tc_max || r.mcmillan_tc || r.allen_dynes_tc || r.experimental_tc, ' K')}</td>
+                            <td>${formatDataValue(r.pressure_gpa)}</td>
+                            <td>${formatDataValue(r.lambda_value)}</td>
+                            <td>${formatDataValue(r.omega_log)}</td>
+                            <td>${formatDataValue(r.n_ef_total)}</td>
                         </tr>
                     `).join('')}
                 </tbody>
@@ -128,7 +129,7 @@ function checkAuth() {
     const state = window.authState.get();
     if (!state || !state.token || !state.user) {
         alert('请先登录');
-        window.location.href = '/admin/login';
+        window.location.href = '/login';
         return false;
     }
 
@@ -140,7 +141,8 @@ function checkAuth() {
 
     token = state.token;
     currentUser = state.user;
-    document.getElementById('userName').textContent = currentUser.real_name;
+    var userNameEl = document.getElementById('userName');
+    if (userNameEl) userNameEl.textContent = currentUser.real_name;
 
     document.querySelectorAll('#batchStatusSelect option[data-superadmin-only="true"]').forEach(option => {
         if (currentUser.is_superadmin) {
@@ -159,9 +161,8 @@ function logout() {
     if (window.authState) {
         window.authState.clear();
     }
-    window.location.href = '/admin/login';
+    window.location.href = '/';
 }
-
 // ========== 加载文献列表 ==========
 
 async function loadPapers(page = 0) {
@@ -192,8 +193,11 @@ async function loadPapers(page = 0) {
         if (value) queryParams.append(key, value);
     }
 
+    const dataType = getSelectedDataType();
+    const apiUrl = dataType === 'records' ? '/api/admin/records/all' : '/api/admin/papers/all';
+
     try {
-        const response = await fetch(`/api/admin/papers/all?${queryParams}`, {
+        const response = await fetch(`${apiUrl}?${queryParams}`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
@@ -205,10 +209,14 @@ async function loadPapers(page = 0) {
 
         const data = await response.json();
         totalPapers = data.total;
-        renderPapers(data.papers);
+        if (dataType === 'records') {
+            renderRecords(data.items || []);
+        } else {
+            renderPapers(data.items || data.papers || []);
+        }
         renderPagination();
     } catch (error) {
-        console.error('加载文献失败:', error);
+        console.error('加载失败:', error);
         document.getElementById('papersList').innerHTML = `
             <div class="alert alert-danger">加载失败: ${error.message}</div>
         `;
@@ -243,12 +251,10 @@ function renderPapers(papers) {
                         <th>标题</th>
                         <th>元素组合</th>
                         <th>年份</th>
-                        <th>数据点</th>
-                        <th>s_factor</th>
                         <th>类型</th>
                         <th>图表</th>
                         <th>审核状态</th>
-                        <th>图片</th>
+                        <th>详细信息</th>
                         <th width="280">操作</th>
                     </tr>
                 </thead>
@@ -280,19 +286,16 @@ function renderPapers(papers) {
             reviewBadge += `<br><small class="text-muted text-truncate d-inline-block" style="max-width: 150px;" title="${escapeHtml(paper.review_comment)}">${escapeHtml(paper.review_comment)}</small>`;
         }
 
-        // 文章类型标签
-        const articleTypeLabel = paper.article_type === 'theoretical' ? '理论' : '实验';
+        // 文章类型标签 — 从聚合数组取
+        const articleTypes = Array.isArray(paper.article_types) ? paper.article_types : [];
+        const articleTypeLabel = articleTypes.includes('e') ? '实验' : (articleTypes.includes('t') ? '理论' : '-');
         const scTypeLabelMap = {
-            'cuprate': '铜基',
-            'iron_based': '铁基',
-            'nickel_based': '镍基',
-            'hydride': '高压氢化物',
-            'carbon': '碳基',
-            'organic': '有机',
-            'others': '其他超导'
+            'h': '高压氢化物', 'c': '碳基', 'cb': '铜基', 'ot': '其他超导',
+            'cuprate': '铜基', 'iron_based': '铁基', 'nickel_based': '镍基',
+            'hydride': '高压氢化物', 'carbon': '碳基', 'organic': '有机', 'others': '其他超导'
         };
-        const normalizedType = normalizeSuperconductorType(paper.superconductor_type);
-        const scTypeLabel = scTypeLabelMap[normalizedType] || '其他超导';
+        const scTypes = Array.isArray(paper.superconductor_types) ? paper.superconductor_types : [];
+        const scLabel = scTypes.map(t => scTypeLabelMap[t] || t).filter(Boolean).join('/') || '-';
 
         html += `
             <tr ${isSelected ? 'class="table-active"' : ''}>
@@ -306,15 +309,8 @@ function renderPapers(papers) {
                 </td>
                 <td><span class="badge bg-info">${paper.compound_symbols}</span></td>
                 <td>${paper.year || '-'}</td>
-                <td>${renderPhysicalDataTable(paper)}</td>
                 <td>
-                    <small>
-                        ${(paper.s_factor !== undefined && paper.s_factor !== null) ?
-                        Number(paper.s_factor).toFixed(2) : '-'}
-                    </small>
-                </td>
-                <td>
-                    <small>${articleTypeLabel} / ${scTypeLabel}</small>
+                    <small>${articleTypeLabel} / ${scLabel}</small>
                 </td>
                 <td>
                     ${paper.show_in_chart ?
@@ -322,7 +318,6 @@ function renderPapers(papers) {
                         '<span class="badge bg-secondary">隐藏</span>'}
                 </td>
                 <td>${reviewBadge}</td>
-                <td><span class="badge bg-secondary">已下线</span></td>
                 <td>
                     <div class="btn-group btn-group-sm">
                         <a href="https://doi.org/${paper.doi}" target="_blank" class="btn btn-outline-primary">原文</a>
@@ -346,6 +341,113 @@ function renderPapers(papers) {
     updateBatchActionsVisibility();
     updateSelectAllCheckbox();
 }
+
+
+// ========== 超导数据列表渲染 ==========
+
+function renderRecords(records) {
+    const container = document.getElementById('papersList');
+
+    if (records.length === 0) {
+        container.innerHTML = `<div class="alert alert-info text-center"><h4>没有找到匹配的超导数据</h4><p class="mb-0">请尝试调整筛选条件</p></div>`;
+        updateBatchActionsVisibility();
+        return;
+    }
+
+    var allChecked = records.every(function(r) { return selectedPapers.has(r.id); });
+
+    let html = `<div class="table-responsive"><table class="table table-hover"><thead><tr>
+        <th width="30"><input type="checkbox" class="paper-checkbox" ${allChecked ? 'checked' : ''} onchange="toggleSelectAllRecords()"></th>
+        <th>化学式</th><th>文献</th><th>P(GPa)</th><th>空间群</th>
+        <th>Tc<sub>exp</sub></th><th>Tc<sub>McM</sub></th><th>Tc<sub>AD</sub></th><th>Tc<sub>El(iso)</sub></th>
+        <th>λ</th><th>ω<sub>log</sub></th><th>s_factor</th><th>图表</th><th>审核</th>
+    </tr></thead><tbody>`;
+
+    const scTypeMap = {
+        'h': '高压氢化物', 'c': '碳基', 'cb': '铜基', 'ot': '其他',
+        'hydride': '高压氢化物', 'carbon': '碳基', 'cuprate': '铜基', 'organic': '有机', 'others': '其他'
+    };
+
+    records.forEach(r => {
+        const formula = r.chemical_formula || '-';
+        const paperTitle = r.paper_title ? r.paper_title.substring(0, 60) : '';
+        const paperInfo = r.paper_title
+            ? '<small class="text-muted">' + escapeHtml(paperTitle) + (r.paper_title.length > 60 ? '...' : '') + '</small><br><small>DOI: ' + (r.paper_doi || '-') + '</small>'
+            : '<small class="text-muted">-</small>';
+        const pressure = r.pressure_gpa != null ? Number(r.pressure_gpa).toFixed(1) + ' GPa' : '-';
+        const scType = (r.superconductor_type && scTypeMap[r.superconductor_type]) || r.superconductor_type || '-';
+        var isSel = selectedPapers.has(r.id);
+
+        html += '<tr>' +
+            '<td><input type="checkbox" class="paper-checkbox" ' + (isSel ? 'checked' : '') + ' onchange="toggleRecordSelection(' + r.id + ')"></td>' +
+            '<td><strong>' + escapeHtml(formula) + '</strong>' +
+            (r.superconductor_type ? '<br><small>' + scType + '</small>' : '') +
+            (r.crystal_structure ? '<br><small class="text-muted">' + escapeHtml(r.crystal_structure) + '</small>' : '') + '</td>' +
+            '<td>' + paperInfo + '</td>' +
+            '<td>' + pressure + '</td>' +
+            '<td>' + escapeHtml(r.space_group_symbol || '-') + '</td>' +
+            '<td><strong>' + (r.experimental_tc != null ? Number(r.experimental_tc).toFixed(1) + ' K' : '-') + '</strong></td>' +
+            '<td>' + (r.mcmillan_tc != null ? Number(r.mcmillan_tc).toFixed(1) : '-') + '</td>' +
+            '<td>' + (r.allen_dynes_tc != null ? Number(r.allen_dynes_tc).toFixed(1) : '-') + '</td>' +
+            '<td>' + (r.isotropic_eliashberg_tc != null ? Number(r.isotropic_eliashberg_tc).toFixed(1) : '-') + '</td>' +
+            '<td>' + (r.lambda_value != null ? Number(r.lambda_value).toFixed(3) : '-') + '</td>' +
+            '<td>' + (r.omega_log != null ? Number(r.omega_log).toFixed(1) : '-') + '</td>' +
+            '<td>' + getFactorDisplay(r) + '</td>' +
+            '<td>' + (r.show_in_chart ? '<span class="badge bg-success">显示</span>' : '<span class="badge bg-secondary">隐藏</span>') + '</td>' +
+            '<td>' + getReviewBadge(r.review_status) + '</td>' +
+            '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+    updateBatchActionsVisibility();
+    updateSelectAllCheckbox();
+}
+
+function toggleSelectAllRecords() {
+    var checkboxes = document.querySelectorAll('#papersList .paper-checkbox');
+    var allChecked = document.querySelector('#papersList thead .paper-checkbox').checked;
+    checkboxes.forEach(function(cb) {
+        cb.checked = allChecked;
+        var id = parseInt(cb.getAttribute('onchange')?.toString().match(/\d+/)?.[0]);
+        if (id) {
+            if (allChecked) selectedPapers.add(id); else selectedPapers.delete(id);
+        }
+    });
+    updateBatchActionsVisibility();
+}
+
+function toggleRecordSelection(id) {
+    if (selectedPapers.has(id)) selectedPapers.delete(id); else selectedPapers.add(id);
+    updateBatchActionsVisibility();
+}
+
+function getReviewBadge(status) {
+    const map = {
+        'pending': '<span class="badge bg-warning">未审核</span>',
+        'approved': '<span class="badge bg-success">已通过</span>',
+        'rejected': '<span class="badge bg-danger">已拒绝</span>',
+        'needs_revision': '<span class="badge bg-info">需修改</span>'
+    };
+    return map[status] || '<span class="badge bg-secondary">未知</span>';
+}
+
+function calcSFactor(tcValue, pressureValue) {
+    var tc = parseFloat(tcValue);
+    var p = parseFloat(pressureValue);
+    if (!isFinite(tc) || !isFinite(p)) return null;
+    return tc / Math.sqrt(1521 + p * p);
+}
+
+function getFactorDisplay(r) {
+    var val = r.s_factor;
+    if (val != null) return Number(val).toFixed(2);
+    // 用实验Tc计算回退
+    var tc = r.experimental_tc || r.allen_dynes_tc || r.mcmillan_tc || r.isotropic_eliashberg_tc;
+    var s = calcSFactor(tc, r.pressure_gpa);
+    return s != null ? '<span class="text-warning">' + s.toFixed(2) + '</span>' : '-';
+}
+
 
 // 渲染分页
 function renderPagination() {
@@ -437,8 +539,28 @@ function clearSelection() {
 function updateBatchActionsVisibility() {
     const batchActions = document.getElementById('batchActions');
     const selectedCount = document.getElementById('selectedCount');
+    const batchSelect = document.getElementById('batchStatusSelect');
+    var isRecords = getSelectedDataType() === 'records';
 
     selectedCount.textContent = selectedPapers.size;
+
+    // 根据数据类型切换批量操作选项
+    if (isRecords) {
+        batchSelect.innerHTML = `
+            <option value="chart_show">显示在图表</option>
+            <option value="chart_hide">从图表隐藏</option>
+        `;
+    } else {
+        batchSelect.innerHTML = `
+            <option value="approved">通过</option>
+            <option value="rejected">拒绝</option>
+            <option value="needs_revision">需修改</option>
+            <option value="pending">撤回审核</option>
+            <option value="chart_show">显示在图表</option>
+            <option value="chart_hide">从图表隐藏</option>
+            <option value="delete">删除</option>
+        `;
+    }
 
     if (selectedPapers.size > 0) {
         batchActions.classList.add('active');
@@ -448,8 +570,9 @@ function updateBatchActionsVisibility() {
 }
 
 function updateSelectAllCheckbox() {
-    const checkboxes = document.querySelectorAll('.paper-checkbox[data-paper-id]');
-    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+    var isRecords = getSelectedDataType() === 'records';
+    var checkboxes = document.querySelectorAll('#papersList tbody .paper-checkbox');
+    var allChecked = checkboxes.length > 0 && Array.from(checkboxes).every(function(cb) { return cb.checked; });
 
     const selectAllMain = document.getElementById('selectAll');
     const selectAllTable = document.getElementById('selectAllTable');
@@ -521,15 +644,19 @@ async function batchChartVisibility(show) {
         return;
     }
 
+    const isRecords = getSelectedDataType() === 'records';
+    const apiUrl = isRecords ? '/api/admin/records/batch-chart-visibility' : '/api/admin/papers/batch-chart-visibility';
+    const bodyKey = isRecords ? 'record_ids' : 'paper_ids';
+
     try {
-        const response = await fetch(`/api/admin/papers/batch-chart-visibility`, {
+        const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                paper_ids: Array.from(selectedPapers),
+                [bodyKey]: Array.from(selectedPapers),
                 show
             })
         });
@@ -605,35 +732,35 @@ function addEditDataRow(data = null) {
     const container = document.getElementById('editDataPointsContainer');
     const row = document.createElement('div');
     row.className = 'edit-data-row card p-2 mb-2 bg-light';
-    const articleType = normalizeArticleType(data ? data.article_type : '') || document.getElementById('editArticleType').value || 'theoretical';
+    const articleType = (data ? data.article_type : '') || document.getElementById('editArticleType').value || 't';
     row.innerHTML = `
         <div class="row g-2">
             <div class="col-md-6 col-lg-2">
                 <input type="text" class="form-control form-control-sm edit-formula" placeholder="化学式" value="${dataInputValue(data, 'chemical_formula')}">
             </div>
             <div class="col-md-6 col-lg-2">
-                <input type="text" class="form-control form-control-sm edit-structure" placeholder="空间群" value="${dataInputValue(data, 'crystal_structure')}">
+                <input type="text" class="form-control form-control-sm edit-structure" placeholder="空间群" value="${dataInputValue(data, 'space_group_symbol')}">
             </div>
             <div class="col-md-6 col-lg-2">
                 <select class="form-select form-select-sm edit-article-type" title="是否实验合成">
-                    <option value="experimental" ${articleType === 'experimental' ? 'selected' : ''}>实验合成：是</option>
-                    <option value="theoretical" ${articleType === 'theoretical' ? 'selected' : ''}>实验合成：否</option>
+                    <option value="e" ${articleType === 'e' ? 'selected' : ''}>实验合成：是</option>
+                    <option value="t" ${articleType === 't' ? 'selected' : ''}>实验合成：否</option>
                 </select>
             </div>
             <div class="col-md-6 col-lg-1">
-                <input type="number" step="any" class="form-control form-control-sm edit-pressure" placeholder="P (GPa)" value="${dataInputValue(data, 'tc_press')}">
+                <input type="number" step="any" class="form-control form-control-sm edit-pressure" placeholder="P (GPa)" value="${dataInputValue(data, 'pressure_gpa')}">
             </div>
             <div class="col-md-6 col-lg-1">
-                <input type="number" step="any" class="form-control form-control-sm edit-tc" placeholder="Tc (K)" value="${dataInputValue(data, 'tc')}">
+                <input type="number" step="any" class="form-control form-control-sm edit-tc" placeholder="Tc (K)" value="${dataInputValue(data, 'experimental_tc') || dataInputValue(data, 'mcmillan_tc') || dataInputValue(data, 'tc_max')}">
             </div>
             <div class="col-md-6 col-lg-1">
-                <input type="number" step="any" class="form-control form-control-sm edit-lambda" placeholder="λ" value="${dataInputValue(data, 'lambda_val')}">
+                <input type="number" step="any" class="form-control form-control-sm edit-lambda" placeholder="λ" value="${dataInputValue(data, 'lambda_value')}">
             </div>
             <div class="col-md-6 col-lg-1">
                 <input type="number" step="any" class="form-control form-control-sm edit-omega" placeholder="ω" value="${dataInputValue(data, 'omega_log')}">
             </div>
             <div class="col-md-6 col-lg-1">
-                <input type="number" step="any" class="form-control form-control-sm edit-nef" placeholder="N" value="${dataInputValue(data, 'n_ef')}">
+                <input type="number" step="any" class="form-control form-control-sm edit-nef" placeholder="N" value="${dataInputValue(data, 'n_ef_total')}">
             </div>
             <div class="col-12 col-lg-1">
                 <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="removeEditDataRow(this)">×</button>
@@ -678,41 +805,42 @@ async function openEditModal(paperId) {
             }
         };
 
-        // 1. 基础信息
+        // 全部字段填充
         setVal('editPaperId', paper.id);
         setVal('editDoi', paper.doi);
         setVal('editTitle', paper.title);
         setVal('editJournal', paper.journal);
         setVal('editYear', paper.year);
         setVal('editVolume', paper.volume);
-        
-        // 作者处理
+        setVal('editPages', paper.pages);
         let authorsStr = paper.authors || '';
         if (Array.isArray(authorsStr)) authorsStr = authorsStr.join(', ');
         setVal('editAuthors', authorsStr);
-        
-        setVal('editArticleType', paper.article_type || 'experimental');
-        setVal('editSuperconductorType', normalizeSuperconductorType(paper.superconductor_type));
-        
-        // 2. 物理数据 (动态行处理)
+        setVal('editAbstract', paper.abstract);
+        setVal('editArticleType', (Array.isArray(paper.article_types) ? paper.article_types[0] : null) || 't');
+        setVal('editSuperconductorType', (Array.isArray(paper.superconductor_types) ? paper.superconductor_types[0] : null) || 'h');
+        setVal('editNotes', paper.review_comment || '');
+
+        // 物理数据
         const dataContainer = document.getElementById('editDataPointsContainer');
         if (dataContainer) {
             dataContainer.innerHTML = '';
-            if (paper.data && paper.data.length > 0) {
-                paper.data.forEach(d => addEditDataRow(d));
+            const records = Array.isArray(paper.records) ? paper.records : [];
+            if (records.length > 0) {
+                records.forEach(r => addEditDataRow(r));
             } else {
                 addEditDataRow();
             }
         }
 
-        setVal('editContributorName', paper.contributor_name);
-        setVal('editContributorAffiliation', paper.contributor_affiliation);
-        setVal('editNotes', paper.notes);
+        // 摘要信息
+        const setHtml = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val !== null && val !== undefined ? val : '-'; };
+        setHtml('detailUploader', paper.uploader_name || '-');
+        setHtml('detailCreatedAt', paper.created_at ? new Date(paper.created_at).toLocaleString('zh-CN') : '-');
 
         // 3. 审核信息
         setVal('editReviewStatus', paper.review_status || 'pending');
         setVal('editReviewComment', paper.review_comment || '');
-        
         const statusMap = {
             'pending': '<span class="badge bg-warning">未审核</span>',
             'approved': '<span class="badge bg-success">已通过</span>',
@@ -720,14 +848,43 @@ async function openEditModal(paperId) {
             'needs_revision': '<span class="badge bg-info">需修改</span>'
         };
         const statusDisplay = document.getElementById('currentReviewStatusDisplay');
-        if (statusDisplay) {
-            statusDisplay.innerHTML = statusMap[paper.review_status] || statusMap['pending'];
-        }
+        if (statusDisplay) statusDisplay.innerHTML = statusMap[paper.review_status] || statusMap['pending'];
 
-        // 4. 图片存储已下线
-        const imagesContainer = document.getElementById('paperImagesContainer');
-        if (imagesContainer) {
-            imagesContainer.innerHTML = '<div class="alert alert-secondary">文献图片存储已下线</div>';
+        // show_in_chart 复选框
+        const chartCb = document.getElementById('editShowInChart');
+        if (chartCb) chartCb.checked = !!paper.show_in_chart;
+
+        // 4. 详细信息 records 表格
+        const tbody = document.getElementById('recordsTableBody');
+        if (tbody) {
+            const records = Array.isArray(paper.records) ? paper.records : [];
+            tbody.innerHTML = records.map((r, i) => `
+                <tr>
+                    <td>${i+1}</td>
+                    <td>${escapeHtml(r.chemical_formula)}</td>
+                    <td>${escapeHtml(r.source_label)}</td>
+                    <td>${r.pressure_gpa != null ? Number(r.pressure_gpa).toFixed(1) : '-'}</td>
+                    <td>${escapeHtml(r.space_group_symbol)}</td>
+                    <td>${escapeHtml(r.crystal_structure)}</td>
+                    <td>${r.mcmillan_tc != null ? Number(r.mcmillan_tc).toFixed(1) : '-'}</td>
+                    <td>${r.allen_dynes_tc != null ? Number(r.allen_dynes_tc).toFixed(1) : '-'}</td>
+                    <td>${r.isotropic_eliashberg_tc != null ? Number(r.isotropic_eliashberg_tc).toFixed(1) : '-'}</td>
+                    <td>${r.anisotropic_eliashberg_tc != null ? Number(r.anisotropic_eliashberg_tc).toFixed(1) : '-'}</td>
+                    <td>${r.experimental_tc != null ? Number(r.experimental_tc).toFixed(1) : '-'}</td>
+                    <td>${r.lambda_value != null ? Number(r.lambda_value).toFixed(2) : '-'}</td>
+                    <td>${r.omega_log != null ? Number(r.omega_log).toFixed(1) : '-'}</td>
+                    <td>${r.n_ef_total != null ? Number(r.n_ef_total).toFixed(2) : '-'}</td>
+                    <td>${r.energy_cutoff_value != null ? Number(r.energy_cutoff_value).toFixed(1) : '-'}</td>
+                    <td>${r.thermodynamically_stable ? '✅' : (r.thermodynamically_stable === false ? '❌' : '-')}</td>
+                    <td>${r.dynamically_stable ? '✅' : (r.dynamically_stable === false ? '❌' : '-')}</td>
+                    <td>${r.energy_above_hull != null ? Number(r.energy_above_hull).toFixed(3) : '-'}</td>
+                    <td>${r.show_in_chart ? '✅' : '—'}</td>
+                    <td>${r.article_type === 'e' ? '实验' : (r.article_type === 't' ? '理论' : '-')}</td>
+                    <td>${escapeHtml(r.superconductor_type)}</td>
+                    <td>${escapeHtml(r.method)}</td>
+                    <td>${escapeHtml(r.note)}</td>
+                </tr>
+            `).join('') || '<tr><td colspan="25" class="text-center text-muted">无记录</td></tr>';
         }
 
         // 5. 显示模态框
@@ -812,17 +969,16 @@ async function savePaperEdits() {
         const lambdaVal = nullableFloat(row.querySelector('.edit-lambda').value);
         const omegaLog = nullableFloat(row.querySelector('.edit-omega').value);
         const nEf = nullableFloat(row.querySelector('.edit-nef').value);
-        if (formula || structure || pressure !== null || tc !== null || lambdaVal !== null || omegaLog !== null || nEf !== null) {
+        if (formula || structure || pressure !== null || tc !== null) {
             physicalData.push({
                 chemical_formula: formula || null,
-                crystal_structure: structure || null,
+                space_group_symbol: structure || null,
                 article_type: row.querySelector('.edit-article-type').value,
-                tc_press: pressure !== null ? [pressure] : null,
-                tc: tc !== null ? [tc] : null,
-                s_factor: calculateSFactor(tc, pressure),
-                lambda_val: lambdaVal,
+                pressure_gpa: pressure,
+                experimental_tc: tc,
+                lambda_value: lambdaVal,
                 omega_log: omegaLog,
-                n_ef: nEf
+                n_ef_total: nEf
             });
         }
     });
@@ -833,17 +989,18 @@ async function savePaperEdits() {
     };
 
     const updateData = {
+        doi: getVal('editDoi') || null,
         title: getVal('editTitle'),
         journal: getVal('editJournal'),
         year: getVal('editYear') ? parseInt(getVal('editYear')) : null,
         volume: getVal('editVolume'),
+        pages: getVal('editPages') || null,
         authors: getVal('editAuthors'),
-        article_type: getVal('editArticleType'),
-        superconductor_type: getVal('editSuperconductorType'),
-        physical_data: physicalData,
-        contributor_name: getVal('editContributorName'),
-        contributor_affiliation: getVal('editContributorAffiliation'),
-        notes: getVal('editNotes')
+        abstract: getVal('editAbstract'),
+        review_comment: getVal('editNotes'),
+        review_status: getVal('editReviewStatus'),
+        show_in_chart: document.getElementById('editShowInChart')?.checked ?? false,
+        records: physicalData
     };
 
     try {
