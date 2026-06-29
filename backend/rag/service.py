@@ -122,6 +122,7 @@ async def chat_stream(
     top_k: int = 15,
     rerank_top_k: int = 5,
     history: list[dict[str, str]] | None = None,
+    explore: bool = False,  # 是否启用灵感探索模式
 ) -> AsyncIterator[dict[str, Any]]:
     _ensure_chat_available()
     try:
@@ -132,6 +133,7 @@ async def chat_stream(
             top_k=top_k,
             rerank_top_k=rerank_top_k,
             history=history,
+            explore=explore,
         ):
             yield event
     except (RagDataUnavailableError, RagChatUnavailableError):

@@ -28,6 +28,7 @@ class RagChatRequest(BaseModel):
     top_k: int = Field(15, ge=1, le=50)
     rerank_top_k: int = Field(5, ge=1, le=20)
     history: list[RagMessage] = Field(default_factory=list)
+    explore: bool = Field(False, description="是否启用灵感探索模式")
 
 
 def _service_error(status_code: int, message: str, detail: str | None = None) -> HTTPException:
@@ -148,6 +149,7 @@ async def rag_chat_stream(request: RagChatRequest):
                 top_k=request.top_k,
                 rerank_top_k=request.rerank_top_k,
                 history=_history_dicts(request.history),
+                explore=request.explore,
             ):
                 yield _sse(event.get("type", "message"), event.get("data"))
             yield _sse("end", {"ok": True})

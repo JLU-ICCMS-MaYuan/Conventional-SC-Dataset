@@ -15,12 +15,11 @@ from openai import OpenAI
 
 from backend.rag.config import settings
 from backend.rag.rag.prompts import build_rag_prompt, is_greeting, build_fusion_prompt
-from backend.rag.rag.brainstorm import (
-    BrainstormSession,
-    BrainstormPhase,
-    PHASE_LABELS,
-    run_brainstorm_subagent,
-)
+from backend.rag.rag.inspiration.session import InspirationSession
+from backend.rag.rag.inspiration.mode_router import route_mode
+from backend.rag.rag.inspiration.retrieval import execute_retrieval
+from backend.rag.rag.inspiration.evidence import build_evidence_stream
+from backend.rag.rag.inspiration.reviewer import review_stream
 from backend.rag.rag.reranker import rerank_chunks
 from backend.rag.search.engine import search_semantic_only
 
@@ -31,54 +30,29 @@ def _format_db_context(papers: int, superconductors: int, records: int) -> str:
     return f"当前数据库包含 {papers} 篇论文、{superconductors} 种超导体、{records} 条超导数据记录。"
 
 
-BS_SESSION_MARKER = "<!--BS:"
+IS_SESSION_MARKER = "<!--IS:"  # Inspiration Session marker
 
-def _try_restore_bs_session(history: list[dict] | None, user_message: str = "") -> BrainstormSession | None:
-    """尝试从对话历史恢复或新建 brainstorm session。
 
-    三种情况触发：
-    1. 上轮 AI 回答中嵌入了 session 元信息（<!--BS:json-->）→ 恢复
-    2. 用户明确请求: brainstorm、头脑风暴
-    3. 用户确认邀请: 对话中有 AI 回复 + 本轮用户说确认词
+def _try_restore_is_session(history: list[dict] | None, user_message: str = "") -> InspirationSession | None:
+    """尝试从对话历史恢复 InspirationSession。
+
+    从 AI 回答中的 <!--IS:json--> marker 恢复。
     """
-    # 1. 从历史恢复活跃 session（上轮 AI 回答中嵌入了 session 状态）
-    if history:
-        for h in reversed(history):
-            if h["role"] == "assistant":
-                content = h.get("content", "")
-                if BS_SESSION_MARKER in content:
-                    try:
-                        start = content.index(BS_SESSION_MARKER) + len(BS_SESSION_MARKER)
-                        end = content.index("-->", start)
-                        data = json.loads(content[start:end])
-                        return BrainstormSession.from_dict(data)
-                    except (json.JSONDecodeError, ValueError, KeyError):
-                        pass
-                break
-
-    # 2. 用户明确请求 brainstorm
-    explicit_triggers = {"brainstorm", "头脑风暴"}
-    if any(t in user_message.lower() for t in explicit_triggers):
-        return BrainstormSession(user_question=user_message)
-
-    # 3. 用户确认邀请：有对话历史 + 本轮是确认词
-    confirm_keywords = {"好的", "是", "可以", "进入", "行", "好", "yes", "ok", "要", "需要"}
-    if not history or len(history) < 2:
+    if not history:
         return None
 
-    is_confirm = any(kw in user_message for kw in confirm_keywords)
-    if not is_confirm:
-        return None
-
-    has_assistant = any(h["role"] == "assistant" for h in history[-4:])
-    if has_assistant:
-        original_question = user_message
-        for h in reversed(history[:-1]):
-            if h["role"] == "user":
-                original_question = h["content"]
-                break
-        return BrainstormSession(user_question=original_question)
-
+    for h in reversed(history):
+        if h["role"] == "assistant":
+            content = h.get("content", "")
+            if IS_SESSION_MARKER in content:
+                try:
+                    start = content.index(IS_SESSION_MARKER) + len(IS_SESSION_MARKER)
+                    end = content.index("-->", start)
+                    data = json.loads(content[start:end])
+                    return InspirationSession.from_dict(data)
+                except (json.JSONDecodeError, ValueError, KeyError):
+                    pass
+            break
     return None
 
 
@@ -199,43 +173,6 @@ numeric_compare 时额外输出 operator（">"|"<"|">="|"<="）和 value（数�
             "value": None,
         }
 
-
-def _detect_explorative_intent(question: str) -> bool:
-    """检测用户问题是否需要 Brainstorm 模式。
-
-    使用 LLM 判断（非关键词匹配），返回 bool。
-    """
-    client = OpenAI(api_key=settings.deepseek_api_key, base_url=settings.deepseek_base_url)
-
-    prompt = f"""判断以下用户问题是否属于探索性/开放性研究讨论，需要交互式头脑风暴引导。
-
-探索性特征（满足任一即为 True）：
-- 研究方向探索（"有什么方向"、"潜力"、"idea"、"课题"、"热点"、"前沿"）
-- 综述/比较（"对比"、"哪个更好"、"发展趋势"、"优缺点"）
-- 方法论/怎么做（"怎么做"、"如何设计"、"从哪入手"、"方案"）
-- 用户明确请求（"brainstorm"、"头脑风暴"、"帮我分析"）
-
-非探索性特征（返回 False）：
-- 事实性数据查询（"LaH10的Tc是多少"）
-- 简单检索（"有哪些超导体"）
-- 文献查找（"关于H3S的论文"）
-
-只返回 JSON: {{"explorative": true}} 或 {{"explorative": false}}
-
-问题: {question}"""
-
-    try:
-        resp = client.chat.completions.create(
-            model=settings.deepseek_model,
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"},
-            temperature=0,
-            max_tokens=50,
-        )
-        result = json.loads(resp.choices[0].message.content)
-        return result.get("explorative", False)
-    except Exception:
-        return False
 
 
 async def ask(
@@ -401,6 +338,7 @@ async def ask_stream(
     rerank_top_k: int = 5,
     model: str | None = None,
     history: list[dict] | None = None,
+    explore: bool = False,
 ):
     model_name = model or settings.deepseek_model
 
@@ -411,7 +349,7 @@ async def ask_stream(
         yield {"type": "done", "data": {"citations": [], "answer": GREETING_RESPONSE, "source": "greeting"}}
         return
 
-    # ── Brainstorm: 数据库上下文（提前获取，brainstorm 管线也需要） ──
+    # ── DB 上下文（探索模式和普通模式共用） ──
     from sqlalchemy import select, func as sa_func
     from backend.rag.database import async_session_factory
     from backend.rag.models import Paper, Superconductor, SuperconductorRecord
@@ -421,101 +359,88 @@ async def ask_stream(
         s_cnt = (await sess.execute(sa_func.count(Superconductor.id))).scalar() or 0
     db_ctx = _format_db_context(papers=p_cnt, superconductors=s_cnt, records=r_cnt)
 
-    # ── Brainstorm: 检测并路由 ──
-    # 尝试从 history 恢复 session
-    bs_session: BrainstormSession | None = _try_restore_bs_session(history, question)
+    # ── Inspiration: 探索模式路由 ──
+    is_session: InspirationSession | None = _try_restore_is_session(history, question)
 
-    # 没有活跃 session 时检测是否需要
-    if bs_session is None and _detect_explorative_intent(question):
-        yield {
-            "type": "brainstorm_suggest",
-            "data": {
-                "message": "这个问题适合用头脑风暴模式深入分析，回复「好的」进入。"
-            }
-        }
-        # 不 return — 继续走普通模式先给出回答，同时前端展示建议提示
+    if is_session is None and explore:
+        is_session = InspirationSession(user_question=question)
 
-    if bs_session is not None:
-        # ── Brainstorm 子 Agent 管线 ──
-        if bs_session.check_exit(question):
-            yield {"type": "brainstorm_exit", "data": {"reason": "user_abort"}}
-            done_msg = "已退出头脑风暴模式。有新的问题可以直接问我。"
+    if is_session is not None:
+        if is_session.check_exit(question):
+            yield {"type": "inspire_exit", "data": {"reason": "user_abort"}}
+            done_msg = "已退出探索模式。"
             for char in done_msg:
                 yield {"type": "token", "data": char}
-            yield {"type": "done", "data": {"citations": [], "answer": done_msg, "source": "brainstorm_exit", "papers": {}, "top10": []}}
+            yield {"type": "done", "data": {"citations": [], "answer": done_msg,
+                     "source": "inspire_exit", "papers": {}, "top10": []}}
             return
-        else:
-            # 发出阶段事件
-            yield {
-                "type": "brainstorm_enter",
-                "data": {
-                    "phase": int(bs_session.phase),
-                    "total": 6,
-                    "label": bs_session.phase_label,
-                }
+
+        # 首次进入：记录当前消息到历史
+        if not is_session.history:
+            is_session.history.append({"role": "user", "content": question})
+
+        yield {
+            "type": "inspire_enter",
+            "data": {
+                "session_id": is_session.session_id,
+                "mode": is_session.current_mode or "pending",
+                "mode_label": is_session.mode_label,
             }
+        }
 
-            # 更新阶段数据
-            bs_session.collected_info.append(f"用户: {question}")
+        # 1. ModeRouter
+        yield {"type": "status", "data": {"action": "routing", "message": "正在分析问题并选择分析视角..."}}
+        mode_result = await route_mode(question, is_session.history)
 
-            # 运行子 Agent（async generator，实时 yield 状态事件）
-            result = None
-            async for event in run_brainstorm_subagent(
-                session=bs_session,
-                user_message=question,
-                db_context=db_ctx,
-            ):
-                if event["type"] == "brainstorm_status":
-                    # 转发状态事件给前端（同时发两种类型保证兼容）
-                    yield {"type": "status", "data": event["data"]}
-                    yield {"type": "brainstorm_status", "data": event["data"]}
-                elif event["type"] == "result":
-                    result = event["data"]
+        is_session.current_mode = mode_result.primary_mode
+        is_session.mode_history.append(mode_result.primary_mode)
 
-            if result is None:
-                yield {"type": "token", "data": "抱歉，头脑风暴分析出现问题。"}
-                yield {"type": "done", "data": {"citations": [], "answer": "", "source": "brainstorm", "papers": {}, "top10": []}}
-                return
-
-            # 流式输出子 Agent 回答
-            for char in result["content"]:
-                yield {"type": "token", "data": char}
-
-            # 推进阶段
-            if result["is_complete"]:
-                if bs_session.phase == BrainstormPhase.REVIEW:
-                    yield {"type": "brainstorm_exit", "data": {"reason": "completed"}}
-                    # 嵌入 session 状态到 answer 以支持跨请求恢复
-                    bs_json = json.dumps(bs_session.to_dict(), ensure_ascii=False)
-                    answer_with_session = f"{BS_SESSION_MARKER}{bs_json}-->\n\n{result['content']}"
-                    done_data = {
-                        "citations": [], "answer": answer_with_session,
-                        "source": "brainstorm", "papers": {}, "top10": [],
-                        "brainstorm": bs_session.to_dict(),
-                    }
-                    yield {"type": "done", "data": done_data}
-                    return
-
-                bs_session.advance_phase()
-                yield {
-                    "type": "brainstorm_phase",
-                    "data": {
-                        "phase": int(bs_session.phase),
-                        "label": bs_session.phase_label,
-                    }
-                }
-
-            # done 事件: 嵌入 session 到 answer 以支持跨请求恢复
-            bs_json = json.dumps(bs_session.to_dict(), ensure_ascii=False)
-            answer_with_session = f"{BS_SESSION_MARKER}{bs_json}-->\n\n{result['content']}"
-            done_data = {
-                "citations": [], "answer": answer_with_session,
-                "source": f"brainstorm_phase_{int(bs_session.phase)}",
-                "papers": {}, "top10": [],
-                "brainstorm": bs_session.to_dict(),
+        yield {
+            "type": "inspire_mode",
+            "data": {
+                "mode": mode_result.primary_mode,
+                "label": is_session.mode_label,
+                "rationale": mode_result.rationale,
             }
-            yield {"type": "done", "data": done_data}
-            return
+        }
+
+        # 2. Retrieval
+        yield {"type": "status", "data": {"action": "searching", "message": "正在检索相关文献..."}}
+        retrieval_result = await execute_retrieval(
+            mode_result.primary_mode,
+            mode_result.search_queries,
+        )
+
+        # 3. EvidenceBuilder（流式）
+        yield {"type": "status", "data": {"action": "generating", "message": "正在生成研究点子..."}}
+        evidence_text = ""
+        async for event in build_evidence_stream(is_session, mode_result, retrieval_result):
+            if event["type"] == "token":
+                evidence_text += event["data"]
+            yield event
+
+        # 4. DualReviewer（流式）
+        yield {"type": "status", "data": {"action": "reviewing", "message": "正在自我审核..."}}
+        yield {"type": "token", "data": "\n\n---\n**🔍 审稿意见：**\n"}
+        async for event in review_stream(evidence_text):
+            yield event
+
+        # 持久化 session marker + done
+        is_json = json.dumps(is_session.to_dict(), ensure_ascii=False)
+        session_marker = f"{IS_SESSION_MARKER}{is_json}-->"
+        for char in session_marker:
+            yield {"type": "token", "data": char}
+
+        answer = evidence_text + session_marker
+        yield {"type": "done", "data": {
+            "citations": [],
+            "answer": answer,
+            "source": f"inspire_{mode_result.primary_mode}",
+            "papers": {},
+            "top10": [],
+            "inspiration": is_session.to_dict(),
+        }}
+        return
 
     # ── 普通模式 ──
     # ── 1. 意图解析 ──
