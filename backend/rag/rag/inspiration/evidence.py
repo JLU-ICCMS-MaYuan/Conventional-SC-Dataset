@@ -1,0 +1,123 @@
+"""Inspiration Agent 证据构建层。
+
+生成自然对话 + 嵌入式 IdeaCard marker。
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from typing import Any, AsyncIterator
+
+from openai import OpenAI
+
+from backend.rag.config import settings
+from backend.rag.rag.inspiration.prompts import (
+    EVIDENCE_BUILDER_SYSTEM,
+    build_explore_prompt,
+)
+
+logger = logging.getLogger(__name__)
+
+IDEA_CARD_MARKER = "<!--IDEA_CARD"
+IDEA_CARD_END = "-->"
+
+
+def parse_idea_cards(text: str) -> list[dict]:
+    """从文本中提取所有 IDEA_CARD JSON。
+
+    Args:
+        text: 包含 <!--IDEA_CARD ... --> marker 的文本
+
+    Returns:
+        解析成功的 IdeaCard dict 列表
+    """
+    cards: list[dict] = []
+    idx = 0
+    while True:
+        start = text.find(IDEA_CARD_MARKER, idx)
+        if start == -1:
+            break
+        json_start = start + len(IDEA_CARD_MARKER)
+        end = text.find(IDEA_CARD_END, json_start)
+        if end == -1:
+            break
+        try:
+            card = json.loads(text[json_start:end].strip())
+            cards.append(card)
+        except json.JSONDecodeError:
+            logger.warning("Failed to parse IDEA_CARD JSON")
+        idx = end + len(IDEA_CARD_END)
+    return cards
+
+
+async def build_evidence_stream(
+    session: InspirationSession,
+    mode_result: Any,  # ModeResult
+    retrieval_result: dict[str, Any],
+) -> AsyncIterator[dict[str, Any]]:
+    """流式生成对话 + IdeaCard。
+
+    Args:
+        session: 当前会话
+        mode_result: ModeRouter 的输出
+        retrieval_result: execute_retrieval 的输出
+
+    Yields:
+        SSE 事件 dict: token / evidence_card / status
+    """
+    from backend.rag.rag.inspiration.retrieval import format_rag_context
+    from backend.rag.rag.inspiration.session import MODE_LABELS
+
+    rag_context = format_rag_context(retrieval_result)
+    mode_label = MODE_LABELS.get(mode_result.primary_mode, mode_result.primary_mode)
+
+    prompt = build_explore_prompt(
+        question=session.user_question,
+        mode=mode_result.primary_mode,
+        mode_label=mode_label,
+        rationale=mode_result.rationale,
+        rag_context=rag_context,
+        history=session.history,
+    )
+
+    client = OpenAI(
+        api_key=settings.deepseek_api_key,
+        base_url=settings.deepseek_base_url,
+    )
+
+    messages: list[dict] = [
+        {"role": "system", "content": EVIDENCE_BUILDER_SYSTEM},
+    ]
+    if session.history:
+        messages.extend(session.history[-6:])
+    messages.append({"role": "user", "content": prompt})
+
+    full_text = ""
+    try:
+        stream = client.chat.completions.create(
+            model=settings.deepseek_model,
+            messages=messages,
+            temperature=0.7,
+            max_tokens=2000,
+            stream=True,
+        )
+        for chunk in stream:
+            delta = chunk.choices[0].delta
+            if delta and delta.content:
+                full_text += delta.content
+                yield {"type": "token", "data": delta.content}
+    except Exception as e:
+        logger.error(f"Evidence builder failed: {e}")
+        yield {"type": "token", "data": f"\n\n抱歉，生成过程出现错误：{e}"}
+        return
+
+    # 提取 IdeaCard
+    cards = parse_idea_cards(full_text)
+    for card in cards:
+        session.add_idea(card)
+        yield {"type": "evidence_card", "data": card}
+
+    # 保存生成上下文到会话历史
+    session.history.append({"role": "user", "content": session.user_question})
+    session.history.append({"role": "assistant", "content": full_text})
