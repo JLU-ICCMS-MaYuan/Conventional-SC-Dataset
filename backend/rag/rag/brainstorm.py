@@ -1,15 +1,12 @@
 """
-brainstorm.py — 头脑风暴会话管理 + 子 Agent。
+brainstorm.py — DEPRECATED: 已被 inspiration/ 模块替代。
 
-基于 superpowers:brainstorming 技能的 6 步流程，适配学术 RAG 场景。
-最终交付物: 面向用户的计划表（结构化 Markdown 文档）。
-
-流程: 探索上下文 → 一次一问澄清 → 提出 2-3 路径 → 逐节呈现 → 写计划书 → 自审
+此模块不再被 engine.py 调用，保留仅用于 git 历史追溯。
+新功能请使用 backend.rag.rag.inspiration.* 。
 """
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Any
@@ -20,259 +17,130 @@ from backend.rag.config import settings
 
 
 class BrainstormPhase(IntEnum):
-    EXPLORE = 1     # 探索上下文 — 了解数据库覆盖范围
-    CLARIFY = 2     # 一次一问澄清需求（可循环多轮）
-    PROPOSE = 3     # 提出 2-3 条路径 + 权衡 + 推荐
-    PRESENT = 4     # 逐节呈现选定路径的方案
-    DOCUMENT = 5    # 写面向用户的计划书
-    REVIEW = 6      # AI 自审计划书 + 修正
+    EXPLORE = 1     # 了解兴趣方向
+    CLARIFY = 2     # 追问缩小范围
+    PROPOSE = 3     # 提出 2-3 条路径
+    PLAN = 4        # 生成研究计划单
+    REVIEW = 5      # 自审修正
 
 
 PHASE_LABELS: dict[int, str] = {
-    1: "探索上下文",
-    2: "澄清需求",
+    1: "了解方向",
+    2: "追问澄清",
     3: "提出路径",
-    4: "逐节呈现",
-    5: "撰写计划",
-    6: "自审修正",
+    4: "生成计划",
+    5: "审核定稿",
 }
 
-# ── 各阶段 Prompt 模板 ─────────────────────────────────────────────
+# ── 统一人设（始终不变）────────────────────────────────────────────
 
-PHASE_PROMPTS: dict[int, str] = {
-    BrainstormPhase.EXPLORE: """你是学术头脑风暴助手，帮助研究者规划科研方向。
+PERSONA = """你是氢化物超导领域的学术头脑风暴伙伴。
 
-当前阶段: {phase_label} (第{phase}步/共{total}步)
+## 你的能力
+你熟悉超导材料数据库中的论文和实验数据。你会在对话中自然地引用数据库中的信息来支撑你的观点，使用 [PID_xxx] 格式标注文献来源。
 
-## 你的任务
+## 你的风格
+- 像一位有经验的导师一样和研究者对话
+- 先理解对方的兴趣，再逐步深入
+- 当你觉得信息足够时，主动帮对方梳理出可行的研究方向
+- 引用数据时自然融入对话，不要像在读表格
 
-用户想探索的方向: "{user_question}"
+## 引用格式
+文献引用必须使用 [PID_xxx] 格式。例如："LaH₁₀ 在 250 GPa 下 Tc 达到 286 K [PID_74]。"
 
-数据库概况: {db_context}
+## 对话中的数据库资料
+用户的第一条消息中包含了数据库检索结果，请充分利用这些资料。"""
 
-## 规则
+# ── 阶段引导（引擎注入用户消息末尾，LLM 看不到标记）─────────────
 
-1. 用 1-2 句话总结你对用户方向的理解
-2. 基于数据库实际覆盖情况，告诉用户"当前数据库中这个领域有 X 篇论文、Y 种超导体"
-3. 提出一个关键澄清问题（选择题，2-4 个选项）
+PHASE_HINTS: dict[BrainstormPhase, str] = {
+    BrainstormPhase.EXPLORE:
+        "\n\n[系统提示：请先复述你对用户研究方向的理解，然后提一个选择题帮用户缩小范围。]",
 
-## 禁止
+    BrainstormPhase.CLARIFY:
+        "\n\n[系统提示：用户已回答了上一轮的问题。如果信息还不够具体（方向+约束+指标不足3类），请继续提一个追问。如果信息已经足够，请回复「信息收集完成，我来为你梳理方向。」]",
 
-- 禁止在探索阶段就进行分析或提议
-- 禁止输出超过 4 句话
-- 你没有检索工具可用
-- 你的输出会在遇到第一个空行时被截断，所以第一段就是全部输出
+    BrainstormPhase.PROPOSE:
+        "\n\n[系统提示：基于前面的对话和数据库资料，请提出2-3个具体的研究方向。每条包含：方向名称、可行性（高/中/低）、关键文献支撑、推荐理由。最后推荐其中一条并请用户选择。]",
 
-## 正确示例
-"您想探索笼状氢化物的研究方向。数据库中有15篇论文、8种超导体。\n您更关注哪个方面？\nA. 稀土基体系\nB. 碱土金属体系\nC. 三元体系"
+    BrainstormPhase.PLAN:
+        "\n\n[系统提示：用户已选定方向。请生成一份结构化研究计划单，包含四个部分：做什么（核心问题）、为什么（背景和价值）、如何做（方法和风险）、分步行动计划（具体可执行步骤）。]",
 
-## 错误示例（禁止）
-"您想探索笼状氢化物的研究方向。以下是我的分析：\n### 1. 背景\n笼状氢化物是..." ← 禁止！出现分析段落""",
-
-    BrainstormPhase.CLARIFY: """当前阶段: {phase_label} (第{phase}步/共{total}步)
-
-## 已收集的用户需求
-{collected_info}
-
-## 规则
-- 只输出一个追问，禁止任何分析
-- 优先选择题（2-4 个选项）
-- 信息足够后只输出 [PHASE_COMPLETE]
-- 你的输出会在遇到第一个空行时被截断
-
-## 正确示例
-"明白了，您关注稀土基体系。请问您更看重哪个指标？\nA. Tc 尽可能高（>250K）\nB. 稳定压力尽可能低（<100GPa）"
-
-## 错误示例（禁止）
-"好的。基于您的选择，以下是分析：\n### 方向1\n..." ← 禁止！
-
-## 本轮任务
-只输出一个问题。""",
-
-    BrainstormPhase.PROPOSE: """当前阶段: {phase_label} (第{phase}步/共{total}步)
-
-## 用户需求
-{collected_info}
-
-## 检索到的数据与文献
-{search_results}
-
-## 规则
-
-- 提出 **恰好 2-3 条** 具体可行的思路/方向
-- 每条包含: 标题 + 可行性 + 关键文献支撑 [PID_xxx] + 推荐理由
-- 推荐其中一条并说明原因
-- **最后必须询问用户选择哪条深入**
-
-## 输出格式
-
-### 路径 1: [标题]
-- 可行性: 高/中/低
-- 支撑: [PID_xxx]
-- 理由: [一句话]
-
-### 路径 2: [标题]
-...
-
-**推荐:** 路径 X，因为...
-
-请选择一条深入。""",
-
-    BrainstormPhase.PRESENT: """当前阶段: {phase_label} (第{phase}步/共{total}步)
-
-## 选定路径
-{selected_path}
-
-## 检索到的数据与文献
-{search_results}
-
-## 规则（逐节呈现）
-
-- 当前只呈现 **第 {present_section} 节**（共 {total_sections} 节）
-- **禁止一次性呈现所有小节**
-- 每节呈现后等待用户确认（"好的"/"继续"）再前进
-
-## 小节顺序
-1. 背景与研究现状
-2. 候选材料/方法
-3. 预期挑战与风险
-4. 下一步具体建议""",
-
-    BrainstormPhase.DOCUMENT: """当前阶段: {phase_label} (第{phase}步/共{total}步)
-
-## 待整合的内容
-
-用户需求: {collected_info}
-选定路径: {selected_path}
-已讨论的小节内容: 前 4 节
-
-## 规则
-
-将所有讨论内容整合为一份**面向用户的计划表**。结构如下:
-
-```markdown
-# [研究方向] 研究计划
-
-## 1. 核心问题
-[一句话]
-
-## 2. 背景与研究现状
-[已有的关键发现 + 文献引用]
-
-## 3. 候选方案
-[2-3 条路径对比，含可行性]
-
-## 4. 推荐路径
-[详细方案: 方法 → 预期结果 → 风险]
-
-## 5. 下一步行动
-[具体的、可执行的步骤清单]
-```
-
-## 禁止
-- 不要只是重复之前的对话
-- 文献必须标注 [PID_xxx]
-- 下一步行动必须具体可执行（不是"进一步研究"）""",
-
-    BrainstormPhase.REVIEW: """当前阶段: {phase_label} (第{phase}步/共{total}步)
-
-## 刚生成的计划书内容
-
-{search_results}
-
-## 你的任务 — AI 自审
-
-逐项检查计划书:
-
-| 检查项 | 标准 |
-|--------|------|
-| 完整性 | 5 个章节都有实际内容，无 "TODO"/"待定" |
-| 一致性 | 推荐路径与候选方案分析一致，不自相矛盾 |
-| 可执行性 | 下一步行动是具体的、有优先级的、可操作的 |
-| 引用准确性 | [PID_xxx] 都指向真实文献，无编造 |
-
-## 规则
-
-1. 如果发现不足，**直接在原文上修改**，然后输出修正后的完整计划书
-2. 如果全部合格，在计划书末尾追加 "## ✅ AI 自审通过"
-3. 计划书末尾输出 [BRAINSTORM_END]
-
-只输出完整的计划书（修正版或原版+通过标记）。""",
+    BrainstormPhase.REVIEW:
+        "\n\n[系统提示：请审核你刚生成的计划单。检查完整性、一致性、可执行性、引用准确性。如有问题请直接修正后输出完整计划单。如无问题请在末尾追加「✅ 自审通过」。]",
 }
 
+# ── 引擎判断：阶段是否该推进 ─────────────────────────────────────
 
-# ── 子 Agent Tool 定义 ─────────────────────────────────────────────
+def _should_advance(session: BrainstormSession, user_msg: str) -> bool:
+    """引擎判断当前阶段是否应该推进到下一阶段。
 
-BRAINSTORM_TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "search_kg",
-            "description": "查询超导材料的结构化数据（Tc、压力、λ、ωlog、N(Ef)等物理参数）",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "predicate": {
-                        "type": "string",
-                        "description": "查询的属性类型，如 '超导温度(AD)'、'压力'、'电声耦合lambda'"
-                    },
-                    "operator": {
-                        "type": "string",
-                        "enum": [">", "<", ">=", "<="],
-                    },
-                    "value": {
-                        "type": "string",
-                        "description": "比较阈值，如 '0' 表示获取所有大于0的记录"
-                    },
-                },
-                "required": ["predicate"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "search_rag",
-            "description": "在超导文献全文数据库中搜索相关文本片段",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "搜索查询词"
-                    },
-                    "top_k": {
-                        "type": "integer",
-                        "description": "返回的文献片段数量，默认5，最大20",
-                    },
-                },
-                "required": ["query"],
-            },
-        },
-    },
-]
+    不依赖 LLM 输出的标记，而是根据对话状态判断。
+    """
+    if session.phase == BrainstormPhase.EXPLORE:
+        # 用户回答了选择题就推进
+        return True
 
+    if session.phase == BrainstormPhase.CLARIFY:
+        # 用户说"够了我来梳理"类似的确认 → 推进
+        confirm = {"够了", "可以", "梳理", "提出", "来吧", "好的", "差不多了", "OK", "ok", "行"}
+        if any(kw in user_msg for kw in confirm):
+            return True
+        # 达到最大轮数 → 推进
+        if session.clarify_rounds >= session.max_clarify_rounds:
+            return True
+        return False
+
+    if session.phase == BrainstormPhase.PROPOSE:
+        # 用户选了路径 → 推进
+        return session.selected_path_index is not None
+
+    if session.phase == BrainstormPhase.PLAN:
+        # 计划生成后自动推进到审核
+        return True
+
+    if session.phase == BrainstormPhase.REVIEW:
+        # 审核完成后结束
+        return True
+
+    return False
+
+
+def _detect_path_selection(session: BrainstormSession, user_msg: str):
+    """从用户消息检测路径选择。"""
+    for i, path in enumerate(session.paths):
+        title = path.get("title", "")
+        if title and title in user_msg:
+            session.selected_path_index = i
+            session.selected_path_label = title
+            return
+    # 数字匹配
+    for i in range(1, len(session.paths) + 1):
+        if str(i) in user_msg:
+            session.selected_path_index = i - 1
+            session.selected_path_label = session.paths[i - 1].get("title", f"路径{i}")
+            return
+
+
+# ── 会话状态 ──────────────────────────────────────────────────────
 
 @dataclass
 class BrainstormSession:
-    """头脑风暴会话状态。跨多轮对话持久化。"""
+    """头脑风暴会话状态。"""
 
     phase: BrainstormPhase = BrainstormPhase.EXPLORE
     user_question: str = ""
     collected_info: list[str] = field(default_factory=list)
     paths: list[dict] = field(default_factory=list)
-    selected_path: int | None = None
-    present_section: int = 0
+    selected_path_index: int | None = None
+    selected_path_label: str = ""
     clarify_rounds: int = 0
-    plan_document: str = ""  # Phase 5 生成的计划书
+    plan_sheet: str = ""
+    rag_data: str = ""
 
     @property
     def total_phases(self) -> int:
-        return 6
-
-    @property
-    def total_sections(self) -> int:
-        return 4
+        return 5
 
     @property
     def max_clarify_rounds(self) -> int:
@@ -289,298 +157,116 @@ class BrainstormSession:
             "user_question": self.user_question,
             "collected_info": self.collected_info.copy(),
             "paths": self.paths.copy(),
-            "selected_path": self.selected_path,
-            "present_section": self.present_section,
+            "selected_path_index": self.selected_path_index,
+            "selected_path_label": self.selected_path_label,
             "clarify_rounds": self.clarify_rounds,
-            "plan_document": self.plan_document,
+            "plan_sheet": self.plan_sheet,
+            "rag_data": self.rag_data,
         }
 
     @classmethod
     def from_dict(cls, d: dict) -> "BrainstormSession":
-        return cls(
+        session = cls(
             phase=BrainstormPhase(d.get("phase", 1)),
             user_question=d.get("user_question", ""),
             collected_info=d.get("collected_info", []),
             paths=d.get("paths", []),
-            selected_path=d.get("selected_path"),
-            present_section=d.get("present_section", 0),
+            selected_path_index=d.get("selected_path_index"),
+            selected_path_label=d.get("selected_path_label", ""),
             clarify_rounds=d.get("clarify_rounds", 0),
-            plan_document=d.get("plan_document", ""),
+            plan_sheet=d.get("plan_sheet", ""),
+            rag_data=d.get("rag_data", ""),
         )
-
-    def build_phase_prompt(
-        self,
-        user_message: str,
-        db_context: str = "",
-        search_results: str = "",
-    ) -> str:
-        """根据当前 phase 构建对应阶段的 system prompt。"""
-        template = PHASE_PROMPTS.get(int(self.phase))
-        if template is None:
-            template = PHASE_PROMPTS[BrainstormPhase.EXPLORE]
-
-        return template.format(
-            phase_label=self.phase_label,
-            phase=int(self.phase),
-            total=self.total_phases,
-            max_clarify=self.max_clarify_rounds,
-            user_question=self.user_question or user_message,
-            db_context=db_context or "暂无数据库信息",
-            collected_info="\n".join(f"- {info}" for info in self.collected_info) if self.collected_info else "暂无",
-            search_results=search_results or "暂无检索结果",
-            selected_path=self.paths[self.selected_path]["title"] if (self.paths and self.selected_path is not None) else "未选定",
-            present_section=self.present_section,
-            total_sections=self.total_sections,
-        )
+        if session.selected_path_index is not None and session.paths:
+            try:
+                session.selected_path_label = session.paths[session.selected_path_index].get("title", "")
+            except IndexError:
+                session.selected_path_label = ""
+        return session
 
     def check_exit(self, user_response: str) -> bool:
-        """检查用户是否要退出。"""
         exit_keywords = {"退出", "不用brainstorm", "不用头脑风暴", "取消", "算了"}
         return any(kw in user_response for kw in exit_keywords)
 
-    def check_advance(self, response: str) -> bool:
-        """检查是否推进到下一阶段。"""
-        if self.phase == BrainstormPhase.EXPLORE:
-            # 用户回答了澄清问题后推进
-            return True
-        elif self.phase == BrainstormPhase.CLARIFY:
-            # [PHASE_COMPLETE] 或达到最大轮数
-            return "[PHASE_COMPLETE]" in response or self.clarify_rounds >= self.max_clarify_rounds
-        elif self.phase == BrainstormPhase.PROPOSE:
-            # 用户选择了路径
-            return False  # 由外部调用者根据用户输入判断
-        elif self.phase == BrainstormPhase.PRESENT:
-            # 4 节全部通过
-            return self.present_section >= self.total_sections
-        elif self.phase == BrainstormPhase.DOCUMENT:
-            # 计划书生成完成
-            return True
-        elif self.phase == BrainstormPhase.REVIEW:
-            # 自审完成
-            return "[BRAINSTORM_END]" in response
-        return False
-
     def advance_phase(self):
-        """推进到下一阶段。"""
         self.phase = BrainstormPhase(self.phase + 1)
-        if self.phase == BrainstormPhase.PRESENT:
-            self.present_section = 1
-        elif self.phase == BrainstormPhase.REVIEW:
-            self.present_section = 0
 
 
-async def run_brainstorm_subagent(
+# ── 历史消息构建 ──────────────────────────────────────────────────
+
+def _build_history_messages(collected_info: list[str]) -> list[dict]:
+    """将 collected_info 解析为对话历史。"""
+    history: list[dict] = []
+    for item in collected_info:
+        if item.startswith("用户"):
+            content = item.split(":", 1)[-1].strip() if ":" in item else item
+            history.append({"role": "user", "content": content})
+        elif item.startswith("助手"):
+            content = item.split(":", 1)[-1].strip() if ":" in item else item
+            history.append({"role": "assistant", "content": content})
+    return history
+
+
+# ── 阶段执行 ──────────────────────────────────────────────────────
+
+async def run_brainstorm_turn(
     session: BrainstormSession,
     user_message: str,
-    db_context: str,
-):
-    """Brainstorm 子 Agent 内部循环（async generator）。
+    *,
+    verbose: bool = False,
+) -> dict[str, Any]:
+    """执行一轮头脑风暴对话。
 
-    各阶段行为:
-    - Phase 1 (EXPLORE): 纯对话，无工具，基于数据库概况提问
-    - Phase 2 (CLARIFY): 纯对话，无工具，一次一问
-    - Phase 3 (PROPOSE): Function Calling，最多 3 轮搜索
-    - Phase 4 (PRESENT): Function Calling，逐节深入搜索
-    - Phase 5 (DOCUMENT): Function Calling，补充检索后生成计划书
-    - Phase 6 (REVIEW): 纯对话，自审计划书
+    引擎决定当前阶段，注入对应引导语到用户消息末尾。
+    LLM 只需自然对话，不需要输出控制标记。
 
-    Yields:
-        {"type": "brainstorm_status"/"status", "data": {"action": str, "message": str}}
-        {"type": "result", "data": {"phase": int, "content": str, "search_results": str, "is_complete": bool}}
+    Returns:
+        {"content": str, "should_advance": bool, "messages_sent": [...]}
     """
-    from typing import AsyncIterator
-
     client = OpenAI(api_key=settings.deepseek_api_key, base_url=settings.deepseek_base_url)
 
-    system_prompt = session.build_phase_prompt(
-        user_message=user_message,
-        db_context=db_context,
-    )
-
+    # ── 构建 messages ──
     messages: list[dict] = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_message},
+        {"role": "system", "content": PERSONA},
     ]
 
-    # ── token 限制 ──
-    if session.phase <= BrainstormPhase.CLARIFY:
-        phase_max_tokens = 400
-    elif session.phase == BrainstormPhase.PROPOSE:
-        phase_max_tokens = 1000
-    else:
-        phase_max_tokens = 2000
+    # 历史对话
+    history_msgs = _build_history_messages(session.collected_info)
+    messages.extend(history_msgs)
 
-    # Phase 1 & 2 & 6: 纯对话，不使用工具
-    no_tool_phases = {BrainstormPhase.EXPLORE, BrainstormPhase.CLARIFY, BrainstormPhase.REVIEW}
+    # 当前用户消息 + 阶段引导（引擎注入，LLM 自然遵循）
+    hint = PHASE_HINTS.get(session.phase, "")
+    augmented_msg = user_message + hint
 
-    if session.phase in no_tool_phases:
-        yield {"type": "brainstorm_status", "data": {"action": "thinking", "message": "正在思考分析..."}}
-
-        # Phase 1-2: stop sequences 防止 LLM 跳到分析模式
-        create_kwargs: dict = {
-            "model": settings.deepseek_model,
-            "messages": messages,
-            "temperature": 0.3,
-            "max_tokens": phase_max_tokens,
-        }
-        if session.phase <= BrainstormPhase.CLARIFY:
-            create_kwargs["stop"] = ["\n\n", "###", "- ", "1.", "首先", "以下", "根据"]
-            create_kwargs["max_tokens"] = 200  # 极短输出
-
-        response = client.chat.completions.create(**create_kwargs)
-        content = response.choices[0].message.content or ""
-
-        # Phase 5 (DOCUMENT) 和 Phase 6 (REVIEW): 保存计划书
-        if session.phase == BrainstormPhase.DOCUMENT:
-            session.plan_document = content
-        elif session.phase == BrainstormPhase.REVIEW:
-            session.plan_document = content  # 更新为修正版
-
-        yield {
-            "type": "result",
-            "data": {
-                "phase": int(session.phase),
-                "content": content,
-                "search_results": session.plan_document if session.phase == BrainstormPhase.REVIEW else "",
-                "is_complete": session.check_advance(content),
-            }
-        }
-        return
-
-    # Phase 3 & 4 & 5: Function Calling
-    max_rounds = settings.brainstorm_max_agent_rounds
-    search_results_parts: list[str] = []
-
-    for _round in range(max_rounds):
-        yield {"type": "brainstorm_status", "data": {"action": "thinking", "message": "正在思考分析..."}}
-
-        response = client.chat.completions.create(
-            model=settings.deepseek_model,
-            messages=messages,
-            tools=BRAINSTORM_TOOLS,
-            temperature=0.3,
-            max_tokens=phase_max_tokens,
-        )
-
-        choice = response.choices[0]
-        if choice.finish_reason == "tool_calls" and choice.message.tool_calls:
-            messages.append(choice.message)
-            for tool_call in choice.message.tool_calls:
-                func_name = tool_call.function.name
-                try:
-                    func_args = json.loads(tool_call.function.arguments)
-                except json.JSONDecodeError:
-                    func_args = {}
-
-                if func_name == "search_kg":
-                    yield {"type": "brainstorm_status", "data": {"action": "searching_kg", "message": "正在查询超导材料结构化数据..."}}
-                    result = await _execute_kg_search(func_args)
-                elif func_name == "search_rag":
-                    yield {"type": "brainstorm_status", "data": {"action": "searching_rag", "message": "正在检索相关文献..."}}
-                    result = await _execute_rag_search(func_args)
-                else:
-                    result = json.dumps({"error": f"未知工具: {func_name}"})
-
-                search_results_parts.append(f"[{func_name}] {result[:500]}")
-
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": result,
-                })
-
-            yield {"type": "brainstorm_status", "data": {"action": "analyzing", "message": "正在分析检索结果..."}}
-        else:
-            yield {"type": "brainstorm_status", "data": {"action": "generating", "message": "正在生成回答..."}}
-            content = choice.message.content or ""
-
-            if session.phase == BrainstormPhase.DOCUMENT:
-                session.plan_document = content
-
-            yield {
-                "type": "result",
-                "data": {
-                    "phase": int(session.phase),
-                    "content": content,
-                    "search_results": "\n".join(search_results_parts),
-                    "is_complete": session.check_advance(content),
-                }
-            }
-            return
-
-    # 超过最大轮数，强制生成
-    yield {"type": "brainstorm_status", "data": {"action": "generating", "message": "正在汇总生成回答..."}}
-    final_response = client.chat.completions.create(
-        model=settings.deepseek_model,
-        messages=messages + [{"role": "user", "content": "请基于已收集的信息，输出你当前阶段的回答。"}],
-        temperature=0.3,
-        max_tokens=phase_max_tokens,
+    # 去重
+    last_is_same = (
+        messages
+        and messages[-1]["role"] == "user"
+        and messages[-1]["content"] == augmented_msg
     )
-    content = final_response.choices[0].message.content or ""
-    if session.phase == BrainstormPhase.DOCUMENT:
-        session.plan_document = content
+    if not last_is_same:
+        messages.append({"role": "user", "content": augmented_msg})
 
-    yield {
-        "type": "result",
-        "data": {
-            "phase": int(session.phase),
-            "content": content,
-            "search_results": "\n".join(search_results_parts),
-            "is_complete": session.check_advance(content),
-        }
+    messages_sent = [dict(m) for m in messages] if verbose else []
+
+    # ── LLM 调用 ──
+    response = client.chat.completions.create(
+        model=settings.deepseek_model,
+        messages=messages,
+        temperature=0.7,  # 稍高温度让对话更自然
+        max_tokens=2000,
+    )
+    content = response.choices[0].message.content or ""
+
+    if session.phase == BrainstormPhase.PLAN:
+        session.plan_sheet = content
+    elif session.phase == BrainstormPhase.REVIEW:
+        session.plan_sheet = content
+
+    result: dict[str, Any] = {
+        "content": content,
+        "should_advance": _should_advance(session, user_message),
     }
-
-
-async def _execute_kg_search(args: dict) -> str:
-    """执行 KG 检索。"""
-    try:
-        from backend.rag.knowledge_graph import query as kg_query
-
-        predicate = args.get("predicate", "超导温度(AD)")
-        operator = args.get("operator", ">")
-        value = args.get("value", "0")
-        results = await kg_query(predicate, operator=operator, value=value)
-
-        top10 = results[:10]
-        return json.dumps(
-            [
-                {
-                    "subject": r["subject"],
-                    "predicate": r.get("predicate", predicate),
-                    "object": r.get("object", ""),
-                    "paper_id": r.get("paper_id"),
-                }
-                for r in top10
-            ],
-            ensure_ascii=False,
-        )
-    except Exception as e:
-        return json.dumps({"error": str(e)})
-
-
-async def _execute_rag_search(args: dict) -> str:
-    """执行 RAG 检索。"""
-    try:
-        from backend.rag.search.engine import search_semantic_only
-        from backend.rag.rag.reranker import rerank_chunks
-
-        query = args.get("query", "")
-        top_k = min(args.get("top_k", 5), 20)
-        search_result = await search_semantic_only(query, top_k=top_k)
-        chunks = search_result.get("chunks", [])
-        if chunks:
-            chunks = await rerank_chunks(query, chunks, top_k=min(top_k, len(chunks)))
-
-        return json.dumps(
-            [
-                {
-                    "content": c.get("content", "")[:300],
-                    "paper_id": c.get("paper_id"),
-                    "section_name": c.get("section_name", ""),
-                }
-                for c in (chunks or [])
-            ],
-            ensure_ascii=False,
-        )
-    except Exception as e:
-        return json.dumps({"error": str(e)})
+    if verbose:
+        result["messages_sent"] = messages_sent
+    return result
