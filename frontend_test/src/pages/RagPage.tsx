@@ -39,12 +39,12 @@ function renderMessage(content: string): string {
 
 const RagPage: React.FC = () => {
   const {
-    convs, activeId, messages, loading, papers, top10, streamRef, brainstorm,
-    suggestMessage, setSuggestMessage,
+    convs, activeId, messages, loading, papers, top10, streamRef, inspiration,
     newConversation, switchConversation, deleteConversation, send,
   } = useStreamingChat()
 
   const [input, setInput] = useState('')
+  const [exploreMode, setThinkMode] = useState(false)
   const [sourceOpen, setSourceOpen] = useState(true)
   const chatBoxRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -52,12 +52,12 @@ const RagPage: React.FC = () => {
   useEffect(() => { chatBoxRef.current?.scrollTo(0, chatBoxRef.current.scrollHeight) }, [messages, loading])
   useEffect(() => { inputRef.current?.focus() }, [])
 
-  const handleSend = () => { const q = input; setInput(''); send(q) }
+  const handleSend = () => { const q = input; setInput(''); send(q, exploreMode) }
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
   }
 
-  const loadSuggest = (q: string) => { setInput(q); send(q) }
+  const loadSuggest = (q: string) => { setInput(q); send(q, exploreMode) }
 
   /** 最后一条助手消息中的引用顺序 */
   const citedOrder = useMemo(() => {
@@ -119,43 +119,30 @@ const RagPage: React.FC = () => {
             </div>
           </div>
 
-          {brainstorm.active && (
+          {inspiration.active && (
             <>
               <div style={st.bsBar}>
-                <div style={st.bsDots}>
-                  {[1,2,3,4,5,6].map(p => (
-                    <div key={p} style={{
-                      ...st.bsDot,
-                      backgroundColor: p <= brainstorm.phase ? '#4d6bfe' : '#e5e5e5',
-                      transition: 'background-color 0.3s',
-                    }} />
-                  ))}
-                </div>
-                <span style={st.bsLabel}>🧠 {brainstorm.phaseLabel} ({brainstorm.phase}/{brainstorm.totalPhases})</span>
+                <span style={st.bsLabel}>🔬 {inspiration.modeLabel}</span>
+                {inspiration.ideasCount > 0 && (
+                  <span style={{ fontSize: 12, color: '#999' }}>
+                    (已生成 {inspiration.ideasCount} 个点子)
+                  </span>
+                )}
               </div>
-              {brainstorm.statusMessage && (
+              {inspiration.statusMessage && (
                 <div style={st.bsStatus}>
                   <span style={st.bsStatusDot} />
-                  {brainstorm.statusMessage}
+                  {inspiration.statusMessage}
                 </div>
               )}
             </>
           )}
 
           {/* 普通模式状态提示 */}
-          {!brainstorm.active && loading && brainstorm.statusMessage && (
+          {!inspiration.active && loading && inspiration.statusMessage && (
             <div style={st.normalStatus}>
               <span style={st.bsStatusDot} />
-              {brainstorm.statusMessage}
-            </div>
-          )}
-
-          {/* Brainstorm 建议提示 */}
-          {!brainstorm.active && suggestMessage && !loading && (
-            <div style={st.suggestBar}>
-              <span>💡 {suggestMessage}</span>
-              <button onClick={() => { setSuggestMessage(''); send('好的') }} style={st.suggestBtn}>好的</button>
-              <button onClick={() => setSuggestMessage('')} style={st.suggestDismiss}>✕</button>
+              {inspiration.statusMessage}
             </div>
           )}
 
@@ -163,17 +150,27 @@ const RagPage: React.FC = () => {
             <div style={st.inputWrap}>
               <input ref={inputRef} style={st.input_} value={input}
                 onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown}
-                placeholder="问一个超导问题..." disabled={loading} />
+                placeholder={exploreMode ? "说说你的想法，AI 帮你探索研究方向..." : "问一个超导问题..."} disabled={loading} />
+              <button
+                onClick={() => setExploreMode(!exploreMode)}
+                style={{
+                  ...st.thinkBtn,
+                  backgroundColor: exploreMode ? '#4d6bfe' : '#fff',
+                  color: exploreMode ? '#fff' : '#999',
+                  borderColor: exploreMode ? '#4d6bfe' : '#e5e5e5',
+                }}
+                title={exploreMode ? '探索模式已开启' : '开启探索模式'}
+              >🔬</button>
               <button style={{ ...st.sendBtn, opacity: input.trim() && !loading ? 1 : 0.3 }}
                 onClick={handleSend} disabled={!input.trim() || loading}>↑</button>
             </div>
-            {brainstorm.active && (
+            {inspiration.active && (
               <button
                 onClick={() => send('退出')}
                 style={st.bsExitBtn}
-                title="退出头脑风暴模式"
+                title="退出探索模式"
               >
-                退出头脑风暴
+                退出探索
               </button>
             )}
           </div>
@@ -283,6 +280,7 @@ const st: Record<string, React.CSSProperties> = {
   inputWrap: { maxWidth: 720, margin: '0 auto', display: 'flex', alignItems: 'center', backgroundColor: '#fff', borderRadius: 24, border: '1px solid #e5e5e5', padding: '4px 4px 4px 16px', boxShadow: '0 2px 8px rgba(0,0,0,.04)' },
   input_: { flex: 1, border: 'none', outline: 'none', fontSize: 14, padding: '8px 0', backgroundColor: 'transparent' },
   sendBtn: { width: 34, height: 34, borderRadius: '50%', border: 'none', backgroundColor: '#4d6bfe', color: '#fff', fontSize: 16, cursor: 'pointer', flexShrink: 0, transition: 'opacity .2s' },
+  thinkBtn: { width: 34, height: 34, borderRadius: '50%', border: '2px solid #e5e5e5', fontSize: 14, cursor: 'pointer', flexShrink: 0, transition: 'all .2s', marginRight: 6 } as React.CSSProperties,
   right: { width: 300, flexShrink: 0, backgroundColor: '#fff', borderLeft: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column' },
   srcHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 12px 8px', fontWeight: 600, fontSize: 13, borderBottom: '1px solid #f0f0f0' },
   closeBtn: { background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#999' },
@@ -290,15 +288,10 @@ const st: Record<string, React.CSSProperties> = {
   pidBadge: { display: 'inline-block', padding: '1px 6px', borderRadius: 4, backgroundColor: '#eef0ff', color: '#4d6bfe', fontSize: 11, fontWeight: 500 },
   openSrc: { position: 'absolute' as const, right: 16, bottom: 100, width: 40, height: 40, borderRadius: '50%', border: '1px solid #e5e5e5', backgroundColor: '#fff', fontSize: 18, cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,.08)' },
   bsBar: { display: 'flex', alignItems: 'center', gap: 12, padding: '8px 20px', backgroundColor: '#fff', borderBottom: '1px solid #f0f0f0', fontSize: 13 } as React.CSSProperties,
-  bsDots: { display: 'flex', gap: 6 } as React.CSSProperties,
-  bsDot: { width: 8, height: 8, borderRadius: '50%' } as React.CSSProperties,
   bsLabel: { color: '#666', fontWeight: 500 } as React.CSSProperties,
   bsStatus: { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 20px 8px', fontSize: 12, color: '#999', backgroundColor: '#fff' } as React.CSSProperties,
   bsStatusDot: { display: 'inline-block', width: 6, height: 6, borderRadius: '50%', backgroundColor: '#4d6bfe', animation: 'blink 1.2s infinite' } as React.CSSProperties,
   normalStatus: { display: 'flex', alignItems: 'center', gap: 8, padding: '4px 20px', fontSize: 12, color: '#999' } as React.CSSProperties,
-  suggestBar: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '8px 20px', margin: '0 20px', fontSize: 13, color: '#333', backgroundColor: '#f0f4ff', borderRadius: 12, border: '1px solid #d0d9ff' } as React.CSSProperties,
-  suggestBtn: { padding: '4px 14px', borderRadius: 14, border: 'none', backgroundColor: '#4d6bfe', color: '#fff', fontSize: 12, cursor: 'pointer', fontWeight: 500 } as React.CSSProperties,
-  suggestDismiss: { background: 'none', border: 'none', fontSize: 14, cursor: 'pointer', color: '#999', padding: 0 } as React.CSSProperties,
   bsExitBtn: { marginTop: 8, padding: '4px 12px', borderRadius: 12, border: '1px solid #e55', backgroundColor: '#fff', color: '#e55', fontSize: 12, cursor: 'pointer' } as React.CSSProperties,
 }
 

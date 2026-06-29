@@ -20,18 +20,19 @@ interface PaperInfo {
   year?: number
 }
 
-interface BrainstormState {
+interface InspirationState {
   active: boolean
-  phase: number
-  phaseLabel: string
-  totalPhases: number
+  mode: string
+  modeLabel: string
   statusMessage: string
+  sessionId: string
+  ideasCount: number
 }
 
 interface CachedMeta {
   papers: Record<string, PaperInfo>
   top10: any[]
-  brainstorm: BrainstormState | null
+  inspiration: InspirationState | null
 }
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
@@ -46,7 +47,7 @@ function save(list: Conversation[]) {
 /** 按对话 ID 存取 papers + top10 */
 function metaKey(cid: string) { return `rag_meta_${cid}` }
 function loadMeta(cid: string): CachedMeta {
-  try { return JSON.parse(localStorage.getItem(metaKey(cid)) || '{"papers":{},"top10":[],"brainstorm":null}') } catch { return { papers: {}, top10: [], brainstorm: null } }
+  try { return JSON.parse(localStorage.getItem(metaKey(cid)) || '{"papers":{},"top10":[],"inspiration":null}') } catch { return { papers: {}, top10: [], inspiration: null } }
 }
 function saveMeta(cid: string, meta: CachedMeta) {
   localStorage.setItem(metaKey(cid), JSON.stringify(meta))
@@ -64,13 +65,12 @@ export function useStreamingChat() {
     const cid = convs[0]?.id
     return cid ? loadMeta(cid).top10 : []
   })
-  const [suggestMessage, setSuggestMessage] = useState<string>('')
   const streamRef = useRef<HTMLDivElement | null>(null)
 
-  const [brainstorm, setBrainstorm] = useState<BrainstormState>(() => {
+  const [inspiration, setInspiration] = useState<InspirationState>(() => {
     const cid = convs[0]?.id
-    const defaultBs: BrainstormState = { active: false, phase: 1, phaseLabel: '', totalPhases: 6, statusMessage: '' }
-    return cid ? (loadMeta(cid).brainstorm || defaultBs) : defaultBs
+    const defaultIns: InspirationState = { active: false, mode: '', modeLabel: '', statusMessage: '', sessionId: '', ideasCount: 0 }
+    return cid ? (loadMeta(cid).inspiration || defaultIns) : defaultIns
   })
 
   const messages = convs.find((c) => c.id === activeId)?.messages || []
@@ -83,7 +83,7 @@ export function useStreamingChat() {
     setActiveId(c.id)
     setPapers({})
     setTop10([])
-    setBrainstorm({ active: false, phase: 1, phaseLabel: '', totalPhases: 6, statusMessage: '' })
+    setInspiration({ active: false, mode: '', modeLabel: '', statusMessage: '', sessionId: '', ideasCount: 0 })
   }, [])
 
   const switchConversation = useCallback((id: string) => {
@@ -91,7 +91,7 @@ export function useStreamingChat() {
     const m = loadMeta(id)
     setPapers(m.papers)
     setTop10(m.top10)
-    setBrainstorm(m.brainstorm || { active: false, phase: 1, phaseLabel: '', totalPhases: 6, statusMessage: '' })
+    setInspiration(m.inspiration || { active: false, mode: '', modeLabel: '', statusMessage: '', sessionId: '', ideasCount: 0 })
   }, [])
 
   const deleteConversation = useCallback((id: string) => {
@@ -105,11 +105,11 @@ export function useStreamingChat() {
           const m = loadMeta(nid)
           setPapers(m.papers)
           setTop10(m.top10)
-          setBrainstorm(m.brainstorm || { active: false, phase: 1, phaseLabel: '', totalPhases: 6, statusMessage: '' })
+          setInspiration(m.inspiration || { active: false, mode: '', modeLabel: '', statusMessage: '', sessionId: '', ideasCount: 0 })
         } else {
           setPapers({})
           setTop10([])
-          setBrainstorm({ active: false, phase: 1, phaseLabel: '', totalPhases: 6, statusMessage: '' })
+          setInspiration({ active: false, mode: '', modeLabel: '', statusMessage: '', sessionId: '', ideasCount: 0 })
         }
       }
       return next
@@ -117,7 +117,7 @@ export function useStreamingChat() {
     try { localStorage.removeItem(metaKey(id)) } catch { /* ignore */ }
   }, [activeId])
 
-  const send = useCallback(async (question: string) => {
+  const send = useCallback(async (question: string, explore = false) => {
     const q = question.trim()
     if (!q || loading) return
 
@@ -137,7 +137,6 @@ export function useStreamingChat() {
 
     const userMsg: Message = { role: 'user', content: q }
     setLoading(true)
-    setSuggestMessage('')
     setPapers({})
     setTop10([])
 
@@ -151,11 +150,11 @@ export function useStreamingChat() {
     let firstToken = true
     let receivedPapers: Record<string, PaperInfo> = {}
     let receivedTop10: any[] = []
-    let finalBrainstorm: BrainstormState | null = null
+    let finalInspiration: InspirationState | null = null
 
     try {
       const response = await api.postStream('/api/rag/chat/stream', {
-        question: q, top_k: 15, rerank_top_k: 5, history,
+        question: q, top_k: 15, rerank_top_k: 5, history, explore,
       })
       if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`)
 
@@ -179,16 +178,23 @@ export function useStreamingChat() {
           if (dataLines.length === 0) continue
           try {
             const data = JSON.parse(dataLines.join('\n'))
-            if (eventType === 'brainstorm_suggest') {
-              setSuggestMessage(data.message || '')
-            } else if (eventType === 'brainstorm_enter') {
-              setBrainstorm({ active: true, phase: data.phase, phaseLabel: data.label, totalPhases: data.total || 5, statusMessage: '正在准备...' })
-            } else if (eventType === 'brainstorm_status' || eventType === 'status') {
-              setBrainstorm(prev => ({ ...prev, statusMessage: data.message || '' }))
-            } else if (eventType === 'brainstorm_phase') {
-              setBrainstorm(prev => ({ ...prev, phase: data.phase, phaseLabel: data.label }))
-            } else if (eventType === 'brainstorm_exit') {
-              setBrainstorm({ active: false, phase: 1, phaseLabel: '', totalPhases: 6, statusMessage: '' })
+            if (eventType === 'inspire_enter') {
+              setInspiration({
+                active: true,
+                mode: data.mode,
+                modeLabel: data.mode_label,
+                sessionId: data.session_id,
+                statusMessage: '正在分析...',
+                ideasCount: 0,
+              })
+            } else if (eventType === 'inspire_mode') {
+              setInspiration(prev => ({ ...prev, mode: data.mode, modeLabel: data.label }))
+            } else if (eventType === 'inspire_exit') {
+              setInspiration({ active: false, mode: '', modeLabel: '', statusMessage: '', sessionId: '', ideasCount: 0 })
+            } else if (eventType === 'evidence_card') {
+              setInspiration(prev => ({ ...prev, ideasCount: prev.ideasCount + 1 }))
+            } else if (eventType === 'status') {
+              setInspiration(prev => prev.active ? { ...prev, statusMessage: data.message || '' } : prev)
             } else if (eventType === 'token') {
               const t = typeof data === 'string' ? data : String(data || '')
               fullAnswer += t
@@ -200,10 +206,22 @@ export function useStreamingChat() {
             } else if (eventType === 'done') {
               if (data.papers) { receivedPapers = data.papers; setPapers(data.papers) }
               if (data.top10) { receivedTop10 = data.top10; setTop10(data.top10) }
-              if (data.brainstorm) {
-                const bs: BrainstormState = { active: true, phase: data.brainstorm.phase, phaseLabel: data.brainstorm.phase_label || '', totalPhases: 6, statusMessage: '' }
-                setBrainstorm(bs)
-                finalBrainstorm = bs
+              // Brainstorm 会话标记嵌入在 answer 中（<!--BS:json-->），
+              // token 事件只含正文不含标记，必须用 data.answer 覆盖 fullAnswer
+              if (data.answer && data.answer.includes('<!--BS:')) {
+                fullAnswer = data.answer
+              }
+              if (data.inspiration) {
+                const ins: InspirationState = {
+                  active: true,
+                  mode: data.inspiration.current_mode || '',
+                  modeLabel: data.inspiration.mode_label || '',
+                  statusMessage: '',
+                  sessionId: data.inspiration.session_id || '',
+                  ideasCount: 0,
+                }
+                setInspiration(ins)
+                finalInspiration = ins
               }
             } else if (eventType === 'error') {
               throw new Error(data.message || 'AI 错误')
@@ -230,12 +248,11 @@ export function useStreamingChat() {
           : m
       ),
     } : c))
-    if (cid) saveMeta(cid, { papers: receivedPapers, top10: receivedTop10, brainstorm: finalBrainstorm })
+    if (cid) saveMeta(cid, { papers: receivedPapers, top10: receivedTop10, inspiration: finalInspiration })
   }, [activeId, convs, loading])
 
   return {
-    convs, activeId, messages, loading, papers, top10, streamRef, brainstorm,
-    suggestMessage, setSuggestMessage,
+    convs, activeId, messages, loading, papers, top10, streamRef, inspiration,
     newConversation, switchConversation, deleteConversation, send,
   }
 }
