@@ -41,20 +41,26 @@ class TestInspirationSession:
         assert s.check_exit("继续分析") is False
 
     def test_serialize_with_ideas(self):
-        card = IdeaCard(
-            title="测试点子",
-            fragments=[EvidenceFragment(paper_id=74, quoted_text="原文...", section="discussion")],
-            reasoning_chain="因为...所以...",
-            assumptions=["假设1"],
-            feasibility=FeasibilityScore(overall=4, theory=5, synthesis=3, measurement=4),
-        )
-        s = InspirationSession(user_question="测试", collected_ideas=[card])
+        # 在 production 中 collected_ideas 存的是 dict（来自 JSON 解析）
+        card_dict = {
+            "title": "测试点子",
+            "fragments": [{"paper_id": 74, "quoted_text": "原文...", "section": "discussion"}],
+            "reasoning_chain": "因为...所以...",
+            "assumptions": ["假设1"],
+            "feasibility": {"overall": 4, "theory": 5, "synthesis": 3, "measurement": 4},
+        }
+        s = InspirationSession(user_question="测试", collected_ideas=[card_dict])
         d = s.to_dict()
         assert len(d["collected_ideas"]) == 1
-        restored = InspirationSession.from_dict(d)
-        assert restored.collected_ideas[0].title == "测试点子"
-        assert restored.collected_ideas[0].fragments[0].paper_id == 74
-        assert restored.collected_ideas[0].feasibility.overall == 4
+        # 验证 JSON 可序列化
+        import json
+        json_str = json.dumps(d, ensure_ascii=False)
+        assert "测试点子" in json_str
+        # 反序列化
+        restored = InspirationSession.from_dict(json.loads(json_str))
+        assert restored.collected_ideas[0]["title"] == "测试点子"
+        assert restored.collected_ideas[0]["fragments"][0]["paper_id"] == 74
+        assert restored.collected_ideas[0]["feasibility"]["overall"] == 4
 
 
 class TestIdeaCard:
