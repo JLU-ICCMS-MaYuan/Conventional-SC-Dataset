@@ -215,6 +215,59 @@ def _paginate(query, limit: int, offset: int, *, cache_key: str | None = None) -
     }
 
 
+def _paginate_paper_items(items: list[models.Paper], limit: int, offset: int) -> dict[str, Any]:
+    total = len(items)
+    page_items = items[offset:offset + limit]
+    page_size = limit
+    page = (offset // page_size) + 1 if page_size else 1
+    total_pages = (total + page_size - 1) // page_size if total > 0 else 0
+    return {
+        "items": [_paper_to_dict(paper, include_records=True) for paper in page_items],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+        "has_prev": offset > 0,
+        "has_next": offset + page_size < total,
+    }
+
+
+def _query_papers_preserving_superconductor_order(
+    db: Session,
+    superconductors: list[models.Superconductor],
+    *,
+    keyword: str | None = None,
+    year_min: int | None = None,
+    year_max: int | None = None,
+    journal: str | None = None,
+    crystal_structure: str | None = None,
+    review_status: str | None = None,
+    sort_by: str = "year",
+    sort_order: str = "desc",
+) -> list[models.Paper]:
+    ordered: list[models.Paper] = []
+    seen: set[int] = set()
+    for superconductor in superconductors:
+        query = _query_papers_for_superconductors(
+            db,
+            [superconductor.id],
+            keyword=keyword,
+            year_min=year_min,
+            year_max=year_max,
+            journal=journal,
+            crystal_structure=crystal_structure,
+            review_status=review_status,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
+        for paper in query.all():
+            if paper.id in seen:
+                continue
+            ordered.append(paper)
+            seen.add(paper.id)
+    return ordered
+
+
 @router.get("/stats/user-ranking")
 def get_user_ranking(db: Session = Depends(get_db)):
     users = db.query(models.User).all()
@@ -295,7 +348,9 @@ def search_papers_by_mode(
     result = search_superconductors(
         db,
         mode,
+        formula=request.formula,
         elements=request.elements,
+        formula_sort=request.formula_sort or "relevance",
         limit=10000,
         offset=0,
     )
@@ -309,6 +364,20 @@ def search_papers_by_mode(
             "has_prev": False,
             "has_next": False,
         }
+    if mode == "formula_search":
+        papers = _query_papers_preserving_superconductor_order(
+            db,
+            result.items,
+            keyword=request.keyword,
+            year_min=request.year_min,
+            year_max=request.year_max,
+            journal=request.journal,
+            crystal_structure=request.crystal_structure,
+            review_status=request.review_status,
+            sort_by=request.sort_by or "year",
+            sort_order=request.sort_order or "desc",
+        )
+        return _paginate_paper_items(papers, request.limit, request.offset)
     query = _query_papers_for_superconductors(
         db,
         [item.id for item in result.items],

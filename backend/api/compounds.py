@@ -27,6 +27,7 @@ def search_compounds(
         request.mode,
         formula=request.formula,
         elements=request.elements,
+        formula_sort=request.formula_sort or "relevance",
         limit=request.limit,
         offset=request.offset,
     )

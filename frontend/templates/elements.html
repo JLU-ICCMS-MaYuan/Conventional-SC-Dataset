@@ -24,6 +24,14 @@
                     <div class="card-body">
                         <h5><span data-i18n="index.selected_elements">已选元素：</span><span id="selected-elements" class="badge bg-primary">未选择</span></h5>
                         <p class="text-muted mb-2" data-i18n="index.select_hint">点击元素进行选择，选中后再次点击可取消。选择完成后点击下方按钮或按Enter键进入页面。</p>
+                        <div class="row g-2 align-items-center mb-3">
+                            <div class="col-md-8">
+                                <input type="text" class="form-control" id="formula-search-input" data-i18n-placeholder="index.formula_search_placeholder" placeholder="输入化学式，例如 LaH10、FeSe1-xTex">
+                            </div>
+                            <div class="col-md-4">
+                                <button id="formula-search-btn" class="btn btn-outline-primary w-100" type="button" data-i18n="index.formula_search">化学式搜索</button>
+                            </div>
+                        </div>
                         <div class="d-flex justify-content-between align-items-center flex-wrap">
                             <div class="apple-tabs" role="group" aria-label="元素筛选模式">
                                 <input type="radio" class="btn-check" name="selection-mode" id="mode-combination" value="elements_combination_search" checked>

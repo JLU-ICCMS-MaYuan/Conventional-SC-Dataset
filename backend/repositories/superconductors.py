@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 from backend import models
-from backend.db_helpers import build_system_key, normalize_element_symbols, normalize_formula
+from backend.db_helpers import build_system_key, normalize_element_symbols
+from backend.formula_similarity import FormulaExpressionError, parse_formula_expression, sort_formula_matches
 
 
 @dataclass
@@ -39,6 +40,7 @@ def search_superconductors(
     *,
     formula: str | None = None,
     elements: list[str] | None = None,
+    formula_sort: str = "relevance",
     limit: int = 50,
     offset: int = 0,
 ) -> SuperconductorSearchResult:
@@ -47,8 +49,13 @@ def search_superconductors(
     if mode == "formula_search":
         if not formula:
             return _paginate([], limit, offset)
-        normalized, _, _, _ = normalize_formula(formula)
-        items = query.filter(models.Superconductor.formula_normalized == normalized).all()
+        try:
+            parsed = parse_formula_expression(formula)
+        except FormulaExpressionError:
+            return _paginate([], limit, offset)
+        system_key, _ = build_system_key(parsed.elements)
+        items = query.filter(models.ChemicalSystem.system_key == system_key).all()
+        items = sort_formula_matches(items, parsed, formula_sort)
         return _paginate(items, limit, offset)
 
     normalized_elements = normalize_element_symbols(elements or [])

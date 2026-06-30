@@ -99,6 +99,7 @@ SearchMode = Literal[
 class SuperconductorSearchRequest(BaseModel):
     mode: SearchMode
     formula: Optional[str] = None
+    formula_sort: Optional[Literal["relevance", "tc_desc", "tc_asc"]] = "relevance"
     elements: List[str] = Field(default_factory=list)
     limit: int = Field(default=50, ge=1, le=200)
     offset: int = Field(default=0, ge=0)
@@ -127,6 +128,8 @@ class SuperconductorSearchResponse(BaseModel):
 class PaperModeSearchRequest(BaseModel):
     elements: List[str] = Field(..., description="选择的元素符号列表")
     mode: str = Field("combination", description="筛选模式: only, combination, contains")
+    formula: Optional[str] = Field(None, description="化学式搜索表达式")
+    formula_sort: Optional[Literal["relevance", "tc_desc", "tc_asc"]] = Field("relevance", description="化学式搜索排序")
     keyword: Optional[str] = Field(None, description="关键词（标题、摘要、作者、化学式）")
     year_min: Optional[int] = Field(None, description="最小年份")
     year_max: Optional[int] = Field(None, description="最大年份")
