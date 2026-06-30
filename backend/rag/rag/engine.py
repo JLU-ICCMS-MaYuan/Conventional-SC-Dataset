@@ -385,9 +385,8 @@ async def ask_stream(
                      "source": "inspire_exit", "papers": {}, "top10": []}}
             return
 
-        # 首次进入：记录当前消息到历史
-        if not is_session.history:
-            is_session.history.append({"role": "user", "content": question})
+        # 是否为首次请求（需要路由）
+        is_first = not is_session.current_mode
 
         yield {
             "type": "inspire_enter",
@@ -398,40 +397,54 @@ async def ask_stream(
             }
         }
 
-        # 1. ModeRouter
-        yield {"type": "status", "data": {"action": "routing", "message": "正在分析问题并选择分析视角..."}}
-        mode_result = await route_mode(question, is_session.history)
-        _sys.stderr.write(f"[INSPIRE] ModeRouter → mode={mode_result.primary_mode} "
-                          f"confidence={mode_result.confidence:.2f} "
-                          f"queries={mode_result.search_queries}\n")
-        _sys.stderr.write(f"[INSPIRE]   rationale={mode_result.rationale[:120]}\n")
-        _sys.stderr.flush()
+        # 记录用户消息到历史
+        is_session.history.append({"role": "user", "content": question})
 
-        is_session.current_mode = mode_result.primary_mode
-        is_session.mode_history.append(mode_result.primary_mode)
+        # ── 首次请求：ModeRouter + Retrieval ──
+        if is_first:
+            yield {"type": "status", "data": {"action": "routing", "message": "正在分析问题并选择分析视角..."}}
+            mode_result = await route_mode(question, is_session.history)
+            _sys.stderr.write(f"[INSPIRE] ModeRouter → mode={mode_result.primary_mode} "
+                              f"confidence={mode_result.confidence:.2f} "
+                              f"queries={mode_result.search_queries}\n")
+            _sys.stderr.write(f"[INSPIRE]   rationale={mode_result.rationale[:120]}\n")
+            _sys.stderr.flush()
 
-        yield {
-            "type": "inspire_mode",
-            "data": {
-                "mode": mode_result.primary_mode,
-                "label": is_session.mode_label,
-                "rationale": mode_result.rationale,
+            is_session.current_mode = mode_result.primary_mode
+            is_session.mode_history.append(mode_result.primary_mode)
+
+            yield {
+                "type": "inspire_mode",
+                "data": {
+                    "mode": mode_result.primary_mode,
+                    "label": is_session.mode_label,
+                    "rationale": mode_result.rationale,
+                }
             }
-        }
 
-        # 2. Retrieval
-        yield {"type": "status", "data": {"action": "searching", "message": "正在检索相关文献..."}}
-        retrieval_result = await execute_retrieval(
-            mode_result.primary_mode,
-            mode_result.search_queries,
-            collections=mode_result.collections or None,
-        )
-        _sys.stderr.write(f"[INSPIRE] ModeRouter → collections={mode_result.collections} ")
-        _sys.stderr.write(f"chunks={len(retrieval_result.get('chunks', []))} "
-                          f"kg_results={len(retrieval_result.get('kg_results', []))}\n")
-        _sys.stderr.flush()
+            yield {"type": "status", "data": {"action": "searching", "message": "正在检索相关文献..."}}
+            retrieval_result = await execute_retrieval(
+                mode_result.primary_mode,
+                mode_result.search_queries,
+                collections=mode_result.collections or None,
+            )
+            _sys.stderr.write(f"[INSPIRE] Retrieval → collections={mode_result.collections} "
+                              f"chunks={len(retrieval_result.get('chunks', []))} "
+                              f"kg_results={len(retrieval_result.get('kg_results', []))}\n")
+            _sys.stderr.flush()
+        else:
+            # 后续对话：复用已有模式 + 空检索结果（纯对话）
+            _sys.stderr.write(f"[INSPIRE] 后续对话 | 复用 mode={is_session.current_mode} 跳过路由+检索\n")
+            _sys.stderr.flush()
+            mode_result = type('ModeResult', (), {
+                'primary_mode': is_session.current_mode,
+                'rationale': '后续对话，延续之前模式',
+                'collections': [],
+                'search_queries': [],
+            })()
+            retrieval_result = {"chunks": [], "kg_results": [], "mode": is_session.current_mode}
 
-        # 3. EvidenceBuilder（流式）
+        # ── EvidenceBuilder（流式） ──
         yield {"type": "status", "data": {"action": "generating", "message": "正在生成研究点子..."}}
         evidence_text = ""
         async for event in build_evidence_stream(is_session, mode_result, retrieval_result):
@@ -445,7 +458,7 @@ async def ask_stream(
                               f"fragments={len(idea.get('fragments', []))}\n")
         _sys.stderr.flush()
 
-        # 4. DualReviewer（流式）
+        # ── DualReviewer（流式） ──
         yield {"type": "status", "data": {"action": "reviewing", "message": "正在自我审核..."}}
         yield {"type": "token", "data": "\n\n---\n**🔍 审稿意见：**\n"}
         review_text = ""
@@ -465,7 +478,7 @@ async def ask_stream(
         answer = evidence_text + session_marker
         _t_elapsed = _time.time() - _t_start
         _sys.stderr.write(f"[INSPIRE] 完成 | 总耗时={_t_elapsed:.1f}s "
-                          f"mode={mode_result.primary_mode} "
+                          f"mode={is_session.current_mode} "
                           f"ideas={len(is_session.collected_ideas)} "
                           f"evidence_len={len(evidence_text)} "
                           f"review_len={len(review_text)}\n")
@@ -474,7 +487,7 @@ async def ask_stream(
         yield {"type": "done", "data": {
             "citations": [],
             "answer": answer,
-            "source": f"inspire_{mode_result.primary_mode}",
+            "source": f"inspire_{is_session.current_mode}",
             "papers": {},
             "top10": [],
             "inspiration": is_session.to_dict(),
