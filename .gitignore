@@ -61,6 +61,7 @@ CLAUDE.md
 # 数据库
 hydride_literature_image_ai.db
 data/
+docs/local-mysql-import.md
 
 # React 构建产物
 frontend/static/assets/
