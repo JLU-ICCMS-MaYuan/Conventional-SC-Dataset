@@ -144,20 +144,31 @@ async def execute_retrieval(
     try:
         from backend.rag.search.vector_search import search_by_semantics
 
+        # section 过滤（如果策略配置了）
+        section_kw = [k.lower() for k in strategy.section_filter] if strategy.section_filter else []
+
         seen_ids: set[str] = set()
         all_results: list[dict] = []
 
         for coll in search_collections:
             try:
-                sr = await search_by_semantics(boosted_query, top_k=top_k, collection=coll)
+                # 有 section 过滤时多拉一些候选
+                fetch_k = top_k * 2 if section_kw else top_k
+                sr = await search_by_semantics(boosted_query, top_k=fetch_k, collection=coll)
                 new = 0
                 for r in sr:
-                    if r["id"] not in seen_ids:
-                        seen_ids.add(r["id"])
-                        all_results.append(r)
-                        new += 1
+                    if r["id"] in seen_ids:
+                        continue
+                    # section 过滤：section_name 包含任一关键词
+                    if section_kw:
+                        sec = (r.get("section_name") or "").lower()
+                        if not any(k in sec for k in section_kw):
+                            continue
+                    seen_ids.add(r["id"])
+                    all_results.append(r)
+                    new += 1
                 top_scores = [round(r.get("score", 0), 3) for r in sr[:3]]
-                _sys.stderr.write(f"[Retrieval]   {coll}: {len(sr)} hits, {new} new (scores: {top_scores})\n")
+                _sys.stderr.write(f"[Retrieval]   {coll}: {len(sr)} hits, {new} new (section_filter={section_kw or 'none'}, scores: {top_scores})\n")
                 _sys.stderr.flush()
             except Exception as e:
                 _sys.stderr.write(f"[Retrieval]   {coll}: 失败 ({e})\n")
@@ -173,25 +184,25 @@ async def execute_retrieval(
         _sys.stderr.write(f"[Retrieval] 检索异常: {e}\n")
         _sys.stderr.flush()
 
-    # ── KG 查询 ──
+    # ── KG 查询 (暂时禁用) ──
     kg_results: list[dict] = []
-    if strategy.kg_enabled:
-        try:
-            from backend.rag.knowledge_graph import query as kg_query
-
-            if strategy.kg_filter:
-                if "max_pressure" in strategy.kg_filter:
-                    kg_results = await kg_query("压力", operator="<",
-                                                value=str(strategy.kg_filter["max_pressure"]))
-                else:
-                    kg_results = await kg_query("超导温度(AD)", operator=">", value="0")
-                    kg_results.sort(
-                        key=lambda r: float(r["object"]) if r["object"].replace(".", "", 1).isdigit() else 0,
-                        reverse=True,
-                    )
-                    kg_results = kg_results[:20]
-        except Exception:
-            pass
+    # TODO: 重新启用 KG 时取消注释
+    # if strategy.kg_enabled:
+    #     try:
+    #         from backend.rag.knowledge_graph import query as kg_query
+    #         if strategy.kg_filter:
+    #             if "max_pressure" in strategy.kg_filter:
+    #                 kg_results = await kg_query("压力", operator="<",
+    #                                             value=str(strategy.kg_filter["max_pressure"]))
+    #             else:
+    #                 kg_results = await kg_query("超导温度(AD)", operator=">", value="0")
+    #                 kg_results.sort(
+    #                     key=lambda r: float(r["object"]) if r["object"].replace(".", "", 1).isdigit() else 0,
+    #                     reverse=True,
+    #                 )
+    #                 kg_results = kg_results[:20]
+    #     except Exception:
+    #         pass
 
     return {
         "chunks": chunks or [],
