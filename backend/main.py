@@ -223,6 +223,9 @@ async def startup_event():
     print("=" * 60)
     print("🚀 正在启动超导文献数据库服务...")
     print("=" * 60)
+    from backend.init_db import initialize_sqlite_database
+
+    initialize_sqlite_database()
 
     print("=" * 60)
     print("✅ 超导文献数据库服务启动成功！")

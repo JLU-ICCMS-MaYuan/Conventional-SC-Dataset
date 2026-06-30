@@ -3,6 +3,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from backend import models
+from backend.database import Base, SessionLocal, engine
 
 
 _SYMBOLS = [
@@ -44,3 +45,26 @@ def seed_periodic_table_elements(db: Session) -> None:
             )
         )
     db.commit()
+
+
+def initialize_sqlite_database() -> None:
+    if engine.dialect.name != "sqlite":
+        return
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        seed_periodic_table_elements(db)
+    finally:
+        db.close()
+
+
+def main() -> None:
+    db = SessionLocal()
+    try:
+        seed_periodic_table_elements(db)
+    finally:
+        db.close()
+
+
+if __name__ == "__main__":
+    main()

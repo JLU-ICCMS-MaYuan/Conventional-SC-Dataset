@@ -1,56 +1,61 @@
-# Conventional-SC-Dataset 文档导航
+# SC-Wiki 功能综述
 
-本目录用于描述当前代码已经落地的业务逻辑、角色分工、系统入口和运维方式。宗旨是：以当前代码真实行为为准，帮助开发者快速定位功能边界。
+本文档按当前代码真实状态，把 SC-Wiki 对外可讲的能力整理为七个大功能。旧文档中的晶体结构能力已并入数据上传，首页图表与贡献排行已并入研究者社区，导入导出、迁移和备份已并入维护与验证。因此当前文档只保留一篇综述和七篇功能说明。
 
-## 业务逻辑分类
+## 七大功能
 
-当前系统可归纳为 **8 个业务模块 + 1 个运维支撑模块**：
+| 编号 | 功能 | 当前状态 | 说明文档 |
+| --- | --- | --- | --- |
+| I | Decentralized Uploading of Superconductivity Data | 已部分落地 | [01-decentralized-uploading.md](01-decentralized-uploading.md) |
+| II | Decentralized Maintenance and Verification | 已部分落地 | [02-maintenance-and-verification.md](02-maintenance-and-verification.md) |
+| III | Retrieval-Augmented AI Question Answering | 已落地 | [03-rag-question-answering.md](03-rag-question-answering.md) |
+| IV | AI-Assisted Estimation of Superconducting Transition Temperatures | 已落地但实验性 | [04-ai-assisted-tc-estimation.md](04-ai-assisted-tc-estimation.md) |
+| V | Superconductivity Development Knowledge Graph | 部分落地 | [05-superconductivity-knowledge-graph.md](05-superconductivity-knowledge-graph.md) |
+| VI | Researcher Community Forum | 社区基础部分落地，论坛未落地 | [06-researcher-community-forum.md](06-researcher-community-forum.md) |
+| VII | External Superconductivity Database Discovery | 已落地 | [07-external-database-discovery.md](07-external-database-discovery.md) |
 
-1. 元素周期表选择与组合检索
-2. 元素组合页与文献浏览
-3. 文献上传与物理数据录入
-4. 批量导入与数据处理
-5. 用户认证与邮箱验证
-6. 管理员/超级管理员审批与审核
-7. 首页图表与统计展示
-8. Tc 预测实验模块
-9. AI 文献助手（RAG）
-10. 运维支撑模块
+## 系统定位
 
-## 文档结构
+SC-Wiki 是一个围绕元素体系、超导体化学式、论文来源和结构化物理记录组织的超导数据平台。它的主线不是通用全文文献库，也不是已经完成的社交论坛，而是让研究者围绕元素组合快速发现超导体系，提交结构化数据，经过维护与审核后进入可查询、可展示、可被 AI 检索使用的数据资产。
 
-- [business-overview.md](business-overview.md)：业务总览、角色分工、模块关系、页面与接口入口
-- [current-state-and-gaps.md](current-state-and-gaps.md)：系统现状、已实现能力、未实现能力、数据库承接差距
-- [business-search-and-discovery.md](business-search-and-discovery.md)：元素选择、组合模式、组合页浏览、筛选、导出
-- [business-paper-ingestion.md](business-paper-ingestion.md)：单篇上传、批量上传、物理参数、截图、导入导出
-- [business-auth-and-review.md](business-auth-and-review.md)：注册登录、邮箱验证、管理员审批、文献审核、全局管理
-- [business-visualization-and-tc-predict.md](business-visualization-and-tc-predict.md)：首页图表、贡献者排行、Tc 预测实验模块
-- [operations-installation-and-deployment.md](operations-installation-and-deployment.md)：安装、部署、环境变量、启动方式
-- [operations-cli-and-maintenance.md](operations-cli-and-maintenance.md)：初始化、导入导出、迁移、管理员创建、备份、服务维护
+当前主业务数据模型包括：
 
-## 快速定位
+- `periodic_table_elements`
+- `chemical_systems`
+- `superconductors`
+- `papers`
+- `users`
+- `superconductor_records`
+- `superconductors_structures`
 
-- 如果你要快速判断某个产品设想是否已经落地，先看 `current-state-and-gaps.md`
-- 如果你要理解用户如何从首页进入某个化合物体系，先看 `business-search-and-discovery.md`
-- 如果你要理解文献如何进入数据库，先看 `business-paper-ingestion.md`
-- 如果你要理解管理员体系和审核流，先看 `business-auth-and-review.md`
-- 如果你要理解首页图表和实验预测页，先看 `business-visualization-and-tc-predict.md`
-- 如果你要理解部署、迁移、备份和命令，先看 `operations-*` 文档
+RAG 子系统还使用 `paper_chunks`、Chroma 向量库和独立配置的数据根目录。主 MySQL 业务库、RAG 数据库和 Chroma 向量库在代码中存在边界，虽然它们服务于同一个站点。
 
-## 当前代码主入口
+## 当前主要入口
 
-- 首页：`/`
-- 元素组合页：`/compound/{element_symbols}`
-- 登录页：`/login`
-- 管理员注册页：`/admin/register`
-- 管理员审核面板：`/admin/dashboard`
-- 超级管理员面板：`/admin/superadmin`
-- 全局文献管理页：`/admin/papers`
-- AI 文献助手：`/rag`
-- Tc 预测实验页：`/tc-pre`
+| 页面或接口 | 作用 |
+| --- | --- |
+| `/` | 首页、周期表入口、图表与统计展示 |
+| `/elements` | 周期表内容页 |
+| `/compound/{element_symbols}` | 元素体系和化学式检索结果页 |
+| `/login`、`/register` | 用户登录与注册 |
+| `/admin/register` | 管理员申请注册 |
+| `/admin/dashboard` | 管理员审核面板 |
+| `/admin/superadmin` | 超级管理员审批和权限管理 |
+| `/admin/papers` | 全局文献管理 |
+| `/admin/users` | 用户管理 |
+| `/rag` | AI 文献助手 |
+| `/tc-pre` | Tc 预测实验页 |
+| `/api/alexandria/*` | Alexandria 外部数据库接口 |
+| `/api/htsc2025/*` | HTSC-2025 外部数据集接口 |
+
+## 功能边界
+
+已经落地的能力包括周期表与化学式检索、论文与超导记录上传、CIF/POSCAR 结构上传与审核、管理员维护、RAG 问答、Tc 预测实验、首页 Tc-Year/Tc-Pressure 图表、贡献者排行，以及 Alexandria/HTSC-2025 外部数据发现。
+
+部分落地的能力包括去中心化维护、研究者社区、知识图谱产品化和批量导入。它们有数据库字段、后台能力、统计接口或内部查询基础，但还没有形成完整的面向终端用户的闭环。
+
+未落地的能力包括真正的论坛帖子、评论区、弹幕、点赞、浏览量、热度排序、审核者排行的完整前端展示、图表点击联动检索、预测结果持久化和预测结果审核入库。
 
 ## 文档维护原则
 
-- 优先描述当前已实现逻辑，不把规划功能写成现状
-- 功能说明必须关联页面、前端脚本、后端接口或命令
-- 跨模块改动应同步更新总览文档
+这些文档只描述当前代码和从当前代码自然推出的功能边界。规划能力必须明确写成未落地或未来方向，不能写成现状。跨功能的基础设施应并入它服务的功能，而不是单独膨胀成产品能力。

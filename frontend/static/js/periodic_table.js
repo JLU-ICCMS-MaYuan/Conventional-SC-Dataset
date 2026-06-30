@@ -231,15 +231,15 @@ function updateSelectedDisplay() {
 
     if (selectedElements.size === 0) {
         display.textContent = I18N.t('index.none_selected');
-        display.className = 'badge bg-secondary';
+        display.className = 'sc-selected-pill';
+        display.removeAttribute('style');
         btn.disabled = true;
         btn.className = 'btn btn-outline-primary';
     } else {
         const sortedElements = Array.from(selectedElements).sort();
         display.textContent = sortedElements.join(', ');
-        display.className = 'badge';
-        display.style.background = '#4d6bfe';
-        display.style.color = '#fff';
+        display.className = 'sc-selected-pill is-active';
+        display.removeAttribute('style');
         btn.disabled = false;
         btn.className = 'btn btn-enter';
     }
