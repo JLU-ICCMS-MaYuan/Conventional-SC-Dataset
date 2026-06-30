@@ -139,6 +139,28 @@ def delete_paper_chunks(paper_id: int, collection: str = COLLECTION_NAME) -> Non
     col.delete(where={"paper_id": str(paper_id)})
 
 
+def get_chunks(
+    where: dict,
+    include_embeddings: bool = False,
+    collection: str = COLLECTION_NAME,
+) -> dict:
+    """从集合中获取 chunks（可选含 embedding 向量）。
+
+    Args:
+        where: 过滤条件，如 {"paper_id": "42"}
+        include_embeddings: 是否返回 embedding 向量
+        collection: 集合名
+
+    Returns:
+        {"ids": [...], "documents": [...], "metadatas": [...], "embeddings": [...]}
+    """
+    col = _get_collection(collection)
+    include = ["documents", "metadatas"]
+    if include_embeddings:
+        include.append("embeddings")
+    return col.get(where=where, include=include)
+
+
 def collection_stats(collection: str = COLLECTION_NAME) -> dict:
     """返回 collection 统计信息。"""
     col = _get_collection(collection)

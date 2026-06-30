@@ -3,18 +3,15 @@
 
 用法:
     cd /home/work/workshop/git/SC-Wiki
-    python backend/rag/ingest/ingest_reviews.py
-
-不依赖 SQLite —— 直接用 folder index 作为 paper_id（900000+），
-chunks 可被检索但暂时没有 Paper 元信息（title/doi）。
+    EMBEDDING_API_KEY="sk-xxx" EMBEDDING_BASE_URL="https://xxx/v1" python backend/rag/ingest/ingest_reviews.py
 """
 
 from __future__ import annotations
 
 import sys
+import time as _time
 from pathlib import Path
 
-# 确保 backend.rag 在 sys.path
 _project_root = Path(__file__).resolve().parents[3]
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
@@ -27,14 +24,14 @@ from backend.rag.vectordb import (
     collection_stats,
     REVIEW_COLLECTION_NAME,
     COLLECTION_NAME,
+    _get_client,
 )
 
 REVIEW_DIR = _project_root / "综述"
-REVIEW_START_PAPER_ID = 900000  # 避免与现有 paper_id 冲突
+REVIEW_START_PAPER_ID = 900000
 
 
 def find_review_mds(root: Path) -> list[tuple[Path, int]]:
-    """找到所有综述 markdown 文件，返回 (path, paper_id)。"""
     jobs = []
     for paper_dir in sorted(root.iterdir()):
         if not paper_dir.is_dir():
@@ -43,9 +40,6 @@ def find_review_mds(root: Path) -> list[tuple[Path, int]]:
         if not auto_dir.exists():
             continue
         mds = sorted(auto_dir.glob("*.md"))
-        if not mds:
-            continue
-        # 用目录字母序作为 paper_id
         paper_id = hash(paper_dir.name) % 100000 + REVIEW_START_PAPER_ID
         for md in mds:
             jobs.append((md, paper_id))
@@ -59,19 +53,18 @@ def main() -> None:
 
     jobs = find_review_mds(REVIEW_DIR)
     print(f"找到 {len(jobs)} 个综述 Markdown 文件")
-    print(f"Embedding 模型: {settings.embedding_model}")
-    print(f"Chroma 路径: {settings.chroma_path}")
+    print(f"Embedding: {settings.embedding_model} @ {settings.embedding_url[:40]}...")
+    print(f"Chroma: {settings.chroma_path}")
 
-    # 收集所有 chunks
+    # 收集 chunks
     all_chunks = []
     for md_path, paper_id in jobs:
         try:
             text = md_path.read_text(encoding="utf-8", errors="ignore")
             if len(text) < 200:
-                print(f"  跳过（太短）: {md_path.name}")
                 continue
             chunks = chunk_paper(text, paper_id=paper_id, max_tokens=800)
-            print(f"  {md_path.parent.parent.name}/{md_path.name} → {len(chunks)} chunks [paper_id={paper_id}]")
+            print(f"  {md_path.parent.parent.name}/{md_path.name} → {len(chunks)} chunks")
             for c in chunks:
                 all_chunks.append({
                     "id": f"review_{c.paper_id}_{c.chunk_index}",
@@ -84,33 +77,51 @@ def main() -> None:
             print(f"  失败: {md_path} - {e}")
 
     if not all_chunks:
-        print("没有可用的 chunks。")
+        print("无可用 chunks。")
         return
-
     print(f"\n总计 {len(all_chunks)} chunks，开始向量化...")
 
-    # 批量 embedding（每次 50 个）
-    batch_size = 50
+    # 清空旧数据
+    client = _get_client()
+    try:
+        client.delete_collection(REVIEW_COLLECTION_NAME)
+    except Exception:
+        pass
+
+    # 小批次 + 长间隔，避免限流
+    batch_size = 10
     indexed = 0
-    for i in range(0, len(all_chunks), batch_size):
+    total = len(all_chunks)
+    err_count = 0
+
+    for i in range(0, total, batch_size):
         batch = all_chunks[i : i + batch_size]
         texts = [c["content"] for c in batch]
-        try:
-            embeddings = embed_texts(texts)
-            add_chunks(batch, embeddings, collection=REVIEW_COLLECTION_NAME)
-            indexed += len(batch)
-            print(f"  已索引: {indexed}/{len(all_chunks)}")
-        except Exception as e:
-            print(f"  Embedding 失败 batch {i}: {e}")
-            print("  请确认 OPENAI_API_KEY 已设置。")
-            sys.exit(1)
+
+        for attempt in range(15):
+            try:
+                embeddings = embed_texts(texts)
+                add_chunks(batch, embeddings, collection=REVIEW_COLLECTION_NAME)
+                indexed += len(batch)
+                err_count = 0
+                print(f"  {indexed}/{total}")
+                break
+            except Exception as e:
+                err = str(e)[:200]
+                if "429" in err:
+                    err_count += 1
+                    wait = min(attempt * 10 + 10, 120)
+                    print(f"  限流(#{err_count}), 等待 {wait}s...")
+                    _time.sleep(wait)
+                else:
+                    print(f"  失败 batch {i}: {err}")
+                    sys.exit(1)
+        _time.sleep(3)
 
     # 统计
-    main_stats = collection_stats(COLLECTION_NAME)
-    review_stats = collection_stats(REVIEW_COLLECTION_NAME)
-    print(f"\n完成！")
-    print(f"  paper_chunks: {main_stats['count']} chunks")
-    print(f"  review_chunks: {review_stats['count']} chunks")
+    ms = collection_stats(COLLECTION_NAME)
+    rs = collection_stats(REVIEW_COLLECTION_NAME)
+    print(f"\n完成！paper_chunks={ms['count']}  review_chunks={rs['count']}")
 
 
 if __name__ == "__main__":

@@ -21,6 +21,25 @@ class RetrievalStrategy:
     collection: str | None = None  # Chroma 集合，None 用默认 paper_chunks
 
 
+# 文件夹 → ChromaDB 集合名映射（与 ingest_split_collections.py 保持一致）
+FOLDER_COLLECTION_MAP: dict[str, str] = {
+    "理论-三元": "theoretical_ternary_chunks",
+    "理论-二元": "theoretical_binary_chunks",
+    "理论-四元": "theoretical_quaternary_chunks",
+    "理论-五元": "theoretical_quinary_chunks",
+    "理论-六元": "theoretical_senary_chunks",
+    "固体氢": "solid_hydrogen_chunks",
+    "氢化物超导机理研究": "mechanism_chunks",
+    "氢化物非谐研究": "anharmonic_chunks",
+    "分子动力学研究": "molecular_dynamics_chunks",
+    "机器学习领域应用": "machine_learning_chunks",
+    "实验-二元": "experimental_binary_chunks",
+    "实验-三元": "experimental_ternary_chunks",
+    "实验-四元": "experimental_quaternary_chunks",
+    "综述": "review_chunks",
+    "upload": "upload_chunks",
+}
+
 RETRIEVAL_STRATEGIES: dict[str, RetrievalStrategy] = {
     "gap_detector": RetrievalStrategy(
         name="文献缺口探测",
@@ -43,6 +62,7 @@ RETRIEVAL_STRATEGIES: dict[str, RetrievalStrategy] = {
         ],
         kg_enabled=True,
         kg_filter={"by_elements": True},
+        collection="theoretical_ternary_chunks",  # 理论预测+机制类比
     ),
     "contradiction_catalyst": RetrievalStrategy(
         name="矛盾证据催化",
@@ -54,6 +74,7 @@ RETRIEVAL_STRATEGIES: dict[str, RetrievalStrategy] = {
         ],
         kg_enabled=True,
         kg_filter={"by_formula": True, "cross_paper": True},
+        collection="experimental_binary_chunks",  # 实验数据对比矛盾
     ),
     "composition_walker": RetrievalStrategy(
         name="成分空间漫步",
@@ -64,6 +85,7 @@ RETRIEVAL_STRATEGIES: dict[str, RetrievalStrategy] = {
         ],
         kg_enabled=True,
         kg_filter={"by_elements": True, "include_candidates": True},
+        collection="theoretical_binary_chunks",  # 二元是最佳替换起点
     ),
     "counterfactual_reasoner": RetrievalStrategy(
         name="反事实推理",
@@ -75,6 +97,7 @@ RETRIEVAL_STRATEGIES: dict[str, RetrievalStrategy] = {
         ],
         kg_enabled=True,
         kg_filter={"max_pressure": 10},
+        collection="solid_hydrogen_chunks",  # 固体氢→常压超导的终极目标
     ),
 }
 
