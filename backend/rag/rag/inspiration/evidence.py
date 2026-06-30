@@ -81,6 +81,9 @@ async def build_evidence_stream(
         history=session.history,
     )
 
+    import sys as _sys, time as _time
+    _t0 = _time.time()
+
     client = OpenAI(
         api_key=settings.deepseek_api_key,
         base_url=settings.deepseek_base_url,
@@ -92,6 +95,10 @@ async def build_evidence_stream(
     if session.history:
         messages.extend(session.history[-6:])
     messages.append({"role": "user", "content": prompt})
+
+    _sys.stderr.write(f"[EvidenceBuilder] 开始生成 | model={settings.deepseek_model} "
+                      f"prompt_len={len(prompt)} mode={mode_result.primary_mode}\n")
+    _sys.stderr.flush()
 
     full_text = ""
     try:
@@ -107,17 +114,29 @@ async def build_evidence_stream(
             if delta and delta.content:
                 full_text += delta.content
                 yield {"type": "token", "data": delta.content}
+        _sys.stderr.write(f"[EvidenceBuilder] 生成完成 | {_time.time() - _t0:.1f}s "
+                          f"text_len={len(full_text)}\n")
+        _sys.stderr.flush()
     except Exception as e:
+        _sys.stderr.write(f"[EvidenceBuilder] 失败! {e}\n")
+        _sys.stderr.flush()
         logger.error(f"Evidence builder failed: {e}")
         yield {"type": "token", "data": f"\n\n抱歉，生成过程出现错误：{e}"}
         return
 
     # 提取 IdeaCard
     cards = parse_idea_cards(full_text)
-    for card in cards:
-        session.add_idea(card)
-        yield {"type": "evidence_card", "data": card}
+    if cards:
+        for i, card in enumerate(cards):
+            _sys.stderr.write(f"[EvidenceBuilder] IDEA_CARD #{i+1}: title={card.get('title','?')[:80]} "
+                              f"fragments={len(card.get('fragments',[]))} "
+                              f"assumptions={len(card.get('assumptions',[]))}\n")
+            _sys.stderr.flush()
+            session.add_idea(card)
+            yield {"type": "evidence_card", "data": card}
+    else:
+        _sys.stderr.write(f"[EvidenceBuilder] ⚠️ 未找到 IDEA_CARD marker! 文本中没有结构化点子\n")
+        _sys.stderr.flush()
 
-    # 保存生成上下文到会话历史
     session.history.append({"role": "user", "content": session.user_question})
     session.history.append({"role": "assistant", "content": full_text})

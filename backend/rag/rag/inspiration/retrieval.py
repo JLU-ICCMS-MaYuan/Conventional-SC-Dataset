@@ -125,27 +125,19 @@ async def execute_retrieval(
     top_k: int = 10,
     collections: list[str] | None = None,
 ) -> dict[str, Any]:
-    """执行检索：RAG 语义搜索 + 可选 KG 查询。
+    """执行检索：RAG 语义搜索 + 可选 KG 查询。"""
+    import sys as _sys
+    import time as _time
+    _t0 = _time.time()
 
-    Args:
-        mode: 思考模式
-        search_queries: ModeRouter 生成的语义查询列表
-        top_k: RAG 检索数量
-        collections: 要搜索的集合列表（来自 ModeRouter），
-                     未提供时用策略默认值
-
-    Returns:
-        {"chunks": [...], "kg_results": [...], "mode": str}
-    """
     strategy = get_strategy(mode)
-
-    # 确定搜索的集合列表
     search_collections = collections if collections else (
         [strategy.collection] if strategy.collection else ["paper_chunks"]
     )
-
-    # 拼接 semantic_boost 到查询中
     boosted_query = " ".join(search_queries + strategy.semantic_boost)
+
+    _sys.stderr.write(f"[Retrieval] 搜索集合: {search_collections} | boosted_query={boosted_query[:150]}\n")
+    _sys.stderr.flush()
 
     # ── RAG 检索（多集合） ──
     chunks: list[dict] = []
@@ -157,23 +149,28 @@ async def execute_retrieval(
 
         for coll in search_collections:
             try:
-                sr = await search_by_semantics(
-                    boosted_query,
-                    top_k=top_k,
-                    collection=coll,
-                )
+                sr = await search_by_semantics(boosted_query, top_k=top_k, collection=coll)
+                new = 0
                 for r in sr:
                     if r["id"] not in seen_ids:
                         seen_ids.add(r["id"])
                         all_results.append(r)
-            except Exception:
-                pass  # 集合可能为空或不存在
+                        new += 1
+                _sys.stderr.write(f"[Retrieval]   {coll}: {len(sr)} hits, {new} new (scores: "
+                                 f"{[f'{r.get(\"score\",0):.3f}' for r in sr[:3]]})\n")
+                _sys.stderr.flush()
+            except Exception as e:
+                _sys.stderr.write(f"[Retrieval]   {coll}: 失败 ({e})\n")
+                _sys.stderr.flush()
 
-        # 按分数排序，取 top
         all_results.sort(key=lambda r: r.get("score", 0), reverse=True)
         chunks = all_results[:min(8, len(all_results))]
-    except Exception:
-        pass
+        _sys.stderr.write(f"[Retrieval] 合并: {len(all_results)} total → top-{len(chunks)} "
+                         f"(scores: {[f'{r.get(\"score\",0):.3f}' for r in chunks[:5]]})\n")
+        _sys.stderr.flush()
+    except Exception as e:
+        _sys.stderr.write(f"[Retrieval] 检索异常: {e}\n")
+        _sys.stderr.flush()
 
     # ── KG 查询 ──
     kg_results: list[dict] = []

@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
+import time as _time
 
 from openai import OpenAI
 
@@ -16,19 +18,19 @@ from backend.rag.rag.inspiration.prompts import MODE_ROUTER_SYSTEM
 
 logger = logging.getLogger(__name__)
 
+_SEP = "─" * 50
+
+
+def _log(msg: str) -> None:
+    sys.stderr.write(f"[ModeRouter] {msg}\n")
+    sys.stderr.flush()
+
 
 def parse_mode_result(llm_response: str) -> ModeResult:
-    """解析 LLM 返回的 JSON，安全降级。
-
-    Args:
-        llm_response: LLM 返回的文本（应包含一个 JSON 对象）
-
-    Returns:
-        ModeResult，解析失败时返回默认值 gap_detector
-    """
+    """解析 LLM 返回的 JSON，安全降级。"""
     try:
         data = json.loads(llm_response)
-        return ModeResult(
+        result = ModeResult(
             primary_mode=data.get("primary_mode", "gap_detector"),
             secondary_modes=data.get("secondary_modes", []),
             collections=data.get("collections", []),
@@ -36,8 +38,11 @@ def parse_mode_result(llm_response: str) -> ModeResult:
             search_queries=data.get("search_queries", []),
             rationale=data.get("rationale", "解析失败"),
         )
+        _log(f"解析成功: mode={result.primary_mode} conf={result.confidence:.2f} "
+             f"collections={result.collections} queries={result.search_queries}")
+        return result
     except (json.JSONDecodeError, TypeError, ValueError) as e:
-        logger.warning(f"ModeResult parse failed: {e}")
+        _log(f"解析失败! error={e} raw={llm_response[:300]}")
         return ModeResult(
             primary_mode="gap_detector",
             collections=["paper_chunks"],
@@ -51,28 +56,25 @@ async def route_mode(
     question: str,
     history: list[dict] | None = None,
 ) -> ModeResult:
-    """LLM 判断用户问题最适合哪种思考模式。
+    """LLM 判断用户问题最适合哪种思考模式。"""
+    _log(f"{_SEP}")
+    _log(f"开始路由 | question={question[:100]}")
+    _log(f"model={settings.deepseek_model} base_url={settings.deepseek_base_url}")
 
-    Args:
-        question: 用户问题
-        history: 对话历史
-
-    Returns:
-        ModeResult 包含模式选择和搜索查询
-    """
     client = OpenAI(
         api_key=settings.deepseek_api_key,
         base_url=settings.deepseek_base_url,
     )
 
-    # 构建消息
     messages: list[dict] = [
         {"role": "system", "content": MODE_ROUTER_SYSTEM},
     ]
     if history:
-        messages.extend(history[-4:])  # 最近 4 轮
+        messages.extend(history[-4:])
+        _log(f"history: {len(history)} 轮, 取最近 {min(4, len(history))} 轮")
     messages.append({"role": "user", "content": f"用户问题: {question}"})
 
+    t0 = _time.time()
     try:
         resp = client.chat.completions.create(
             model=settings.deepseek_model,
@@ -81,10 +83,17 @@ async def route_mode(
             temperature=0,
             max_tokens=500,
         )
+        elapsed = _time.time() - t0
+        usage = resp.usage
         content = resp.choices[0].message.content or ""
+        _log(f"LLM 响应 | {elapsed:.1f}s "
+             f"prompt_tokens={usage.prompt_tokens if usage else '?'} "
+             f"completion_tokens={usage.completion_tokens if usage else '?'}")
+        _log(f"raw_response: {content[:500]}")
         return parse_mode_result(content)
     except Exception as e:
-        logger.error(f"ModeRouter LLM call failed: {e}")
+        elapsed = _time.time() - t0
+        _log(f"LLM 失败! {elapsed:.1f}s error={e}")
         return ModeResult(
             primary_mode="gap_detector",
             collections=["paper_chunks"],
