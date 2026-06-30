@@ -50,6 +50,8 @@ TEMPLATES_DIR = BASE_DIR / "frontend" / "templates"
 # 如果静态文件目录存在，挂载它
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    # Vite 构建的 CSS 引用 /assets/KaTeX_* 字体，需要直接挂载
+    app.mount("/assets", StaticFiles(directory=str(STATIC_DIR / "assets")), name="assets")
 
 
 # 根路径：返回首页
