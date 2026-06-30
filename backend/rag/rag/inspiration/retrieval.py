@@ -123,6 +123,7 @@ async def execute_retrieval(
     mode: str,
     search_queries: list[str],
     top_k: int = 10,
+    collections: list[str] | None = None,
 ) -> dict[str, Any]:
     """执行检索：RAG 语义搜索 + 可选 KG 查询。
 
@@ -130,27 +131,47 @@ async def execute_retrieval(
         mode: 思考模式
         search_queries: ModeRouter 生成的语义查询列表
         top_k: RAG 检索数量
+        collections: 要搜索的集合列表（来自 ModeRouter），
+                     未提供时用策略默认值
 
     Returns:
         {"chunks": [...], "kg_results": [...], "mode": str}
     """
     strategy = get_strategy(mode)
 
+    # 确定搜索的集合列表
+    search_collections = collections if collections else (
+        [strategy.collection] if strategy.collection else ["paper_chunks"]
+    )
+
     # 拼接 semantic_boost 到查询中
     boosted_query = " ".join(search_queries + strategy.semantic_boost)
 
-    # ── RAG 检索 ──
+    # ── RAG 检索（多集合） ──
     chunks: list[dict] = []
     try:
         from backend.rag.search.vector_search import search_by_semantics
 
-        sr_chunks = await search_by_semantics(
-            boosted_query,
-            top_k=top_k,
-            collection=strategy.collection,
-        )
-        if sr_chunks:
-            chunks = sr_chunks[:min(5, len(sr_chunks))]
+        seen_ids: set[str] = set()
+        all_results: list[dict] = []
+
+        for coll in search_collections:
+            try:
+                sr = await search_by_semantics(
+                    boosted_query,
+                    top_k=top_k,
+                    collection=coll,
+                )
+                for r in sr:
+                    if r["id"] not in seen_ids:
+                        seen_ids.add(r["id"])
+                        all_results.append(r)
+            except Exception:
+                pass  # 集合可能为空或不存在
+
+        # 按分数排序，取 top
+        all_results.sort(key=lambda r: r.get("score", 0), reverse=True)
+        chunks = all_results[:min(8, len(all_results))]
     except Exception:
         pass
 

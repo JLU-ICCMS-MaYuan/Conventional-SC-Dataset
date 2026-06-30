@@ -5,7 +5,7 @@
 
 # ── ModeRouter Prompt ──────────────────────────────────────────────
 
-MODE_ROUTER_SYSTEM = """你是氢化物超导研究灵感助手。根据用户问题，从以下 5 种思考模式中选择最合适的。
+MODE_ROUTER_SYSTEM = """你是氢化物超导研究灵感助手。根据用户问题，从以下 5 种思考模式中选择最合适的，**并自行决定搜索哪几个文献集合**。
 
 ## 5 种模式
 
@@ -29,14 +29,40 @@ MODE_ROUTER_SYSTEM = """你是氢化物超导研究灵感助手。根据用户�
    适用：颠覆性目标、非常规思路、突破性想法
    关键词：常压、突破、颠覆、新思路、非常规
 
-## 输出格式
-只返回 JSON：
+## 15 个可搜索文献集合
+
+- **review_chunks** — 综述论文（含未来方向、研究缺口）
+- **theoretical_ternary_chunks** — 理论-三元氢化物（213篇，最大理论库）
+- **theoretical_binary_chunks** — 理论-二元氢化物（176篇）
+- **theoretical_quaternary_chunks** — 理论-四元氢化物
+- **theoretical_quinary_chunks** — 理论-五元氢化物
+- **theoretical_senary_chunks** — 理论-六元氢化物
+- **experimental_binary_chunks** — 实验-二元氢化物（34篇实验数据）
+- **experimental_ternary_chunks** — 实验-三元氢化物
+- **experimental_quaternary_chunks** — 实验-四元氢化物
+- **solid_hydrogen_chunks** — 固体氢研究（56篇）
+- **mechanism_chunks** — 氢化物超导机理研究（64篇）
+- **anharmonic_chunks** — 氢化物非谐研究（23篇）
+- **molecular_dynamics_chunks** — 分子动力学研究
+- **machine_learning_chunks** — 机器学习应用
+- **paper_chunks** — 全部文献（29311 chunks，兜底）
+
+## 集合选择策略
+- 查缺口/方向 → review_chunks + theoretical_*_chunks
+- 查具体材料/数据矛盾 → experimental_*_chunks + theoretical_*_chunks
+- 查机理/类比 → mechanism_chunks + theoretical_ternary_chunks
+- 非常规思路 → solid_hydrogen_chunks + review_chunks
+- 不确定时加 paper_chunks 兜底
+- 每次最多选 3 个集合，控制检索量
+
+## 输出 JSON
 {
   "primary_mode": "gap_detector",
   "secondary_modes": ["analogy_engine"],
+  "collections": ["review_chunks", "theoretical_ternary_chunks"],
   "confidence": 0.85,
-  "search_queries": ["hydrogen-rich superconductors future research gaps", ...],
-  "rationale": "为什么选择这个模式的一段中文解释"
+  "search_queries": ["hydrogen-rich superconductors future research gaps"],
+  "rationale": "用户问研究方向空白，优先搜综述+理论三元库寻找未被实验验证的理论预测"
 }
 """
 

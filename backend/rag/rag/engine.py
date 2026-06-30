@@ -366,7 +366,17 @@ async def ask_stream(
         is_session = InspirationSession(user_question=question)
 
     if is_session is not None:
+        # ── [INSPIRE LOG] 入口 ──
+        import time as _time
+        _t_start = _time.time()
+        import sys as _sys
+        _sys.stderr.write(f"\n{'='*60}\n")
+        _sys.stderr.write(f"[INSPIRE] 进入探索模式 | question={question[:80]}\n")
+        _sys.stderr.write(f"[INSPIRE] session_id={is_session.session_id} restored={is_session.current_mode is not None}\n")
+        _sys.stderr.flush()
+
         if is_session.check_exit(question):
+            _sys.stderr.write(f"[INSPIRE] 用户退出探索模式\n")
             yield {"type": "inspire_exit", "data": {"reason": "user_abort"}}
             done_msg = "已退出探索模式。"
             for char in done_msg:
@@ -391,6 +401,11 @@ async def ask_stream(
         # 1. ModeRouter
         yield {"type": "status", "data": {"action": "routing", "message": "正在分析问题并选择分析视角..."}}
         mode_result = await route_mode(question, is_session.history)
+        _sys.stderr.write(f"[INSPIRE] ModeRouter → mode={mode_result.primary_mode} "
+                          f"confidence={mode_result.confidence:.2f} "
+                          f"queries={mode_result.search_queries}\n")
+        _sys.stderr.write(f"[INSPIRE]   rationale={mode_result.rationale[:120]}\n")
+        _sys.stderr.flush()
 
         is_session.current_mode = mode_result.primary_mode
         is_session.mode_history.append(mode_result.primary_mode)
@@ -409,7 +424,12 @@ async def ask_stream(
         retrieval_result = await execute_retrieval(
             mode_result.primary_mode,
             mode_result.search_queries,
+            collections=mode_result.collections or None,
         )
+        _sys.stderr.write(f"[INSPIRE] ModeRouter → collections={mode_result.collections} ")
+        _sys.stderr.write(f"chunks={len(retrieval_result.get('chunks', []))} "
+                          f"kg_results={len(retrieval_result.get('kg_results', []))}\n")
+        _sys.stderr.flush()
 
         # 3. EvidenceBuilder（流式）
         yield {"type": "status", "data": {"action": "generating", "message": "正在生成研究点子..."}}
@@ -418,12 +438,23 @@ async def ask_stream(
             if event["type"] == "token":
                 evidence_text += event["data"]
             yield event
+        _sys.stderr.write(f"[INSPIRE] EvidenceBuilder → text_len={len(evidence_text)} "
+                          f"ideas_count={len(is_session.collected_ideas)}\n")
+        for i, idea in enumerate(is_session.collected_ideas):
+            _sys.stderr.write(f"[INSPIRE]   Idea #{i+1}: title={idea.get('title', '?')[:60]} "
+                              f"fragments={len(idea.get('fragments', []))}\n")
+        _sys.stderr.flush()
 
         # 4. DualReviewer（流式）
         yield {"type": "status", "data": {"action": "reviewing", "message": "正在自我审核..."}}
         yield {"type": "token", "data": "\n\n---\n**🔍 审稿意见：**\n"}
+        review_text = ""
         async for event in review_stream(evidence_text):
+            if event["type"] == "token":
+                review_text += event["data"]
             yield event
+        _sys.stderr.write(f"[INSPIRE] DualReviewer → text_len={len(review_text)}\n")
+        _sys.stderr.flush()
 
         # 持久化 session marker + done
         is_json = json.dumps(is_session.to_dict(), ensure_ascii=False)
@@ -432,6 +463,14 @@ async def ask_stream(
             yield {"type": "token", "data": char}
 
         answer = evidence_text + session_marker
+        _t_elapsed = _time.time() - _t_start
+        _sys.stderr.write(f"[INSPIRE] 完成 | 总耗时={_t_elapsed:.1f}s "
+                          f"mode={mode_result.primary_mode} "
+                          f"ideas={len(is_session.collected_ideas)} "
+                          f"evidence_len={len(evidence_text)} "
+                          f"review_len={len(review_text)}\n")
+        _sys.stderr.write(f"{'='*60}\n\n")
+        _sys.stderr.flush()
         yield {"type": "done", "data": {
             "citations": [],
             "answer": answer,

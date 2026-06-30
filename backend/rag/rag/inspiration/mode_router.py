@@ -31,6 +31,7 @@ def parse_mode_result(llm_response: str) -> ModeResult:
         return ModeResult(
             primary_mode=data.get("primary_mode", "gap_detector"),
             secondary_modes=data.get("secondary_modes", []),
+            collections=data.get("collections", []),
             confidence=float(data.get("confidence", 0.0)),
             search_queries=data.get("search_queries", []),
             rationale=data.get("rationale", "解析失败"),
@@ -39,9 +40,10 @@ def parse_mode_result(llm_response: str) -> ModeResult:
         logger.warning(f"ModeResult parse failed: {e}")
         return ModeResult(
             primary_mode="gap_detector",
+            collections=["paper_chunks"],
             confidence=0.0,
             search_queries=[],
-            rationale=f"解析失败，默认使用缺口探测模式。原始响应: {llm_response[:200]}",
+            rationale=f"解析失败，默认使用全文献库。原始响应: {llm_response[:200]}",
         )
 
 
@@ -77,7 +79,7 @@ async def route_mode(
             messages=messages,
             response_format={"type": "json_object"},
             temperature=0,
-            max_tokens=300,
+            max_tokens=500,
         )
         content = resp.choices[0].message.content or ""
         return parse_mode_result(content)
@@ -85,7 +87,8 @@ async def route_mode(
         logger.error(f"ModeRouter LLM call failed: {e}")
         return ModeResult(
             primary_mode="gap_detector",
+            collections=["paper_chunks"],
             confidence=0.0,
             search_queries=[question],
-            rationale=f"LLM 调用失败，默认使用缺口探测模式",
+            rationale=f"LLM 调用失败，默认使用全文献库",
         )

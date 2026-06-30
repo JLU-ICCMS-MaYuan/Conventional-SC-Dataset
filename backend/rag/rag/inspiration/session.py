@@ -39,6 +39,7 @@ class ModeResult:
     """ModeRouter 的输出。"""
     primary_mode: str
     secondary_modes: list[str] = field(default_factory=list)
+    collections: list[str] = field(default_factory=list)
     confidence: float = 1.0
     search_queries: list[str] = field(default_factory=list)
     rationale: str = ""

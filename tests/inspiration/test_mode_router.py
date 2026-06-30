@@ -10,6 +10,7 @@ class TestParseModeResult:
         response = json.dumps({
             "primary_mode": "gap_detector",
             "secondary_modes": ["analogy_engine"],
+            "collections": ["review_chunks", "theoretical_ternary_chunks"],
             "confidence": 0.9,
             "search_queries": ["query1", "query2"],
             "rationale": "用户问研究方向空白",
@@ -17,12 +18,14 @@ class TestParseModeResult:
         result = parse_mode_result(response)
         assert isinstance(result, ModeResult)
         assert result.primary_mode == "gap_detector"
+        assert result.collections == ["review_chunks", "theoretical_ternary_chunks"]
         assert len(result.search_queries) == 2
         assert result.confidence == 0.9
 
     def test_fallback_on_invalid_json(self):
         result = parse_mode_result("invalid json {{{")
         assert result.primary_mode == "gap_detector"
+        assert result.collections == ["paper_chunks"]
         assert result.confidence == 0.0
         assert "解析失败" in result.rationale
 
