@@ -20,6 +20,7 @@ from chromadb.config import Settings
 CHROMA_DIR = rag_settings.chroma_path
 
 COLLECTION_NAME = "paper_chunks"
+REVIEW_COLLECTION_NAME = "review_chunks"
 
 _client: chromadb.PersistentClient | None = None
 
@@ -35,14 +36,14 @@ def _get_client() -> chromadb.PersistentClient:
     return _client
 
 
-def _get_collection():
+def _get_collection(name: str = COLLECTION_NAME):
     """获取 collection，不存在则创建。"""
     client = _get_client()
     try:
-        return client.get_collection(COLLECTION_NAME)
+        return client.get_collection(name)
     except Exception:
         return client.create_collection(
-            name=COLLECTION_NAME,
+            name=name,
             metadata={"hnsw:space": "cosine"},
         )
 
@@ -50,6 +51,7 @@ def _get_collection():
 def add_chunks(
     chunks: list[dict],
     embeddings: list[list[float]],
+    collection: str = COLLECTION_NAME,
 ) -> list[str]:
     """批量添加 chunks 到 Chroma。
 
@@ -57,11 +59,12 @@ def add_chunks(
         chunks: [{"id": str, "paper_id": int, "chunk_index": int,
                    "section_name": str, "content": str}, ...]
         embeddings: 每个 chunk 对应的向量，shape (n_chunks, dim)
+        collection: 目标集合名，默认 paper_chunks
 
     Returns:
         添加成功的 chunk id 列表
     """
-    collection = _get_collection()
+    col = _get_collection(collection)
     ids = [str(c["id"]) for c in chunks]
     documents = [c["content"] for c in chunks]
     metadatas = [
@@ -73,7 +76,7 @@ def add_chunks(
         for c in chunks
     ]
 
-    collection.add(
+    col.add(
         ids=ids,
         embeddings=embeddings,
         documents=documents,
@@ -86,6 +89,7 @@ def search_chunks(
     query_embedding: list[float],
     top_k: int = 10,
     where: dict | None = None,
+    collection: str = COLLECTION_NAME,
 ) -> list[dict]:
     """向量搜索。
 
@@ -93,13 +97,14 @@ def search_chunks(
         query_embedding: 用户问题的向量
         top_k: 返回多少条
         where: 过滤条件，如 {"paper_id": "42"}
+        collection: 搜索的集合名，默认 paper_chunks
 
     Returns:
         [{"id": str, "paper_id": int, "chunk_index": int,
           "section_name": str, "content": str, "distance": float}, ...]
     """
-    collection = _get_collection()
-    results = collection.query(
+    col = _get_collection(collection)
+    results = col.query(
         query_embeddings=[query_embedding],
         n_results=top_k,
         where=where,
@@ -128,16 +133,16 @@ def search_chunks(
     return out
 
 
-def delete_paper_chunks(paper_id: int) -> None:
+def delete_paper_chunks(paper_id: int, collection: str = COLLECTION_NAME) -> None:
     """删除某篇论文的所有 chunks。"""
-    collection = _get_collection()
-    collection.delete(where={"paper_id": str(paper_id)})
+    col = _get_collection(collection)
+    col.delete(where={"paper_id": str(paper_id)})
 
 
-def collection_stats() -> dict:
+def collection_stats(collection: str = COLLECTION_NAME) -> dict:
     """返回 collection 统计信息。"""
-    collection = _get_collection()
+    col = _get_collection(collection)
     return {
-        "name": collection.name,
-        "count": collection.count(),
+        "name": col.name,
+        "count": col.count(),
     }

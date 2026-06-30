@@ -14,6 +14,7 @@ async def search_by_semantics(
     query: str,
     top_k: int = 10,
     paper_id: int | None = None,
+    collection: str | None = None,
 ) -> list[dict]:
     """语义搜索。
 
@@ -21,17 +22,21 @@ async def search_by_semantics(
         query: 用户自然语言问题
         top_k: 返回多少条结果
         paper_id: 可限制在某一篇论文内搜索
+        collection: Chroma 集合名，默认 paper_chunks，可传 review_chunks
 
     Returns:
         [{"id", "paper_id", "chunk_index", "section_name",
           "content", "distance", "score"}, ...]
     """
+    from backend.rag.vectordb import COLLECTION_NAME, REVIEW_COLLECTION_NAME
+
+    col = collection or COLLECTION_NAME
     # 1. 将用户问题向量化
     query_vec = embed_texts([query])[0]
 
     # 2. Chroma 搜索
     where = {"paper_id": str(paper_id)} if paper_id else None
-    results = chroma_search(query_vec, top_k=top_k, where=where)
+    results = chroma_search(query_vec, top_k=top_k, where=where, collection=col)
 
     # 3. 格式化：Chroma 返回的距离（cosine distance），越小越相似
     #    转成 0-1 的分数，分数越高越相关

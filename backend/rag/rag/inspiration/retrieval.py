@@ -18,6 +18,7 @@ class RetrievalStrategy:
     semantic_boost: list[str] = field(default_factory=list)
     kg_enabled: bool = False
     kg_filter: dict | None = None
+    collection: str | None = None  # Chroma 集合，None 用默认 paper_chunks
 
 
 RETRIEVAL_STRATEGIES: dict[str, RetrievalStrategy] = {
@@ -30,6 +31,7 @@ RETRIEVAL_STRATEGIES: dict[str, RetrievalStrategy] = {
             "尚未解决", "有待研究", "需要进一步",
         ],
         kg_enabled=False,
+        collection="review_chunks",  # 优先搜索综述文献
     ),
     "analogy_engine": RetrievalStrategy(
         name="类比推荐引擎",
@@ -117,15 +119,15 @@ async def execute_retrieval(
     # ── RAG 检索 ──
     chunks: list[dict] = []
     try:
-        from backend.rag.search.engine import search_semantic_only
-        from backend.rag.rag.reranker import rerank_chunks
+        from backend.rag.search.vector_search import search_by_semantics
 
-        sr = await search_semantic_only(boosted_query, top_k=top_k)
-        raw_chunks = sr.get("chunks", [])
-        if raw_chunks:
-            chunks = await rerank_chunks(boosted_query, raw_chunks, top_k=min(5, len(raw_chunks)))
-            if not chunks:
-                chunks = raw_chunks[:5]
+        sr_chunks = await search_by_semantics(
+            boosted_query,
+            top_k=top_k,
+            collection=strategy.collection,
+        )
+        if sr_chunks:
+            chunks = sr_chunks[:min(5, len(sr_chunks))]
     except Exception:
         pass
 
