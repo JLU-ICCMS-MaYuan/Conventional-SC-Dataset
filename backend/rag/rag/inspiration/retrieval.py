@@ -156,8 +156,8 @@ async def execute_retrieval(
                         seen_ids.add(r["id"])
                         all_results.append(r)
                         new += 1
-                _sys.stderr.write(f"[Retrieval]   {coll}: {len(sr)} hits, {new} new (scores: "
-                                 f"{[f'{r.get(\"score\",0):.3f}' for r in sr[:3]]})\n")
+                top_scores = [round(r.get("score", 0), 3) for r in sr[:3]]
+                _sys.stderr.write(f"[Retrieval]   {coll}: {len(sr)} hits, {new} new (scores: {top_scores})\n")
                 _sys.stderr.flush()
             except Exception as e:
                 _sys.stderr.write(f"[Retrieval]   {coll}: 失败 ({e})\n")
@@ -165,8 +165,9 @@ async def execute_retrieval(
 
         all_results.sort(key=lambda r: r.get("score", 0), reverse=True)
         chunks = all_results[:min(8, len(all_results))]
-        _sys.stderr.write(f"[Retrieval] 合并: {len(all_results)} total → top-{len(chunks)} "
-                         f"(scores: {[f'{r.get(\"score\",0):.3f}' for r in chunks[:5]]})\n")
+        merged_scores = [round(r.get("score", 0), 3) for r in chunks[:5]]
+        _sys.stderr.write(f"[Retrieval] 合并: {len(all_results)} total -> top-{len(chunks)} "
+                         f"(scores: {merged_scores})\n")
         _sys.stderr.flush()
     except Exception as e:
         _sys.stderr.write(f"[Retrieval] 检索异常: {e}\n")
