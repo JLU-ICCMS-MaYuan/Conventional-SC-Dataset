@@ -45,7 +45,7 @@ class TestRetrievalRegistry:
     def test_gap_detector_no_kg(self):
         s = RETRIEVAL_STRATEGIES["gap_detector"]
         assert s.kg_enabled is False
-        assert "conclusion" in s.section_filter
+        assert s.section_filter == []  # Curator 替代了 section 过滤
 
     def test_analogy_engine_has_kg(self):
         s = RETRIEVAL_STRATEGIES["analogy_engine"]
