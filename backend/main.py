@@ -195,8 +195,8 @@ def tc_prediction_page():
 
 @app.get("/rag")
 def rag_page():
-    """AI 文献助手页面"""
-    page_file = TEMPLATES_DIR / "rag.html"
+    """AI 文献助手页面（vite 构建产物）"""
+    page_file = STATIC_DIR / "index.html"
     if page_file.exists():
         return FileResponse(page_file)
     return {"error": "页面不存在"}
