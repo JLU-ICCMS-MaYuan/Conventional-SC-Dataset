@@ -89,33 +89,6 @@
 </head>
 <body>
     <!-- 导航栏 -->
-    <nav class="navbar navbar-expand-lg navbar-dark navbar-custom sticky-top">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="/" data-i18n="nav.title">超导文献数据库</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link active" href="/admin/dashboard" data-i18n="admin.review_papers">审核文献</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/papers" data-i18n="admin.global_management">全局管理</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/superadmin" data-i18n="admin.superadmin">超级管理员</a>
-                    </li>
-                </ul>
-                <div class="d-flex align-items-center text-white">
-                    <span class="me-3"><span data-i18n="common.welcome">欢迎，</span><span id="userName"></span></span>
-                    <button class="btn btn-outline-light btn-sm me-2" onclick="logout()" data-i18n="common.logout">退出</button>
-                    <button class="btn btn-outline-light btn-sm" onclick="I18N.toggle()" data-i18n="common.language">中/EN</button>
-                </div>
-            </div>
-        </div>
-    </nav>
-
     <div class="container mt-4">
         <div class="d-flex align-items-center justify-content-between mb-3">
             <h2 class="mb-0" data-i18n="admin.pending_review">待审核文献列表</h2>
@@ -211,11 +184,10 @@
                         <div class="mb-3">
                             <label class="form-label" data-i18n="admin.review_status">审核状态</label>
                             <select class="form-select" id="editReviewStatus">
-                                <option value="unreviewed">⏳ 未审核</option>
+                                <option value="pending">未审核</option>
                                 <option value="approved">✅ 已通过</option>
                                 <option value="rejected">❌ 已拒绝</option>
-                                <option value="modifying">🛠️ 待修改</option>
-                                <option value="admin_only">🔒 仅管理员可见</option>
+                                <option value="needs_revision">需修改</option>
                             </select>
                         </div>
 
@@ -663,7 +635,7 @@
             }
 
             const currentImage = previewGroupImages[previewImageIndex];
-            imageEl.src = `/api/papers/images/${currentImage.id}?database=${currentDatabase}`;
+            imageEl.src = `/api/papers/images/${currentImage.id}`;
             imageEl.alt = `图片 ${currentImage.order}`;
             captionEl.textContent = `第 ${previewGroupIndex + 1} 组 · 图片 ${currentImage.order} / 第 ${previewImageIndex + 1} 张，共 ${previewGroupImages.length} 张`;
             introEl.innerHTML = renderImageGroupIntro(previewGroupIntro);
@@ -735,7 +707,7 @@
                                 class="btn p-0 border-0 bg-transparent text-decoration-none"
                                 onclick="openImagePreviewByGroup(${groupIndex}, ${index})"
                                 aria-label="放大查看图片 ${img.order}">
-                            <img src="/api/papers/images/${img.id}?thumbnail=true&database=${currentDatabase}"
+                            <img src="/api/papers/images/${img.id}?thumbnail=true"
                                  alt="图片 ${img.order}"
                                  class="img-thumbnail"
                                  style="width: 140px; height: 140px; object-fit: cover;">
@@ -764,7 +736,7 @@
                 container.innerHTML = '<div class="text-muted small">正在加载图片分组...</div>';
             }
 
-            const response = await fetch(`/api/admin/papers/${paperId}/images?database=${currentDatabase}`, {
+            const response = await fetch(`/api/admin/papers/${paperId}/images`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -895,7 +867,7 @@
             const state = window.authState.get();
             if (!state || !state.token || !state.user) {
                 alert('请先登录');
-                window.location.href = '/admin/login';
+                window.location.href = '/login';
                 return false;
             }
 
@@ -907,7 +879,8 @@
 
             token = state.token;
             currentUser = state.user;
-            document.getElementById('userName').textContent = currentUser.real_name;
+            var userNameEl = document.getElementById('userName');
+            if (userNameEl) userNameEl.textContent = currentUser.real_name;
             return true;
         }
 
@@ -916,14 +889,14 @@
             if (window.authState) {
                 window.authState.clear();
             }
-            window.location.href = '/admin/login';
+            window.location.href = '/';
         }
 
         // 加载未审核文献
         async function loadUnreviewedPapers() {
             const offset = (dashboardPagination.page - 1) * dashboardPagination.pageSize;
             try {
-                const response = await fetch(`/api/admin/papers/unreviewed?limit=${dashboardPagination.pageSize}&offset=${offset}&database=${currentDatabase}`, {
+                const response = await fetch(`/api/admin/papers/unreviewed?limit=${dashboardPagination.pageSize}&offset=${offset}`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
@@ -934,7 +907,7 @@
                     throw new Error(data.detail || '加载失败');
                 }
 
-                renderPapers(Array.isArray(data.papers) ? data.papers : [], data.total || 0);
+                renderPapers(Array.isArray(data.items) ? data.items : (Array.isArray(data.papers) ? data.papers : []), data.total || 0);
             } catch (error) {
                 console.error('加载文献失败:', error);
                 clearDashboardPagination();
@@ -1040,7 +1013,7 @@
             }
 
             try {
-                const response = await fetch(`/api/admin/papers/${paperId}/review?database=${currentDatabase}`, {
+                const response = await fetch(`/api/admin/papers/${paperId}/review`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -1121,7 +1094,7 @@
         // 打开编辑模态框
         async function openEditModal(paperId) {
             try {
-                const response = await fetch(`/api/admin/papers/${paperId}?database=${currentDatabase}`, {
+                const response = await fetch(`/api/admin/papers/${paperId}`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
@@ -1143,7 +1116,7 @@
                 document.getElementById('editAuthors').value = paper.authors || '';
                 document.getElementById('editArticleType').value = paper.article_type || 'experimental';
                 document.getElementById('editSuperconductorType').value = normalizeSuperconductorType(paper.superconductor_type);
-                document.getElementById('editReviewStatus').value = paper.review_status || 'unreviewed';
+                document.getElementById('editReviewStatus').value = paper.review_status || 'pending';
 
                 const dataContainer = document.getElementById('editDataPointsContainer');
                 dataContainer.innerHTML = '';
@@ -1194,7 +1167,7 @@
             };
 
             try {
-                const response = await fetch(`/api/admin/papers/${paperId}?database=${currentDatabase}`, {
+                const response = await fetch(`/api/admin/papers/${paperId}`, {
                     method: 'PUT',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -1238,7 +1211,7 @@
             }
 
             try {
-                const response = await fetch(`/api/admin/papers/${paperId}?database=${currentDatabase}`, {
+                const response = await fetch(`/api/admin/papers/${paperId}`, {
                     method: 'DELETE',
                     headers: {
                         'Authorization': `Bearer ${token}`

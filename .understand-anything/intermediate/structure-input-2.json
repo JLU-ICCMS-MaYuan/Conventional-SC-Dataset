@@ -1,0 +1,70 @@
+{
+  "projectRoot": "/home/mayuan/code/Conventional-SC-Dataset",
+  "batchFiles": [
+    {
+      "path": "frontend/templates/admin_dashboard.html",
+      "language": "html",
+      "sizeLines": 1270,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "frontend/templates/admin_papers.html",
+      "language": "html",
+      "sizeLines": 335,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "frontend/templates/admin_register.html",
+      "language": "html",
+      "sizeLines": 167,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "frontend/templates/compound.html",
+      "language": "html",
+      "sizeLines": 284,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "frontend/templates/index.html",
+      "language": "html",
+      "sizeLines": 673,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "frontend/templates/login.html",
+      "language": "html",
+      "sizeLines": 133,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "frontend/templates/superadmin_dashboard.html",
+      "language": "html",
+      "sizeLines": 532,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "frontend/templates/tc_pre.html",
+      "language": "html",
+      "sizeLines": 80,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "frontend/templates/user_register.html",
+      "language": "html",
+      "sizeLines": 158,
+      "fileCategory": "markup"
+    }
+  ],
+  "batchImportData": {
+    "frontend/templates/admin_dashboard.html": [],
+    "frontend/templates/admin_papers.html": [],
+    "frontend/templates/admin_register.html": [],
+    "frontend/templates/compound.html": [],
+    "frontend/templates/index.html": [],
+    "frontend/templates/login.html": [],
+    "frontend/templates/superadmin_dashboard.html": [],
+    "frontend/templates/tc_pre.html": [],
+    "frontend/templates/user_register.html": []
+  }
+}

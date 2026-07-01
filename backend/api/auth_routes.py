@@ -21,6 +21,28 @@ from backend.email_service import email_service
 router = APIRouter(prefix="/api/auth", tags=["认证"])
 
 
+def _is_admin(user: User) -> bool:
+    return user.role in {"admin", "superadmin"}
+
+
+def _is_superadmin(user: User) -> bool:
+    return user.role == "superadmin"
+
+
+def _user_payload(user: User) -> dict:
+    return {
+        "id": user.id,
+        "email": user.email,
+        "real_name": user.real_name,
+        "role": user.role,
+        "is_admin": _is_admin(user),
+        "is_superadmin": _is_superadmin(user),
+        "is_approved": user.is_approved,
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+        "approved_at": user.approved_at.isoformat() if user.approved_at else None,
+    }
+
+
 # Pydantic 模型
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -85,16 +107,17 @@ async def register_step1(request: RegisterRequest, db: Session = Depends(get_db)
     if existing_user:
         existing_user.password_hash = hash_password(request.password)
         existing_user.real_name = request.real_name
-        existing_user.is_admin = request.is_admin
+        existing_user.role = "admin" if request.is_admin else "user"
         existing_user.verification_code = code
         existing_user.verification_expires = expires
+        existing_user.is_approved = not request.is_admin
     else:
         # 创建新用户（待验证状态）
         new_user = User(
             email=request.email,
             password_hash=hash_password(request.password),
             real_name=request.real_name,
-            is_admin=request.is_admin,
+            role="admin" if request.is_admin else "user",
             is_email_verified=False,
             is_approved=not request.is_admin,  # 普通用户直接标记为已批准，只有管理员需要审核
             verification_code=code,
@@ -153,7 +176,7 @@ async def register_step2(request: VerifyEmailRequest, db: Session = Depends(get_
     user.verification_expires = None
     db.commit()
 
-    if user.is_admin:
+    if _is_admin(user):
         message = "邮箱验证成功！您的管理员申请已提交，请等待超级管理员审批"
         status_val = "pending_approval"
     else:
@@ -194,7 +217,7 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
         )
 
     # 如果是管理员，必须审批通过
-    if user.is_admin and not user.is_approved:
+    if _is_admin(user) and not user.is_approved:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="您的管理员申请尚未通过审批，请耐心等待"
@@ -205,27 +228,11 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
 
     return TokenResponse(
         access_token=access_token,
-        user={
-            "id": user.id,
-            "email": user.email,
-            "real_name": user.real_name,
-            "is_admin": user.is_admin,
-            "is_superadmin": user.is_superadmin,
-            "approved_at": user.approved_at.isoformat() if user.approved_at else None
-        }
+        user=_user_payload(user),
     )
 
 
 @router.get("/me", summary="获取当前用户信息")
 async def get_me(current_user: User = Depends(get_current_user)):
     """获取当前登录用户的信息"""
-    return {
-        "id": current_user.id,
-        "email": current_user.email,
-        "real_name": current_user.real_name,
-        "is_admin": current_user.is_admin,
-        "is_superadmin": current_user.is_superadmin,
-        "is_approved": current_user.is_approved,
-        "created_at": current_user.created_at.isoformat(),
-        "approved_at": current_user.approved_at.isoformat() if current_user.approved_at else None
-    }
+    return _user_payload(current_user)

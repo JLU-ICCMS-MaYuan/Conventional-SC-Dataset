@@ -3,7 +3,7 @@ Pydantic数据模型
 用于API的输入输出验证
 """
 from pydantic import BaseModel, Field, validator
-from typing import Optional, List
+from typing import Any, Literal, Optional, List
 from datetime import datetime
 import re
 
@@ -50,7 +50,7 @@ class CompoundResponse(BaseModel):
 
 class CompoundSearchRequest(BaseModel):
     elements: List[str] = Field(..., description="选择的元素符号列表")
-    mode: str = Field("combination", description="筛选模式: only, combination, contains")
+    mode: str = Field("elements_combination_search", description="筛选模式")
     limit: int = Field(50, ge=1, le=200, description="返回数量限制")
     offset: int = Field(0, ge=0, description="偏移量")
 
@@ -88,6 +88,42 @@ class CompoundSearchPaginationResponse(BaseModel):
     has_next: bool
 
 
+SearchMode = Literal[
+    "formula_search",
+    "elements_exact_search",
+    "elements_combination_search",
+    "elements_contained_search",
+]
+
+
+class SuperconductorSearchRequest(BaseModel):
+    mode: SearchMode
+    formula: Optional[str] = None
+    elements: List[str] = Field(default_factory=list)
+    limit: int = Field(default=50, ge=1, le=200)
+    offset: int = Field(default=0, ge=0)
+
+
+class SuperconductorSummary(BaseModel):
+    id: int
+    chemical_system_id: int
+    chemical_formula: str
+    formula_normalized: str
+    display_name: str
+    elements_list: List[str]
+    composition: dict[str, Any]
+    element_ratio: dict[str, Any]
+
+
+class SuperconductorSearchResponse(BaseModel):
+    items: List[SuperconductorSummary]
+    total: int
+    page: int
+    page_size: int
+    has_prev: bool
+    has_next: bool
+
+
 class PaperModeSearchRequest(BaseModel):
     elements: List[str] = Field(..., description="选择的元素符号列表")
     mode: str = Field("combination", description="筛选模式: only, combination, contains")
@@ -110,7 +146,15 @@ class PaperModeSearchRequest(BaseModel):
 
     @validator('mode')
     def validate_mode_search_mode(cls, v):
-        allowed = {'only', 'combination', 'contains'}
+        allowed = {
+            'only',
+            'combination',
+            'contains',
+            'formula_search',
+            'elements_exact_search',
+            'elements_combination_search',
+            'elements_contained_search',
+        }
         if v not in allowed:
             raise ValueError(f"筛选模式必须是: {', '.join(allowed)}")
         return v
@@ -265,7 +309,7 @@ class PaperSearchParams(BaseModel):
     review_status: Optional[str] = Field(None, description="审核状态：unreviewed, approved, rejected, modifying, admin_only")
     sort_by: Optional[str] = Field("year", description="排序字段：created_at, year")
     sort_order: Optional[str] = Field("desc", description="排序顺序：asc, desc")
-    limit: Optional[int] = Field(50, ge=1, le=200, description="返回数量限制")
+    limit: Optional[int] = Field(30, ge=1, le=30, description="返回数量限制")
     offset: Optional[int] = Field(0, ge=0, description="偏移量")
 
 

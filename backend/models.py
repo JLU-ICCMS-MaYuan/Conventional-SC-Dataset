@@ -1,250 +1,217 @@
 """
-数据库模型定义
-
-当前数据主体采用 data/import_papers_to_sqlite.py 生成的新结构：
-- papers 保存论文元数据
-- compounds 保存具体化学式与组成
-- paper_data 关联论文与化合物，并保存物理数据点
-- paper_images 每篇论文一行，最多保存 fig1..fig40
+SQLAlchemy models for the redesigned superconducting dataset schema.
 """
-from sqlalchemy import Column, Integer, String, Text, BLOB, DateTime, ForeignKey, Boolean, Float
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-import json
 
-from backend.database import Base, ImageBase
-
-
-class Element(Base):
-    """元素表 - 存储118个化学元素"""
-    __tablename__ = "elements"
-
-    id = Column(Integer, primary_key=True, index=True)
-    symbol = Column(String(3), unique=True, nullable=False, index=True)
-    name = Column(String(50), nullable=False)
-    name_zh = Column(String(50))
-    atomic_number = Column(Integer, unique=True, nullable=False)
-
-    def __repr__(self):
-        return f"<Element {self.symbol} ({self.name})>"
+from backend.database import Base
 
 
-class Compound(Base):
-    """具体化合物表 - 存储化学式与元素组成"""
-    __tablename__ = "compounds"
+class PeriodicTableElement(Base):
+    __tablename__ = "periodic_table_elements"
 
-    id = Column(Integer, primary_key=True, index=True)
-    chemical_formula = Column(Text, unique=True, index=True)
-    element_list = Column(Text)
-    composition = Column(Text)
-    element_id_list = Column(Text)
-    element_ratio = Column(Text)
+    id = Column(Integer, primary_key=True)
+    atomic_number = Column(Integer, unique=True, index=True, nullable=False)
+    symbol = Column(String(8), unique=True, index=True, nullable=False)
+    english_name = Column(String(100), nullable=False)
+    chinese_name = Column(String(100))
+    atomic_mass = Column(Float)
+    period_number = Column(Integer)
+    group_number = Column(Integer)
+    category = Column(String(100))
 
-    physical_parameters = relationship("PaperData", back_populates="compound")
 
-    @property
-    def element_symbols(self) -> str:
-        """兼容旧前端：把具体化合物的元素列表显示为 H-S 形式。"""
-        import json
+class ChemicalSystem(Base):
+    __tablename__ = "chemical_systems"
 
-        try:
-            values = json.loads(self.element_list or "[]")
-        except Exception:
-            values = []
-        return "-".join(values) if values else (self.chemical_formula or "")
+    id = Column(Integer, primary_key=True)
+    system_key = Column(String(255), unique=True, index=True, nullable=False)
+    elements_list = Column(JSON, nullable=False)
+    element_count = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    def __repr__(self):
-        return f"<Compound {self.chemical_formula}>"
+    superconductors = relationship("Superconductor", back_populates="chemical_system")
+
+
+class Superconductor(Base):
+    __tablename__ = "superconductors"
+
+    id = Column(Integer, primary_key=True)
+    chemical_system_id = Column(Integer, ForeignKey("chemical_systems.id"), nullable=False, index=True)
+    chemical_formula = Column(String(255), nullable=False)
+    formula_normalized = Column(String(255), unique=True, index=True, nullable=False)
+    display_name = Column(String(255), nullable=False)
+    elements_list = Column(JSON, nullable=False)
+    composition = Column(JSON, nullable=False)
+    element_ratio = Column(JSON, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    chemical_system = relationship("ChemicalSystem", back_populates="superconductors")
+    records = relationship("SuperconductorRecord", back_populates="superconductor")
+    structures = relationship("SuperconductorStructure", back_populates="superconductor")
 
 
 class User(Base):
-    """用户/管理员表，仍由网站认证系统使用"""
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True)
-    email = Column(String(200), unique=True, nullable=False, index=True)
-    password_hash = Column(String(200), nullable=False)
+    id = Column(Integer, primary_key=True)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    password_hash = Column(String(255), nullable=False)
     real_name = Column(String(100), nullable=False)
-    is_admin = Column(Boolean, default=False)
-    is_superadmin = Column(Boolean, default=False)
-    is_approved = Column(Boolean, default=False)
-    is_email_verified = Column(Boolean, default=False)
-    verification_code = Column(String(10))
-    verification_expires = Column(DateTime)
+    affiliation = Column(String(255))
+    role = Column(String(50), default="user", nullable=False, index=True)
+    is_approved = Column(Boolean, default=False, nullable=False)
+    is_email_verified = Column(Boolean, default=False, nullable=False)
+    verification_code = Column(String(16))
+    verification_expires = Column(DateTime(timezone=True))
+    approved_at = Column(DateTime(timezone=True))
+    approved_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    approved_at = Column(DateTime)
-    approved_by = Column(Integer, ForeignKey("users.id"))
-    reviewed_papers = relationship("Paper", back_populates="reviewer", foreign_keys="Paper.reviewed_by")
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    def __repr__(self):
-        return f"<User {self.email} ({self.real_name})>"
+    uploaded_papers = relationship(
+        "Paper",
+        back_populates="uploaded_by_user",
+        foreign_keys="Paper.uploaded_by_user_id",
+    )
+    reviewed_papers = relationship(
+        "Paper",
+        back_populates="reviewed_by_user",
+        foreign_keys="Paper.reviewed_by_user_id",
+    )
+    created_structures = relationship(
+        "SuperconductorStructure",
+        back_populates="created_by_user",
+        foreign_keys="SuperconductorStructure.created_by_user_id",
+    )
 
 
 class Paper(Base):
-    """论文元数据表"""
     __tablename__ = "papers"
 
-    id = Column(Integer, primary_key=True, index=True)
-    doi = Column(Text, index=True)
-    paper_images_id = Column(Integer)
-    title = Column(Text)
-    authors = Column(Text)
-    journal = Column(Text)
-    volume = Column(Text)
-    pages = Column(Text)
+    id = Column(Integer, primary_key=True)
+    doi = Column(String(255), unique=True, index=True, nullable=True)
+    title = Column(Text, nullable=True)
+    journal = Column(String(255))
+    volume = Column(String(100))
+    pages = Column(String(100))
     year = Column(Integer, index=True)
     abstract = Column(Text)
-    imagetxts = Column(Text)
-    imagetxts_cn = Column(Text)
-    is_referenced_by_count = Column("is-referenced-by-count", Integer)
-
-    # 网站业务字段：导入脚本只负责科研数据，网站启动时补齐这些列。
-    contributor_name = Column(String(100), default="Data Import")
-    contributor_affiliation = Column(String(200), default="System")
-    notes = Column(Text)
-    review_status = Column(String(20), default="unreviewed", nullable=False, index=True)
-    reviewed_by = Column(Integer, ForeignKey("users.id"))
-    reviewed_at = Column(DateTime)
+    authors = Column(JSON, nullable=True)
+    uploaded_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    reviewed_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    review_status = Column(String(50), default="pending", nullable=False, index=True)
+    reviewed_at = Column(DateTime(timezone=True))
     review_comment = Column(Text)
-    show_in_chart = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    physical_parameters = relationship("PaperData", back_populates="paper", cascade="all, delete-orphan")
-    reviewer = relationship("User", back_populates="reviewed_papers", foreign_keys=[reviewed_by])
+    uploaded_by_user = relationship(
+        "User",
+        back_populates="uploaded_papers",
+        foreign_keys=[uploaded_by_user_id],
+    )
+    reviewed_by_user = relationship(
+        "User",
+        back_populates="reviewed_papers",
+        foreign_keys=[reviewed_by_user_id],
+    )
+    records = relationship("SuperconductorRecord", back_populates="paper")
 
-    def __repr__(self):
-        return f"<Paper {self.doi}>"
 
+class SuperconductorRecord(Base):
+    __tablename__ = "superconductor_records"
 
-class PaperData(Base):
-    """论文中的化合物/结构/条件数据点"""
-    __tablename__ = "paper_data"
-
-    id = Column(Integer, primary_key=True, index=True)
-    paper_id = Column(Integer, ForeignKey("papers.id"), index=True)
-    compound_id = Column(Integer, ForeignKey("compounds.id"), index=True)
-    article_type = Column(Text)
-    superconductor_type = Column(Text)
-    chemical_formula = Column(Text)
-    crystal_structure = Column(Text)
-    tc = Column(Text)
-    tc_press = Column(Text)
-    lambda_val = Column(Float)
+    id = Column(Integer, primary_key=True)
+    superconductor_id = Column(Integer, ForeignKey("superconductors.id"), nullable=False, index=True)
+    paper_id = Column(Integer, ForeignKey("papers.id"), nullable=True, index=True)
+    source_label = Column(String(255), nullable=False, index=True)
+    pressure_gpa = Column(Float, nullable=False, index=True)
+    space_group_symbol = Column(String(100))
+    space_group_number = Column(Integer)
+    crystal_structure = Column(String(255))
+    thermodynamically_stable = Column(Boolean)
+    dynamically_stable = Column(Boolean)
+    energy_above_hull = Column(Float)
+    mcmillan_tc = Column(Float)
+    allen_dynes_tc = Column(Float)
+    isotropic_eliashberg_tc = Column(Float)
+    anisotropic_eliashberg_tc = Column(Float)
+    experimental_tc = Column(Float)
+    lambda_value = Column(Float)
     omega_log = Column(Float)
-    n_ef = Column(Float)
+    n_ef_total = Column(Float)
+    element_n_ef = Column(JSON)
+    pseudopotential_type = Column(String(100))
+    pseudopotential_name = Column(String(255))
+    exchange_correlation_functional = Column(String(100))
+    calculation_code = Column(String(100))
+    k_grid = Column(String(100))
+    q_grid = Column(String(100))
+    energy_cutoff_value = Column(Float)
+    energy_cutoff_unit = Column(String(50))
+    show_in_chart = Column(Boolean, default=False, nullable=False, index=True)
+    article_type = Column(String(10))
+    superconductor_type = Column(String(10))
     s_factor = Column(Float)
-    structure_file_name = Column(Text)
-    structure_file_data = Column(BLOB)
-    sample_name = Column(Text)
-    data_source_note = Column(Text)
-    sequence_in_paper = Column(Integer)
-
-    paper = relationship("Paper", back_populates="physical_parameters")
-    compound = relationship("Compound", back_populates="physical_parameters")
-
-    @staticmethod
-    def _parse_range(value):
-        try:
-            parsed = json.loads(value) if value else None
-        except Exception:
-            return None
-        if not isinstance(parsed, list):
-            return None
-        cleaned = []
-        for item in parsed:
-            if item is None:
-                cleaned.append(None)
-                continue
-            try:
-                cleaned.append(float(item))
-            except (TypeError, ValueError):
-                return None
-        return cleaned[:2] if cleaned else None
-
-    @staticmethod
-    def _representative_value(values):
-        if not values:
-            return None
-        numeric = [float(v) for v in values if v is not None]
-        if not numeric:
-            return None
-        if len(numeric) == 1:
-            return numeric[0]
-        return sum(numeric[:2]) / min(len(numeric), 2)
-
-    @property
-    def tc_range(self):
-        return self._parse_range(self.tc)
-
-    @property
-    def pressure_range(self):
-        return self._parse_range(self.tc_press)
-
-    @property
-    def tc_value(self):
-        return self._representative_value(self.tc_range)
-
-    @property
-    def pressure_value(self):
-        return self._representative_value(self.pressure_range)
-
-    def __repr__(self):
-        return f"<PaperData paper_id={self.paper_id} compound_id={self.compound_id}>"
-
-
-class PaperImage(ImageBase):
-    """论文图片集合表，每行保存一篇论文最多40张图"""
-    __tablename__ = "paper_images"
-
-    id = Column(Integer, primary_key=True, index=True)
-    paper_id = Column(Integer, index=True, nullable=False)
-    figs = Column(Text)
-    image_data = Column(BLOB)
-    thumbnail_data = Column(BLOB)
-    image_order = Column(Integer)
-    file_size = Column(Integer)
+    method = Column(String(255))
+    note = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    fig1 = Column(BLOB)
-    fig2 = Column(BLOB)
-    fig3 = Column(BLOB)
-    fig4 = Column(BLOB)
-    fig5 = Column(BLOB)
-    fig6 = Column(BLOB)
-    fig7 = Column(BLOB)
-    fig8 = Column(BLOB)
-    fig9 = Column(BLOB)
-    fig10 = Column(BLOB)
-    fig11 = Column(BLOB)
-    fig12 = Column(BLOB)
-    fig13 = Column(BLOB)
-    fig14 = Column(BLOB)
-    fig15 = Column(BLOB)
-    fig16 = Column(BLOB)
-    fig17 = Column(BLOB)
-    fig18 = Column(BLOB)
-    fig19 = Column(BLOB)
-    fig20 = Column(BLOB)
-    fig21 = Column(BLOB)
-    fig22 = Column(BLOB)
-    fig23 = Column(BLOB)
-    fig24 = Column(BLOB)
-    fig25 = Column(BLOB)
-    fig26 = Column(BLOB)
-    fig27 = Column(BLOB)
-    fig28 = Column(BLOB)
-    fig29 = Column(BLOB)
-    fig30 = Column(BLOB)
-    fig31 = Column(BLOB)
-    fig32 = Column(BLOB)
-    fig33 = Column(BLOB)
-    fig34 = Column(BLOB)
-    fig35 = Column(BLOB)
-    fig36 = Column(BLOB)
-    fig37 = Column(BLOB)
-    fig38 = Column(BLOB)
-    fig39 = Column(BLOB)
-    fig40 = Column(BLOB)
+    superconductor = relationship("Superconductor", back_populates="records")
+    paper = relationship("Paper", back_populates="records")
 
-    def __repr__(self):
-        return f"<PaperImage paper_id={self.paper_id}>"
+
+class SuperconductorStructure(Base):
+    __tablename__ = "superconductors_structures"
+    __table_args__ = (
+        Index(
+            "ix_superconductors_structures_identity",
+            "superconductor_id",
+            "space_group_symbol",
+            "space_group_number",
+            "pressure_gpa",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    superconductor_id = Column(Integer, ForeignKey("superconductors.id"), nullable=False, index=True)
+    pressure_gpa = Column(Float, nullable=False, index=True)
+    space_group_symbol = Column(String(100), index=True)
+    space_group_number = Column(Integer, index=True)
+    structure_format = Column(String(20), nullable=False, index=True)
+    structure_text = Column(Text, nullable=False)
+    structure_hash = Column(String(64), nullable=False, index=True)
+    atom_count = Column(Integer)
+    elements_list = Column(JSON)
+    cell_parameters = Column(JSON)
+    volume = Column(Float)
+    review_status = Column(String(50), default="pending", nullable=False, index=True)
+    is_default = Column(Boolean, default=False, nullable=False, index=True)
+    source_type = Column(String(100), nullable=False, index=True)
+    source_label = Column(String(255))
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    superconductor = relationship("Superconductor", back_populates="structures")
+    created_by_user = relationship(
+        "User",
+        back_populates="created_structures",
+        foreign_keys=[created_by_user_id],
+    )

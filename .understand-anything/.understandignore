@@ -1,0 +1,20 @@
+# Understand-Anything analysis scope for this repository.
+# Keep source, templates, docs, and configuration; exclude generated artifacts
+# and heavy scientific data files that do not describe application structure.
+
+.git/
+.understand-anything/
+.playwright-mcp/
+.spec-workflow/
+
+articles/
+docs/
+
+data/*.db
+data/*.xlsx
+data/*.json
+
+scripts/
+
+AGENTS.md
+README.md

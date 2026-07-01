@@ -1,0 +1,154 @@
+{
+  "projectRoot": "/home/mayuan/code/Conventional-SC-Dataset",
+  "batchFiles": [
+    {
+      "path": "backend/migrations/__init__.py",
+      "language": "python",
+      "sizeLines": 3,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/models.py",
+      "language": "python",
+      "sizeLines": 250,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/schemas.py",
+      "language": "python",
+      "sizeLines": 323,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/security.py",
+      "language": "python",
+      "sizeLines": 122,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/utils/__init__.py",
+      "language": "python",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/utils/citation.py",
+      "language": "python",
+      "sizeLines": 353,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/utils/doi_resolver.py",
+      "language": "python",
+      "sizeLines": 160,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/utils/image_processor.py",
+      "language": "python",
+      "sizeLines": 185,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backups/data_export_20260112_110119.json",
+      "language": "json",
+      "sizeLines": 1167,
+      "fileCategory": "config"
+    },
+    {
+      "path": "data/import_papers_to_sqlite.py",
+      "language": "python",
+      "sizeLines": 1203,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/static/css/style.css",
+      "language": "css",
+      "sizeLines": 368,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "frontend/static/js/admin_papers.js",
+      "language": "javascript",
+      "sizeLines": 1007,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/static/js/auth_helper.js",
+      "language": "javascript",
+      "sizeLines": 61,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/static/js/auth_state.js",
+      "language": "javascript",
+      "sizeLines": 50,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/static/js/chart.js",
+      "language": "javascript",
+      "sizeLines": 14,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/static/js/compound_page.js",
+      "language": "javascript",
+      "sizeLines": 1842,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/static/js/i18n.js",
+      "language": "javascript",
+      "sizeLines": 372,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/static/js/periodic_table.js",
+      "language": "javascript",
+      "sizeLines": 380,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/static/js/tc_pre.js",
+      "language": "javascript",
+      "sizeLines": 70,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/autobackup.sh",
+      "language": "shell",
+      "sizeLines": 120,
+      "fileCategory": "script"
+    },
+    {
+      "path": "scripts/remote_backup.sh",
+      "language": "shell",
+      "sizeLines": 167,
+      "fileCategory": "script"
+    }
+  ],
+  "batchImportData": {
+    "backend/migrations/__init__.py": [],
+    "backend/models.py": [],
+    "backend/schemas.py": [],
+    "backend/security.py": [],
+    "backend/utils/__init__.py": [],
+    "backend/utils/citation.py": [],
+    "backend/utils/doi_resolver.py": [],
+    "backend/utils/image_processor.py": [],
+    "backups/data_export_20260112_110119.json": [],
+    "data/import_papers_to_sqlite.py": [],
+    "frontend/static/css/style.css": [],
+    "frontend/static/js/admin_papers.js": [],
+    "frontend/static/js/auth_helper.js": [],
+    "frontend/static/js/auth_state.js": [],
+    "frontend/static/js/chart.js": [],
+    "frontend/static/js/compound_page.js": [],
+    "frontend/static/js/i18n.js": [],
+    "frontend/static/js/periodic_table.js": [],
+    "frontend/static/js/tc_pre.js": [],
+    "scripts/autobackup.sh": [],
+    "scripts/remote_backup.sh": []
+  }
+}

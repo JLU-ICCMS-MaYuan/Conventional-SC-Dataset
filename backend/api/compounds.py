@@ -1,119 +1,53 @@
 """
-元素组合相关API
-"""
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from typing import List
-import json
+Superconductor search API.
 
+The route keeps the historical /api/compounds prefix so the frontend can
+transition without changing every caller at once.
+"""
+
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from backend import schemas
 from backend.database import get_db
-from backend import crud, schemas
+from backend.repositories.superconductors import search_superconductors
+
 
 router = APIRouter(prefix="/api/compounds", tags=["compounds"])
 
 
-@router.post("/check")
-def check_compound_exists(
-    compound_data: schemas.CompoundCreate,
-    db: Session = Depends(get_db)
-):
-    """
-    检查元素组合是否存在且有文献
-
-    Args:
-        compound_data: 包含元素符号列表的数据
-
-    Returns:
-        {
-            "exists": bool,  # 元素组合是否存在
-            "has_papers": bool,  # 是否有文献
-            "element_symbols": str,  # 元素组合字符串
-            "message": str  # 提示信息
-        }
-    """
-    element_symbols = compound_data.element_symbols
-
-    # 验证元素是否都存在
-    elements = crud.get_elements_by_symbols(db, element_symbols)
-    if len(elements) != len(element_symbols):
-        invalid_symbols = set(element_symbols) - {e.symbol for e in elements}
-        raise HTTPException(
-            status_code=400,
-            detail=f"以下元素不存在: {', '.join(invalid_symbols)}"
-        )
-
-    # 检查元素组合是否有文献
-    has_papers = crud.check_compound_has_papers(db, element_symbols)
-
-    # 生成元素组合字符串
-    sorted_symbols = sorted(set(element_symbols))
-    compound_key = "-".join(sorted_symbols)
-
-    if has_papers:
-        message = f"找到 {compound_key} 系统的文献"
-        return {
-            "exists": True,
-            "has_papers": True,
-            "element_symbols": compound_key,
-            "message": message
-        }
-    else:
-        message = "该元素组合暂未收录对应化合物，请重新选择"
-        return {
-            "exists": False,
-            "has_papers": False,
-            "element_symbols": compound_key,
-            "message": message
-        }
-
-
-@router.get("/{element_symbols}")
-def get_compound_info(
-    element_symbols: str,
-    db: Session = Depends(get_db)
-):
-    """
-    获取元素组合信息
-
-    Args:
-        element_symbols: 元素符号组合，如 "Ba-Cu-O-Y"
-
-    Returns:
-        元素组合信息和文献数量
-    """
-    # 解析元素符号
-    symbols = element_symbols.split("-")
-
-    compounds = crud.get_compounds_by_symbols(db, symbols, exact=True)
-    compound = compounds[0] if compounds else None
-    if not compound:
-        elements = crud.get_elements_by_symbols(db, symbols)
-        if len(elements) != len(symbols):
-            invalid_symbols = set(symbols) - {e.symbol for e in elements}
-            raise HTTPException(status_code=400, detail=f"以下元素不存在: {', '.join(invalid_symbols)}")
-
-    # 获取文献数量
-    paper_count = sum(crud.get_compound_papers_count(db, item.id) for item in compounds)
-
-    return {
-        "id": compound.id if compound else None,
-        "element_symbols": "-".join(symbols),
-        "element_list": symbols,
-        "created_at": None,
-        "paper_count": paper_count
-    }
-
-
-@router.post("/search", response_model=schemas.CompoundSearchPaginationResponse)
+@router.post("/search", response_model=schemas.SuperconductorSearchResponse)
 def search_compounds(
-    request: schemas.CompoundSearchRequest,
-    db: Session = Depends(get_db)
+    request: schemas.SuperconductorSearchRequest,
+    db: Session = Depends(get_db),
 ):
-    """根据筛选模式搜索元素组合列表"""
-    return crud.search_compounds_by_elements(
+    """Search superconductors by formula or element-set mode."""
+    result = search_superconductors(
         db,
-        request.elements,
         request.mode,
+        formula=request.formula,
+        elements=request.elements,
         limit=request.limit,
         offset=request.offset,
     )
+
+    return {
+        "items": [
+            {
+                "id": item.id,
+                "chemical_system_id": item.chemical_system_id,
+                "chemical_formula": item.chemical_formula,
+                "formula_normalized": item.formula_normalized,
+                "display_name": item.display_name,
+                "elements_list": item.elements_list,
+                "composition": item.composition,
+                "element_ratio": item.element_ratio,
+            }
+            for item in result.items
+        ],
+        "total": result.total,
+        "page": result.page,
+        "page_size": result.page_size,
+        "has_prev": result.has_prev,
+        "has_next": result.has_next,
+    }

@@ -1,0 +1,26 @@
+{
+  "workflow": "build_from_materials",
+  "scene": "journal",
+  "tier": "pro",
+  "output_language": "en",
+  "target_name": "Conventional-SC-Dataset",
+  "materials_dir": "articles/raw",
+  "draft_path": "docs/article-draft.md",
+  "user_motivation": "",
+  "official_urls": [],
+  "special_requirements": [
+    "Position the work as a resource/database/software-system paper, not as a superconducting mechanism paper or a validated machine-learning prediction paper.",
+    "Use local materials and existing project evidence first.",
+    "Keep claims bounded to implemented platform features, local data files, and cited literature.",
+    "Discuss materials databases, structure databases, and superconductivity-specific databases in the introduction."
+  ],
+  "word_output": "docx",
+  "translation_package": "none",
+  "reference_mode": "local_first",
+  "reference_paths": [
+    "articles/raw",
+    "docs",
+    "articles"
+  ],
+  "citation_target_count": 20
+}

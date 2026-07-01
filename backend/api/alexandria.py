@@ -33,6 +33,12 @@ class AlexandriaMaterial(BaseModel):
     imag: bool = True
     band_gap: Optional[float] = None
     dos_ef: Optional[float] = None
+    tc_mcmillan: Optional[float] = None
+    tc_allen_dynes: Optional[float] = None
+    tc_eliashberg: Optional[float] = None
+    wlog: Optional[float] = None
+    integral_a2f: Optional[float] = None
+    pressure: Optional[float] = None
 
 
 class AlexandriaSearchResult(BaseModel):
@@ -173,9 +179,9 @@ def _structure_to_cif(ibrav, celldm, lattice, sites, formula):
     for site in sites:
         el = site[0]
         cnt[el] += 1
-        x = site[1] if len(site) > 1 else 0
-        y = site[2] if len(site) > 2 else 0
-        z = site[3] if len(site) > 3 else 0
+        x = (float(site[1]) % 1.0) if len(site) > 1 and site[1] is not None else 0
+        y = (float(site[2]) % 1.0) if len(site) > 2 and site[2] is not None else 0
+        z = (float(site[3]) % 1.0) if len(site) > 3 and site[3] is not None else 0
         lines.append(f"  {el}{cnt[el]} {el} {x:.8f} {y:.8f} {z:.8f}")
     return "\n".join(lines)
 
@@ -225,8 +231,8 @@ def get_alexandria_material(mat_id: str):
 @router.get("/material/{mat_id}/download")
 def download_alexandria_material(mat_id: str):
     """下载材料完整原始数据（含 force_constants 和 dyns，文件较大）"""
-    from backend.alexandria_import import get_read_conn
-    conn = get_read_conn()
+    from backend.alexandria_import import get_full_conn
+    conn = get_full_conn()
     row = conn.execute(
         "SELECT data FROM entries WHERE mat_id = ?", (mat_id,)
     ).fetchone()

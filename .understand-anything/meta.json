@@ -1,0 +1,10 @@
+{
+  "lastAnalyzedAt": "2026-06-08T07:22:08.337Z",
+  "gitCommitHash": "11c8352c40f962cafbc6209de28fb2b96157e473",
+  "version": "1.0.0",
+  "analyzedFiles": 60,
+  "excludedScopes": [
+    "articles/",
+    "docs/"
+  ]
+}

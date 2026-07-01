@@ -25,13 +25,12 @@ def create_superadmin(email: str, password: str, real_name: str):
         # 检查是否已存在该邮箱
         existing_user = db.query(User).filter(User.email == email).first()
         if existing_user:
-            if existing_user.is_superadmin:
+            if existing_user.role == "superadmin":
                 print(f"❌ 超级管理员 {email} 已存在")
                 return False
             else:
                 # 升级为超级管理员
-                existing_user.is_superadmin = True
-                existing_user.is_admin = True
+                existing_user.role = "superadmin"
                 existing_user.is_approved = True
                 existing_user.is_email_verified = True
                 existing_user.approved_at = datetime.utcnow()
@@ -44,8 +43,7 @@ def create_superadmin(email: str, password: str, real_name: str):
             email=email,
             password_hash=hash_password(password),
             real_name=real_name,
-            is_admin=True,
-            is_superadmin=True,
+            role="superadmin",
             is_approved=True,
             is_email_verified=True,
             approved_at=datetime.utcnow()

@@ -1,0 +1,61 @@
+{
+  "version": "1.0.0",
+  "language": "zh",
+  "generatedAt": "2026-06-08T07:22:08.337Z",
+  "scope": "已排除 articles/ 与 docs/，仅分析代码、配置、页面模板和运维脚本。",
+  "domains": [
+    {
+      "id": "domain:search",
+      "name": "元素组合检索",
+      "entrypoints": [
+        "backend/api/compounds.py",
+        "backend/api/elements.py",
+        "frontend/static/js/periodic_table.js",
+        "frontend/static/js/compound_page.js"
+      ]
+    },
+    {
+      "id": "domain:papers",
+      "name": "文献与物理数据管理",
+      "entrypoints": [
+        "backend/api/papers.py",
+        "backend/crud.py",
+        "backend/models.py"
+      ]
+    },
+    {
+      "id": "domain:auth-review",
+      "name": "认证、管理员审批与文献审核",
+      "entrypoints": [
+        "backend/api/auth_routes.py",
+        "backend/api/admin.py",
+        "backend/security.py"
+      ]
+    },
+    {
+      "id": "domain:visualization",
+      "name": "首页统计与图表展示",
+      "entrypoints": [
+        "backend/api/papers.py",
+        "frontend/static/js/chart.js"
+      ]
+    },
+    {
+      "id": "domain:tc-predict",
+      "name": "Tc 预测实验模块",
+      "entrypoints": [
+        "backend/api/tc_predict.py",
+        "frontend/static/js/tc_pre.js"
+      ]
+    },
+    {
+      "id": "domain:external-datasets",
+      "name": "外部数据集检索",
+      "entrypoints": [
+        "backend/api/alexandria.py",
+        "backend/api/htsc2025.py",
+        "backend/api/ai_papers.py"
+      ]
+    }
+  ]
+}
