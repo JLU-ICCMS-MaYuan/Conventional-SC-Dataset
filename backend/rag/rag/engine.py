@@ -486,7 +486,9 @@ async def ask_stream(
         _sys.stderr.write(f"  → 完成 {_t_elapsed:.1f}s | "
                           f"{len(is_session.collected_ideas)} ideas | "
                           f"{len(papers_dict)} papers | "
-                          f"evidence={len(evidence_text)} review={len(review_text)}\n\n")
+                          f"evidence={len(evidence_text)} review={len(review_text)}\n")
+        _sys.stderr.write(f"  === EVIDENCE TEXT ===\n{evidence_text}\n=== END EVIDENCE ===\n")
+        _sys.stderr.write(f"  === ANSWER (last 300) ===\n...{answer[-300:]}\n=== END ANSWER ===\n\n")
         _sys.stderr.flush()
         yield {"type": "done", "data": {
             "citations": [{"paper_id": pid} for pid in paper_ids],
