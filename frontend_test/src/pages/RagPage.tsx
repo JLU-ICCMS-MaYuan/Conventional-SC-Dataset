@@ -119,12 +119,14 @@ const RagPage: React.FC = () => {
                 </div>
               ))}
 
-              {/* 探索模式的点子卡片 — 左对齐，与助手气泡同宽 */}
+              {/* 探索模式的点子卡片 — 与助手气泡同宽同位置 */}
               {!loading && ideas.length > 0 && (
-                <div style={{ maxWidth: '85%', paddingLeft: 16 }}>
-                  {ideas.map((idea, i) => (
-                    <EvidenceCard key={i} idea={idea} review={reviews[i]} />
-                  ))}
+                <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 16 }}>
+                  <div style={{ maxWidth: '85%', padding: '10px 16px' }}>
+                    {ideas.map((idea, i) => (
+                      <EvidenceCard key={i} idea={idea} review={reviews[i]} />
+                    ))}
+                  </div>
                 </div>
               )}
 
