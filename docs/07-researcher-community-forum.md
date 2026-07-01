@@ -1,4 +1,4 @@
-# VI. Researcher Community Forum
+# VII. Researcher Community Forum
 
 ## Definition
 

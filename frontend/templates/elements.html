@@ -26,19 +26,19 @@
                 <h1 data-i18n="index.title">超导文献数据库</h1>
             </div>
             <p class="sc-explore-copy" data-i18n="index.subtitle">输入化学式，或用元素周期表选择体系，进入对应文献与数据。</p>
-            <p class="sc-hotspot-copy">查看超导 Tc 年代趋势、压力分布与诺奖学者。</p>
-            <p class="sc-share-copy">下载超导文献数据，也分享你发现的新体系进展。</p>
+            <p class="sc-hotspot-copy" data-i18n="index.hotspot_subtitle">查看超导 Tc 年代趋势、压力分布与诺奖学者。</p>
+            <p class="sc-share-copy" data-i18n="index.share_subtitle">下载超导文献数据，也分享你发现的新体系进展。</p>
         </header>
 
         <section class="sc-explore-view">
             <section class="sc-formula-panel" id="formula-search" aria-labelledby="formula-search-title">
                 <div>
-                    <h2 id="formula-search-title">化学式检索</h2>
-                    <p>支持模糊搜索，找到目标体系后进入文献与数据页面。</p>
+                    <h2 id="formula-search-title" data-i18n="index.formula_title">化学式检索</h2>
+                    <p data-i18n="index.formula_desc">支持模糊搜索，找到目标体系后进入文献与数据页面。</p>
                 </div>
                 <div class="sc-formula-row">
                     <label class="sc-field">
-                        <span>化学式</span>
+                        <span data-i18n="index.formula_label">化学式</span>
                         <input type="text" class="form-control" id="formula-search-input" data-i18n-placeholder="index.formula_search_placeholder" placeholder="LaH10、FeSe1-xTex、YBa2Cu3O7">
                     </label>
                     <button id="formula-search-btn" class="btn btn-primary" type="button" data-i18n="index.formula_search">搜索</button>
@@ -48,7 +48,7 @@
             <section class="sc-elements-panel" aria-labelledby="elements-search-title">
                 <div class="sc-elements-toolbar">
                     <div>
-                        <h2 id="elements-search-title">元素周期表检索</h2>
+                        <h2 id="elements-search-title" data-i18n="index.elements_title">元素周期表检索</h2>
                         <div class="sc-selected-summary">
                             <span data-i18n="index.selected_elements">已选元素</span>
                             <span id="selected-elements" class="sc-selected-pill">未选择</span>
@@ -56,15 +56,15 @@
                     </div>
 
                     <div class="sc-elements-controls">
-                        <div class="apple-tabs" role="group" aria-label="元素筛选模式">
+                        <div class="apple-tabs" role="group" aria-label="元素筛选模式" data-i18n-aria-label="index.elements_mode_aria">
                             <input type="radio" class="btn-check" name="selection-mode" id="mode-combination" value="elements_combination_search" checked>
-                            <label class="apple-tab" for="mode-combination">选择元素的组合</label>
+                            <label class="apple-tab" for="mode-combination" data-i18n="index.mode_combination">选择元素的组合</label>
 
                             <input type="radio" class="btn-check" name="selection-mode" id="mode-only" value="elements_exact_search">
-                            <label class="apple-tab" for="mode-only">仅包含选择元素</label>
+                            <label class="apple-tab" for="mode-only" data-i18n="index.mode_only">仅包含选择元素</label>
 
                             <input type="radio" class="btn-check" name="selection-mode" id="mode-contains" value="elements_contained_search">
-                            <label class="apple-tab" for="mode-contains">包含所选元素</label>
+                            <label class="apple-tab" for="mode-contains" data-i18n="index.mode_contains">包含所选元素</label>
 
                             <span class="apple-tab-slider"></span>
                         </div>
@@ -85,55 +85,55 @@
 
         <section class="sc-share-view" aria-labelledby="share-title">
             <div class="sc-section-heading">
-                <h2 id="share-title">SC-share</h2>
-                <p>获取你需要的超导文献数据，也分享新的超导体系进展。</p>
+                <h2 id="share-title" data-i18n="share.title">超导分享</h2>
+                <p data-i18n="share.desc">获取你需要的超导文献数据，也分享新的超导体系进展。</p>
             </div>
 
             <div class="sc-share-grid">
                 <section class="sc-share-panel" aria-labelledby="share-download-title">
                     <div>
-                        <h3 id="share-download-title">获取数据</h3>
-                        <p>按化学式或元素组合下载数据，也可以导出全库文献。</p>
+                        <h3 id="share-download-title" data-i18n="share.download_title">获取数据</h3>
+                        <p data-i18n="share.download_desc">按化学式或元素组合下载数据，也可以导出全库文献。</p>
                     </div>
 
                     <div class="sc-share-form">
                         <label class="sc-field">
-                            <span>下载方式</span>
+                            <span data-i18n="share.download_scope">下载方式</span>
                             <select id="share-download-scope" class="form-select">
-                                <option value="formula">按化学式检索</option>
-                                <option value="elements">按元素组合检索</option>
-                                <option value="all">全库下载</option>
+                                <option value="formula" data-i18n="share.scope_formula">按化学式检索</option>
+                                <option value="elements" data-i18n="share.scope_elements">按元素组合检索</option>
+                                <option value="all" data-i18n="share.scope_all">全库下载</option>
                             </select>
                         </label>
                         <label class="sc-field sc-share-query-field">
-                            <span id="share-query-label">化学式</span>
+                            <span id="share-query-label" data-i18n="share.query_formula">化学式</span>
                             <input type="text" class="form-control" id="share-query-input" placeholder="LaH10、FeSe1-xTex、Y-Ba-Cu-O">
                         </label>
                         <label class="sc-field sc-share-mode-field">
-                            <span>元素筛选方式</span>
+                            <span data-i18n="share.elements_mode">元素筛选方式</span>
                             <select id="share-elements-mode" class="form-select">
-                                <option value="elements_combination_search">选择元素的组合</option>
-                                <option value="elements_exact_search">仅包含选择元素</option>
-                                <option value="elements_contained_search">包含所选元素</option>
+                                <option value="elements_combination_search" data-i18n="index.mode_combination">选择元素的组合</option>
+                                <option value="elements_exact_search" data-i18n="index.mode_only">仅包含选择元素</option>
+                                <option value="elements_contained_search" data-i18n="index.mode_contains">包含所选元素</option>
                             </select>
                         </label>
                     </div>
 
                     <div class="sc-share-actions">
-                        <button class="btn btn-primary" type="button" onclick="downloadShareData('json')">下载 JSON 数据</button>
-                        <button class="btn btn-outline-primary" type="button" onclick="downloadShareData('ris')">下载 RIS 引文</button>
+                        <button class="btn btn-primary" type="button" onclick="downloadShareData('json')" data-i18n="share.download_json">下载 JSON 数据</button>
+                        <button class="btn btn-outline-primary" type="button" onclick="downloadShareData('ris')" data-i18n="share.download_ris">下载 RIS 引文</button>
                     </div>
                 </section>
 
                 <section class="sc-share-panel" aria-labelledby="share-upload-title">
                     <div>
-                        <h3 id="share-upload-title">分享进展</h3>
-                        <p>上传论文 PDF，或手动填写你发现的超导体系和 Tc 数据。</p>
+                        <h3 id="share-upload-title" data-i18n="share.upload_title">分享进展</h3>
+                        <p data-i18n="share.upload_desc">上传论文 PDF，或手动填写你发现的超导体系和 Tc 数据。</p>
                     </div>
 
                     <div class="sc-upload-options">
-                        <button class="btn btn-primary" type="button" onclick="document.getElementById('pdf-upload-input').click(); return false;">从 PDF 上传</button>
-                        <button class="btn btn-outline-primary" type="button" onclick="manualUpload()">手动填写数据</button>
+                        <button class="btn btn-primary" type="button" onclick="document.getElementById('pdf-upload-input').click(); return false;" data-i18n="share.upload_pdf">从 PDF 上传</button>
+                        <button class="btn btn-outline-primary" type="button" onclick="manualUpload()" data-i18n="share.manual_upload">手动填写数据</button>
                     </div>
                     <input type="file" id="pdf-upload-input" style="display: none;" accept=".pdf" onchange="handlePdfUpload(this)">
                 </section>
@@ -143,8 +143,8 @@
         <!-- 数据统计展示区域 -->
         <section class="sc-hotspot-view" aria-labelledby="hotspot-title">
             <div class="sc-section-heading">
-                <h2 id="hotspot-title">SC-hot spot</h2>
-                <p>Tc-year、Tc-pressure 与超导诺奖学者。</p>
+                <h2 id="hotspot-title" data-i18n="index.hotspot_title">超导热点</h2>
+                <p data-i18n="index.hotspot_desc">Tc-year、Tc-pressure 与超导诺奖学者。</p>
             </div>
         <div class="row mb-4 sc-secondary-content">
             <!-- 历史趋势图 (基于 Book1.xls) -->
@@ -264,8 +264,10 @@
             var value = scope.value;
             queryField.style.display = value === 'all' ? 'none' : '';
             modeField.style.display = value === 'elements' ? '' : 'none';
-            queryLabel.textContent = value === 'elements' ? '元素组合' : '化学式';
-            queryInput.placeholder = value === 'elements' ? 'Y-Ba-Cu-O 或 Y Ba Cu O' : 'LaH10、FeSe1-xTex';
+            var labelKey = value === 'elements' ? 'share.query_elements' : 'share.query_formula';
+            queryLabel.setAttribute('data-i18n', labelKey);
+            queryLabel.textContent = I18N.t(labelKey);
+            queryInput.placeholder = value === 'elements' ? I18N.t('share.placeholder_elements') : I18N.t('share.placeholder_formula');
         }
 
         function downloadShareData(format) {
@@ -278,7 +280,7 @@
                 params.set('scope', 'all');
             } else if (scope === 'formula') {
                 if (!query) {
-                    alert('请输入化学式');
+                    alert(I18N.t('share.alert_formula_required'));
                     return;
                 }
                 params.set('scope', 'search');
@@ -287,7 +289,7 @@
             } else {
                 var elements = parseShareElements(query);
                 if (!elements.length) {
-                    alert('请输入元素组合');
+                    alert(I18N.t('share.alert_elements_required'));
                     return;
                 }
                 params.set('scope', 'search');
@@ -302,7 +304,7 @@
         function manualUpload() {
             var auth = window.authState ? window.authState.get() : null;
             if (!auth || !auth.token) {
-                if (confirm('请先登录后再上传文献。是否前往登录？')) {
+                if (confirm(I18N.t('share.alert_login_upload'))) {
                     window.location.href = '/login';
                 }
                 return;
@@ -316,19 +318,19 @@
             const file = input.files[0];
             if (!file) return;
             const token = localStorage.getItem('auth_token');
-            if (!token) { alert('请先登录'); input.value = ''; return; }
+            if (!token) { alert(I18N.t('share.alert_login_required')); input.value = ''; return; }
             const formData = new FormData();
             formData.append('file', file);
             try {
                 const resp = await fetch('/api/rag/upload-pdf', { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: formData });
                 const data = await resp.json();
                 if (resp.ok && data.ok) {
-                    alert('✅ 上传成功！论文已摄入。\n标题：' + (data.data?.title || file.name));
+                    alert(I18N.t('share.alert_upload_success') + '\n' + I18N.t('admin.title') + '：' + (data.data?.title || file.name));
                 } else {
-                    alert('❌ 上传失败：' + (data.detail?.message || data.detail || '未知错误'));
+                    alert(I18N.t('share.alert_upload_failed') + (data.detail?.message || data.detail || I18N.t('share.alert_unknown_error')));
                 }
             } catch (e) {
-                alert('❌ 上传失败：' + e.message);
+                alert(I18N.t('share.alert_upload_failed') + e.message);
             }
             input.value = '';
         }
@@ -349,6 +351,7 @@
                 shareScope.addEventListener('change', updateShareDownloadFields);
                 updateShareDownloadFields();
             }
+            document.addEventListener('langChange', updateShareDownloadFields);
 
             document.querySelectorAll('.animate-on-scroll:not(.chart-section)').forEach(el => scrollObserver.observe(el));
 
@@ -418,6 +421,29 @@
                     experimental: getCSSVar('--sc-shape-experimental'),
                     theoretical: getCSSVar('--sc-shape-theoretical')
                 };
+                const legendPrefix = 'Legend: ';
+                const legendDefs = [
+                    ['legend_cuprate', 'index.legend_cuprate', colors.cuprate],
+                    ['legend_iron', 'index.legend_iron', colors.iron],
+                    ['legend_nickel', 'index.legend_nickel', colors.nickel],
+                    ['legend_hydride', 'index.legend_hydride', colors.hydride],
+                    ['legend_carbon', 'index.legend_carbon', colors.carbon],
+                    ['legend_organic', 'index.legend_organic', colors.organic],
+                    ['legend_others', 'index.legend_others', colors.others]
+                ];
+                const buildLegendDatasets = () => legendDefs.map(([id, key, color]) => ({
+                    id,
+                    label: legendPrefix + I18N.t(key),
+                    backgroundColor: color,
+                    data: [],
+                    pointStyle: 'rect'
+                }));
+                const refreshLegendDatasets = (chart) => {
+                    chart.data.datasets.forEach(dataset => {
+                        const def = legendDefs.find(([id]) => dataset.id === id);
+                        if (def) dataset.label = legendPrefix + I18N.t(def[1]);
+                    });
+                };
                 const chartAspectRatio = 2;
                 // 1. 左侧图表：超导历史 Tc 演变 (基于数据库数据)
                 const ctxStatic = document.getElementById('staticChart').getContext('2d');
@@ -444,13 +470,7 @@
                                 order: 0
                             },
                             // 虚拟数据集用于显示图例
-                            { label: 'Legend: 铜基', backgroundColor: colors.cuprate, data: [], pointStyle: 'rect' },
-                            { label: 'Legend: 铁基', backgroundColor: colors.iron, data: [], pointStyle: 'rect' },
-                            { label: 'Legend: 镍基', backgroundColor: colors.nickel, data: [], pointStyle: 'rect' },
-                            { label: 'Legend: 高压氢化物', backgroundColor: colors.hydride, data: [], pointStyle: 'rect' },
-                            { label: 'Legend: 碳基', backgroundColor: colors.carbon, data: [], pointStyle: 'rect' },
-                            { label: 'Legend: 有机', backgroundColor: colors.organic, data: [], pointStyle: 'rect' },
-                            { label: 'Legend: 其他超导', backgroundColor: colors.others, data: [], pointStyle: 'rect' }
+                            ...buildLegendDatasets()
                         ]
                     },
                     options: {
@@ -522,8 +542,8 @@
                                 ctx.font = '10px Arial';
                                 ctx.fillText(text, left + 5, yPos - 5);
                             };
-                            drawLine(77, 'rgba(255, 0, 0, 0.5)', '77 K (Liquid N₂)');
-                            drawLine(300, 'rgba(0, 0, 0, 0.3)', '300 K (Room Temp)');
+                            drawLine(77, 'rgba(255, 0, 0, 0.5)', I18N.t('index.chart_liquid_n2'));
+                            drawLine(300, 'rgba(0, 0, 0, 0.3)', I18N.t('index.chart_room_temp'));
                             ctx.restore();
                         },
                         afterDatasetsDraw: (chart) => {
@@ -595,13 +615,7 @@
                                 pointStyle: shapes.theoretical,
                             },
                             // 虚拟数据集用于显示图例
-                            { label: 'Legend: 铜基', backgroundColor: colors.cuprate, data: [], pointStyle: 'rect' },
-                            { label: 'Legend: 铁基', backgroundColor: colors.iron, data: [], pointStyle: 'rect' },
-                            { label: 'Legend: 镍基', backgroundColor: colors.nickel, data: [], pointStyle: 'rect' },
-                            { label: 'Legend: 高压氢化物', backgroundColor: colors.hydride, data: [], pointStyle: 'rect' },
-                            { label: 'Legend: 碳基', backgroundColor: colors.carbon, data: [], pointStyle: 'rect' },
-                            { label: 'Legend: 有机', backgroundColor: colors.organic, data: [], pointStyle: 'rect' },
-                            { label: 'Legend: 其他超导', backgroundColor: colors.others, data: [], pointStyle: 'rect' }
+                            ...buildLegendDatasets()
                         ]
                     },
                     options: {
@@ -844,6 +858,7 @@
                     staticChart.options.scales.y.title.text = I18N.t('index.chart_tc');
                     staticChart.data.datasets[0].label = I18N.t('index.legend_experiment');
                     staticChart.data.datasets[1].label = I18N.t('index.legend_theory');
+                    refreshLegendDatasets(staticChart);
                     staticChart.update();
 
                     // 更新动态图表
@@ -851,6 +866,7 @@
                     dynamicChart.options.scales.y.title.text = I18N.t('index.chart_tc');
                     dynamicChart.data.datasets[10].label = I18N.t('index.legend_experiment');
                     dynamicChart.data.datasets[11].label = I18N.t('index.legend_theory');
+                    refreshLegendDatasets(dynamicChart);
                     dynamicChart.update();
 
                     // 更新排行榜图表

@@ -9,11 +9,40 @@ const I18N = {
         // ========== Navbar 导航栏 ==========
         'nav.title': { zh: '超导文献数据库', en: 'Superconductor Literature DB' },
         'nav.home': { zh: '首页', en: 'Home' },
+        'nav.aria_label': { zh: 'SC-Wiki 导航', en: 'SC-Wiki navigation' },
+        'nav.home_aria': { zh: 'SC-Wiki 首页', en: 'SC-Wiki home' },
+        'nav.frame_title': { zh: 'SC-Wiki 工作区', en: 'SC-Wiki workspace' },
+        'nav.brand_subtitle': { zh: '超导工作台', en: 'Superconductor workspace' },
+        'nav.hotspot': { zh: '超导热点', en: 'SC Hotspot' },
+        'nav.hotspot_note': { zh: 'Tc 与诺奖学者', en: 'Tc and laureates' },
+        'nav.explore': { zh: '超导探索', en: 'SC Explore' },
+        'nav.explore_note': { zh: '化学式与元素检索', en: 'Formula and element search' },
+        'nav.results': { zh: '结果页', en: 'Results' },
+        'nav.results_note': { zh: '文献与数据', en: 'Literature and data' },
+        'nav.share': { zh: '超导分享', en: 'SC Share' },
+        'nav.share_note': { zh: '下载与分享文献', en: 'Download and share' },
+        'nav.chat': { zh: '超导对话', en: 'SC Chat' },
+        'nav.chat_note': { zh: 'RAG 对话助手', en: 'RAG assistant' },
+        'nav.predict': { zh: '超导预测', en: 'SC Predict' },
+        'nav.predict_note': { zh: 'Tc 模型预测', en: 'Tc model prediction' },
+        'nav.admin_papers': { zh: '文献管理', en: 'Paper Admin' },
+        'nav.admin_papers_note': { zh: '审核与维护', en: 'Review and maintain' },
+        'nav.admin_users': { zh: '用户管理', en: 'User Admin' },
+        'nav.admin_users_note': { zh: 'Permissions and approval' },
 
         // ========== Index 首页 ==========
         'index.page_title': { zh: '超导文献数据库 - 元素周期表', en: 'Superconductor Literature DB - Periodic Table' },
         'index.title': { zh: '超导文献数据库', en: 'Superconductor Literature Database' },
-        'index.subtitle': { zh: '基于元素周期表的超导材料文献检索系统', en: 'Periodic-table-based superconductor literature retrieval system' },
+        'index.subtitle': { zh: '输入化学式，或用元素周期表选择体系，进入对应文献与数据。', en: 'Enter a formula or choose elements to open the matching literature and data.' },
+        'index.hotspot_subtitle': { zh: '查看超导 Tc 年代趋势、压力分布与诺奖学者。', en: 'View Tc trends, pressure distributions, and superconductivity Nobel laureates.' },
+        'index.share_subtitle': { zh: '下载超导文献数据，也分享你发现的新体系进展。', en: 'Download superconductivity data and share progress on new systems.' },
+        'index.formula_title': { zh: '化学式检索', en: 'Formula Search' },
+        'index.formula_desc': { zh: '支持模糊搜索，找到目标体系后进入文献与数据页面。', en: 'Use fuzzy search to find a target system, then open its literature and data.' },
+        'index.formula_label': { zh: '化学式', en: 'Formula' },
+        'index.alert_formula_required': { zh: '请输入化学式', en: 'Please enter a formula' },
+        'index.alert_formula_unrecognized': { zh: '未能识别化学式中的元素', en: 'Could not recognize elements in the formula' },
+        'index.elements_title': { zh: '元素周期表检索', en: 'Periodic Table Search' },
+        'index.elements_mode_aria': { zh: '元素筛选模式', en: 'Element filter mode' },
         'index.periodic_table': { zh: '元素周期表', en: 'Periodic Table' },
         'index.selected_elements': { zh: '已选元素：', en: 'Selected: ' },
         'index.none_selected': { zh: '未选择', en: 'None' },
@@ -43,6 +72,15 @@ const I18N = {
         'index.chart_submitted_papers': { zh: ' 提交了 {count} 篇文献', en: ' submitted {count} papers' },
         'index.legend_experiment': { zh: '实验数据', en: 'Experiment' },
         'index.legend_theory': { zh: '理论预测', en: 'Theory' },
+        'index.legend_cuprate': { zh: '铜基', en: 'Cuprate' },
+        'index.legend_iron': { zh: '铁基', en: 'Iron-based' },
+        'index.legend_nickel': { zh: '镍基', en: 'Nickel-based' },
+        'index.legend_hydride': { zh: '高压氢化物', en: 'High-pressure hydride' },
+        'index.legend_carbon': { zh: '碳基', en: 'Carbon-based' },
+        'index.legend_organic': { zh: '有机', en: 'Organic' },
+        'index.legend_others': { zh: '其他超导', en: 'Other superconductors' },
+        'index.chart_liquid_n2': { zh: '77 K（液氮）', en: '77 K (Liquid N2)' },
+        'index.chart_room_temp': { zh: '300 K（室温）', en: '300 K (Room Temp)' },
         'index.usage_guide': { zh: '使用说明', en: 'Usage Guide' },
         'index.usage_item_1': { zh: '选择一个或多个元素，系统将显示含有这些元素的超导体文献', en: 'Select one or more elements to find superconductor literature containing them' },
         'index.usage_item_2': { zh: '选择多个元素时，显示同时包含所有选中元素的化合物文献', en: 'When selecting multiple elements, compounds containing ALL selected elements are shown' },
@@ -50,9 +88,38 @@ const I18N = {
         'index.usage_item_4': { zh: '支持键盘Enter键快捷跳转', en: 'Press Enter key for quick navigation' },
         'index.login_to_upload': { zh: '只有注册用户可以批量上传文献。是否立即前往登录？', en: 'Only registered users can batch upload. Go to login now?' },
         'index.loading': { zh: '加载中...', en: 'Loading...' },
+        'index.hotspot_title': { zh: '超导热点', en: 'SC Hotspot' },
+        'index.hotspot_desc': { zh: 'Tc-year、Tc-pressure 与超导诺奖学者。', en: 'Tc-year, Tc-pressure, and superconductivity Nobel laureates.' },
+        'share.title': { zh: '超导分享', en: 'SC Share' },
+        'share.desc': { zh: '获取你需要的超导文献数据，也分享新的超导体系进展。', en: 'Get the superconductivity literature data you need and share new system progress.' },
+        'share.download_title': { zh: '获取数据', en: 'Get Data' },
+        'share.download_desc': { zh: '按化学式或元素组合下载数据，也可以导出全库文献。', en: 'Download by formula or element set, or export the full literature database.' },
+        'share.download_scope': { zh: '下载方式', en: 'Download Mode' },
+        'share.scope_formula': { zh: '按化学式检索', en: 'By formula' },
+        'share.scope_elements': { zh: '按元素组合检索', en: 'By element set' },
+        'share.scope_all': { zh: '全库下载', en: 'Full database' },
+        'share.query_formula': { zh: '化学式', en: 'Formula' },
+        'share.query_elements': { zh: '元素组合', en: 'Element Set' },
+        'share.placeholder_formula': { zh: 'LaH10、FeSe1-xTex', en: 'LaH10 or FeSe1-xTex' },
+        'share.placeholder_elements': { zh: 'Y-Ba-Cu-O 或 Y Ba Cu O', en: 'Y-Ba-Cu-O or Y Ba Cu O' },
+        'share.elements_mode': { zh: '元素筛选方式', en: 'Element Filter Mode' },
+        'share.download_json': { zh: '下载 JSON 数据', en: 'Download JSON Data' },
+        'share.download_ris': { zh: '下载 RIS 引文', en: 'Download RIS Citations' },
+        'share.upload_title': { zh: '分享进展', en: 'Share Progress' },
+        'share.upload_desc': { zh: '上传论文 PDF，或手动填写你发现的超导体系和 Tc 数据。', en: 'Upload a paper PDF or manually enter the superconducting system and Tc data you found.' },
+        'share.upload_pdf': { zh: '从 PDF 上传', en: 'Upload PDF' },
+        'share.manual_upload': { zh: '手动填写数据', en: 'Enter Data Manually' },
+        'share.alert_formula_required': { zh: '请输入化学式', en: 'Please enter a formula' },
+        'share.alert_elements_required': { zh: '请输入元素组合', en: 'Please enter an element set' },
+        'share.alert_login_upload': { zh: '请先登录后再上传文献。是否前往登录？', en: 'Please log in before uploading literature. Go to login?' },
+        'share.alert_login_required': { zh: '请先登录', en: 'Please log in first' },
+        'share.alert_upload_success': { zh: '上传成功！论文已摄入。', en: 'Upload successful. The paper has been ingested.' },
+        'share.alert_upload_failed': { zh: '上传失败：', en: 'Upload failed: ' },
+        'share.alert_unknown_error': { zh: '未知错误', en: 'Unknown error' },
 
         // ========== Common 通用 ==========
         'common.language': { zh: '中/EN', en: '中/EN' },
+        'common.switch_language': { zh: '切换语言', en: 'Switch language' },
         'common.loading': { zh: '加载中...', en: 'Loading...' },
         'common.error': { zh: '错误', en: 'Error' },
         'common.success': { zh: '成功', en: 'Success' },
@@ -346,6 +413,8 @@ const I18N = {
 
     /** 将翻译应用到当前页面 */
     applyToPage() {
+        document.documentElement.lang = this.lang === 'zh' ? 'zh-CN' : 'en';
+
         // 更新所有 data-i18n 元素
         document.querySelectorAll('[data-i18n]').forEach(el => {
             const key = el.getAttribute('data-i18n');
@@ -363,6 +432,16 @@ const I18N = {
             el.placeholder = this.t(key);
         });
 
+        document.querySelectorAll('[data-i18n-title]').forEach(el => {
+            const key = el.getAttribute('data-i18n-title');
+            el.title = this.t(key);
+        });
+
+        document.querySelectorAll('[data-i18n-aria-label]').forEach(el => {
+            const key = el.getAttribute('data-i18n-aria-label');
+            el.setAttribute('aria-label', this.t(key));
+        });
+
         // 触发自定义事件让各页面 JS 响应语言切换
         document.dispatchEvent(new CustomEvent('langChange', { detail: { lang: this.lang } }));
     },
@@ -372,6 +451,8 @@ const I18N = {
         this.applyToPage();
     }
 };
+
+window.I18N = I18N;
 
 // 页面加载时初始化
 document.addEventListener('DOMContentLoaded', () => {

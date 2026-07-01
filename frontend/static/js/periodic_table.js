@@ -349,13 +349,13 @@ function enterFormulaSearchPage() {
     const input = document.getElementById('formula-search-input');
     const formula = input ? input.value.trim() : '';
     if (!formula) {
-        alert('请输入化学式');
+        alert(I18N.t('index.alert_formula_required'));
         return;
     }
 
     const elements = extractFormulaElements(formula);
     if (!elements.length) {
-        alert('未能识别化学式中的元素');
+        alert(I18N.t('index.alert_formula_unrecognized'));
         return;
     }
 

@@ -1,4 +1,4 @@
-# V. Superconductivity Development Knowledge Graph
+# IV. Superconductivity Development Knowledge Graph
 
 ## Definition
 
@@ -22,7 +22,7 @@ Superconductivity Development Knowledge Graph 指围绕超导体、论文、物�
 
 知识图谱不是 RAG 的同义词。RAG 是完整问答系统，包含意图解析、KG 查询、向量检索、重排序、prompt 构造和 LLM 生成。知识图谱是其中更结构化、更适合事实和数值问题的一层。
 
-当前把知识图谱单列为第五大功能，是因为它表达了项目未来可以从“文献问答”走向“超导发展脉络和材料关系网络”的方向。但从代码现状看，它还不是独立产品化模块。
+当前把知识图谱单列为第四大功能，是因为它承接了前面三步沉淀出的可信结构化数据，并为后续 RAG 提供可递归调用的结构化索引层。它表达了项目未来可以从“文献问答”走向“超导发展脉络和材料关系网络”的方向。但从代码现状看，它还不是独立产品化模块。
 
 ## Code and API Evidence
 

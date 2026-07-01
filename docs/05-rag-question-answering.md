@@ -1,4 +1,4 @@
-# III. Retrieval-Augmented AI Question Answering
+# V. Retrieval-Augmented AI Question Answering
 
 ## Definition
 
@@ -27,7 +27,7 @@ RAG 后端主要经过以下步骤：
 7. 调用 LLM，非流式或 SSE 流式返回答案。
 8. 返回引用论文、超导体或数据点信息。
 
-RAG 的知识图谱和检索并非完全独立产品，而是 AI 问答链路中的检索层。独立的知识图谱功能在第五篇文档中单独说明。
+RAG 的知识图谱和检索并非完全独立产品，而是 AI 问答链路中的检索层。独立的知识图谱功能在第四篇文档中单独说明；RAG 在它之上继续叠加向量索引、意图解析、上下文融合和 LLM 生成。
 
 ## Code and API Evidence
 

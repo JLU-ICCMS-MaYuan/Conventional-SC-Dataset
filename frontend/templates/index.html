@@ -9,56 +9,56 @@
 </head>
 <body class="app-shell-body">
     <div class="sc-shell">
-        <aside class="sc-sidebar" aria-label="SC-Wiki navigation">
+        <aside class="sc-sidebar" aria-label="SC-Wiki navigation" data-i18n-aria-label="nav.aria_label">
             <div class="sc-brand">
-                <button class="sc-brand-mark" type="button" onclick="switchPage('/elements')" aria-label="SC-Wiki home">SC</button>
+                <button class="sc-brand-mark" type="button" onclick="switchPage('/elements?view=hotspot')" aria-label="SC-Wiki home" data-i18n-aria-label="nav.home_aria">SC</button>
                 <div>
                     <div class="sc-brand-name">SC-Wiki</div>
-                    <div class="sc-brand-subtitle">Superconductor workspace</div>
+                    <div class="sc-brand-subtitle" data-i18n="nav.brand_subtitle">超导工作台</div>
                 </div>
             </div>
 
             <nav class="sc-nav" id="navTabs">
-                <a class="sc-nav-link active" href="#" data-page="/elements" onclick="return switchPage('/elements')">
+                <a class="sc-nav-link active" href="#" data-page="/elements?view=hotspot" onclick="return switchPage('/elements?view=hotspot')">
+                    <span class="sc-nav-icon">H</span>
+                    <span>
+                        <span class="sc-nav-title" data-i18n="nav.hotspot">超导热点</span>
+                        <span class="sc-nav-note" data-i18n="nav.hotspot_note">Tc 与诺奖学者</span>
+                    </span>
+                </a>
+                <a class="sc-nav-link" href="#" data-page="/elements" onclick="return switchPage('/elements')">
                     <span class="sc-nav-icon">X</span>
                     <span>
-                        <span class="sc-nav-title">SC-explore</span>
-                        <span class="sc-nav-note">化学式与元素检索</span>
+                        <span class="sc-nav-title" data-i18n="nav.explore">超导探索</span>
+                        <span class="sc-nav-note" data-i18n="nav.explore_note">化学式与元素检索</span>
                     </span>
                 </a>
                 <a class="sc-nav-link" href="#" data-page="/compound" style="display:none;" onclick="return switchPage(this.dataset.url)">
                     <span class="sc-nav-icon">R</span>
                     <span>
-                        <span class="sc-nav-title">结果页</span>
-                        <span class="sc-nav-note">文献与数据</span>
+                        <span class="sc-nav-title" data-i18n="nav.results">结果页</span>
+                        <span class="sc-nav-note" data-i18n="nav.results_note">文献与数据</span>
                     </span>
                 </a>
                 <a class="sc-nav-link" href="#" data-page="/elements?view=share" onclick="return switchPage('/elements?view=share')">
                     <span class="sc-nav-icon">S</span>
                     <span>
-                        <span class="sc-nav-title">SC-share</span>
-                        <span class="sc-nav-note">下载与分享文献</span>
-                    </span>
-                </a>
-                <a class="sc-nav-link" href="#" data-page="/elements?view=hotspot" onclick="return switchPage('/elements?view=hotspot')">
-                    <span class="sc-nav-icon">H</span>
-                    <span>
-                        <span class="sc-nav-title">SC-hot spot</span>
-                        <span class="sc-nav-note">Tc 与诺奖学者</span>
+                        <span class="sc-nav-title" data-i18n="nav.share">超导分享</span>
+                        <span class="sc-nav-note" data-i18n="nav.share_note">下载与分享文献</span>
                     </span>
                 </a>
                 <a class="sc-nav-link" href="#" data-page="/rag" onclick="return switchPage('/rag')">
                     <span class="sc-nav-icon">C</span>
                     <span>
-                        <span class="sc-nav-title">SC-chat</span>
-                        <span class="sc-nav-note">RAG 对话助手</span>
+                        <span class="sc-nav-title" data-i18n="nav.chat">超导对话</span>
+                        <span class="sc-nav-note" data-i18n="nav.chat_note">RAG 对话助手</span>
                     </span>
                 </a>
                 <a class="sc-nav-link" href="#" data-page="/tc-pre" onclick="return switchPage('/tc-pre')">
                     <span class="sc-nav-icon">P</span>
                     <span>
-                        <span class="sc-nav-title">SC-predict</span>
-                        <span class="sc-nav-note">Tc 模型预测</span>
+                        <span class="sc-nav-title" data-i18n="nav.predict">超导预测</span>
+                        <span class="sc-nav-note" data-i18n="nav.predict_note">Tc 模型预测</span>
                     </span>
                 </a>
 
@@ -66,15 +66,15 @@
                 <a class="sc-nav-link admin-only" href="#" data-page="/admin/papers" style="display:none;" data-role="admin" onclick="return switchPage('/admin/papers')">
                     <span class="sc-nav-icon">A</span>
                     <span>
-                        <span class="sc-nav-title">文献管理</span>
-                        <span class="sc-nav-note">审核与维护</span>
+                        <span class="sc-nav-title" data-i18n="nav.admin_papers">文献管理</span>
+                        <span class="sc-nav-note" data-i18n="nav.admin_papers_note">审核与维护</span>
                     </span>
                 </a>
                 <a class="sc-nav-link admin-only" href="#" data-page="/admin/users" style="display:none;" data-role="superadmin" onclick="return switchPage('/admin/users')">
                     <span class="sc-nav-icon">U</span>
                     <span>
-                        <span class="sc-nav-title">用户管理</span>
-                        <span class="sc-nav-note">权限与审批</span>
+                        <span class="sc-nav-title" data-i18n="nav.admin_users">用户管理</span>
+                        <span class="sc-nav-note" data-i18n="nav.admin_users_note">权限与审批</span>
                     </span>
                 </a>
             </nav>
@@ -83,12 +83,12 @@
                 <div id="user-nav" class="sc-user-nav">
                     <div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">Loading...</span></div>
                 </div>
-                <button class="sc-language-btn" onclick="I18N.toggle()" title="Switch Language">中 / EN</button>
+                <button class="sc-language-btn" onclick="toggleShellLanguage()" title="Switch Language" data-i18n-title="common.switch_language">中 / EN</button>
             </div>
         </aside>
 
         <main class="sc-main">
-            <iframe id="page-frame" src="/elements" title="SC-Wiki workspace"></iframe>
+            <iframe id="page-frame" src="/elements?view=hotspot" title="SC-Wiki workspace" data-i18n-title="nav.frame_title"></iframe>
         </main>
     </div>
 
@@ -114,6 +114,20 @@
             return false;
         }
 
+        function syncFrameLanguage() {
+            var frame = document.getElementById('page-frame');
+            try {
+                if (frame.contentWindow && frame.contentWindow.I18N && window.I18N) {
+                    frame.contentWindow.I18N.set(window.I18N.lang);
+                }
+            } catch(e) {}
+        }
+
+        function toggleShellLanguage() {
+            I18N.toggle();
+            syncFrameLanguage();
+        }
+
         document.getElementById('page-frame').addEventListener('load', function() {
             var frame = document.getElementById('page-frame');
             var compoundTab = document.querySelector('[data-page="/compound"]');
@@ -133,6 +147,7 @@
                 } else {
                     setActiveNav(frameUrl);
                 }
+                syncFrameLanguage();
             } catch(e) {}
         });
 
