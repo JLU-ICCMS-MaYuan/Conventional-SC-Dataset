@@ -116,10 +116,10 @@ export function useStreamingChat() {
   const switchConversation = useCallback((id: string) => {
     setActiveId(id)
     const m = loadMeta(id)
-    setPapers(m.papers)
-    setTop10(m.top10)
-    setIdeas(m.ideas)
-    setReviews(m.reviews)
+    setPapers(m.papers || {})
+    setTop10(m.top10 || [])
+    setIdeas(m.ideas || [])
+    setReviews(m.reviews || [])
     setInspiration(m.inspiration || { active: false, mode: '', modeLabel: '', statusMessage: '', sessionId: '', ideasCount: 0 })
   }, [])
 
