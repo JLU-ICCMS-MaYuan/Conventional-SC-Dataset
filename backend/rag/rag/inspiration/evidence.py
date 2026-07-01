@@ -117,7 +117,6 @@ async def build_evidence_stream(
             delta = chunk.choices[0].delta
             if delta and delta.content:
                 full_text += delta.content
-                yield {"type": "token", "data": delta.content}
         _sys.stderr.write(f"  [EvidenceBuilder] {_time.time() - _t0:.1f}s {len(full_text)}字\n")
         _sys.stderr.flush()
     except Exception as e:
@@ -126,7 +125,9 @@ async def build_evidence_stream(
         yield {"type": "token", "data": f"\n\n抱歉，生成过程出现错误：{e}"}
         return
 
+    # 提取 IDEA_CARD → 从文本中移除 → 剩余干净文本流式输出
     cards = parse_idea_cards(full_text)
+    clean_text = full_text
     if cards:
         for i, card in enumerate(cards):
             _sys.stderr.write(f"  [EvidenceBuilder] Idea #{i+1}: {card.get('title','?')[:60]} "
@@ -134,9 +135,18 @@ async def build_evidence_stream(
             _sys.stderr.flush()
             session.add_idea(card)
             yield {"type": "evidence_card", "data": card}
+        # 移除所有 IDEA_CARD marker
+        import re
+        clean_text = re.sub(r'<!--IDEA_CARD[\s\S]*?-->', '', full_text).strip()
+        # 也移除 IDEATE 模式里附带的可行性备注行（理论★ 合成★ 测量★）
+        clean_text = re.sub(r'\n*可行性：.*$', '', clean_text, flags=re.MULTILINE).strip()
     else:
         _sys.stderr.write(f"  [EvidenceBuilder] ⚠️ 无 IDEA_CARD\n")
         _sys.stderr.flush()
 
+    # 流式输出清理后的文本
+    for char in clean_text:
+        yield {"type": "token", "data": char}
+
     session.history.append({"role": "user", "content": session.user_question})
-    session.history.append({"role": "assistant", "content": full_text})
+    session.history.append({"role": "assistant", "content": clean_text})

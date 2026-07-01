@@ -24,18 +24,13 @@ function citationOrder(content: string): string[] {
   return ids
 }
 
-/** 清理 HTML 注释 marker 和 session 标记 */
+/** 清理 session 持久化标记（后端已处理 IDEA_CARD/REVIEW，这里只砍 IS/BS） */
 function cleanContent(text: string): string {
-  // IDEA_CARD 和 REVIEW 一般较小，正则处理
-  let cleaned = text.replace(/<!--(?:IDEA_CARD|REVIEW):[\s\S]*?-->/g, '')
-  // IS/BS session marker 可能很大，用字符串截断更可靠
   for (const tag of ['<!--IS:', '<!--BS:']) {
-    const i = cleaned.lastIndexOf(tag)
-    if (i !== -1) cleaned = cleaned.substring(0, i)
+    const i = text.lastIndexOf(tag)
+    if (i !== -1) text = text.substring(0, i)
   }
-  // 去掉纯文本审稿段落
-  cleaned = cleaned.replace(/\n*---\n\*\*🔍 审稿意见：\*\*[\s\S]*$/, '')
-  return cleaned
+  return text
 }
 
 /** 将助手消息转换为 HTML，[PID_xxx] 映射为顺序编号 [1] [2] ... */
