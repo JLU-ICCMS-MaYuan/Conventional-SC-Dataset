@@ -43,9 +43,14 @@ def parse_idea_cards(text: str) -> list[dict]:
         if end == -1:
             break
         try:
-            card = json.loads(text[json_start:end].strip())
+            raw = text[json_start:end].strip()
+            card = json.loads(raw)
             cards.append(card)
         except json.JSONDecodeError:
+            import sys
+            raw = text[json_start:end].strip()[:300]
+            sys.stderr.write(f"  [EvidenceBuilder] JSON解析失败: {raw}\n")
+            sys.stderr.flush()
             logger.warning("Failed to parse IDEA_CARD JSON")
         idx = end + len(IDEA_CARD_END)
     return cards
