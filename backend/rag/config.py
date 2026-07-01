@@ -24,10 +24,22 @@ class RagSettings(BaseSettings):
     openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"
     embedding_model: str = "text-embedding-3-small"
+    embedding_api_key: str = ""
+    embedding_base_url: str = ""
 
     debug: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    @property
+    def embedding_key(self) -> str:
+        """Embedding API key，默认回退到 openai_api_key。"""
+        return self.embedding_api_key or self.openai_api_key
+
+    @property
+    def embedding_url(self) -> str:
+        """Embedding API base URL，默认回退到 openai_base_url。"""
+        return self.embedding_base_url or self.openai_base_url
 
     # Brainstorm 配置
     brainstorm_max_clarify_rounds: int = 5

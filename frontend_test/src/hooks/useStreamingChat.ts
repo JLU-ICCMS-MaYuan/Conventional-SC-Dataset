@@ -91,11 +91,11 @@ export function useStreamingChat() {
   })
   const [ideas, setIdeas] = useState<IdeaCard[]>(() => {
     const cid = convs[0]?.id
-    return cid ? loadMeta(cid).ideas : []
+    return cid ? (loadMeta(cid).ideas || []) : []
   })
   const [reviews, setReviews] = useState<ReviewVerdict[]>(() => {
     const cid = convs[0]?.id
-    return cid ? loadMeta(cid).reviews : []
+    return cid ? (loadMeta(cid).reviews || []) : []
   })
 
   const messages = convs.find((c) => c.id === activeId)?.messages || []

@@ -25,15 +25,15 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
     Returns:
         向量列表，shape (n_texts, dim)
     """
-    if not settings.openai_api_key:
+    if not settings.embedding_key:
         raise RuntimeError(
-            "OpenAI API key 未配置。向量化需要设置 OPENAI_API_KEY。\n"
-            "  在 .env 中添加: OPENAI_API_KEY=sk-..."
+            "Embedding API key 未配置。请设置 EMBEDDING_API_KEY 或 OPENAI_API_KEY。\n"
+            "  在 .env 中添加: EMBEDDING_API_KEY=sk-..."
         )
 
     client = OpenAI(
-        api_key=settings.openai_api_key,
-        base_url=settings.openai_base_url,
+        api_key=settings.embedding_key,
+        base_url=settings.embedding_url,
     )
     model = settings.embedding_model
 
