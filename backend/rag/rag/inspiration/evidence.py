@@ -79,6 +79,7 @@ async def build_evidence_stream(
         rationale=mode_result.rationale,
         rag_context=rag_context,
         history=session.history,
+        has_ideas=len(session.collected_ideas) > 0,
     )
 
     import sys as _sys, time as _time
