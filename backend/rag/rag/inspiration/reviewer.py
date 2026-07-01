@@ -50,15 +50,20 @@ def parse_review_verdicts(text: str) -> list[dict]:
 
 async def review_stream(
     evidence_text: str,
+    deep_context: str = "",
 ) -> AsyncIterator[dict[str, Any]]:
-    """对生成的证据文本进行双角色自省。"""
+    """对生成的证据文本进行双角色自省。
+
+    Args:
+        evidence_text: EvidenceBuilder 的输出
+        deep_context: 点子引用的论文原文（可选，帮助审稿人深入了解）
+    """
     import sys as _sys, time as _time
     _t0 = _time.time()
 
-    # 先看有没有 IDEA_CARD
     idea_count = evidence_text.count("<!--IDEA_CARD")
     _sys.stderr.write(f"[Reviewer] 开始审核 | evidence_len={len(evidence_text)} "
-                      f"idea_cards_found={idea_count}\n")
+                      f"deep_len={len(deep_context)} idea_cards={idea_count}\n")
     _sys.stderr.flush()
 
     if idea_count == 0:
@@ -74,6 +79,7 @@ async def review_stream(
     review_prompt = f"""请审核以下研究点子的可行性。对每个点子，找出至少 2 个潜在漏洞。
 
 {evidence_text}
+{deep_context}
 
 请按格式输出审核意见。"""
 

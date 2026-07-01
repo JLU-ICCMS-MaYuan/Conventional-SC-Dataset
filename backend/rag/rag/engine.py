@@ -454,16 +454,33 @@ async def ask_stream(
                               f"fragments={len(idea.get('fragments', []))}\n")
         _sys.stderr.flush()
 
-        # ── DualReviewer（暂时禁用） ──
-        # yield {"type": "status", "data": {"action": "reviewing", "message": "正在自我审核..."}}
-        # yield {"type": "token", "data": "\n\n---\n**🔍 审稿意见：**\n"}
-        # review_text = ""
-        # async for event in review_stream(evidence_text):
-        #     if event["type"] == "token":
-        #         review_text += event["data"]
-        #     yield event
-        # _sys.stderr.write(f"[INSPIRE] DualReviewer → text_len={len(review_text)}\n")
-        # _sys.stderr.flush()
+        # ── DualReviewer（流式，含引用论文原文） ──
+        # 收集点子引用的 paper_id，附上原文 chunks
+        idea_pids = set()
+        for idea in is_session.collected_ideas:
+            for f in idea.get("fragments", []):
+                if f.get("paper_id"):
+                    idea_pids.add(f["paper_id"])
+        deep_context = ""
+        if idea_pids:
+            deep_parts = []
+            for c in retrieval_result.get("chunks", []):
+                if c.get("paper_id") in idea_pids:
+                    deep_parts.append(
+                        f"[PID_{c['paper_id']}] ({c.get('section_name','')})\n{c['content'][:800]}"
+                    )
+            if deep_parts:
+                deep_context = "\n\n=== 审稿参考资料：点子引用的论文原文 ===\n" + "\n\n---\n".join(deep_parts[:10])
+        yield {"type": "status", "data": {"action": "reviewing", "message": "正在阅读引用文献并审核..."}}
+        yield {"type": "token", "data": "\n\n---\n**🔍 审稿意见：**\n"}
+        review_text = ""
+        async for event in review_stream(evidence_text, deep_context):
+            if event["type"] == "token":
+                review_text += event["data"]
+            yield event
+        _sys.stderr.write(f"[INSPIRE] DualReviewer → text_len={len(review_text)} "
+                          f"deep_papers={len(idea_pids)}\n")
+        _sys.stderr.flush()
 
         # 收集涉及的 paper_id，加载元信息
         paper_ids = set()
@@ -493,7 +510,8 @@ async def ask_stream(
                           f"mode={is_session.current_mode} "
                           f"ideas={len(is_session.collected_ideas)} "
                           f"papers={len(papers_dict)} "
-                          f"evidence_len={len(evidence_text)}\n")
+                          f"evidence_len={len(evidence_text)} "
+                          f"review_len={len(review_text)}\n")
         _sys.stderr.write(f"{'='*60}\n\n")
         _sys.stderr.flush()
         yield {"type": "done", "data": {
