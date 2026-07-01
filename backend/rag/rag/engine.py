@@ -403,6 +403,9 @@ async def ask_stream(
         is_session.mode_history.append(mode_result.primary_mode)
         yield {"type": "inspire_mode", "data": {"mode": mode_result.primary_mode,
                  "label": is_session.mode_label, "rationale": mode_result.rationale}}
+        # send search queries to frontend
+        queries_str = ", ".join(f'"{q}"' for q in mode_result.search_queries)
+        yield {"type": "status", "data": {"action": "search_queries", "message": f"正在搜索 {queries_str}..."}}
 
         # 2. Retrieval
         yield {"type": "status", "data": {"action": "searching", "message": "正在检索文献..."}}
@@ -411,15 +414,19 @@ async def ask_stream(
             mode_result.search_queries,
             collections=mode_result.collections or None,
         )
+        retrieval_papers = len({c["paper_id"] for c in retrieval_result.get("chunks", []) if c.get("paper_id")})
+        retrieval_chunks = len(retrieval_result.get("chunks", []))
+        yield {"type": "status", "data": {"action": "searched", "message": f"搜索到了 {retrieval_papers} 篇文献 ({retrieval_chunks} 条片段)..."}}
 
         # 2.5. Curator
         yield {"type": "status", "data": {"action": "curating", "message": "正在筛选文献..."}}
         curation = await curate_papers(question, retrieval_result)
         retrieval_result["chunks"] = curation.get("chunks", retrieval_result.get("chunks", []))
         yield {"type": "curation", "data": {"keep_paper_ids": curation["keep_paper_ids"], "summary": curation["summary"]}}
+        yield {"type": "status", "data": {"action": "curated", "message": f"筛选了 {len(curation['keep_paper_ids'])} 篇文献..."}}
 
         # 3. EvidenceBuilder
-        yield {"type": "status", "data": {"action": "generating", "message": "正在生成点子..."}}
+        yield {"type": "status", "data": {"action": "generating", "message": "阅读文献中..."}}
         evidence_text = ""
         async for event in build_evidence_stream(is_session, mode_result, retrieval_result):
             if event["type"] == "token":
@@ -453,7 +460,7 @@ async def ask_stream(
                 _sys.stderr.flush()
         yield {"type": "status", "data": {"action": "reviewing", "message": "正在审核..."}}
         review_text = ""
-        async for event in review_stream(evidence_text, deep_context):
+        async for event in review_stream(evidence_text, deep_context, len(is_session.collected_ideas)):
             if event["type"] == "token":
                 review_text += event["data"]
             elif event["type"] == "review_verdict":
@@ -481,7 +488,10 @@ async def ask_stream(
         for char in session_marker:
             yield {"type": "token", "data": char}
 
-        answer = evidence_text + session_marker
+        answer = evidence_text
+        if review_text:
+            answer += "\n\n---\n\n## 审稿意见\n\n" + review_text
+        answer += session_marker
         _t_elapsed = _time.time() - _t_start
         _sys.stderr.write(f"  → 完成 {_t_elapsed:.1f}s | "
                           f"{len(is_session.collected_ideas)} ideas | "

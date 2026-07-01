@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
+import { flushSync } from 'react-dom'
 import { api } from '../lib/api'
 
 interface Message {
@@ -55,7 +56,14 @@ interface CachedMeta {
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
 
 function load(): Conversation[] {
-  try { return JSON.parse(localStorage.getItem('rag_conversations') || '[]') } catch { return [] }
+  try {
+    const raw = JSON.parse(localStorage.getItem('rag_conversations') || '[]')
+    // strip empty assistant messages left over from failed sends
+    return raw.map((c: Conversation) => ({
+      ...c,
+      messages: c.messages.filter(m => !(m.role === 'assistant' && !m.content)),
+    }))
+  } catch { return [] }
 }
 function save(list: Conversation[]) {
   localStorage.setItem('rag_conversations', JSON.stringify(list))
@@ -97,6 +105,11 @@ export function useStreamingChat() {
     const cid = convs[0]?.id
     return cid ? (loadMeta(cid).reviews || []) : []
   })
+  const [statusLog, setStatusLog] = useState<string[]>([])
+
+  /** accumulated filtered papers across conversation turns */
+  const [savedPapers, setSavedPapers] = useState<Array<{ pid: string; info: PaperInfo }>>([])
+  const keptIdsRef = useRef<string[]>([])
 
   const messages = convs.find((c) => c.id === activeId)?.messages || []
 
@@ -111,6 +124,8 @@ export function useStreamingChat() {
     setIdeas([])
     setReviews([])
     setInspiration({ active: false, mode: '', modeLabel: '', statusMessage: '', sessionId: '', ideasCount: 0 })
+    setStatusLog([])
+    setSavedPapers([])
   }, [])
 
   const switchConversation = useCallback((id: string) => {
@@ -121,6 +136,8 @@ export function useStreamingChat() {
     setIdeas(m.ideas || [])
     setReviews(m.reviews || [])
     setInspiration(m.inspiration || { active: false, mode: '', modeLabel: '', statusMessage: '', sessionId: '', ideasCount: 0 })
+    setStatusLog([])
+    setSavedPapers([])
   }, [])
 
   const deleteConversation = useCallback((id: string) => {
@@ -168,6 +185,7 @@ export function useStreamingChat() {
     setLoading(true)
     setPapers({})
     setTop10([])
+    setStatusLog([])
 
     setConvs((prev) => prev.map((c) => c.id === cid ? {
       ...c,
@@ -221,6 +239,7 @@ export function useStreamingChat() {
             } else if (eventType === 'inspire_mode') {
               setInspiration(prev => ({ ...prev, mode: data.mode, modeLabel: data.label }))
             } else if (eventType === 'curation') {
+              keptIdsRef.current = (data.keep_paper_ids || []).map(String)
               setInspiration(prev => ({ ...prev, statusMessage: `筛选文献: ${data.keep_paper_ids?.length || 0} 篇 - ${data.summary?.slice(0, 60) || ''}` }))
             } else if (eventType === 'inspire_exit') {
               setInspiration({ active: false, mode: '', modeLabel: '', statusMessage: '', sessionId: '', ideasCount: 0 })
@@ -234,7 +253,11 @@ export function useStreamingChat() {
               receivedReviews.push(verdict)
               setReviews(prev => [...prev, verdict])
             } else if (eventType === 'status') {
-              setInspiration(prev => prev.active ? { ...prev, statusMessage: data.message || '' } : prev)
+              const msg = data.message || ''
+              if (msg) {
+                flushSync(() => { setStatusLog(prev => [...prev, msg]) })
+              }
+              setInspiration(prev => prev.active ? { ...prev, statusMessage: msg } : prev)
             } else if (eventType === 'token') {
               const t = typeof data === 'string' ? data : String(data || '')
               fullAnswer += t
@@ -246,6 +269,21 @@ export function useStreamingChat() {
             } else if (eventType === 'done') {
               if (data.papers) { receivedPapers = data.papers; setPapers(data.papers) }
               if (data.top10) { receivedTop10 = data.top10; setTop10(data.top10) }
+              // accumulate filtered papers into savedPapers (deduplicated, sequential numbering)
+              const keptIds = keptIdsRef.current
+              if (keptIds.length > 0 && data.papers) {
+                setSavedPapers(prev => {
+                  const seen = new Set(prev.map(p => p.pid))
+                  const added: Array<{ pid: string; info: PaperInfo }> = []
+                  for (const pid of keptIds) {
+                    if (!seen.has(pid) && data.papers[pid]) {
+                      added.push({ pid, info: data.papers[pid] })
+                    }
+                  }
+                  return added.length > 0 ? [...prev, ...added] : prev
+                })
+                keptIdsRef.current = [] // consumed
+              }
               // Brainstorm 会话标记嵌入在 answer 中（<!--BS:json-->），
               // token 事件只含正文不含标记，必须用 data.answer 覆盖 fullAnswer
               if (data.answer && data.answer.includes('<!--BS:')) {
@@ -293,7 +331,7 @@ export function useStreamingChat() {
 
   return {
     convs, activeId, messages, loading, papers, top10, streamRef, inspiration,
-    ideas, reviews,
+    ideas, reviews, statusLog, savedPapers,
     newConversation, switchConversation, deleteConversation, send,
   }
 }

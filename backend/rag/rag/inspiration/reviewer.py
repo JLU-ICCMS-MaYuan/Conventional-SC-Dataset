@@ -51,17 +51,20 @@ def parse_review_verdicts(text: str) -> list[dict]:
 async def review_stream(
     evidence_text: str,
     deep_context: str = "",
+    idea_count: int = 0,
 ) -> AsyncIterator[dict[str, Any]]:
     """对生成的证据文本进行双角色自省。
 
     Args:
-        evidence_text: EvidenceBuilder 的输出
+        evidence_text: EvidenceBuilder 的输出（clean text，marker 已被剥离）
         deep_context: 点子引用的论文原文（可选，帮助审稿人深入了解）
+        idea_count: IDEA_CARD 数量（由调用方传入，因 evidence_text 已无 marker）
     """
     import sys as _sys, time as _time
     _t0 = _time.time()
 
-    idea_count = evidence_text.count("<!--IDEA_CARD")
+    if not idea_count:
+        idea_count = evidence_text.count("<!--IDEA_CARD")
     _sys.stderr.write(f"  [Reviewer] 审核 {idea_count} 个点子, deep={len(deep_context)}字\n")
     _sys.stderr.flush()
     if idea_count == 0:
