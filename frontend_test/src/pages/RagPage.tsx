@@ -24,10 +24,16 @@ function citationOrder(content: string): string[] {
   return ids
 }
 
-/** 清理 session marker、HTML 注释、纯文本审稿段落 */
+/** 清理 HTML 注释 marker 和 session 标记 */
 function cleanContent(text: string): string {
-  let cleaned = text.replace(/<!--(?:IS|BS|IDEA_CARD|REVIEW):[\s\S]*?-->/g, '')
-  // 去掉 "---\n🔍 审稿意见：..." 到文本末尾的纯文本审稿段落
+  // IDEA_CARD 和 REVIEW 一般较小，正则处理
+  let cleaned = text.replace(/<!--(?:IDEA_CARD|REVIEW):[\s\S]*?-->/g, '')
+  // IS/BS session marker 可能很大，用字符串截断更可靠
+  for (const tag of ['<!--IS:', '<!--BS:']) {
+    const i = cleaned.lastIndexOf(tag)
+    if (i !== -1) cleaned = cleaned.substring(0, i)
+  }
+  // 去掉纯文本审稿段落
   cleaned = cleaned.replace(/\n*---\n\*\*🔍 审稿意见：\*\*[\s\S]*$/, '')
   return cleaned
 }
