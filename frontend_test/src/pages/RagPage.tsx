@@ -24,9 +24,12 @@ function citationOrder(content: string): string[] {
   return ids
 }
 
-/** 清理 session marker 和 HTML 注释 */
+/** 清理 session marker、HTML 注释、纯文本审稿段落 */
 function cleanContent(text: string): string {
-  return text.replace(/<!--(?:IS|BS|IDEA_CARD|REVIEW):[\s\S]*?-->/g, '')
+  let cleaned = text.replace(/<!--(?:IS|BS|IDEA_CARD|REVIEW):[\s\S]*?-->/g, '')
+  // 去掉 "---\n🔍 审稿意见：..." 到文本末尾的纯文本审稿段落
+  cleaned = cleaned.replace(/\n*---\n\*\*🔍 审稿意见：\*\*[\s\S]*$/, '')
+  return cleaned
 }
 
 /** 将助手消息转换为 HTML，[PID_xxx] 映射为顺序编号 [1] [2] ... */
