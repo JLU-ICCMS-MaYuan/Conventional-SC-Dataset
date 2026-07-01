@@ -465,6 +465,22 @@ async def ask_stream(
         _sys.stderr.write(f"[INSPIRE] DualReviewer → text_len={len(review_text)}\n")
         _sys.stderr.flush()
 
+        # 收集涉及的 paper_id，加载元信息
+        paper_ids = set()
+        for c in retrieval_result.get("chunks", []):
+            if c.get("paper_id"):
+                paper_ids.add(c["paper_id"])
+        papers_dict = {}
+        if paper_ids:
+            from backend.rag.models import Paper
+            async with async_session_factory() as sess:
+                q = await sess.execute(
+                    select(Paper).where(Paper.id.in_(list(paper_ids)))
+                )
+                for p in q.scalars():
+                    papers_dict[p.id] = {"title": p.title, "doi": p.doi,
+                                          "journal": p.journal, "year": p.year}
+
         # 持久化 session marker + done
         is_json = json.dumps(is_session.to_dict(), ensure_ascii=False)
         session_marker = f"{IS_SESSION_MARKER}{is_json}-->"
@@ -476,15 +492,16 @@ async def ask_stream(
         _sys.stderr.write(f"[INSPIRE] 完成 | 总耗时={_t_elapsed:.1f}s "
                           f"mode={is_session.current_mode} "
                           f"ideas={len(is_session.collected_ideas)} "
+                          f"papers={len(papers_dict)} "
                           f"evidence_len={len(evidence_text)} "
                           f"review_len={len(review_text)}\n")
         _sys.stderr.write(f"{'='*60}\n\n")
         _sys.stderr.flush()
         yield {"type": "done", "data": {
-            "citations": [],
+            "citations": [{"paper_id": pid} for pid in paper_ids],
             "answer": answer,
             "source": f"inspire_{is_session.current_mode}",
-            "papers": {},
+            "papers": papers_dict,
             "top10": [],
             "inspiration": is_session.to_dict(),
         }}
