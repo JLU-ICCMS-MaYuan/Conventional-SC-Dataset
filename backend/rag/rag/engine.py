@@ -426,7 +426,7 @@ async def ask_stream(
                 evidence_text += event["data"]
             yield event
 
-        # 4. DualReviewer（含引用论文全文）
+        # 4. DualReviewer（含引用论文全文）— 审稿文本不混入对话，只发 review_verdict 事件到卡片
         idea_pids = set()
         for idea in is_session.collected_ideas:
             for f in idea.get("fragments", []):
@@ -452,12 +452,12 @@ async def ask_stream(
                 _sys.stderr.write(f"  [DeepRead] {len(paper_texts)}篇 {sum(len(t) for t in paper_texts.values())} chunks\n")
                 _sys.stderr.flush()
         yield {"type": "status", "data": {"action": "reviewing", "message": "正在审核..."}}
-        yield {"type": "token", "data": "\n\n---\n**🔍 审稿意见：**\n"}
         review_text = ""
         async for event in review_stream(evidence_text, deep_context):
             if event["type"] == "token":
                 review_text += event["data"]
-            yield event
+            elif event["type"] == "review_verdict":
+                yield event  # 只发结构化审稿数据到卡片，不发纯文本
 
         # 收集涉及的 paper_id，加载元信息
         paper_ids = set()
