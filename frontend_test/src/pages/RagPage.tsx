@@ -119,9 +119,9 @@ const RagPage: React.FC = () => {
                 </div>
               ))}
 
-              {/* 探索模式的点子卡片 */}
+              {/* 探索模式的点子卡片 — 与对话气泡宽度对齐 */}
               {!loading && ideas.length > 0 && (
-                <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 20px' }}>
+                <div style={{ maxWidth: '85%', margin: '0 auto' }}>
                   {ideas.map((idea, i) => (
                     <EvidenceCard key={i} idea={idea} review={reviews[i]} />
                   ))}
