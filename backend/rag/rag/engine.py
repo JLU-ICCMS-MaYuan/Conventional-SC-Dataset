@@ -454,8 +454,7 @@ async def ask_stream(
                               f"fragments={len(idea.get('fragments', []))}\n")
         _sys.stderr.flush()
 
-        # ── DualReviewer（流式，含引用论文原文） ──
-        # 收集点子引用的 paper_id，附上原文 chunks
+        # ── DualReviewer（流式，含引用论文全文） ──
         idea_pids = set()
         for idea in is_session.collected_ideas:
             for f in idea.get("fragments", []):
@@ -463,15 +462,28 @@ async def ask_stream(
                     idea_pids.add(f["paper_id"])
         deep_context = ""
         if idea_pids:
-            deep_parts = []
-            for c in retrieval_result.get("chunks", []):
-                if c.get("paper_id") in idea_pids:
-                    deep_parts.append(
-                        f"[PID_{c['paper_id']}] ({c.get('section_name','')})\n{c['content'][:800]}"
+            from backend.rag.models import PaperChunk
+            _sys.stderr.write(f"[INSPIRE] 加载引用论文全文: {len(idea_pids)} 篇...\n")
+            _sys.stderr.flush()
+            async with async_session_factory() as sess:
+                r = await sess.execute(
+                    select(PaperChunk).where(PaperChunk.paper_id.in_(list(idea_pids)))
+                    .order_by(PaperChunk.paper_id, PaperChunk.chunk_index)
+                )
+                paper_texts: dict[int, list[str]] = {}
+                for c in r.scalars():
+                    paper_texts.setdefault(c.paper_id, []).append(
+                        f"[{c.section_name or '正文'}]\n{c.content}"
                     )
-            if deep_parts:
-                deep_context = "\n\n=== 审稿参考资料：点子引用的论文原文 ===\n" + "\n\n---\n".join(deep_parts[:10])
-        yield {"type": "status", "data": {"action": "reviewing", "message": "正在阅读引用文献并审核..."}}
+            if paper_texts:
+                deep_parts = []
+                for pid, texts in paper_texts.items():
+                    full = f"=== [PID_{pid}] 全文（{len(texts)} chunks） ===\n" + "\n\n".join(texts[:30])
+                    deep_parts.append(full[:6000])  # 每篇最多6000字
+                deep_context = "\n\n=== 审稿参考资料：点子引用的论文全文 ===\n" + "\n\n".join(deep_parts[:5])
+                _sys.stderr.write(f"[INSPIRE] 全文加载: {len(paper_texts)} 篇, {sum(len(t) for t in paper_texts.values())} chunks\n")
+                _sys.stderr.flush()
+        yield {"type": "status", "data": {"action": "reviewing", "message": "正在阅读引用文献全文并审核..."}}
         yield {"type": "token", "data": "\n\n---\n**🔍 审稿意见：**\n"}
         review_text = ""
         async for event in review_stream(evidence_text, deep_context):
