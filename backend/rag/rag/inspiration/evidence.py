@@ -105,7 +105,7 @@ async def build_evidence_stream(
             model=settings.deepseek_model,
             messages=messages,
             temperature=0.7,
-            max_tokens=2000,
+            max_tokens=3500,
             stream=True,
         )
         for chunk in stream:
