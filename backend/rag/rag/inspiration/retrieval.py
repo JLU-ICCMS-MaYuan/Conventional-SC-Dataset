@@ -136,30 +136,23 @@ async def execute_retrieval(
     )
     boosted_query = " ".join(search_queries + strategy.semantic_boost)
 
-    _sys.stderr.write(f"[Retrieval] 搜索集合: {search_collections} | boosted_query={boosted_query[:150]}\n")
-    _sys.stderr.flush()
-
     # ── RAG 检索（多集合） ──
     chunks: list[dict] = []
     try:
         from backend.rag.search.vector_search import search_by_semantics
-
-        # section 过滤（如果策略配置了）
         section_kw = [k.lower() for k in strategy.section_filter] if strategy.section_filter else []
-
         seen_ids: set[str] = set()
         all_results: list[dict] = []
+        coll_counts = []
 
         for coll in search_collections:
             try:
-                # Curator 会筛选，多拉候选
-                fetch_k = 40  # Curator 只读标题，多拉不贵
+                fetch_k = 40
                 sr = await search_by_semantics(boosted_query, top_k=fetch_k, collection=coll)
                 new = 0
                 for r in sr:
                     if r["id"] in seen_ids:
                         continue
-                    # section 过滤：section_name 包含任一关键词
                     if section_kw:
                         sec = (r.get("section_name") or "").lower()
                         if not any(k in sec for k in section_kw):
@@ -167,21 +160,16 @@ async def execute_retrieval(
                     seen_ids.add(r["id"])
                     all_results.append(r)
                     new += 1
-                top_scores = [round(r.get("score", 0), 3) for r in sr[:3]]
-                _sys.stderr.write(f"[Retrieval]   {coll}: {len(sr)} hits, {new} new (section_filter={section_kw or 'none'}, scores: {top_scores})\n")
-                _sys.stderr.flush()
-            except Exception as e:
-                _sys.stderr.write(f"[Retrieval]   {coll}: 失败 ({e})\n")
-                _sys.stderr.flush()
+                coll_counts.append(f"{coll}({new})")
+            except Exception:
+                coll_counts.append(f"{coll}(err)")
 
         all_results.sort(key=lambda r: r.get("score", 0), reverse=True)
-        chunks = all_results[:min(40, len(all_results))]  # Curator 只读标题，拉多不贵
-        merged_scores = [round(r.get("score", 0), 3) for r in chunks[:5]]
-        _sys.stderr.write(f"[Retrieval] 合并: {len(all_results)} total -> top-{len(chunks)} "
-                         f"(scores: {merged_scores})\n")
+        chunks = all_results[:min(40, len(all_results))]
+        _sys.stderr.write(f"  [Retrieval] {len(search_collections)}集合→{len(all_results)}篇({', '.join(coll_counts)})\n")
         _sys.stderr.flush()
     except Exception as e:
-        _sys.stderr.write(f"[Retrieval] 检索异常: {e}\n")
+        _sys.stderr.write(f"  [Retrieval] 失败 {e}\n")
         _sys.stderr.flush()
 
     # ── KG 查询 (暂时禁用) ──

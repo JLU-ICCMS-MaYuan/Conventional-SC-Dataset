@@ -96,8 +96,7 @@ async def build_evidence_stream(
         messages.extend(session.history[-6:])
     messages.append({"role": "user", "content": prompt})
 
-    _sys.stderr.write(f"[EvidenceBuilder] 开始生成 | model={settings.deepseek_model} "
-                      f"prompt_len={len(prompt)} mode={mode_result.primary_mode}\n")
+    _sys.stderr.write(f"  [EvidenceBuilder] 生成中...\n")
     _sys.stderr.flush()
 
     full_text = ""
@@ -114,28 +113,24 @@ async def build_evidence_stream(
             if delta and delta.content:
                 full_text += delta.content
                 yield {"type": "token", "data": delta.content}
-        _sys.stderr.write(f"[EvidenceBuilder] 生成完成 | {_time.time() - _t0:.1f}s "
-                          f"text_len={len(full_text)}\n")
+        _sys.stderr.write(f"  [EvidenceBuilder] {_time.time() - _t0:.1f}s {len(full_text)}字\n")
         _sys.stderr.flush()
     except Exception as e:
-        _sys.stderr.write(f"[EvidenceBuilder] 失败! {e}\n")
+        _sys.stderr.write(f"  [EvidenceBuilder] 失败 {e}\n")
         _sys.stderr.flush()
-        logger.error(f"Evidence builder failed: {e}")
         yield {"type": "token", "data": f"\n\n抱歉，生成过程出现错误：{e}"}
         return
 
-    # 提取 IdeaCard
     cards = parse_idea_cards(full_text)
     if cards:
         for i, card in enumerate(cards):
-            _sys.stderr.write(f"[EvidenceBuilder] IDEA_CARD #{i+1}: title={card.get('title','?')[:80]} "
-                              f"fragments={len(card.get('fragments',[]))} "
-                              f"assumptions={len(card.get('assumptions',[]))}\n")
+            _sys.stderr.write(f"  [EvidenceBuilder] Idea #{i+1}: {card.get('title','?')[:60]} "
+                              f"({len(card.get('fragments',[]))}引用, {len(card.get('assumptions',[]))}假设)\n")
             _sys.stderr.flush()
             session.add_idea(card)
             yield {"type": "evidence_card", "data": card}
     else:
-        _sys.stderr.write(f"[EvidenceBuilder] ⚠️ 未找到 IDEA_CARD marker! 文本中没有结构化点子\n")
+        _sys.stderr.write(f"  [EvidenceBuilder] ⚠️ 无 IDEA_CARD\n")
         _sys.stderr.flush()
 
     session.history.append({"role": "user", "content": session.user_question})

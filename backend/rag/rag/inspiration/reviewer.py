@@ -62,12 +62,10 @@ async def review_stream(
     _t0 = _time.time()
 
     idea_count = evidence_text.count("<!--IDEA_CARD")
-    _sys.stderr.write(f"[Reviewer] 开始审核 | evidence_len={len(evidence_text)} "
-                      f"deep_len={len(deep_context)} idea_cards={idea_count}\n")
+    _sys.stderr.write(f"  [Reviewer] 审核 {idea_count} 个点子, deep={len(deep_context)}字\n")
     _sys.stderr.flush()
-
     if idea_count == 0:
-        _sys.stderr.write(f"[Reviewer] ⚠️ 证据文本中没有 IDEA_CARD，跳过审核\n")
+        _sys.stderr.write(f"  [Reviewer] ⚠️ 跳过（无 IDEA_CARD）\n")
         _sys.stderr.flush()
         return
 
@@ -102,25 +100,18 @@ async def review_stream(
             if delta and delta.content:
                 full_text += delta.content
                 yield {"type": "token", "data": delta.content}
-        _sys.stderr.write(f"[Reviewer] 审核完成 | {_time.time() - _t0:.1f}s "
-                          f"text_len={len(full_text)}\n")
+        _sys.stderr.write(f"  [Reviewer] {_time.time() - _t0:.1f}s {len(full_text)}字\n")
         _sys.stderr.flush()
     except Exception as e:
-        _sys.stderr.write(f"[Reviewer] 失败! {e}\n")
+        _sys.stderr.write(f"  [Reviewer] 失败 {e}\n")
         _sys.stderr.flush()
-        logger.error(f"Reviewer failed: {e}")
         yield {"type": "token", "data": f"\n\n审核过程出现错误：{e}"}
         return
 
     verdicts = parse_review_verdicts(full_text)
-    if verdicts:
-        for i, v in enumerate(verdicts):
-            _sys.stderr.write(f"[Reviewer] REVIEW #{i+1}: score={v.get('feasibility_score','?')} "
-                              f"flaws={len(v.get('flaws',[]))} "
-                              f"dims={v.get('dimensions',{})}\n")
-            _sys.stderr.flush()
-    else:
-        _sys.stderr.write(f"[Reviewer] ⚠️ 未找到 REVIEW marker!\n")
+    for i, v in enumerate(verdicts):
+        _sys.stderr.write(f"  [Reviewer] Review #{i+1}: score={v.get('feasibility_score','?')} "
+                          f"flaws={len(v.get('flaws',[]))}\n")
         _sys.stderr.flush()
 
     for verdict in verdicts:

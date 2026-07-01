@@ -371,13 +371,11 @@ async def ask_stream(
         import time as _time
         _t_start = _time.time()
         import sys as _sys
-        _sys.stderr.write(f"\n{'='*60}\n")
-        _sys.stderr.write(f"[INSPIRE] 进入探索模式 | question={question[:80]}\n")
-        _sys.stderr.write(f"[INSPIRE] session_id={is_session.session_id} restored={is_session.current_mode is not None}\n")
+        _sys.stderr.write(f"\n═══ EXPLORE: {question[:60]}{' (恢复)' if is_session.current_mode else ''} ═══\n")
         _sys.stderr.flush()
 
         if is_session.check_exit(question):
-            _sys.stderr.write(f"[INSPIRE] 用户退出探索模式\n")
+            _sys.stderr.write(f"  → 用户退出\n")
             yield {"type": "inspire_exit", "data": {"reason": "user_abort"}}
             done_msg = "已退出探索模式。"
             for char in done_msg:
@@ -398,63 +396,37 @@ async def ask_stream(
         # 记录用户消息到历史
         is_session.history.append({"role": "user", "content": question})
 
-        # 1. ModeRouter — 每轮都重新路由（用户可能切换话题）
-        yield {"type": "status", "data": {"action": "routing", "message": "正在分析问题并选择分析视角..."}}
+        # 1. ModeRouter
+        yield {"type": "status", "data": {"action": "routing", "message": "正在分析问题..."}}
         mode_result = await route_mode(question, is_session.history)
-        _sys.stderr.write(f"[INSPIRE] ModeRouter → mode={mode_result.primary_mode} "
-                          f"confidence={mode_result.confidence:.2f} "
-                          f"queries={mode_result.search_queries} "
-                          f"collections={mode_result.collections}\n")
-        _sys.stderr.write(f"[INSPIRE]   rationale={mode_result.rationale[:120]}\n")
-        _sys.stderr.flush()
-
         is_session.current_mode = mode_result.primary_mode
         is_session.mode_history.append(mode_result.primary_mode)
-
-        yield {
-            "type": "inspire_mode",
-            "data": {
-                "mode": mode_result.primary_mode,
-                "label": is_session.mode_label,
-                "rationale": mode_result.rationale,
-            }
-        }
+        yield {"type": "inspire_mode", "data": {"mode": mode_result.primary_mode,
+                 "label": is_session.mode_label, "rationale": mode_result.rationale}}
 
         # 2. Retrieval
-        yield {"type": "status", "data": {"action": "searching", "message": "正在检索相关文献..."}}
+        yield {"type": "status", "data": {"action": "searching", "message": "正在检索文献..."}}
         retrieval_result = await execute_retrieval(
             mode_result.primary_mode,
             mode_result.search_queries,
             collections=mode_result.collections or None,
         )
-        _sys.stderr.write(f"[INSPIRE] Retrieval → chunks={len(retrieval_result.get('chunks', []))} "
-                          f"kg_results={len(retrieval_result.get('kg_results', []))}\n")
-        _sys.stderr.flush()
 
-        # 2.5. Curator — LLM 筛选文献
-        yield {"type": "status", "data": {"action": "curating", "message": "正在筛选最相关的文献..."}}
+        # 2.5. Curator
+        yield {"type": "status", "data": {"action": "curating", "message": "正在筛选文献..."}}
         curation = await curate_papers(question, retrieval_result)
         retrieval_result["chunks"] = curation.get("chunks", retrieval_result.get("chunks", []))
-        yield {"type": "curation", "data": {
-            "keep_paper_ids": curation["keep_paper_ids"],
-            "summary": curation["summary"],
-        }}
+        yield {"type": "curation", "data": {"keep_paper_ids": curation["keep_paper_ids"], "summary": curation["summary"]}}
 
-        # ── EvidenceBuilder（流式） ──
-        yield {"type": "status", "data": {"action": "generating", "message": "正在生成研究点子..."}}
+        # 3. EvidenceBuilder
+        yield {"type": "status", "data": {"action": "generating", "message": "正在生成点子..."}}
         evidence_text = ""
         async for event in build_evidence_stream(is_session, mode_result, retrieval_result):
             if event["type"] == "token":
                 evidence_text += event["data"]
             yield event
-        _sys.stderr.write(f"[INSPIRE] EvidenceBuilder → text_len={len(evidence_text)} "
-                          f"ideas_count={len(is_session.collected_ideas)}\n")
-        for i, idea in enumerate(is_session.collected_ideas):
-            _sys.stderr.write(f"[INSPIRE]   Idea #{i+1}: title={idea.get('title', '?')[:60]} "
-                              f"fragments={len(idea.get('fragments', []))}\n")
-        _sys.stderr.flush()
 
-        # ── DualReviewer（流式，含引用论文全文） ──
+        # 4. DualReviewer（含引用论文全文）
         idea_pids = set()
         for idea in is_session.collected_ideas:
             for f in idea.get("fragments", []):
@@ -463,8 +435,6 @@ async def ask_stream(
         deep_context = ""
         if idea_pids:
             from backend.rag.models import PaperChunk
-            _sys.stderr.write(f"[INSPIRE] 加载引用论文全文: {len(idea_pids)} 篇...\n")
-            _sys.stderr.flush()
             async with async_session_factory() as sess:
                 r = await sess.execute(
                     select(PaperChunk).where(PaperChunk.paper_id.in_(list(idea_pids)))
@@ -472,27 +442,22 @@ async def ask_stream(
                 )
                 paper_texts: dict[int, list[str]] = {}
                 for c in r.scalars():
-                    paper_texts.setdefault(c.paper_id, []).append(
-                        f"[{c.section_name or '正文'}]\n{c.content}"
-                    )
+                    paper_texts.setdefault(c.paper_id, []).append(f"[{c.section_name or '正文'}]\n{c.content}")
             if paper_texts:
                 deep_parts = []
                 for pid, texts in paper_texts.items():
                     full = f"=== [PID_{pid}] 全文（{len(texts)} chunks） ===\n" + "\n\n".join(texts[:30])
-                    deep_parts.append(full[:6000])  # 每篇最多6000字
-                deep_context = "\n\n=== 审稿参考资料：点子引用的论文全文 ===\n" + "\n\n".join(deep_parts[:5])
-                _sys.stderr.write(f"[INSPIRE] 全文加载: {len(paper_texts)} 篇, {sum(len(t) for t in paper_texts.values())} chunks\n")
+                    deep_parts.append(full[:6000])
+                deep_context = "\n\n".join(deep_parts[:5])
+                _sys.stderr.write(f"  [DeepRead] {len(paper_texts)}篇 {sum(len(t) for t in paper_texts.values())} chunks\n")
                 _sys.stderr.flush()
-        yield {"type": "status", "data": {"action": "reviewing", "message": "正在阅读引用文献全文并审核..."}}
+        yield {"type": "status", "data": {"action": "reviewing", "message": "正在审核..."}}
         yield {"type": "token", "data": "\n\n---\n**🔍 审稿意见：**\n"}
         review_text = ""
         async for event in review_stream(evidence_text, deep_context):
             if event["type"] == "token":
                 review_text += event["data"]
             yield event
-        _sys.stderr.write(f"[INSPIRE] DualReviewer → text_len={len(review_text)} "
-                          f"deep_papers={len(idea_pids)}\n")
-        _sys.stderr.flush()
 
         # 收集涉及的 paper_id，加载元信息
         paper_ids = set()
@@ -518,13 +483,10 @@ async def ask_stream(
 
         answer = evidence_text + session_marker
         _t_elapsed = _time.time() - _t_start
-        _sys.stderr.write(f"[INSPIRE] 完成 | 总耗时={_t_elapsed:.1f}s "
-                          f"mode={is_session.current_mode} "
-                          f"ideas={len(is_session.collected_ideas)} "
-                          f"papers={len(papers_dict)} "
-                          f"evidence_len={len(evidence_text)} "
-                          f"review_len={len(review_text)}\n")
-        _sys.stderr.write(f"{'='*60}\n\n")
+        _sys.stderr.write(f"  → 完成 {_t_elapsed:.1f}s | "
+                          f"{len(is_session.collected_ideas)} ideas | "
+                          f"{len(papers_dict)} papers | "
+                          f"evidence={len(evidence_text)} review={len(review_text)}\n\n")
         _sys.stderr.flush()
         yield {"type": "done", "data": {
             "citations": [{"paper_id": pid} for pid in paper_ids],

@@ -30,7 +30,7 @@ def parse_mode_result(llm_response: str) -> ModeResult:
     """解析 LLM 返回的 JSON，安全降级。"""
     try:
         data = json.loads(llm_response)
-        result = ModeResult(
+        return ModeResult(
             primary_mode=data.get("primary_mode", "gap_detector"),
             secondary_modes=data.get("secondary_modes", []),
             collections=data.get("collections", []),
@@ -38,11 +38,8 @@ def parse_mode_result(llm_response: str) -> ModeResult:
             search_queries=data.get("search_queries", []),
             rationale=data.get("rationale", "解析失败"),
         )
-        _log(f"解析成功: mode={result.primary_mode} conf={result.confidence:.2f} "
-             f"collections={result.collections} queries={result.search_queries}")
-        return result
     except (json.JSONDecodeError, TypeError, ValueError) as e:
-        _log(f"解析失败! error={e} raw={llm_response[:300]}")
+        _log(f"解析失败 {e}")
         return ModeResult(
             primary_mode="gap_detector",
             collections=["paper_chunks"],
@@ -57,10 +54,6 @@ async def route_mode(
     history: list[dict] | None = None,
 ) -> ModeResult:
     """LLM 判断用户问题最适合哪种思考模式。"""
-    _log(f"{_SEP}")
-    _log(f"开始路由 | question={question[:100]}")
-    _log(f"model={settings.deepseek_model} base_url={settings.deepseek_base_url}")
-
     client = OpenAI(
         api_key=settings.deepseek_api_key,
         base_url=settings.deepseek_base_url,
@@ -71,7 +64,6 @@ async def route_mode(
     ]
     if history:
         messages.extend(history[-4:])
-        _log(f"history: {len(history)} 轮, 取最近 {min(4, len(history))} 轮")
     messages.append({"role": "user", "content": f"用户问题: {question}"})
 
     t0 = _time.time()
@@ -84,16 +76,13 @@ async def route_mode(
             max_tokens=500,
         )
         elapsed = _time.time() - t0
-        usage = resp.usage
         content = resp.choices[0].message.content or ""
-        _log(f"LLM 响应 | {elapsed:.1f}s "
-             f"prompt_tokens={usage.prompt_tokens if usage else '?'} "
-             f"completion_tokens={usage.completion_tokens if usage else '?'}")
-        _log(f"raw_response: {content[:500]}")
-        return parse_mode_result(content)
+        result = parse_mode_result(content)
+        _log(f"{elapsed:.1f}s mode={result.primary_mode} "
+             f"collections={result.collections} queries={result.search_queries}")
+        return result
     except Exception as e:
-        elapsed = _time.time() - t0
-        _log(f"LLM 失败! {elapsed:.1f}s error={e}")
+        _log(f"失败 {e}")
         return ModeResult(
             primary_mode="gap_detector",
             collections=["paper_chunks"],

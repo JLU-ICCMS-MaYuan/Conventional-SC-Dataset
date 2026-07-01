@@ -51,28 +51,17 @@ async def curate_papers(
 
     chunks = retrieval_result.get("chunks", [])
     if not chunks:
-        _sys.stderr.write("[Curator] 无 chunks，跳过筛选\n")
-        _sys.stderr.flush()
+        _sys.stderr.write("  [Curator] 无 chunks\n"); _sys.stderr.flush()
         return {"keep_paper_ids": [], "summary": "未检索到相关文献"}
 
-    # 收集唯一 paper_id
     paper_ids = {c["paper_id"] for c in chunks if c.get("paper_id")}
     titles = await load_paper_titles(paper_ids)
-
-    # 构建筛选 prompt：论文标题 + 内容摘要
     catalog = []
     for pid in sorted(paper_ids):
         info = titles.get(pid, {"title": "未知", "doi": "", "year": 0})
-        # 找该 paper 的一个代表性 chunk 作为预览
         preview = next((c["content"][:200] for c in chunks if c.get("paper_id") == pid), "")
-        catalog.append(
-            f"[ID:{pid}] {info['title']} ({info['year']})\n"
-            f"  预览: {preview[:150]}..."
-        )
-
+        catalog.append(f"[ID:{pid}] {info['title']} ({info['year']})\n  预览: {preview[:150]}...")
     catalog_text = "\n\n".join(catalog)
-    _sys.stderr.write(f"[Curator] 开始筛选 | {len(paper_ids)} 篇文献\n")
-    _sys.stderr.flush()
 
     client = OpenAI(
         api_key=settings.deepseek_api_key,
@@ -108,16 +97,13 @@ async def curate_papers(
         kept = [pid for pid in keep_ids if pid in all_ids]
         filtered_chunks = [c for c in chunks if c.get("paper_id") in kept]
 
-        _sys.stderr.write(f"[Curator] 筛选完成 | {_time.time() - _t0:.1f}s "
-                          f"keep={len(kept)}/{len(paper_ids)} "
-                          f"chunks={len(chunks)}->{len(filtered_chunks)}\n")
-        _sys.stderr.write(f"[Curator]   {summary[:200]}\n")
+        _sys.stderr.write(f"  [Curator] {_time.time() - _t0:.1f}s {len(paper_ids)}篇→{len(kept)}篇: {summary[:100]}\n")
         _sys.stderr.flush()
 
         return {
             "keep_paper_ids": kept,
             "summary": summary,
-            "chunks": filtered_chunks,  # 替换原 chunks
+            "chunks": filtered_chunks,
         }
     except Exception as e:
         _sys.stderr.write(f"[Curator] 失败: {e}\n")
