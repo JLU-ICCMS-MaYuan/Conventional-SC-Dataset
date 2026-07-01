@@ -153,7 +153,7 @@ async def execute_retrieval(
         for coll in search_collections:
             try:
                 # Curator 会筛选，多拉候选
-                fetch_k = max(top_k * 2, 20) if section_kw else max(top_k, 15)
+                fetch_k = 40  # Curator 只读标题，多拉不贵
                 sr = await search_by_semantics(boosted_query, top_k=fetch_k, collection=coll)
                 new = 0
                 for r in sr:
@@ -175,7 +175,7 @@ async def execute_retrieval(
                 _sys.stderr.flush()
 
         all_results.sort(key=lambda r: r.get("score", 0), reverse=True)
-        chunks = all_results[:min(15, len(all_results))]  # 多拉，Curator 会筛选
+        chunks = all_results[:min(40, len(all_results))]  # Curator 只读标题，拉多不贵
         merged_scores = [round(r.get("score", 0), 3) for r in chunks[:5]]
         _sys.stderr.write(f"[Retrieval] 合并: {len(all_results)} total -> top-{len(chunks)} "
                          f"(scores: {merged_scores})\n")
