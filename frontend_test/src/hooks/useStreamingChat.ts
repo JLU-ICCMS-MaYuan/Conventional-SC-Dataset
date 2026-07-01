@@ -189,6 +189,8 @@ export function useStreamingChat() {
               })
             } else if (eventType === 'inspire_mode') {
               setInspiration(prev => ({ ...prev, mode: data.mode, modeLabel: data.label }))
+            } else if (eventType === 'curation') {
+              setInspiration(prev => ({ ...prev, statusMessage: `筛选文献: ${data.keep_paper_ids?.length || 0} 篇 - ${data.summary?.slice(0, 60) || ''}` }))
             } else if (eventType === 'inspire_exit') {
               setInspiration({ active: false, mode: '', modeLabel: '', statusMessage: '', sessionId: '', ideasCount: 0 })
             } else if (eventType === 'evidence_card') {

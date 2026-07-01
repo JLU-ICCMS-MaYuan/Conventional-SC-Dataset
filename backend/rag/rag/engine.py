@@ -18,6 +18,7 @@ from backend.rag.rag.prompts import build_rag_prompt, is_greeting, build_fusion_
 from backend.rag.rag.inspiration.session import InspirationSession
 from backend.rag.rag.inspiration.mode_router import route_mode
 from backend.rag.rag.inspiration.retrieval import execute_retrieval
+from backend.rag.rag.inspiration.curator import curate_papers
 from backend.rag.rag.inspiration.evidence import build_evidence_stream
 from backend.rag.rag.inspiration.reviewer import review_stream
 from backend.rag.rag.reranker import rerank_chunks
@@ -429,6 +430,15 @@ async def ask_stream(
         _sys.stderr.write(f"[INSPIRE] Retrieval → chunks={len(retrieval_result.get('chunks', []))} "
                           f"kg_results={len(retrieval_result.get('kg_results', []))}\n")
         _sys.stderr.flush()
+
+        # 2.5. Curator — LLM 筛选文献
+        yield {"type": "status", "data": {"action": "curating", "message": "正在筛选最相关的文献..."}}
+        curation = await curate_papers(question, retrieval_result)
+        retrieval_result["chunks"] = curation.get("chunks", retrieval_result.get("chunks", []))
+        yield {"type": "curation", "data": {
+            "keep_paper_ids": curation["keep_paper_ids"],
+            "summary": curation["summary"],
+        }}
 
         # ── EvidenceBuilder（流式） ──
         yield {"type": "status", "data": {"action": "generating", "message": "正在生成研究点子..."}}
