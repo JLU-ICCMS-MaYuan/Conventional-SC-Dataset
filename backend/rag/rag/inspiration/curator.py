@@ -97,7 +97,7 @@ async def curate_papers(
         kept = [pid for pid in keep_ids if pid in all_ids]
         filtered_chunks = [c for c in chunks if c.get("paper_id") in kept]
 
-        _sys.stderr.write(f"  [Curator] {_time.time() - _t0:.1f}s {len(paper_ids)}篇→{len(kept)}篇: {summary[:100]}\n")
+        _sys.stderr.write(f"  [Curator] {_time.time() - _t0:.1f}s {len(chunks)} chunks/{len(paper_ids)} papers → keep {len(kept)} papers ({len(filtered_chunks)} chunks): {summary[:100]}\n")
         _sys.stderr.flush()
 
         return {

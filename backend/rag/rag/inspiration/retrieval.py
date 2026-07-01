@@ -166,7 +166,8 @@ async def execute_retrieval(
 
         all_results.sort(key=lambda r: r.get("score", 0), reverse=True)
         chunks = all_results[:min(40, len(all_results))]
-        _sys.stderr.write(f"  [Retrieval] {len(search_collections)}集合→{len(all_results)}篇({', '.join(coll_counts)})\n")
+        paper_count = len({r.get("paper_id") for r in all_results})
+        _sys.stderr.write(f"  [Retrieval] {len(search_collections)}集合→{len(all_results)} chunks/{paper_count} papers ({', '.join(coll_counts)})\n")
         _sys.stderr.flush()
     except Exception as e:
         _sys.stderr.write(f"  [Retrieval] 失败 {e}\n")
