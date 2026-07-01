@@ -1,38 +1,50 @@
-# Web框架
-fastapi==0.109.0
-uvicorn[standard]==0.27.0
-python-multipart==0.0.6  # 文件上传支持
-jinja2==3.1.3  # 模板引擎
+# ============================================================
+# SC-Wiki 依赖清单
+# 安装: pip install -r requirements.txt
+# ============================================================
 
-# 数据库
-sqlalchemy==2.0.25
-alembic==1.13.1
-pymysql==1.1.0
+# ── Web 框架 ────────────────────────────────────────────────
+fastapi>=0.109
+uvicorn[standard]>=0.27
+python-multipart>=0.0.6
+jinja2>=3.1
 
-# HTTP客户端
-httpx==0.26.0
-openai>=1.0
+# ── 数据库 ──────────────────────────────────────────────────
+sqlalchemy[asyncio]>=2.0
+alembic>=1.13
+pymysql>=1.1          # MySQL (生产 sync)
+asyncmy>=0.2           # MySQL (异步，RAG)
+aiosqlite>=0.20        # SQLite (开发)
+
+# ── 向量数据库 ──────────────────────────────────────────────
 chromadb>=0.5
-aiosqlite>=0.20
-asyncmy>=0.2
 
-# 数据验证
-pydantic==2.5.3
-pydantic-settings==2.1.0
-email-validator==2.3.0  # 邮箱验证（pydantic EmailStr 需要）
+# ── LLM / Embedding ─────────────────────────────────────────
+openai>=1.0            # DeepSeek + OpenAI 兼容
 
-# 图片处理
-Pillow==10.2.0
+# ── 数据校验 ────────────────────────────────────────────────
+pydantic>=2.5
+pydantic-settings>=2.1
+email-validator>=2.3
 
-# 认证与安全
-bcrypt==4.0.1  # bcrypt 加密（必须用 4.0.1 版本，5.x 与 passlib 不兼容）
-passlib[bcrypt]==1.7.4  # 密码哈希
-python-jose[cryptography]==3.3.0  # JWT token
+# ── 认证与安全 ──────────────────────────────────────────────
+bcrypt==4.0.1          # 固定版本，5.x 与 passlib 不兼容
+passlib[bcrypt]>=1.7
+python-jose[cryptography]>=3.3
 
-# 工具库
-python-dotenv==1.0.0  # 环境变量管理
-pytest==8.2.2
-openpyxl==3.1.2
-ase==3.22.1
-numpy==1.26.4  # pymatgen 依赖 NumPy < 2.0
-pymatgen==2023.9.25
+# ── HTTP / 异步 ─────────────────────────────────────────────
+httpx>=0.26
+anyio>=4.0
+
+# ── 材料科学 ────────────────────────────────────────────────
+numpy>=1.26,<2.0       # pymatgen 不兼容 2.x
+pymatgen>=2023.9
+ase>=3.22
+
+# ── 工具 ────────────────────────────────────────────────────
+Pillow>=10.2
+openpyxl>=3.1
+python-dotenv>=1.0
+
+# ── 测试 ────────────────────────────────────────────────────
+pytest>=8.0
