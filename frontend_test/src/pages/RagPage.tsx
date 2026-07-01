@@ -3,6 +3,7 @@ import 'bootstrap/dist/css/bootstrap.min.css'
 import 'katex/dist/katex.min.css'
 import { useStreamingChat } from '../hooks/useStreamingChat'
 import { renderMath } from '../utils/math'
+import EvidenceCard from '../components/EvidenceCard'
 
 /** 从消息内容中构建 PID → 顺序编号的映射（按首次出现顺序） */
 function buildCitationMap(content: string): Map<string, number> {
@@ -23,10 +24,16 @@ function citationOrder(content: string): string[] {
   return ids
 }
 
+/** 清理 session marker 和 HTML 注释 */
+function cleanContent(text: string): string {
+  return text.replace(/<!--(?:IS|BS|IDEA_CARD|REVIEW):[\s\S]*?-->/g, '')
+}
+
 /** 将助手消息转换为 HTML，[PID_xxx] 映射为顺序编号 [1] [2] ... */
 function renderMessage(content: string): string {
-  const withMath = renderMath(content)
-  const cMap = buildCitationMap(content)
+  const cleaned = cleanContent(content)
+  const withMath = renderMath(cleaned)
+  const cMap = buildCitationMap(cleaned)
   return withMath
     .replace(/\[PID_(\d+)\]/g, (_: string, pid: string) =>
       `<sup class="cite-ref">[${cMap.get(pid) || pid}]</sup>`)
@@ -40,6 +47,7 @@ function renderMessage(content: string): string {
 const RagPage: React.FC = () => {
   const {
     convs, activeId, messages, loading, papers, top10, streamRef, inspiration,
+    ideas, reviews,
     newConversation, switchConversation, deleteConversation, send,
   } = useStreamingChat()
 
@@ -106,6 +114,15 @@ const RagPage: React.FC = () => {
                   </div>
                 </div>
               ))}
+
+              {/* 探索模式的点子卡片 */}
+              {!loading && ideas.length > 0 && (
+                <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 20px' }}>
+                  {ideas.map((idea, i) => (
+                    <EvidenceCard key={i} idea={idea} review={reviews[i]} />
+                  ))}
+                </div>
+              )}
 
               {loading && (
                 <div style={st.rowL}>

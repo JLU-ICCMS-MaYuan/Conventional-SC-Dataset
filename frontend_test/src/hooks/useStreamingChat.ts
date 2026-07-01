@@ -29,10 +29,27 @@ interface InspirationState {
   ideasCount: number
 }
 
+interface IdeaCard {
+  title: string
+  fragments: Array<{ paper_id: number; quoted_text: string; section: string }>
+  reasoning_chain: string
+  assumptions: string[]
+  feasibility?: { overall: number; theory: number; synthesis: number; measurement: number }
+}
+
+interface ReviewVerdict {
+  flaws: Array<{ severity: string; description: string }>
+  feasibility_score: number
+  revised_idea: string
+  dimensions: { theory: number; synthesis: number; measurement: number }
+}
+
 interface CachedMeta {
   papers: Record<string, PaperInfo>
   top10: any[]
   inspiration: InspirationState | null
+  ideas: IdeaCard[]
+  reviews: ReviewVerdict[]
 }
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
@@ -47,7 +64,7 @@ function save(list: Conversation[]) {
 /** 按对话 ID 存取 papers + top10 */
 function metaKey(cid: string) { return `rag_meta_${cid}` }
 function loadMeta(cid: string): CachedMeta {
-  try { return JSON.parse(localStorage.getItem(metaKey(cid)) || '{"papers":{},"top10":[],"inspiration":null}') } catch { return { papers: {}, top10: [], inspiration: null } }
+  try { return JSON.parse(localStorage.getItem(metaKey(cid)) || '{"papers":{},"top10":[],"inspiration":null,"ideas":[],"reviews":[]}') } catch { return { papers: {}, top10: [], inspiration: null, ideas: [], reviews: [] } }
 }
 function saveMeta(cid: string, meta: CachedMeta) {
   localStorage.setItem(metaKey(cid), JSON.stringify(meta))
@@ -72,6 +89,14 @@ export function useStreamingChat() {
     const defaultIns: InspirationState = { active: false, mode: '', modeLabel: '', statusMessage: '', sessionId: '', ideasCount: 0 }
     return cid ? (loadMeta(cid).inspiration || defaultIns) : defaultIns
   })
+  const [ideas, setIdeas] = useState<IdeaCard[]>(() => {
+    const cid = convs[0]?.id
+    return cid ? loadMeta(cid).ideas : []
+  })
+  const [reviews, setReviews] = useState<ReviewVerdict[]>(() => {
+    const cid = convs[0]?.id
+    return cid ? loadMeta(cid).reviews : []
+  })
 
   const messages = convs.find((c) => c.id === activeId)?.messages || []
 
@@ -83,6 +108,8 @@ export function useStreamingChat() {
     setActiveId(c.id)
     setPapers({})
     setTop10([])
+    setIdeas([])
+    setReviews([])
     setInspiration({ active: false, mode: '', modeLabel: '', statusMessage: '', sessionId: '', ideasCount: 0 })
   }, [])
 
@@ -91,6 +118,8 @@ export function useStreamingChat() {
     const m = loadMeta(id)
     setPapers(m.papers)
     setTop10(m.top10)
+    setIdeas(m.ideas)
+    setReviews(m.reviews)
     setInspiration(m.inspiration || { active: false, mode: '', modeLabel: '', statusMessage: '', sessionId: '', ideasCount: 0 })
   }, [])
 
@@ -150,6 +179,8 @@ export function useStreamingChat() {
     let firstToken = true
     let receivedPapers: Record<string, PaperInfo> = {}
     let receivedTop10: any[] = []
+    let receivedIdeas: IdeaCard[] = []
+    let receivedReviews: ReviewVerdict[] = []
     let finalInspiration: InspirationState | null = null
 
     try {
@@ -194,7 +225,14 @@ export function useStreamingChat() {
             } else if (eventType === 'inspire_exit') {
               setInspiration({ active: false, mode: '', modeLabel: '', statusMessage: '', sessionId: '', ideasCount: 0 })
             } else if (eventType === 'evidence_card') {
+              const card: IdeaCard = data
+              receivedIdeas.push(card)
+              setIdeas(prev => [...prev, card])
               setInspiration(prev => ({ ...prev, ideasCount: prev.ideasCount + 1 }))
+            } else if (eventType === 'review_verdict') {
+              const verdict: ReviewVerdict = data
+              receivedReviews.push(verdict)
+              setReviews(prev => [...prev, verdict])
             } else if (eventType === 'status') {
               setInspiration(prev => prev.active ? { ...prev, statusMessage: data.message || '' } : prev)
             } else if (eventType === 'token') {
@@ -250,11 +288,12 @@ export function useStreamingChat() {
           : m
       ),
     } : c))
-    if (cid) saveMeta(cid, { papers: receivedPapers, top10: receivedTop10, inspiration: finalInspiration })
+    if (cid) saveMeta(cid, { papers: receivedPapers, top10: receivedTop10, inspiration: finalInspiration, ideas: receivedIdeas, reviews: receivedReviews })
   }, [activeId, convs, loading])
 
   return {
     convs, activeId, messages, loading, papers, top10, streamRef, inspiration,
+    ideas, reviews,
     newConversation, switchConversation, deleteConversation, send,
   }
 }
