@@ -43,7 +43,7 @@ FOLDER_COLLECTION_MAP: dict[str, str] = {
 RETRIEVAL_STRATEGIES: dict[str, RetrievalStrategy] = {
     "gap_detector": RetrievalStrategy(
         name="文献缺口探测",
-        section_filter=["conclusion", "future_work", "outlook"],
+        section_filter=[],  # Curator 替代了 section 过滤，不再限制
         semantic_boost=[
             "research gap", "remains unclear", "future work",
             "beyond the scope", "requires further", "open question",
@@ -54,7 +54,7 @@ RETRIEVAL_STRATEGIES: dict[str, RetrievalStrategy] = {
     ),
     "analogy_engine": RetrievalStrategy(
         name="类比推荐引擎",
-        section_filter=["discussion", "results"],
+        section_filter=[],
         semantic_boost=[
             "chemical precompression", "charge transfer",
             "electron-phonon coupling", "hydrogen cage",
@@ -66,7 +66,7 @@ RETRIEVAL_STRATEGIES: dict[str, RetrievalStrategy] = {
     ),
     "contradiction_catalyst": RetrievalStrategy(
         name="矛盾证据催化",
-        section_filter=["results", "discussion"],
+        section_filter=[],
         semantic_boost=[
             "discrepancy", "different", "however",
             "unexpected", "anomalous", "contradiction",
