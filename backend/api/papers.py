@@ -5,11 +5,12 @@ Paper and superconductor record APIs.
 from __future__ import annotations
 
 import json
+import re
 import time
 import threading
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -127,6 +128,58 @@ def _paper_to_dict(paper: models.Paper, include_records: bool = True) -> dict[st
     return payload
 
 
+def _build_ris_content(papers: list[models.Paper]) -> str:
+    entries: list[str] = []
+    for paper in papers:
+        lines = ["TY  - JOUR"]
+        for author in crud.authors_to_list(paper.authors):
+            if author:
+                lines.append(f"AU  - {author}")
+        if paper.title:
+            lines.append(f"TI  - {paper.title}")
+        if paper.journal:
+            lines.append(f"JO  - {paper.journal}")
+        if paper.year:
+            lines.append(f"PY  - {paper.year}")
+        if paper.volume:
+            lines.append(f"VL  - {paper.volume}")
+        if paper.pages:
+            lines.append(f"SP  - {paper.pages}")
+        if paper.doi:
+            lines.append(f"DO  - {paper.doi}")
+        first_record = paper.records[0] if paper.records else None
+        first_superconductor = first_record.superconductor if first_record else None
+        if first_superconductor:
+            lines.append(f"N1  - 化学式 {first_superconductor.chemical_formula}")
+        lines.append("ER  - ")
+        entries.append("\n".join(lines))
+    return "\n\n".join(entries)
+
+
+def _papers_response(
+    papers: list[models.Paper],
+    export_format: str,
+    filename_base: str,
+) -> Response:
+    if export_format == "json":
+        payload = {
+            "papers": [_paper_to_dict(paper, include_records=True) for paper in papers],
+            "total": len(papers),
+        }
+        return Response(
+            content=json.dumps(payload, ensure_ascii=False, default=str, indent=2),
+            media_type="application/json",
+            headers={"Content-Disposition": f"attachment; filename={filename_base}.json"},
+        )
+    if export_format == "ris":
+        return Response(
+            content=_build_ris_content(papers),
+            media_type="application/x-research-info-systems",
+            headers={"Content-Disposition": f"attachment; filename={filename_base}.ris"},
+        )
+    raise HTTPException(status_code=400, detail="format 仅支持 json 或 ris")
+
+
 def _query_papers_for_superconductors(
     db: Session,
     superconductor_ids: list[int],
@@ -215,6 +268,59 @@ def _paginate(query, limit: int, offset: int, *, cache_key: str | None = None) -
     }
 
 
+def _paginate_paper_items(items: list[models.Paper], limit: int, offset: int) -> dict[str, Any]:
+    total = len(items)
+    page_items = items[offset:offset + limit]
+    page_size = limit
+    page = (offset // page_size) + 1 if page_size else 1
+    total_pages = (total + page_size - 1) // page_size if total > 0 else 0
+    return {
+        "items": [_paper_to_dict(paper, include_records=True) for paper in page_items],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+        "has_prev": offset > 0,
+        "has_next": offset + page_size < total,
+    }
+
+
+def _query_papers_preserving_superconductor_order(
+    db: Session,
+    superconductors: list[models.Superconductor],
+    *,
+    keyword: str | None = None,
+    year_min: int | None = None,
+    year_max: int | None = None,
+    journal: str | None = None,
+    crystal_structure: str | None = None,
+    review_status: str | None = None,
+    sort_by: str = "year",
+    sort_order: str = "desc",
+) -> list[models.Paper]:
+    ordered: list[models.Paper] = []
+    seen: set[int] = set()
+    for superconductor in superconductors:
+        query = _query_papers_for_superconductors(
+            db,
+            [superconductor.id],
+            keyword=keyword,
+            year_min=year_min,
+            year_max=year_max,
+            journal=journal,
+            crystal_structure=crystal_structure,
+            review_status=review_status,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
+        for paper in query.all():
+            if paper.id in seen:
+                continue
+            ordered.append(paper)
+            seen.add(paper.id)
+    return ordered
+
+
 @router.get("/stats/user-ranking")
 def get_user_ranking(db: Session = Depends(get_db)):
     users = db.query(models.User).all()
@@ -295,7 +401,9 @@ def search_papers_by_mode(
     result = search_superconductors(
         db,
         mode,
+        formula=request.formula,
         elements=request.elements,
+        formula_sort=request.formula_sort or "relevance",
         limit=10000,
         offset=0,
     )
@@ -309,6 +417,20 @@ def search_papers_by_mode(
             "has_prev": False,
             "has_next": False,
         }
+    if mode == "formula_search":
+        papers = _query_papers_preserving_superconductor_order(
+            db,
+            result.items,
+            keyword=request.keyword,
+            year_min=request.year_min,
+            year_max=request.year_max,
+            journal=request.journal,
+            crystal_structure=request.crystal_structure,
+            review_status=request.review_status,
+            sort_by=request.sort_by or "year",
+            sort_order=request.sort_order or "desc",
+        )
+        return _paginate_paper_items(papers, request.limit, request.offset)
     query = _query_papers_for_superconductors(
         db,
         [item.id for item in result.items],
@@ -333,6 +455,61 @@ def get_crystal_structures(db: Session = Depends(get_db)):
         .all()
     )
     return sorted(value for (value,) in rows if value)
+
+
+@router.get("/share-export")
+def export_share_papers(
+    format: Literal["json", "ris"] = Query("json", description="导出格式"),
+    scope: Literal["all", "search"] = Query("all", description="导出范围"),
+    mode: str = Query("elements_combination_search", description="搜索模式"),
+    formula: str | None = Query(None, description="化学式搜索表达式"),
+    elements: str | None = Query(None, description="逗号分隔的元素符号"),
+    db: Session = Depends(get_db),
+):
+    if scope == "all":
+        papers = db.query(models.Paper).order_by(models.Paper.year.desc().nullslast(), models.Paper.id.desc()).all()
+        return _papers_response(papers, format, "sc-wiki-all-papers")
+
+    requested_elements = [item.strip() for item in (elements or "").split(",") if item.strip()]
+    if mode == "formula_search" and not formula:
+        raise HTTPException(status_code=400, detail="化学式检索需要 formula")
+    if mode != "formula_search" and not requested_elements:
+        raise HTTPException(status_code=400, detail="元素检索需要 elements")
+
+    mode_map = {
+        "only": "elements_exact_search",
+        "combination": "elements_combination_search",
+        "contains": "elements_contained_search",
+        "formula_search": "formula_search",
+        "elements_exact_search": "elements_exact_search",
+        "elements_combination_search": "elements_combination_search",
+        "elements_contained_search": "elements_contained_search",
+    }
+    normalized_mode = mode_map.get(mode)
+    if normalized_mode is None:
+        raise HTTPException(status_code=400, detail="不支持的搜索模式")
+
+    result = search_superconductors(
+        db,
+        normalized_mode,
+        formula=formula,
+        elements=requested_elements,
+        formula_sort="relevance",
+        limit=10000,
+        offset=0,
+    )
+    if not result.items:
+        return _papers_response([], format, "sc-wiki-search-empty")
+
+    if normalized_mode == "formula_search":
+        papers = _query_papers_preserving_superconductor_order(db, result.items)
+    else:
+        query = _query_papers_for_superconductors(db, [item.id for item in result.items])
+        papers = query.all()
+
+    filename_key = formula if normalized_mode == "formula_search" else "-".join(sorted(requested_elements))
+    safe_key = re.sub(r"[^A-Za-z0-9_.-]+", "-", filename_key or "search").strip("-") or "search"
+    return _papers_response(papers, format, f"sc-wiki-{safe_key}")
 
 
 @router.get("/{paper_id}")

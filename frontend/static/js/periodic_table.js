@@ -231,15 +231,15 @@ function updateSelectedDisplay() {
 
     if (selectedElements.size === 0) {
         display.textContent = I18N.t('index.none_selected');
-        display.className = 'badge bg-secondary';
+        display.className = 'sc-selected-pill';
+        display.removeAttribute('style');
         btn.disabled = true;
         btn.className = 'btn btn-outline-primary';
     } else {
         const sortedElements = Array.from(selectedElements).sort();
         display.textContent = sortedElements.join(', ');
-        display.className = 'badge';
-        display.style.background = '#4d6bfe';
-        display.style.color = '#fff';
+        display.className = 'sc-selected-pill is-active';
+        display.removeAttribute('style');
         btn.disabled = false;
         btn.className = 'btn btn-enter';
     }
@@ -259,8 +259,23 @@ function setupEventListeners() {
         clearSelection();
     });
 
+    const formulaInput = document.getElementById('formula-search-input');
+    const formulaButton = document.getElementById('formula-search-btn');
+    if (formulaButton) {
+        formulaButton.addEventListener('click', enterFormulaSearchPage);
+    }
+    if (formulaInput) {
+        formulaInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                enterFormulaSearchPage();
+            }
+        });
+    }
+
     // Enter键快捷键
     document.addEventListener('keypress', function(e) {
+        if (e.target && e.target.id === 'formula-search-input') return;
         if (e.key === 'Enter' && selectedElements.size > 0) {
             enterCompoundPage();
         }
@@ -303,6 +318,51 @@ function enterCompoundPage() {
     const query = params.toString();
     const target = query ? `/compound/${elements.join('-')}?${query}` : `/compound/${elements.join('-')}`;
     window.location.href = target;
+}
+
+function extractFormulaElements(formula) {
+    const validElements = new Set(ELEMENTS_DATA
+        .map(element => element.symbol)
+        .filter(symbol => /^[A-Z][a-z]?$/.test(symbol)));
+    const cleaned = (formula || '').replace(/[−–—]/g, '-').replace(/\s+/g, '');
+    const elements = new Set();
+    for (let i = 0; i < cleaned.length; i++) {
+        const ch = cleaned[i];
+        if (!/[A-Z]/.test(ch)) continue;
+        let symbol = ch;
+        if (i + 1 < cleaned.length && /[a-z]/.test(cleaned[i + 1])) {
+            const two = cleaned.slice(i, i + 2);
+            if (validElements.has(two)) {
+                symbol = two;
+                i += 1;
+            }
+        }
+        if (!validElements.has(symbol)) {
+            return [];
+        }
+        elements.add(symbol);
+    }
+    return Array.from(elements).sort();
+}
+
+function enterFormulaSearchPage() {
+    const input = document.getElementById('formula-search-input');
+    const formula = input ? input.value.trim() : '';
+    if (!formula) {
+        alert(I18N.t('index.alert_formula_required'));
+        return;
+    }
+
+    const elements = extractFormulaElements(formula);
+    if (!elements.length) {
+        alert(I18N.t('index.alert_formula_unrecognized'));
+        return;
+    }
+
+    const params = new URLSearchParams();
+    params.set('mode', 'formula_search');
+    params.set('formula', formula);
+    window.location.href = `/compound/${elements.join('-')}?${params.toString()}`;
 }
 
 // 清除选择

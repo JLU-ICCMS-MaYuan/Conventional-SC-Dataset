@@ -45,6 +45,7 @@ function _addLegend(containerEl, elements) {
     containerEl.appendChild(leg);
 }
 const urlParams = new URLSearchParams(window.location.search);
+const formulaQuery = urlParams.get('formula') || '';
 const SEARCH_MODE_ALIASES = {
     only: 'elements_exact_search',
     combination: 'elements_combination_search',
@@ -69,6 +70,12 @@ const allDbPagination = { page: 1, pageSize: 30, total: 0, totalPages: 0 };
 if (!['elements_exact_search', 'elements_combination_search', 'elements_contained_search', 'formula_search'].includes(viewMode)) {
     viewMode = 'elements_exact_search';
 }
+let formulaSort = ['relevance', 'tc_desc', 'tc_asc'].includes(urlParams.get('formula_sort'))
+    ? urlParams.get('formula_sort')
+    : 'relevance';
+if (viewMode === 'formula_search') {
+    currentDatabase = 'local';
+}
 
 function getAuthState() {
     return window.authState ? window.authState.get() : null;
@@ -88,7 +95,7 @@ function getModeDescription(mode = viewMode) {
         elements_exact_search: I18N.t('compound.mode_desc_only'),
         elements_combination_search: I18N.t('compound.mode_desc_combination'),
         elements_contained_search: I18N.t('compound.mode_desc_contains'),
-        formula_search: I18N.t('compound.mode_desc_only')
+        formula_search: I18N.t('compound.mode_desc_formula')
     };
     return map[mode] || map.elements_exact_search;
 }
@@ -97,7 +104,8 @@ function updateModeSubtitle(extraText) {
     const subtitleEl = document.getElementById('compound-subtitle');
     if (!subtitleEl) return;
     const desc = getModeDescription();
-    subtitleEl.innerHTML = extraText ? `${desc} · ${extraText}` : desc;
+    const formulaText = viewMode === 'formula_search' && formulaQuery ? ` · ${formulaQuery}` : '';
+    subtitleEl.innerHTML = extraText ? `${desc}${formulaText} · ${extraText}` : `${desc}${formulaText}`;
 }
 
 function calculateSFactor(tcValue, pressureValue) {
@@ -177,6 +185,7 @@ document.addEventListener('DOMContentLoaded', function() {
     imageModal = new bootstrap.Modal(document.getElementById('imageModal'));
 
     // 加载页面数据
+    initFormulaSearchControls();
     loadCompoundInfo();
     loadPapers();
     loadCrystalStructures();
@@ -200,8 +209,38 @@ document.addEventListener('DOMContentLoaded', function() {
 // 加载元素组合信息
 async function loadCompoundInfo() {
     if (!elementSymbols) return;
-    document.getElementById('compound-title').textContent = `${elementSymbols} ${I18N.t('compound.system_sc')}`;
+    document.getElementById('compound-title').textContent = viewMode === 'formula_search' && formulaQuery
+        ? `${formulaQuery} ${I18N.t('compound.chemical_formula')}`
+        : `${elementSymbols} ${I18N.t('compound.system_sc')}`;
     updateModeSubtitle();
+}
+
+function initFormulaSearchControls() {
+    const sortWrap = document.getElementById('formula-sort-wrap');
+    const sortSelect = document.getElementById('formula-sort-select');
+    if (sortWrap) {
+        sortWrap.style.display = viewMode === 'formula_search' ? '' : 'none';
+    }
+    if (sortSelect) {
+        sortSelect.value = formulaSort;
+    }
+
+    const dbSelect = document.getElementById('db-select');
+    if (dbSelect && viewMode === 'formula_search') {
+        dbSelect.value = 'local';
+        dbSelect.disabled = true;
+    }
+}
+
+function onFormulaSortChange() {
+    const sortSelect = document.getElementById('formula-sort-select');
+    formulaSort = sortSelect ? sortSelect.value : 'relevance';
+    const params = new URLSearchParams(window.location.search);
+    params.set('formula_sort', formulaSort);
+    const nextUrl = `${window.location.pathname}?${params.toString()}`;
+    window.history.replaceState({}, '', nextUrl);
+    resetCurrentPage();
+    loadPapers(currentSearchParams);
 }
 
 // 加载文献列表
@@ -214,6 +253,9 @@ async function loadPapers(searchParams = null) {
     }
 
     try {
+        if (viewMode === 'formula_search') {
+            currentDatabase = 'local';
+        }
         if (currentDatabase === 'all')        { await loadAllDatabases(container); return; }
         if (currentDatabase === 'alexandria') { await loadAlexandriaMaterials(container); return; }
         if (currentDatabase === 'htsc2025')  { await loadHTSC2025Materials(container); return; }
@@ -335,6 +377,10 @@ async function loadAllDatabases(container) {
 
 function onDatabaseChange() {
     currentDatabase = document.getElementById('db-select').value;
+    if (viewMode === 'formula_search') {
+        currentDatabase = 'local';
+        document.getElementById('db-select').value = 'local';
+    }
     allDbPagination.page = 1;
     resetCurrentPage();
     loadPapers(currentSearchParams);
@@ -1082,6 +1128,8 @@ async function fetchPapersByMode(mode) {
     const body = {
         elements,
         mode,
+        formula: mode === 'formula_search' ? formulaQuery : null,
+        formula_sort: mode === 'formula_search' ? formulaSort : 'relevance',
         keyword: currentSearchParams.keyword || null,
         year_min: currentSearchParams.year_min || null,
         year_max: currentSearchParams.year_max || null,
