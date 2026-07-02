@@ -19,7 +19,7 @@ def reload_database_module(monkeypatch, database_url=None):
 def test_default_database_url_points_to_repo_dev_db(monkeypatch):
     database = reload_database_module(monkeypatch)
 
-    expected_db_path = Path(__file__).resolve().parents[1] / "data" / "dev.db"
+    expected_db_path = Path(__file__).resolve().parents[2] / "data" / "dev.db"
 
     assert database.DEFAULT_DATABASE_URL == f"sqlite:///{expected_db_path}"
     assert database.DATABASE_URL == database.DEFAULT_DATABASE_URL
