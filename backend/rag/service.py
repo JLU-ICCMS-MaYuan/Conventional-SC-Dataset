@@ -128,14 +128,21 @@ async def chat_stream(
     try:
         from backend.rag.rag.engine import ask_stream
 
-        async for event in ask_stream(
-            question,
-            top_k=top_k,
-            rerank_top_k=rerank_top_k,
-            history=history,
-            explore=explore,
-        ):
-            yield event
+        kwargs = {
+            "top_k": top_k,
+            "rerank_top_k": rerank_top_k,
+            "history": history,
+            "explore": explore,
+        }
+        try:
+            async for event in ask_stream(question, **kwargs):
+                yield event
+        except TypeError as exc:
+            if "unexpected keyword argument 'explore'" not in str(exc):
+                raise
+            kwargs.pop("explore")
+            async for event in ask_stream(question, **kwargs):
+                yield event
     except (RagDataUnavailableError, RagChatUnavailableError):
         raise
     except Exception as exc:

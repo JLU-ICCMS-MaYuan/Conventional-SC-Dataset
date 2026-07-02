@@ -42,73 +42,70 @@ app.include_router(htsc2025.router)  # HTSC-2025 数据集 API
 app.include_router(structures.router)  # 晶体结构 API
 app.include_router(rag.router)  # RAG 代理 API
 
-# 挂载静态文件目录
+# 挂载前端构建目录
 BASE_DIR = Path(__file__).resolve().parent.parent
-STATIC_DIR = BASE_DIR / "frontend" / "static"
-TEMPLATES_DIR = BASE_DIR / "frontend" / "templates"
+FRONTEND_BUILD_DIR = BASE_DIR / "frontend_build"
 
-# 如果静态文件目录存在，挂载它
-if STATIC_DIR.exists():
-    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-    # Vite 构建的 CSS 引用 /assets/KaTeX_* 字体，需要直接挂载
-    app.mount("/assets", StaticFiles(directory=str(STATIC_DIR / "assets")), name="assets")
+if (FRONTEND_BUILD_DIR / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=str(FRONTEND_BUILD_DIR / "assets")), name="assets")
+
+
+def _serve_spa():
+    index_file = FRONTEND_BUILD_DIR / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file)
+    return {"error": "前端构建产物不存在，请先运行 cd frontend && npm run build"}
+
+
+@app.get("/favicon.svg")
+def favicon():
+    icon_file = FRONTEND_BUILD_DIR / "favicon.svg"
+    if icon_file.exists():
+        return FileResponse(icon_file)
+    return {"error": "favicon 不存在"}
+
+
+@app.get("/icons.svg")
+def icons():
+    icon_file = FRONTEND_BUILD_DIR / "icons.svg"
+    if icon_file.exists():
+        return FileResponse(icon_file)
+    return {"error": "icons 不存在"}
 
 
 # 根路径：返回首页
 @app.get("/")
 def read_root():
-    """返回主页"""
-    f = TEMPLATES_DIR / "index.html"
-    if f.exists():
-        return FileResponse(f)
-    return {"error": "页面不存在"}
+    """返回 React 前端入口"""
+    return _serve_spa()
 
 
 @app.get("/elements")
 def elements_page():
-    """元素周期表内容页（iframe 内嵌用）"""
-    f = TEMPLATES_DIR / "elements.html"
-    if f.exists():
-        return FileResponse(f)
-    return {"error": "页面不存在"}
+    return _serve_spa()
 
 
 # 元素周期表页面
 @app.get("/periodic-table")
 def periodic_table_page():
-    """返回元素周期表页面"""
-    index_file = TEMPLATES_DIR / "index.html"
-    if index_file.exists():
-        return FileResponse(index_file)
-    return {"error": "页面不存在"}
+    return _serve_spa()
 
 
 # 元素组合页面
 @app.get("/compound/{element_symbols}")
 def compound_page(element_symbols: str):
-    """返回元素组合页面"""
-    compound_file = TEMPLATES_DIR / "compound.html"
-    if compound_file.exists():
-        return FileResponse(compound_file)
-    return {"error": "页面不存在"}
+    return _serve_spa()
 
 
 # 管理员注册页面
 @app.get("/admin/register")
 def admin_register_page():
-    """返回管理员注册页面"""
-    register_file = TEMPLATES_DIR / "admin_register.html"
-    if register_file.exists():
-        return FileResponse(register_file)
-    return {"error": "页面不存在"}
+    return _serve_spa()
 
 
 # 统一登录页面
 def _serve_login_page():
-    login_file = TEMPLATES_DIR / "login.html"
-    if login_file.exists():
-        return FileResponse(login_file)
-    return {"error": "页面不存在"}
+    return _serve_spa()
 
 
 @app.get("/admin/login")
@@ -127,88 +124,51 @@ def user_login_page():
 # 用户注册页面
 @app.get("/register")
 def user_register_page():
-    """返回用户注册页面"""
-    register_file = TEMPLATES_DIR / "user_register.html"
-    if register_file.exists():
-        return FileResponse(register_file)
-    return {"error": "页面不存在"}
+    return _serve_spa()
 
 
 # 管理员审核面板
 @app.get("/admin/dashboard")
 def admin_dashboard_page():
-    """返回管理员审核面板"""
-    dashboard_file = TEMPLATES_DIR / "admin_dashboard.html"
-    if dashboard_file.exists():
-        return FileResponse(dashboard_file)
-    return {"error": "页面不存在"}
+    return _serve_spa()
 
 
 # 超级管理员审批面板
 @app.get("/admin/superadmin")
 def superadmin_dashboard_page():
-    """返回超级管理员审批面板"""
-    superadmin_file = TEMPLATES_DIR / "superadmin_dashboard.html"
-    if superadmin_file.exists():
-        return FileResponse(superadmin_file)
-    return {"error": "页面不存在"}
+    return _serve_spa()
 
 
 # 我审核的文献页面（可选）
 @app.get("/admin/my-reviews")
 def admin_my_reviews_page():
-    """返回我审核的文献页面"""
-    # 暂时重定向到审核面板
-    dashboard_file = TEMPLATES_DIR / "admin_dashboard.html"
-    if dashboard_file.exists():
-        return FileResponse(dashboard_file)
-    return {"error": "页面不存在"}
+    return _serve_spa()
 
 
 # 全局文献管理页面（新增）
 @app.get("/admin/papers")
 def admin_papers_page():
-    """返回全局文献管理页面"""
-    papers_file = TEMPLATES_DIR / "admin_papers.html"
-    if papers_file.exists():
-        return FileResponse(papers_file)
-    return {"error": "页面不存在"}
+    return _serve_spa()
 
 
 @app.get("/admin/users")
 def admin_users_page():
-    """返回用户管理页面"""
-    users_file = TEMPLATES_DIR / "admin_users.html"
-    if users_file.exists():
-        return FileResponse(users_file)
-    return {"error": "页面不存在"}
+    return _serve_spa()
 
 
 @app.get("/tc-pre")
 def tc_prediction_page():
-    """Tc 预测实验页面"""
-    page_file = TEMPLATES_DIR / "tc_pre.html"
-    if page_file.exists():
-        return FileResponse(page_file)
-    return {"error": "页面不存在"}
+    return _serve_spa()
 
 
 @app.get("/rag")
 def rag_page():
-    """AI 文献助手页面（vite 构建产物）"""
-    page_file = STATIC_DIR / "index.html"
-    if page_file.exists():
-        return FileResponse(page_file)
-    return {"error": "页面不存在"}
+    return _serve_spa()
 
 
 @app.get("/merged")
 def merged_page():
-    """三合一页面"""
-    page_file = TEMPLATES_DIR / "merged.html"
-    if page_file.exists():
-        return FileResponse(page_file)
-    return {"error": "页面不存在"}
+    return _serve_spa()
 
 
 # 健康检查端点

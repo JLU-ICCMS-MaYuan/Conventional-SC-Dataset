@@ -10,7 +10,7 @@ Retrieval-Augmented AI Question Answering 是 SC-Wiki 的 AI 文献助手能力�
 
 ## User Experience
 
-用户进入 `/rag` 后，可以进行文献搜索、自然语言问答和 PDF 上传摄入。前端支持流式输出、对话历史、本地缓存、引用编号和文献来源展示。旧文档中描述过 React 三栏布局：对话列表、流式聊天和文献来源栏。当前模板入口是 `frontend/templates/rag.html`，并引用构建后的静态资源；仓库中也保留了旧 `frontend/static/js/rag.js`。
+用户进入 `/rag` 后，可以进行文献搜索、自然语言问答和 PDF 上传摄入。前端支持流式输出、对话历史、本地缓存、引用编号和文献来源展示。当前页面由 React/Vite 实现，源码入口在 `frontend/src/pages/RagPage.tsx`，构建产物输出到 `frontend_build/` 后由 FastAPI 返回。
 
 回答过程不是纯 LLM 聊天。系统先判断问题意图，再按问题类型选择结构化 KG 查询、语义检索或二者融合，最后把检索证据交给 LLM 生成回答。
 

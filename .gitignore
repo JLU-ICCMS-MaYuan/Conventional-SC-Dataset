@@ -48,7 +48,7 @@ bak
 tmp/
 temp/
 *.tmp
-frontend_test
+frontend/node_modules/
 
 #AI
 AGENTS.md
@@ -64,7 +64,7 @@ data/
 docs/local-mysql-import.md
 
 # React 构建产物
-frontend/static/assets/
+frontend_build/
 
 # 测试截图 & 快照
 *.png
@@ -72,4 +72,3 @@ frontend/static/assets/
 *-page.yml
 *-current.yml
 .superpowers/
-frontend/static/index.html

@@ -74,7 +74,7 @@ Researcher Community Forum 指围绕研究者身份、贡献、审核、讨论�
 - `GET /api/papers/stats/tc-pressure`
 - `GET /api/papers/stats/tc-year`
 - `GET /api/papers/stats/chart-data`
-- `frontend/static/js/chart.js`
+- `frontend/src/pages/HomePage.tsx`
 - 首页 `/`
 
 ## Boundary

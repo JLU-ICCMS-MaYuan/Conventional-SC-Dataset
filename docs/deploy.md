@@ -69,9 +69,9 @@ python backend/rag/ingest/ingest_tag_collections.py      # 6 个标签集合
 ## 5. 前端构建
 
 ```bash
-cd frontend_test
-npm install
-npm run build        # 产物输出到 ../frontend/static/
+cd frontend
+npm ci
+npm run build        # 产物输出到 ../frontend_build/
 cd ..
 ```
 

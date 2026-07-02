@@ -76,6 +76,24 @@ def _sse(event_type: str, data: Any) -> str:
     return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
+async def _chat_stream_events(question: str, request: RagChatRequest):
+    kwargs = {
+        "top_k": request.top_k,
+        "rerank_top_k": request.rerank_top_k,
+        "history": _history_dicts(request.history),
+        "explore": request.explore,
+    }
+    try:
+        async for event in service.chat_stream(question, **kwargs):
+            yield event
+    except TypeError as exc:
+        if "unexpected keyword argument 'explore'" not in str(exc):
+            raise
+        kwargs.pop("explore")
+        async for event in service.chat_stream(question, **kwargs):
+            yield event
+
+
 @router.get("/health")
 async def rag_health():
     return service.health()
@@ -144,13 +162,7 @@ async def rag_chat_stream(request: RagChatRequest):
 
     async def event_generator():
         try:
-            async for event in service.chat_stream(
-                question,
-                top_k=request.top_k,
-                rerank_top_k=request.rerank_top_k,
-                history=_history_dicts(request.history),
-                explore=request.explore,
-            ):
+            async for event in _chat_stream_events(question, request):
                 yield _sse(event.get("type", "message"), event.get("data"))
             yield _sse("end", {"ok": True})
         except Exception as exc:

@@ -56,8 +56,7 @@ AI-Assisted Estimation of Superconducting Transition Temperatures 指 SC-Wiki �
 页面和脚本：
 
 - `/tc-pre`
-- `frontend/templates/tc_pre.html`
-- `frontend/static/js/tc_pre.js`
+- `frontend/src/pages/TcPredictionPage.tsx`
 
 后端：
 

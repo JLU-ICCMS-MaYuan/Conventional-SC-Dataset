@@ -65,8 +65,8 @@ HTSC-2025 能力主要面向常压高温超导体基准数据集。代码中有 
 - `backend/api/papers.py`
 - `backend/repositories/superconductors.py`
 - `backend/formula_similarity.py`
-- `frontend/static/js/periodic_table.js`
-- `frontend/static/js/compound_page.js`
+- `frontend/src/pages/ElementsPage.tsx`
+- `frontend/src/pages/CompoundPage.tsx`
 
 Alexandria 接口：
 

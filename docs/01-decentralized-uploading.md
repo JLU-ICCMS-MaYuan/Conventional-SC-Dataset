@@ -30,7 +30,7 @@ Decentralized Uploading of Superconductivity Data 指研究者或注册用户把
 
 ## Code and API Evidence
 
-主要页面是 `/compound/{element_symbols}`，模板为 `frontend/templates/compound.html`，前端脚本为 `frontend/static/js/compound_page.js`。核心后端在 `backend/api/papers.py`、`backend/api/structures.py`、`backend/models.py` 和 `backend/services/structure_storage.py`。
+主要页面是 `/compound/{element_symbols}`，React 页面入口为 `frontend/src/pages/CompoundPage.tsx`。核心后端在 `backend/api/papers.py`、`backend/api/structures.py`、`backend/models.py` 和 `backend/services/structure_storage.py`。
 
 相关接口包括：
 
