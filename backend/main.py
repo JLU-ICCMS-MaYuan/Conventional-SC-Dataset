@@ -49,6 +49,9 @@ FRONTEND_BUILD_DIR = BASE_DIR / "frontend_build"
 if (FRONTEND_BUILD_DIR / "assets").exists():
     app.mount("/assets", StaticFiles(directory=str(FRONTEND_BUILD_DIR / "assets")), name="assets")
 
+if (FRONTEND_BUILD_DIR / "img").exists():
+    app.mount("/img", StaticFiles(directory=str(FRONTEND_BUILD_DIR / "img")), name="img")
+
 
 def _serve_spa():
     index_file = FRONTEND_BUILD_DIR / "index.html"
@@ -82,6 +85,11 @@ def read_root():
 
 @app.get("/elements")
 def elements_page():
+    return _serve_spa()
+
+
+@app.get("/share")
+def share_page():
     return _serve_spa()
 
 

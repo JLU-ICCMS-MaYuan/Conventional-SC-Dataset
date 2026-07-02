@@ -1,4 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react'
+import {
+  Button,
+  Card,
+  CardContent,
+  Input,
+  Table,
+} from '@heroui/react'
 import { putJson, requestJson } from '../lib/apiClient'
 
 interface Paper {
@@ -52,11 +59,11 @@ export const AdminDashboardPage: React.FC = () => {
   return (
     <section className="page">
       <header className="page-header"><h1 className="page-title">审核面板</h1></header>
-      {status && <div className="status">{status}</div>}
+      {status && <div className="status-message">{status}</div>}
       <PaperTable papers={papers} actions={(paper) => (
         <div className="toolbar">
-          <button className="button" onClick={() => review(paper.id, true)}>通过</button>
-          <button className="button danger" onClick={() => review(paper.id, false)}>拒绝</button>
+          <Button variant="primary"  size="sm" onPress={() => review(paper.id, true)}>通过</Button>
+          <Button variant="danger"  size="sm" onPress={() => review(paper.id, false)}>拒绝</Button>
         </div>
       )} />
     </section>
@@ -88,11 +95,11 @@ export const AdminPapersPage: React.FC = () => {
       <header className="page-header">
         <h1 className="page-title">文献管理</h1>
         <div className="toolbar">
-          <input className="input" value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="标题 / DOI" />
-          <button className="button" onClick={search}>搜索</button>
+          <Input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="标题 / DOI" />
+          <Button variant="primary"  onPress={search}>搜索</Button>
         </div>
       </header>
-      {status && <div className="status">{status}</div>}
+      {status && <div className="status-message">{status}</div>}
       <PaperTable papers={papers} />
     </section>
   )
@@ -126,52 +133,76 @@ export const AdminUsersPage: React.FC = () => {
   return (
     <section className="page">
       <header className="page-header"><h1 className="page-title">用户管理</h1></header>
-      {status && <div className="status">{status}</div>}
-      <div className="table-wrap panel">
-        <table className="table">
-          <thead><tr><th>用户</th><th>邮箱</th><th>角色</th><th>状态</th><th>操作</th></tr></thead>
-          <tbody>
+      {status && <div className="status-message">{status}</div>}
+      <Card  >
+        <CardContent>
+        <Table aria-label="用户管理"><Table.Content>
+          <Table.Header>
+            <Table.Column>用户</Table.Column>
+            <Table.Column>邮箱</Table.Column>
+            <Table.Column>角色</Table.Column>
+            <Table.Column>状态</Table.Column>
+            <Table.Column>操作</Table.Column>
+          </Table.Header>
+          <Table.Body>
             {users.map((user) => (
-              <tr key={user.id}>
-                <td>{user.real_name || user.username || user.id}</td>
-                <td>{user.email || '-'}</td>
-                <td>{user.role || (user.is_superadmin ? 'superadmin' : user.is_admin ? 'admin' : 'user')}</td>
-                <td>{user.is_approved === false ? '待审批' : '已启用'}</td>
-                <td>
+              <Table.Row key={user.id}>
+                <Table.Cell>{user.real_name || user.username || user.id}</Table.Cell>
+                <Table.Cell>{user.email || '-'}</Table.Cell>
+                <Table.Cell>{user.role || (user.is_superadmin ? 'superadmin' : user.is_admin ? 'admin' : 'user')}</Table.Cell>
+                <Table.Cell>{user.is_approved === false ? '待审批' : '已启用'}</Table.Cell>
+                <Table.Cell>
                   <div className="toolbar">
-                    <button className="button secondary" onClick={() => setRole(user, 'user')}>用户</button>
-                    <button className="button secondary" onClick={() => setRole(user, 'admin')}>管理员</button>
-                    <button className="button secondary" onClick={() => setRole(user, 'superadmin')}>超管</button>
+                    <Button variant="outline"  size="sm" onPress={() => setRole(user, 'user')}>用户</Button>
+                    <Button variant="outline"  size="sm" onPress={() => setRole(user, 'admin')}>管理员</Button>
+                    <Button variant="outline"  size="sm" onPress={() => setRole(user, 'superadmin')}>超管</Button>
                   </div>
-                </td>
-              </tr>
+                </Table.Cell>
+              </Table.Row>
             ))}
-            {users.length === 0 && <tr><td colSpan={5} className="muted">暂无用户</td></tr>}
-          </tbody>
-        </table>
-      </div>
+            {users.length === 0 && (
+              <Table.Row>
+                <Table.Cell colSpan={5}>暂无用户</Table.Cell>
+              </Table.Row>
+            )}
+          </Table.Body>
+        </Table.Content></Table>
+        </CardContent>
+      </Card>
     </section>
   )
 }
 
 function PaperTable({ papers, actions }: { papers: Paper[]; actions?: (paper: Paper) => React.ReactNode }) {
   return (
-    <div className="table-wrap panel">
-      <table className="table">
-        <thead><tr><th>ID</th><th>标题</th><th>来源</th><th>状态</th><th>操作</th></tr></thead>
-        <tbody>
+    <Card  >
+      <CardContent>
+      <Table aria-label="文献表格"><Table.Content>
+        <Table.Header>
+          <Table.Column>ID</Table.Column>
+          <Table.Column>标题</Table.Column>
+          <Table.Column>来源</Table.Column>
+          <Table.Column>状态</Table.Column>
+          <Table.Column>操作</Table.Column>
+        </Table.Header>
+        <Table.Body>
           {papers.map((paper) => (
-            <tr key={paper.id}>
-              <td>{paper.id}</td>
-              <td>{paper.title || paper.doi || '-'}</td>
-              <td>{[paper.journal, paper.year].filter(Boolean).join(' · ') || '-'}</td>
-              <td>{paper.review_status || '-'}</td>
-              <td>{actions ? actions(paper) : '-'}</td>
-            </tr>
+            <Table.Row key={paper.id}>
+              <Table.Cell>{paper.id}</Table.Cell>
+              <Table.Cell>{paper.title || paper.doi || '-'}</Table.Cell>
+              <Table.Cell>{[paper.journal, paper.year].filter(Boolean).join(' · ') || '-'}</Table.Cell>
+              <Table.Cell>{paper.review_status || '-'}</Table.Cell>
+              <Table.Cell>{actions ? actions(paper) : '-'}</Table.Cell>
+            </Table.Row>
           ))}
-          {papers.length === 0 && <tr><td colSpan={5} className="muted">暂无文献</td></tr>}
-        </tbody>
-      </table>
-    </div>
+          {papers.length === 0 && (
+            <Table.Row>
+              <Table.Cell colSpan={5}>暂无文献</Table.Cell>
+            </Table.Row>
+          )}
+        </Table.Body>
+      </Table.Content></Table>
+      </CardContent>
+    </Card>
   )
 }

@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { Button, Card, CardContent, CardHeader, Separator, Input } from '@heroui/react'
 import { requestJson } from '../lib/apiClient'
 
 const TcPredictionPage: React.FC = () => {
@@ -27,15 +28,31 @@ const TcPredictionPage: React.FC = () => {
           <h1 className="page-title">超导 Tc 预测</h1>
         </div>
       </header>
-      <div className="panel">
-        <form className="grid" onSubmit={submit}>
-          <label className="field">CONTCAR<input className="input" name="contcar" type="file" /></label>
-          <label className="field">PDOS_H.dat<input className="input" name="pdos" type="file" /></label>
-          <button className="button">运行预测</button>
+      <Card  >
+        <CardHeader><h2 className="section-title">输入结构与态密度文件</h2></CardHeader>
+        <Separator />
+        <CardContent className="stack">
+        <form className="stack" onSubmit={submit}>
+          <label className="stack gap-2 text-sm font-semibold text-[var(--sc-muted)]">
+            CONTCAR
+            <Input name="contcar" type="file" />
+          </label>
+          <label className="stack gap-2 text-sm font-semibold text-[var(--sc-muted)]">
+            PDOS_H.dat
+            <Input name="pdos" type="file" />
+          </label>
+          <Button variant="primary"  type="submit">运行预测</Button>
         </form>
-        {status && <div className="status" style={{ marginTop: 12 }}>{status}</div>}
-        {result && <pre className="panel" style={{ marginTop: 12, whiteSpace: 'pre-wrap' }}>{JSON.stringify(result, null, 2)}</pre>}
-      </div>
+        {status && <div className="status-message">{status}</div>}
+        {result && (
+          <Card   className="border border-[var(--sc-border)]">
+            <CardContent>
+              <pre className="whitespace-pre-wrap text-sm">{JSON.stringify(result, null, 2)}</pre>
+            </CardContent>
+          </Card>
+        )}
+        </CardContent>
+      </Card>
     </section>
   )
 }

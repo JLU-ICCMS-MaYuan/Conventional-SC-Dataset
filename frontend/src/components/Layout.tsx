@@ -1,8 +1,8 @@
 import React from 'react'
+import { Button, Separator } from '@heroui/react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useI18n } from '../context/I18nContext'
-import '../styles/app.css'
 
 const navItems = [
   { to: '/', labelKey: 'nav.hotspot' },
@@ -35,8 +35,18 @@ const Layout: React.FC = () => {
         </div>
         <nav className="nav-list">
           {navItems.map((item) => (
-            <NavLink key={item.to} to={item.to} end={item.to === '/'} className="nav-item">
-              {t(item.labelKey)}
+            <NavLink key={item.to} to={item.to} end={item.to === '/'} className="contents">
+              {({ isActive }) => (
+                <Button
+                  className="nav-item"
+
+                  variant={isActive ? 'secondary' : 'ghost'}
+
+                  fullWidth
+                >
+                  {t(item.labelKey)}
+                </Button>
+              )}
             </NavLink>
           ))}
         </nav>
@@ -45,22 +55,33 @@ const Layout: React.FC = () => {
             <div className="admin-nav-title">{t('nav.admin')}</div>
             <nav className="nav-list compact">
               {adminItems.map((item) => (
-                <NavLink key={item.to} to={item.to} className="nav-item">
-                  {t(item.labelKey)}
+                <NavLink key={item.to} to={item.to} className="contents">
+                  {({ isActive }) => (
+                    <Button
+                      className="nav-item"
+
+                      variant={isActive ? 'secondary' : 'ghost'}
+
+                      fullWidth
+                    >
+                      {t(item.labelKey)}
+                    </Button>
+                  )}
                 </NavLink>
               ))}
             </nav>
           </div>
         )}
         <div className="grid sidebar-footer">
-          <button className="button secondary" onClick={toggleLang}>{t('common.language')}</button>
+          <Separator />
+          <Button variant="outline"  onPress={toggleLang}>{t('common.language')}</Button>
           {user ? (
             <>
               <div className="muted">{user.username || user.email}</div>
-              <button className="button secondary" onClick={() => { logout(); navigate('/') }}>{t('common.logout')}</button>
+              <Button variant="outline"  onPress={() => { logout(); navigate('/') }}>{t('common.logout')}</Button>
             </>
           ) : (
-            <button className="button secondary" onClick={() => navigate('/login')}>{t('common.login')}</button>
+            <Button variant="outline"  onPress={() => navigate('/login')}>{t('common.login')}</Button>
           )}
         </div>
       </aside>

@@ -1,5 +1,5 @@
 import React from 'react'
-import { Card } from 'react-bootstrap'
+import { Card, CardContent } from '@heroui/react'
 
 interface ChatMessageProps {
   role: 'user' | 'assistant'
@@ -9,16 +9,15 @@ interface ChatMessageProps {
 const ChatMessage: React.FC<ChatMessageProps> = ({ role, content }) => {
   const isUser = role === 'user'
   return (
-    <div className={`d-flex mb-3 ${isUser ? 'justify-content-end' : 'justify-content-start'}`}>
+    <div className={`chat-message-row ${isUser ? 'user' : 'assistant'}`}>
       <Card
-        bg={isUser ? 'primary' : 'light'}
-        text={isUser ? 'white' : 'dark'}
-        className="shadow-sm"
-        style={{ maxWidth: '80%', borderRadius: 16 }}
+        className={`chat-bubble ${isUser ? 'user' : ''}`}
+
+
       >
-        <Card.Body className="py-2 px-3">
-          {isUser ? `🙋 ${content}` : content}
-        </Card.Body>
+        <CardContent className="px-4 py-2 text-sm">
+          {content}
+        </CardContent>
       </Card>
     </div>
   )

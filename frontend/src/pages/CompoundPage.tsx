@@ -1,4 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import {
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  Separator,
+  Input,
+  Table,
+} from '@heroui/react'
 import { useLocation, useParams } from 'react-router-dom'
 import { getToken, postJson, requestJson } from '../lib/apiClient'
 
@@ -105,53 +114,71 @@ const CompoundPage: React.FC = () => {
           <h1 className="page-title">{formula || elementSymbols || '材料体系'}</h1>
         </div>
         <div className="toolbar">
-          <button className="button secondary" onClick={loadAlexandria}>Alexandria</button>
-          <button className="button secondary" onClick={loadHtsc}>HTSC-2025</button>
+          <Button variant="outline"  onPress={loadAlexandria}>Alexandria</Button>
+          <Button variant="outline"  onPress={loadHtsc}>HTSC-2025</Button>
         </div>
       </header>
-      {status && <div className="status">{status}</div>}
-      {error && <div className="status error">{error}</div>}
+      <div className="stack">
+        {status && <div className="status-message">{status}</div>}
+        {error && <div className="status-message error">{error}</div>}
+      </div>
 
-      <div className="grid two" style={{ marginTop: 14 }}>
-        <div className="panel">
-          <h2>本地文献与超导记录</h2>
-          <div className="cards">
+      <div className="grid-two" style={{ marginTop: 16 }}>
+        <Card  >
+          <CardHeader><h2 className="section-title">本地文献与超导记录</h2></CardHeader>
+          <Separator />
+          <CardContent className="stack">
             {papers.map((paper, index) => (
-              <article className="card-row" key={paper.id || index}>
-                <h3>{paper.title || paper.doi || `论文 ${paper.id || index + 1}`}</h3>
+              <Card   className="border border-[var(--sc-border)]" key={paper.id || index}>
+                <CardContent>
+                <h3 className="font-semibold">{paper.title || paper.doi || `论文 ${paper.id || index + 1}`}</h3>
                 <p className="muted">{[paper.journal, paper.year].filter(Boolean).join(' · ') || '来源信息待补充'}</p>
                 {paper.summary && <p>{paper.summary}</p>}
-              </article>
+                </CardContent>
+              </Card>
             ))}
             {papers.length === 0 && <p className="muted">暂无本地文献结果</p>}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
-        <div className="panel">
-          <h2>外部候选材料</h2>
-          <div className="table-wrap">
-            <table className="table">
-              <thead><tr><th>材料</th><th>Tc</th><th>空间群</th><th>状态</th></tr></thead>
-              <tbody>
+        <Card  >
+          <CardHeader><h2 className="section-title">外部候选材料</h2></CardHeader>
+          <Separator />
+          <CardContent>
+            <Table aria-label="外部候选材料"><Table.Content>
+              <Table.Header>
+                <Table.Column>材料</Table.Column>
+                <Table.Column>Tc</Table.Column>
+                <Table.Column>空间群</Table.Column>
+                <Table.Column>状态</Table.Column>
+              </Table.Header>
+              <Table.Body>
                 {materials.map((item, index) => (
-                  <tr key={item.mat_id || index}>
-                    <td>{item.formula || item.mat_id || '-'}</td>
-                    <td>{item.tc ?? '-'}</td>
-                    <td>{item.spacegroup || '-'}</td>
-                    <td>{item.stable === undefined ? '-' : item.stable ? '稳定' : '不稳定'}</td>
-                  </tr>
+                  <Table.Row key={item.mat_id || index}>
+                    <Table.Cell>{item.formula || item.mat_id || '-'}</Table.Cell>
+                    <Table.Cell>{item.tc ?? '-'}</Table.Cell>
+                    <Table.Cell>{item.spacegroup || '-'}</Table.Cell>
+                    <Table.Cell>{item.stable === undefined ? '-' : item.stable ? '稳定' : '不稳定'}</Table.Cell>
+                  </Table.Row>
                 ))}
-                {materials.length === 0 && <tr><td colSpan={4} className="muted">点击上方按钮加载外部数据库</td></tr>}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                {materials.length === 0 && (
+                  <Table.Row>
+                    <Table.Cell colSpan={4}>点击上方按钮加载外部数据库</Table.Cell>
+                  </Table.Row>
+                )}
+              </Table.Body>
+            </Table.Content></Table>
+          </CardContent>
+        </Card>
       </div>
 
-      <div className="panel" style={{ marginTop: 14 }}>
-        <h2>上传文献</h2>
-        <input className="input" type="file" onChange={(e) => uploadPaper(e.target.files?.[0])} />
-      </div>
+      <Card   style={{ marginTop: 16 }}>
+        <CardHeader><h2 className="section-title">上传文献</h2></CardHeader>
+        <Separator />
+        <CardContent>
+          <Input  type="file" onChange={(e) => uploadPaper(e.target.files?.[0])} />
+        </CardContent>
+      </Card>
     </section>
   )
 }

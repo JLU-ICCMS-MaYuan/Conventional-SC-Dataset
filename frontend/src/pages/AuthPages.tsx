@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { Button, Card, CardContent, CardHeader, Separator, Input } from '@heroui/react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { postJson } from '../lib/apiClient'
 import { useAuth } from '../context/AuthContext'
@@ -31,16 +32,25 @@ export const LoginPage: React.FC = () => {
 
   return (
     <section className="page">
-      <div className="panel" style={{ maxWidth: 460, margin: '40px auto' }}>
-        <h1>{isAdmin ? '管理员登录' : '用户登录'}</h1>
-        <form className="grid" onSubmit={submit}>
-          <label className="field">用户名或邮箱<input className="input" value={username} onChange={(e) => setUsername(e.target.value)} /></label>
-          <label className="field">密码<input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
-          {error && <div className="status error">{error}</div>}
-          <button className="button">登录</button>
-          <Link to={isAdmin ? '/admin/register' : '/register'}>{isAdmin ? '申请管理员账号' : '注册新账号'}</Link>
+      <Card   className="mx-auto mt-10 max-w-[460px]">
+        <CardHeader><h1 className="page-title">{isAdmin ? '管理员登录' : '用户登录'}</h1></CardHeader>
+        <Separator />
+        <CardContent>
+        <form className="stack" onSubmit={submit}>
+          <label className="stack gap-2 text-sm font-semibold text-[var(--sc-muted)]">
+            用户名或邮箱
+            <Input value={username} onChange={(event) => setUsername(event.target.value)} />
+          </label>
+          <label className="stack gap-2 text-sm font-semibold text-[var(--sc-muted)]">
+            密码
+            <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+          </label>
+          {error && <div className="status-message error">{error}</div>}
+          <Button variant="primary"  type="submit">登录</Button>
+          <Link className="text-sm text-[var(--sc-primary)]" to={isAdmin ? '/admin/register' : '/register'}>{isAdmin ? '申请管理员账号' : '注册新账号'}</Link>
         </form>
-      </div>
+        </CardContent>
+      </Card>
     </section>
   )
 }
@@ -70,17 +80,32 @@ export const RegisterPage: React.FC = () => {
 
   return (
     <section className="page">
-      <div className="panel" style={{ maxWidth: 520, margin: '40px auto' }}>
-        <h1>{isAdmin ? '管理员注册申请' : '用户注册'}</h1>
-        <form className="grid" onSubmit={submit}>
-          <label className="field">用户名<input className="input" value={form.username} onChange={(e) => update('username', e.target.value)} /></label>
-          <label className="field">真实姓名<input className="input" value={form.real_name} onChange={(e) => update('real_name', e.target.value)} /></label>
-          <label className="field">邮箱<input className="input" value={form.email} onChange={(e) => update('email', e.target.value)} /></label>
-          <label className="field">密码<input className="input" type="password" value={form.password} onChange={(e) => update('password', e.target.value)} /></label>
-          {status && <div className="status">{status}</div>}
-          <button className="button">提交</button>
+      <Card   className="mx-auto mt-10 max-w-[520px]">
+        <CardHeader><h1 className="page-title">{isAdmin ? '管理员注册申请' : '用户注册'}</h1></CardHeader>
+        <Separator />
+        <CardContent>
+        <form className="stack" onSubmit={submit}>
+          <label className="stack gap-2 text-sm font-semibold text-[var(--sc-muted)]">
+            用户名
+            <Input value={form.username} onChange={(event) => update('username', event.target.value)} />
+          </label>
+          <label className="stack gap-2 text-sm font-semibold text-[var(--sc-muted)]">
+            真实姓名
+            <Input value={form.real_name} onChange={(event) => update('real_name', event.target.value)} />
+          </label>
+          <label className="stack gap-2 text-sm font-semibold text-[var(--sc-muted)]">
+            邮箱
+            <Input value={form.email} onChange={(event) => update('email', event.target.value)} />
+          </label>
+          <label className="stack gap-2 text-sm font-semibold text-[var(--sc-muted)]">
+            密码
+            <Input type="password" value={form.password} onChange={(event) => update('password', event.target.value)} />
+          </label>
+          {status && <div className="status-message">{status}</div>}
+          <Button variant="primary"  type="submit">提交</Button>
         </form>
-      </div>
+        </CardContent>
+      </Card>
     </section>
   )
 }

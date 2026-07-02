@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { Button, Card, CardContent, CardHeader, Chip, Separator, Input } from '@heroui/react'
 import { useNavigate } from 'react-router-dom'
 import { useI18n } from '../context/I18nContext'
 import { periodicElements, type PeriodicElement } from '../lib/periodicElements'
@@ -58,60 +59,69 @@ const ElementsPage: React.FC = () => {
         <p className="muted">{t('explore.subtitle')}</p>
       </header>
 
-      <section className="formula-panel" aria-labelledby="formula-search-title">
-        <div>
-          <h2 id="formula-search-title">{t('explore.formula_title')}</h2>
-          <p>{t('explore.formula_desc')}</p>
-        </div>
-        <div className="formula-row">
-          <label className="field">
-            {t('explore.formula_label')}
-            <input
-              id="formula-search-input"
-              className="input"
-              value={formula}
-              onChange={(event) => setFormula(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  goFormula()
-                }
-              }}
-              placeholder={t('explore.formula_placeholder')}
-            />
-          </label>
-          <button className="button" onClick={goFormula}>{t('explore.formula_search')}</button>
-        </div>
-      </section>
+      <Card   aria-labelledby="formula-search-title">
+        <CardContent>
+          <section className="formula-panel">
+            <div>
+              <h2 className="section-title" id="formula-search-title">{t('explore.formula_title')}</h2>
+              <p className="section-subtitle">{t('explore.formula_desc')}</p>
+            </div>
+            <div className="formula-row">
+              <label className="stack min-w-[280px] flex-1 gap-2 text-sm font-semibold text-[var(--sc-muted)]">
+                {t('explore.formula_label')}
+                <Input
+                  id="formula-search-input"
+                  value={formula}
+                  onChange={(event) => setFormula(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      goFormula()
+                    }
+                  }}
+                  placeholder={t('explore.formula_placeholder')}
+                />
+              </label>
+              <Button variant="primary"  onPress={goFormula}>{t('explore.formula_search')}</Button>
+            </div>
+          </section>
+        </CardContent>
+      </Card>
 
-      <section className="elements-panel" aria-labelledby="elements-search-title">
-        <div className="elements-toolbar">
+      <Card   aria-labelledby="elements-search-title">
+        <CardHeader className="elements-toolbar">
           <div>
-            <h2 id="elements-search-title">{t('explore.elements_title')}</h2>
+            <h2 className="section-title" id="elements-search-title">{t('explore.elements_title')}</h2>
             <div className="selected-summary">
               <span>{t('explore.selected')}</span>
-              <span className={`selected-pill ${selected.length ? 'is-active' : ''}`}>{selectedLabel}</span>
+              <Chip color={selected.length ? 'accent' : 'default'} variant="soft" >{selectedLabel}</Chip>
             </div>
           </div>
 
           <div className="elements-controls">
-            <div className="segmented-control" role="group" aria-label={t('explore.elements_title')}>
-              <button className={mode === 'elements_combination_search' ? 'active' : ''} onClick={() => setMode('elements_combination_search')}>
-                {t('explore.mode_combination')}
-              </button>
-              <button className={mode === 'elements_exact_search' ? 'active' : ''} onClick={() => setMode('elements_exact_search')}>
-                {t('explore.mode_exact')}
-              </button>
-              <button className={mode === 'elements_contained_search' ? 'active' : ''} onClick={() => setMode('elements_contained_search')}>
-                {t('explore.mode_contains')}
-              </button>
+            <div className="toolbar" role="group" aria-label={t('explore.elements_title')}>
+              {[
+                ['elements_combination_search', t('explore.mode_combination')],
+                ['elements_exact_search', t('explore.mode_exact')],
+                ['elements_contained_search', t('explore.mode_contains')],
+              ].map(([key, label]) => (
+                <Button
+                  key={key}
+                  variant={mode === key ? 'secondary' : 'outline'}
+                  onPress={() => setMode(key)}
+                >
+                  {label}
+                </Button>
+              ))}
             </div>
             <div className="toolbar">
-              <button className="button secondary" onClick={() => setSelected([])}>{t('explore.clear')}</button>
-              <button className="button" disabled={!selected.length} onClick={goElements}>{t('explore.enter')}</button>
+              <Button variant="outline"  onPress={() => setSelected([])}>{t('explore.clear')}</Button>
+              <Button variant="primary"  isDisabled={!selected.length} onPress={goElements}>{t('explore.enter')}</Button>
             </div>
           </div>
-        </div>
+        </CardHeader>
+        <Separator />
+        <CardContent>
 
         <div className="periodic-table-container">
           <div className="periodic-table">
@@ -141,7 +151,8 @@ const ElementsPage: React.FC = () => {
           </div>
         </div>
         <p className="muted explore-hint">{t('explore.hint')}</p>
-      </section>
+        </CardContent>
+      </Card>
     </section>
   )
 }

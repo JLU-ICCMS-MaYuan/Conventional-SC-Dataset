@@ -1,6 +1,6 @@
 import React from 'react'
+import { Button, Card, CardContent } from '@heroui/react'
 import { Link, useLocation } from 'react-router-dom'
-import { Navbar, Nav, Container, Button } from 'react-bootstrap'
 import { useAuth } from '../context/AuthContext'
 
 const NavBar: React.FC = () => {
@@ -8,38 +8,25 @@ const NavBar: React.FC = () => {
   const location = useLocation()
 
   return (
-    <Navbar bg="white" expand="lg" className="border-bottom shadow-sm sticky-top">
-      <Container fluid>
-        <Navbar.Brand as={Link} to="/" className="fw-bold">
-          超导文献数据库
-        </Navbar.Brand>
-        <Navbar.Toggle />
-        <Navbar.Collapse>
-          <Nav className="me-auto">
-            <Nav.Link as={Link} to="/rag" active={location.pathname === '/rag'}>
-              AI 助手
-            </Nav.Link>
-            <Nav.Link as={Link} to="/compound" active={location.pathname.startsWith('/compound')}>
-              化合物
-            </Nav.Link>
-          </Nav>
-          <Nav>
-            {user ? (
-              <>
-                <Navbar.Text className="me-3">{user.username}</Navbar.Text>
-                <Button variant="outline-secondary" size="sm" onClick={logout}>
-                  退出
-                </Button>
-              </>
-            ) : (
-              <Nav.Link as={Link} to="/login">
-                登录
-              </Nav.Link>
-            )}
-          </Nav>
-        </Navbar.Collapse>
-      </Container>
-    </Navbar>
+    <Card className="border-b border-[var(--sc-border)] bg-[rgba(251,253,251,0.9)]">
+      <CardContent className="flex min-h-14 items-center justify-between gap-4 px-4 py-2">
+        <Link to="/" className="font-bold text-[var(--sc-text)]">SC-Wiki</Link>
+        <nav className="toolbar">
+          <Link to="/rag"><Button variant={location.pathname === '/rag' ? 'secondary' : 'ghost'} size="sm">超导对话</Button></Link>
+          <Link to="/compound"><Button variant={location.pathname.startsWith('/compound') ? 'secondary' : 'ghost'} size="sm">结果页</Button></Link>
+        </nav>
+        <div className="toolbar">
+          {user ? (
+            <>
+              <span className="text-sm text-[var(--sc-muted)]">{user.username}</span>
+              <Button variant="outline" size="sm" onPress={logout}>退出</Button>
+            </>
+          ) : (
+            <Link to="/login"><Button variant="outline" size="sm">登录</Button></Link>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
