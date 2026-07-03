@@ -440,16 +440,17 @@ a {
   z-index: 5;
 }
 
-.element.alkali-metal { background-color: oklch(0.91 0.035 18); }
-.element.alkaline-earth { background-color: oklch(0.91 0.035 72); }
-.element.transition-metal { background-color: oklch(0.91 0.03 92); }
-.element.post-transition { background-color: oklch(0.92 0.03 115); }
-.element.metalloid { background-color: oklch(0.9 0.036 150); }
-.element.nonmetal { background-color: oklch(0.9 0.034 195); }
-.element.halogen { background-color: oklch(0.89 0.034 235); }
-.element.noble-gas { background-color: oklch(0.91 0.03 285); }
-.element.lanthanide { background-color: oklch(0.89 0.035 315); }
-.element.actinide { background-color: oklch(0.87 0.038 340); }
+.element.alkali-metal { background-color: #f4bcc2; }
+.element.alkaline-earth { background-color: #e3bd91; }
+.element.transition { background-color: #edcda9; }
+.element.transition-metal { background-color: #edcda9; }
+.element.post-transition { background-color: #ededab; }
+.element.metalloid { background-color: #9cd5a8; }
+.element.nonmetal { background-color: #a3d7dc; }
+.element.halogen { background-color: #b7a0db; }
+.element.noble-gas { background-color: #cfb5d6; }
+.element.lanthanide { background-color: #cea1ce; }
+.element.actinide { background-color: #c782ab; }
 
 .element.empty {
   background: transparent;
