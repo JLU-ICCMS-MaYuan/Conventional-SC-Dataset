@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SC-Wiki — UI 展示</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #f5f5f5; color: #1a1a1a;
+  }
+  header {
+    background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
+    color: #fff; padding: 16px 24px;
+    display: flex; align-items: center; gap: 16px;
+  }
+  header h1 { font-size: 18px; font-weight: 600; }
+  header nav { display: flex; gap: 12px; }
+  header nav a {
+    color: rgba(255,255,255,.7); text-decoration: none;
+    font-size: 13px; padding: 4px 12px; border-radius: 6px;
+    transition: all .15s;
+  }
+  header nav a:hover, header nav a.active {
+    color: #fff; background: rgba(255,255,255,.15);
+  }
+  .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+  .section-title {
+    font-size: 20px; font-weight: 700; margin-bottom: 16px;
+    color: #1e3a5f; border-left: 3px solid #4d6bfe; padding-left: 12px;
+  }
+  .subsection-title {
+    font-size: 14px; font-weight: 600; color: #64748b;
+    margin: 24px 0 12px; text-transform: uppercase; letter-spacing: .5px;
+  }
+  /* ── Homepage ── */
+  .hero {
+    background: linear-gradient(135deg, #f0f4ff 0%, #e8f0fe 100%);
+    border-radius: 16px; padding: 48px 32px; text-align: center; margin-bottom: 32px;
+  }
+  .hero h2 { font-size: 28px; color: #1e3a5f; margin-bottom: 8px; }
+  .hero p { color: #64748b; font-size: 15px; margin-bottom: 24px; }
+  .periodic-grid {
+    display: grid; grid-template-columns: repeat(18, 1fr); gap: 3px;
+    max-width: 900px; margin: 0 auto;
+  }
+  .element {
+    aspect-ratio: 1; border-radius: 4px; font-size: 9px;
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; cursor: pointer; transition: all .15s;
+    background: #fff; border: 1px solid #e5e5e5; color: #666;
+    min-width: 36px;
+  }
+  .element:hover { transform: scale(1.15); z-index: 1; box-shadow: 0 4px 12px rgba(0,0,0,.15); }
+  .element.selected { background: #4d6bfe; color: #fff; border-color: #4d6bfe; }
+  .element .sym { font-size: 14px; font-weight: 700; line-height: 1; }
+  .element .num { font-size: 8px; opacity: .6; }
+  .stats-row { display: flex; gap: 16px; justify-content: center; margin-top: 24px; }
+  .stat-card {
+    background: #fff; border-radius: 12px; padding: 16px 24px;
+    text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  }
+  .stat-card .val { font-size: 24px; font-weight: 700; color: #1e3a5f; }
+  .stat-card .lbl { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+  /* ── RAG Chat ── */
+  .chat-layout { display: flex; gap: 16px; height: 500px; }
+  .chat-main { flex: 1; display: flex; flex-direction: column; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  .chat-messages { flex: 1; overflow-y: auto; padding: 16px; }
+  .msg-row { display: flex; margin-bottom: 12px; }
+  .msg-row.user { justify-content: flex-end; }
+  .bubble {
+    max-width: 75%; padding: 10px 14px; border-radius: 16px;
+    font-size: 13px; line-height: 1.7;
+  }
+  .bubble.user { background: #4d6bfe; color: #fff; border-bottom-right-radius: 4px; }
+  .bubble.assistant { background: #f1f5f9; color: #1a1a1a; border-bottom-left-radius: 4px; }
+  .bubble .cite { font-size: 11px; color: #4d6bfe; vertical-align: super; cursor: pointer; }
+  .explore-btn {
+    background: #fff; border: 2px solid #4d6bfe; color: #4d6bfe;
+    border-radius: 20px; padding: 6px 14px; font-size: 13px;
+    cursor: pointer; transition: all .15s;
+  }
+  .explore-btn.active { background: #4d6bfe; color: #fff; }
+  .chat-input-bar {
+    padding: 12px 16px; border-top: 1px solid #f0f0f0;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .chat-input-bar input {
+    flex: 1; border: 1px solid #e5e5e5; border-radius: 20px;
+    padding: 8px 16px; font-size: 13px; outline: none;
+  }
+  .chat-input-bar input:focus { border-color: #4d6bfe; }
+  .chat-sidebar {
+    width: 280px; background: #fff; border-radius: 12px; padding: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06); overflow-y: auto;
+  }
+  .chat-sidebar h3 { font-size: 13px; color: #64748b; margin-bottom: 12px; }
+  .ref-item { padding: 8px 0; border-bottom: 1px solid #f5f5f5; font-size: 12px; }
+  .ref-item .ref-num { color: #4d6bfe; font-weight: 600; margin-right: 6px; }
+  .ref-item .ref-title { color: #333; font-weight: 500; }
+  .ref-item .ref-meta { color: #94a3b8; font-size: 11px; margin-top: 2px; }
+  /* ── Evidence Card ── */
+  .idea-card {
+    margin: 12px 0; border: 1px solid #e5e5e5; border-radius: 10px;
+    background: #fff; overflow: hidden; font-size: 13px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  }
+  .idea-card .card-header {
+    padding: 10px 14px; font-weight: 600; font-size: 14px;
+    background: #f8faff; color: #1e3a5f; border-left: 3px solid #4d6bfe;
+  }
+  .idea-card .card-body { padding: 10px 14px; }
+  .idea-card .card-section { margin-bottom: 10px; }
+  .idea-card .card-label {
+    font-weight: 700; font-size: 11px; color: #64748b;
+    margin-bottom: 6px; text-transform: uppercase; letter-spacing: .4px;
+  }
+  .idea-card .fragment {
+    padding: 8px 10px; margin-bottom: 6px; background: #f8fafc;
+    border-radius: 6px; border-left: 3px solid #4d6bfe;
+  }
+  .idea-card .fragment .quote { font-style: italic; color: #334155; line-height: 1.7; }
+  .idea-card .fragment .src { font-size: 11px; color: #94a3b8; margin-top: 4px; }
+  .idea-card .reasoning { color: #334155; line-height: 1.7; }
+  .idea-card .assumptions { margin: 0; padding-left: 18px; }
+  .idea-card .assumptions li { color: #64748b; margin-bottom: 3px; }
+  .idea-card .review-bar {
+    border-top: 2px solid #fed7aa; background: #fffbf5;
+    padding: 10px 14px;
+  }
+  .stars { color: #f59e0b; letter-spacing: 2px; }
+  .flaw-item {
+    padding: 4px 8px; margin-bottom: 4px; border-radius: 4px;
+    font-size: 12px; display: flex; gap: 8px; align-items: flex-start;
+  }
+  .flaw-badge {
+    padding: 1px 8px; border-radius: 3px; font-size: 10px;
+    font-weight: 600; flex-shrink: 0; text-align: center;
+  }
+  .flaw-badge.high { background: #fee2e2; color: #dc2626; }
+  .flaw-badge.medium { background: #fef3c7; color: #d97706; }
+  /* ── Nav tabs ── */
+  .tabs { display: flex; gap: 8px; margin-bottom: 24px; }
+  .tab {
+    padding: 8px 20px; border-radius: 8px; font-size: 13px;
+    cursor: pointer; border: 1px solid #e5e5e5; background: #fff;
+    transition: all .15s;
+  }
+  .tab:hover { border-color: #4d6bfe; }
+  .tab.active { background: #4d6bfe; color: #fff; border-color: #4d6bfe; }
+  .screen { display: none; }
+  .screen.active { display: block; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>SC-Wiki</h1>
+  <nav>
+    <a href="#" class="active">首页</a>
+    <a href="#">周期表</a>
+    <a href="#">化合物</a>
+    <a href="#">AI 文献助手</a>
+    <a href="#">管理</a>
+  </nav>
+</header>
+
+<div class="container">
+
+<!-- ─── Tab: Homepage ─── -->
+<div id="tab-home" class="screen active">
+  <div class="hero">
+    <h2>超导文献数据平台</h2>
+    <p>基于元素周期表的去中心化超导研究数据库<br/>638 篇论文 · 1012 种超导体 · 4709 条超导记录</p>
+  </div>
+  <div class="section-title">元素周期表入口</div>
+  <div class="periodic-grid" id="periodic-grid"></div>
+  <div class="stats-row">
+    <div class="stat-card"><div class="val">638</div><div class="lbl">论文</div></div>
+    <div class="stat-card"><div class="val">1,012</div><div class="lbl">超导体</div></div>
+    <div class="stat-card"><div class="val">4,709</div><div class="lbl">超导记录</div></div>
+    <div class="stat-card"><div class="val">29,311</div><div class="lbl">文本块 (RAG)</div></div>
+  </div>
+</div>
+
+<!-- ─── Tab: RAG Chat ─── -->
+<div id="tab-rag" class="screen">
+  <div class="section-title">AI 文献助手 · 灵感探索</div>
+  <div class="subsection-title">普通问答模式</div>
+  <div class="chat-layout">
+    <div class="chat-main">
+      <div class="chat-messages">
+        <div class="msg-row"><div class="bubble user">LaH₁₀ 的 Tc 是多少？</div></div>
+        <div class="msg-row"><div class="bubble assistant">
+          LaH₁₀ 在 250 GPa 下 Fm-3m 结构的 Tc 为 <strong>250-260 K</strong><sup class="cite">[1]</sup>。
+          这是目前已知 Tc 最高的氢化物超导体之一<sup class="cite">[2]</sup>。
+        </div></div>
+      </div>
+      <div class="chat-input-bar">
+        <input placeholder="问一个超导问题..." value="LaH₁₀ 的 Tc 是多少？" readonly>
+        <button style="border:none;background:#4d6bfe;color:#fff;border-radius:50%;width:34px;height:34px;cursor:pointer">↑</button>
+      </div>
+    </div>
+    <div class="chat-sidebar">
+      <h3>📚 文献来源</h3>
+      <div class="ref-item">
+        <span class="ref-num">[1]</span>
+        <span class="ref-title">Superconductivity in LaH₁₀</span>
+        <div class="ref-meta">Physical Review Letters (2024)</div>
+      </div>
+      <div class="ref-item">
+        <span class="ref-num">[2]</span>
+        <span class="ref-title">High-Tc Hydrides Review</span>
+        <div class="ref-meta">National Science Review (2024)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="subsection-title">灵感探索模式 (🔬)</div>
+  <div class="chat-layout">
+    <div class="chat-main">
+      <div class="chat-messages">
+        <div class="msg-row"><div class="bubble user">氢化物超导还有什么新方向？</div></div>
+        <div class="msg-row"><div class="bubble assistant">
+          基于数据库文献，我注意到三个趋势：<br/>
+          1. 三元氢化物快速增长，实验验证很少<sup class="cite">[1]</sup><br/>
+          2. 常压亚稳氢化物研究开始出现<sup class="cite">[2]</sup><br/>
+          3. 机器学习辅助结构搜索已应用到氢化物<sup class="cite">[3]</sup><br/><br/>
+          你对哪个方向最感兴趣？
+        </div></div>
+      </div>
+      <div class="chat-input-bar">
+        <button class="explore-btn active">🔬 探索</button>
+        <input placeholder="说说你的想法..." value="三元氢化物搜索不错，从哪入手？" readonly>
+        <button style="border:none;background:#4d6bfe;color:#fff;border-radius:50%;width:34px;height:34px;cursor:pointer">↑</button>
+      </div>
+    </div>
+    <div class="chat-sidebar">
+      <h3>📄 筛选文献 (3)</h3>
+      <div class="ref-item">
+        <span class="ref-num">[1]</span>
+        <span class="ref-title">Superconducting ternary hydrides</span>
+        <div class="ref-meta">WIREs Comp Mol Sci (2021)</div>
+      </div>
+      <div class="ref-item">
+        <span class="ref-num">[2]</span>
+        <span class="ref-title">Metastable hydrides at ambient pressure</span>
+        <div class="ref-meta">Adv Funct Mater (2024)</div>
+      </div>
+      <div class="ref-item">
+        <span class="ref-num">[3]</span>
+        <span class="ref-title">ML-driven hydride superconductor search</span>
+        <div class="ref-meta">npj Comput Mater (2022)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Idea Card -->
+  <div class="subsection-title">点子卡片 (IDEATE 阶段输出)</div>
+  <div style="max-width: 640px;">
+    <div class="idea-card">
+      <div class="card-header">💡 尺寸失配诱导的非整数比双笼超导体</div>
+      <div class="card-body">
+        <div class="card-section">
+          <div class="card-label">📎 灵感来源</div>
+          <div class="fragment">
+            <div class="quote">"We have found a series of ternary multicage clathrate hydrides with noninteger H/metal ratios..."</div>
+            <div class="src">[1] — abstract</div>
+          </div>
+          <div class="fragment">
+            <div class="quote">"a common strategy is to consider substitutions of a third element into a known binary hydride..."</div>
+            <div class="src">[2] — discussion</div>
+          </div>
+        </div>
+        <div class="card-section">
+          <div class="card-label">🔗 推理链</div>
+          <div class="reasoning">文献[1]证实非整数比多笼氢化物存在。利用Mg(小)与La(大)的半径差异，可在150-250 GPa下诱导出不同于二元体系的新笼拓扑。</div>
+        </div>
+        <div class="card-section">
+          <div class="card-label">⚠️ 假设前提</div>
+          <ul class="assumptions">
+            <li>Mg可部分取代La进入笼结构</li>
+            <li>150-250 GPa压力窗口稳定</li>
+          </ul>
+        </div>
+      </div>
+      <div class="review-bar">
+        <div style="font-weight:600;color:#c2410c;margin-bottom:8px">
+          🔍 审稿意见 <span class="stars">★★★★☆</span> 综合可行性
+        </div>
+        <div class="flaw-item">
+          <span class="flaw-badge high">严重</span>
+          <span>Mg 可能优先与 H 反应形成 MgH₂ 而无法进入笼结构</span>
+        </div>
+        <div class="flaw-item">
+          <span class="flaw-badge medium">中等</span>
+          <span>未给出具体合成压力窗口和氢源选择</span>
+        </div>
+        <div style="display:flex;gap:24px;margin-top:10px;font-size:12px;color:#64748b">
+          <span>理论自洽 ★★★★</span>
+          <span>合成可达 ★★</span>
+          <span>测量可验 ★★★</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Tab: Compound ─── -->
+<div id="tab-compound" class="screen">
+  <div class="section-title">La-H 体系</div>
+  <div style="background:#fff;border-radius:12px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,.06)">
+    <div style="font-size:18px;font-weight:700;color:#1e3a5f;margin-bottom:16px">LaH₁₀ (Fm-3m)</div>
+    <table style="width:100%;font-size:13px;border-collapse:collapse">
+      <thead><tr style="text-align:left;border-bottom:2px solid #e5e5e5">
+        <th style="padding:8px">化合物</th><th style="padding:8px">Tc (K)</th>
+        <th style="padding:8px">压力 (GPa)</th><th style="padding:8px">类型</th>
+        <th style="padding:8px">文献</th>
+      </tr></thead>
+      <tbody>
+        <tr style="border-bottom:1px solid #f5f5f5">
+          <td style="padding:8px;font-weight:500">LaH₁₀</td><td style="padding:8px;color:#4d6bfe">250</td>
+          <td style="padding:8px">170</td><td style="padding:8px">理论</td>
+          <td style="padding:8px"><span class="cite">[1]</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f5f5f5">
+          <td style="padding:8px;font-weight:500">LaH₁₀</td><td style="padding:8px;color:#4d6bfe">260</td>
+          <td style="padding:8px">200</td><td style="padding:8px">实验</td>
+          <td style="padding:8px"><span class="cite">[2]</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #f5f5f5">
+          <td style="padding:8px;font-weight:500">LaH₉</td><td style="padding:8px;color:#4d6bfe">215</td>
+          <td style="padding:8px">180</td><td style="padding:8px">理论</td>
+          <td style="padding:8px"><span class="cite">[3]</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+</div>
+
+<script>
+// ── Simple tab switching ──
+document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'))
+document.getElementById('tab-home').classList.add('active')
+
+// ── Periodic table generator ──
+const elements = [
+  ['H','','','','','','','','','','','','','','','','','He'],
+  ['Li','Be','','','','','','','','','','B','C','N','O','F','Ne'],
+  ['Na','Mg','','','','','','','','','','Al','Si','P','S','Cl','Ar'],
+  ['K','Ca','Sc','Ti','V','Cr','Mn','Fe','Co','Ni','Cu','Zn','Ga','Ge','As','Se','Br','Kr'],
+]
+const grid = document.getElementById('periodic-grid')
+elements.forEach(row => {
+  row.forEach(sym => {
+    const div = document.createElement('div')
+    div.className = 'element'
+    if (sym) {
+      div.innerHTML = `<span class="sym">${sym}</span>`
+      div.onclick = () => {
+        grid.querySelectorAll('.element').forEach(e => e.classList.remove('selected'))
+        div.classList.add('selected')
+      }
+    } else {
+      div.style.background = 'transparent'
+      div.style.border = 'none'
+    }
+    grid.appendChild(div)
+  })
+})
+</script>
+</body>
+</html>
