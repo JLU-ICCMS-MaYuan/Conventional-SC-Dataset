@@ -132,7 +132,7 @@ const RagPage: React.FC = () => {
                     {isAssistant && msg.content && (
                       <div style={st.rowL}>
                         <div style={st.bubbleA}>
-                          <MarkdownMessage content={msg.content} papers={papers} />
+                          <MarkdownMessage content={msg.content} papers={papers} paperSeqMap={paperSeqMap} />
                         </div>
                       </div>
                     )}

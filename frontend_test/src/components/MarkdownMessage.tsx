@@ -14,23 +14,10 @@ interface PaperInfo {
 interface MarkdownMessageProps {
   content: string
   papers: Record<string, PaperInfo>
+  paperSeqMap?: Record<string, number>  // 全局 PID→序号映射（来自 savedPapers）
 }
 
-/**
- * Renders markdown with citation support.
- * Replaces [PID_xxx] markers with superscript citation links.
- */
-/** 构建 PID → 顺序编号映射（按首次出现顺序） */
-function buildSeqMap(content: string): Map<string, number> {
-  const map = new Map<string, number>()
-  let n = 1
-  for (const m of content.matchAll(/\[PID_(\d+)\]/g)) {
-    if (!map.has(m[1])) map.set(m[1], n++)
-  }
-  return map
-}
-
-const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content, papers }) => {
+const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content, papers, paperSeqMap }) => {
   // 清理内部标记
   let text = content
   for (const tag of ['<!--IS:', '<!--BS:']) {
@@ -39,13 +26,10 @@ const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content, papers }) =>
   }
   text = text.replace(/\[来源\d+\]（paper_id=\d+）/g, '')
   text = text.replace(/\[来源\d+\]/g, '')
-
-  // PID → 上标序号
-  const seqMap = buildSeqMap(text)
   const processed = text.replace(
     /\[PID_(\d+)\]/g,
     (_match, pid: string) => {
-      const seq = seqMap.get(pid) || pid
+      const seq = paperSeqMap?.[pid] || '?'
       const p = papers?.[pid]
       const doi = p?.doi || ''
       const tooltip = p?.journal && p?.year
