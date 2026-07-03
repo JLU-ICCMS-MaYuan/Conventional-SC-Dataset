@@ -24,6 +24,8 @@ const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content, papers, pape
     const i = text.lastIndexOf(tag)
     if (i !== -1) text = text.substring(0, i)
   }
+  // 清理 [PID_X 来源Y] 或 [PID_X, 来源Y] 混合格式 → 只保留 [PID_X]
+  text = text.replace(/\[PID_(\d+)[,\s]*来源\d+\]/g, '[PID_$1]')
   text = text.replace(/\[来源\d+\]（paper_id=\d+）/g, '')
   text = text.replace(/\[来源\d+\]/g, '')
   // 自动包裹 LLM 输出的裸 LaTeX 命令（如 \mathrm{H}_{24} → $\mathrm{H}_{24}$）
