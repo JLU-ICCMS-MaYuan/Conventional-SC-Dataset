@@ -24,7 +24,7 @@ cp .env.example .env   # 编辑 .env，填入实际值
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-| `DATABASE_URL` | 主应用数据库 | `sqlite:///data/local_dev.db` |
+| `DATABASE_URL` | 主应用数据库 | `mysql+pymysql://work:12345678@127.0.0.1:3306/superconductor_dataset?charset=utf8mb4` |
 | `DEEPSEEK_API_KEY` | LLM 对话 API Key | — |
 | `DEEPSEEK_BASE_URL` | LLM 对话 Base URL | `https://api.deepseek.com` |
 | `DEEPSEEK_MODEL` | LLM 模型名 | `deepseek-chat` |
@@ -79,7 +79,7 @@ cd ..
 
 ```bash
 # 开发环境（热重载）
-DATABASE_URL="sqlite:///data/local_dev.db" \
+DATABASE_URL="mysql+pymysql://work:12345678@127.0.0.1:3306/superconductor_dataset?charset=utf8mb4" \
   uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 
 # 生产环境
@@ -105,7 +105,7 @@ curl http://localhost:8000/api/rag/health
 
 工作树缺少 `init_db.py`，跳过该步骤直接启动：
 ```bash
-DATABASE_URL="sqlite:///data/local_dev.db" \
+DATABASE_URL="mysql+pymysql://work:12345678@127.0.0.1:3306/superconductor_dataset?charset=utf8mb4" \
   uvicorn backend.main:app --host 0.0.0.0 --port 8000
 ```
 

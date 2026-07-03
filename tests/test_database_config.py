@@ -30,5 +30,5 @@ def test_database_url_environment_variable_overrides_default(monkeypatch):
 
     database = reload_database_module(monkeypatch, override_url)
 
-    assert database.DEFAULT_DATABASE_URL.endswith("/data/dev.db")
+    assert "mysql" in database.DEFAULT_DATABASE_URL
     assert database.DATABASE_URL == override_url
