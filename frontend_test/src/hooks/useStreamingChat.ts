@@ -45,12 +45,15 @@ interface ReviewVerdict {
   dimensions: { theory: number; synthesis: number; measurement: number }
 }
 
+interface SavedPaper { pid: string; info: PaperInfo }
+
 interface CachedMeta {
   papers: Record<string, PaperInfo>
   top10: any[]
   inspiration: InspirationState | null
   ideas: IdeaCard[]
   reviews: ReviewVerdict[]
+  savedPapers: SavedPaper[]
 }
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
@@ -72,7 +75,7 @@ function save(list: Conversation[]) {
 /** 按对话 ID 存取 papers + top10 */
 function metaKey(cid: string) { return `rag_meta_${cid}` }
 function loadMeta(cid: string): CachedMeta {
-  try { return JSON.parse(localStorage.getItem(metaKey(cid)) || '{"papers":{},"top10":[],"inspiration":null,"ideas":[],"reviews":[]}') } catch { return { papers: {}, top10: [], inspiration: null, ideas: [], reviews: [] } }
+  try { return JSON.parse(localStorage.getItem(metaKey(cid)) || '{"papers":{},"top10":[],"inspiration":null,"ideas":[],"reviews":[],"savedPapers":[]}') } catch { return { papers: {}, top10: [], inspiration: null, ideas: [], reviews: [], savedPapers: [] } }
 }
 function saveMeta(cid: string, meta: CachedMeta) {
   localStorage.setItem(metaKey(cid), JSON.stringify(meta))
@@ -108,7 +111,10 @@ export function useStreamingChat() {
   const [statusLog, setStatusLog] = useState<string[]>([])
 
   /** accumulated filtered papers across conversation turns */
-  const [savedPapers, setSavedPapers] = useState<Array<{ pid: string; info: PaperInfo }>>([])
+  const [savedPapers, setSavedPapers] = useState<Array<{ pid: string; info: PaperInfo }>>(() => {
+    const cid = convs[0]?.id
+    return cid ? (loadMeta(cid).savedPapers || []) : []
+  })
   const keptIdsRef = useRef<string[]>([])
 
   const messages = convs.find((c) => c.id === activeId)?.messages || []
@@ -137,7 +143,7 @@ export function useStreamingChat() {
     setReviews(m.reviews || [])
     setInspiration(m.inspiration || { active: false, mode: '', modeLabel: '', statusMessage: '', sessionId: '', ideasCount: 0 })
     setStatusLog([])
-    setSavedPapers([])
+    setSavedPapers(m.savedPapers || [])
   }, [])
 
   const deleteConversation = useCallback((id: string) => {
@@ -199,6 +205,7 @@ export function useStreamingChat() {
     let receivedTop10: any[] = []
     let receivedIdeas: IdeaCard[] = []
     let receivedReviews: ReviewVerdict[] = []
+    const savedPapersAcc: SavedPaper[] = []  // 累积本次请求新加的论文
     let finalInspiration: InspirationState | null = null
 
     try {
@@ -279,6 +286,8 @@ export function useStreamingChat() {
                       added.push({ pid, info: data.papers[pid] })
                     }
                   }
+                  // 同步到 accumulator 供持久化
+                  added.forEach(p => { if (!savedPapersAcc.some(x => x.pid === p.pid)) savedPapersAcc.push(p) })
                   return added.length > 0 ? [...prev, ...added] : prev
                 })
               }
@@ -324,7 +333,7 @@ export function useStreamingChat() {
           : m
       ),
     } : c))
-    if (cid) saveMeta(cid, { papers: receivedPapers, top10: receivedTop10, inspiration: finalInspiration, ideas: receivedIdeas, reviews: receivedReviews })
+    if (cid) saveMeta(cid, { papers: receivedPapers, top10: receivedTop10, inspiration: finalInspiration, ideas: receivedIdeas, reviews: receivedReviews, savedPapers: savedPapersAcc })
   }, [activeId, convs, loading])
 
   return {
