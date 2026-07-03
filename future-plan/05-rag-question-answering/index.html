@@ -1,33 +1,33 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>05 RAG 问答</title>
-  <style>
-    :root { --background: oklch(0.985 0.002 90); --foreground: oklch(0.12 0.01 60); --muted: oklch(0.45 0.02 60); --border: oklch(0.88 0.01 90); --surface: #fff; --surface-subtle: oklch(0.96 0.003 90); --radius: .25rem; }
-    * { box-sizing: border-box; } body { margin: 0; background: var(--background); color: var(--foreground); font-family: "Instrument Sans", Inter, "Microsoft YaHei", system-ui, sans-serif; }
-    main { max-width: 1400px; margin: 0 auto; padding: 48px; } .eyebrow { display: flex; align-items: center; gap: 12px; color: var(--muted); font: 12px "JetBrains Mono", monospace; text-transform: uppercase; letter-spacing: .08em; } .eyebrow::before { content: ""; width: 32px; height: 1px; background: var(--foreground); }
-    h1 { max-width: 1040px; margin: 24px 0 32px; font-family: "Instrument Serif", Georgia, serif; font-size: clamp(3rem, 9vw, 8rem); line-height: .9; letter-spacing: -.04em; font-weight: 400; } .lede { max-width: 760px; color: var(--muted); font-size: 18px; line-height: 1.7; }
-    .chat { display: grid; grid-template-columns: 220px minmax(0, 1fr) 340px; gap: 18px; margin-top: 88px; min-height: 680px; } .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; } .head { padding: 16px 18px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; gap: 12px; align-items: center; } h2 { margin: 0; font-size: 20px; }
-    .tag { border: 1px solid var(--border); border-radius: 999px; padding: 6px 10px; font: 11px "JetBrains Mono", monospace; text-transform: uppercase; background: var(--surface); } .list, .evidence { padding: 16px; display: grid; gap: 12px; }
-    .session { padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); } .session.active { background: var(--foreground); color: #fff; border-color: var(--foreground); }
-    .messages { padding: 20px; display: grid; gap: 18px; } .bubble { max-width: 74%; border: 1px solid var(--border); padding: 16px; line-height: 1.65; background: var(--surface); } .bubble.user { margin-left: auto; background: var(--foreground); color: #fff; border-color: var(--foreground); } .bubble.assistant { margin-right: auto; }
-    .composer { border-top: 1px solid var(--border); padding: 16px; display: flex; gap: 10px; } input { flex: 1; min-height: 42px; border: 1px solid var(--border); border-radius: 999px; padding: 0 16px; font: inherit; } button { min-height: 42px; border-radius: 999px; border: 1px solid var(--foreground); background: var(--foreground); color: #fff; padding: 0 18px; font-weight: 650; }
-    .source-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; line-height: 1.55; } .source-card strong { display: block; margin: 8px 0; } .candidate { border: 1px dashed var(--foreground); background: repeating-linear-gradient(-45deg, transparent 0 8px, var(--surface-subtle) 8px 9px); }
-    @media (max-width: 1100px) { main { padding: 24px; } .chat { grid-template-columns: 1fr; } .bubble { max-width: 100%; } }
-  </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>检索增强问答 · Material Demo</title>
+  <link rel="stylesheet" href="../material-demo.css">
 </head>
 <body>
-  <main>
-    <div class="eyebrow">05 RAG question answering</div>
-    <h1>Ask the superconductivity literature with evidence.</h1>
-    <p class="lede">RAG 页面必须把回答和证据绑定展示。AI 候选结构化记录只能作为待审核草稿，不能被误认为已入库数据。</p>
-    <section class="chat">
-      <aside class="panel"><div class="head"><h2>会话</h2><span class="tag">NEW</span></div><div class="list"><div class="session active">LaH10 pressure range</div><div class="session">Hydride cage structures</div><div class="session">FeSe isotope effect</div></div></aside>
-      <section class="panel"><div class="head"><h2>对话流</h2><span class="tag">STREAMING</span></div><div class="messages"><div class="bubble user">LaH10 的高 Tc 证据来自哪些论文？</div><div class="bubble assistant">主要证据来自高压氢化物实验和后续理论分析。回答中的每个结论都应链接到论文片段、本地记录或知识图谱关系。</div><div class="bubble assistant">候选结构化记录可以生成，但必须进入审核队列，不能直接成为公开数据库数据。</div></div><div class="composer"><input value="继续追问压力范围和结构来源" /><button>Send →</button></div></section>
-      <aside class="panel"><div class="head"><h2>证据</h2><span class="tag">4 SOURCES</span></div><div class="evidence"><div class="source-card"><span class="tag">PAPER CHUNK</span><strong>Nature 2019 · LaH10</strong><p>实验 Tc 和压力范围片段。</p></div><div class="source-card"><span class="tag">KG RELATION</span><strong>H3S → LaH10</strong><p>材料体系扩展关系。</p></div><div class="source-card"><span class="tag">LOCAL RECORD</span><strong>Record #1024</strong><p>已审核结构化记录。</p></div><div class="source-card candidate"><span class="tag">CANDIDATE · NOT PUBLIC DATA</span><strong>AI generated record draft</strong><p>需要人工审核后才能进入数据库。</p></div></div></aside>
-    </section>
-  </main>
+  <div class="app-shell">
+    <header class="top-app-bar"><div class="brand"><div class="brand-mark">SC</div><span>SC-chat</span></div><div class="toolbar"><span class="chip success">RAG 可用</span><button class="button outlined">新对话</button></div></header>
+    <nav class="rail"><button class="rail-item">上传</button><button class="rail-item">审核</button><button class="rail-item">检索</button><button class="rail-item">图谱</button><button class="rail-item active">问答</button><button class="rail-item">预测</button><button class="rail-item">社区</button></nav>
+    <main class="content">
+      <section class="page-header"><div><p class="eyebrow">RAG Question Answering</p><h1>回答必须能追溯到证据</h1><p>对话流、引用标记和证据 Side Sheet 联动，候选结构化记录明确标注为待审核。</p></div><button class="button filled">发送问题</button></section>
+      <section class="grid two-col">
+        <article class="card elevated">
+          <h2>对话流</h2>
+          <div class="card filled"><h3>用户</h3><p>LaH10 在 200 GPa 附近的代表 Tc 是多少？</p></div>
+          <div class="card" style="margin-top:16px"><h3>SC-chat</h3><p>本地审核记录中 LaH10 在 200 GPa 附近的 representative Tc 为 250 K。回答依据来自论文片段、本地记录和图谱关系证据。</p><div class="toolbar" style="margin-top:12px"><span class="chip primary">[1] paper</span><span class="chip secondary">[2] local record</span></div></div>
+          <div class="field" style="margin-top:20px"><label>输入问题</label><strong>继续追问压强范围或结构来源...</strong></div>
+        </article>
+        <aside class="card side-sheet">
+          <h2>证据面板</h2>
+          <div class="card filled"><h3>[1] 论文片段</h3><p>包含 DOI、年份、期刊和可追踪段落。</p></div>
+          <div class="card filled" style="margin-top:12px"><h3>[2] 本地记录</h3><p>LaH10 · approved · representative_tc = experimental_tc。</p></div>
+          <div class="card" style="margin-top:12px"><h3>候选记录</h3><span class="chip warning">非公开数据，需审核</span></div>
+        </aside>
+      </section>
+    </main>
+  </div>
+  <div class="snackbar">引用已定位到证据卡片</div>
 </body>
 </html>

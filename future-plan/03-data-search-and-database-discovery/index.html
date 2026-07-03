@@ -1,69 +1,52 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>03 超导数据检索</title>
-  <style>
-    :root { --background: oklch(0.985 0.002 90); --foreground: oklch(0.12 0.01 60); --muted: oklch(0.45 0.02 60); --border: oklch(0.88 0.01 90); --surface: #fff; --surface-subtle: oklch(0.96 0.003 90); --radius: .25rem; }
-    * { box-sizing: border-box; } body { margin: 0; background: var(--background); color: var(--foreground); font-family: "Instrument Sans", Inter, "Microsoft YaHei", system-ui, sans-serif; }
-    main { max-width: 1400px; margin: 0 auto; padding: 48px; } body::before { content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .4; background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px); background-size: 48px 48px; mask-image: linear-gradient(to bottom, #000, transparent 75%); }
-    .eyebrow { display: flex; align-items: center; gap: 12px; color: var(--muted); font: 12px "JetBrains Mono", monospace; text-transform: uppercase; letter-spacing: .08em; } .eyebrow::before { content: ""; width: 32px; height: 1px; background: var(--foreground); }
-    h1 { max-width: 1080px; margin: 24px 0 32px; font-family: "Instrument Serif", Georgia, serif; font-size: clamp(3rem, 9vw, 8rem); line-height: .9; letter-spacing: -.04em; font-weight: 400; }
-    .lede { max-width: 760px; color: var(--muted); font-size: 18px; line-height: 1.7; }
-    .context { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 32px; } .tag { border: 1px solid var(--border); border-radius: 999px; padding: 6px 10px; font: 11px "JetBrains Mono", monospace; text-transform: uppercase; background: var(--surface); }
-    .filters, .panel { background: color-mix(in oklch, var(--surface) 92%, transparent); border: 1px solid var(--border); border-radius: var(--radius); }
-    .filters { margin: 88px 0 24px; padding: 20px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
-    label { display: grid; gap: 8px; color: var(--muted); font-size: 12px; } input, select { width: 100%; min-height: 40px; border: 1px solid var(--border); border-radius: var(--radius); background: #fff; color: var(--foreground); padding: 8px 10px; font: inherit; }
-    .layout { display: grid; grid-template-columns: minmax(700px, 1fr) 420px; gap: 24px; align-items: start; }
-    .panel-head { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; gap: 16px; align-items: center; } h2 { margin: 0; font-size: 24px; }
-    .source-switch { display: flex; flex-wrap: wrap; gap: 8px; } .source-switch button { border: 1px solid var(--border); background: transparent; border-radius: 999px; min-height: 34px; padding: 0 12px; font: 11px "JetBrains Mono", monospace; } .source-switch .active { background: var(--foreground); color: #fff; border-color: var(--foreground); }
-    table { width: 100%; border-collapse: collapse; font-size: 14px; } th, td { padding: 14px 12px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; } th { color: var(--muted); background: var(--surface-subtle); font: 11px "JetBrains Mono", monospace; text-transform: uppercase; }
-    tr.selected { background: var(--surface-subtle); box-shadow: inset 3px 0 0 var(--foreground); }
-    .detail { padding: 24px; display: grid; gap: 22px; } .formula { font-family: "Instrument Serif", Georgia, serif; font-size: 58px; line-height: .9; }
-    .kv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; } .kv { border-top: 1px solid var(--border); padding-top: 12px; } .kv span { display: block; color: var(--muted); font: 11px "JetBrains Mono", monospace; text-transform: uppercase; } .kv strong { display: block; margin-top: 6px; }
-    .rule { border: 1px dashed var(--foreground); padding: 16px; background: repeating-linear-gradient(-45deg, transparent 0 8px, var(--surface-subtle) 8px 9px); color: var(--muted); line-height: 1.6; }
-    @media (max-width: 1000px) { main { padding: 24px; } .filters, .layout { grid-template-columns: 1fr; } }
-  </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>超导数据检索 · Material Demo</title>
+  <link rel="stylesheet" href="../material-demo.css">
 </head>
 <body>
-  <main>
-    <div class="eyebrow">03 Data search and discovery</div>
-    <h1>Discover superconducting systems through structured records.</h1>
-    <p class="lede">检索页默认展示本地数据库结果，用户可以切换外部来源。表格用于快速比较，右侧卡片展示选中记录的科研细节。</p>
-    <div class="context"><span class="tag">SYSTEM La-H</span><span class="tag">MODE contains selected elements</span><span class="tag">REPRESENTATIVE TC RULE</span></div>
-    <section class="filters">
-      <label>Formula<input value="LaH10" /></label><label>Tc range<input value="200 - 300 K" /></label><label>Pressure<input value="150 - 220 GPa" /></label><label>Year<input value="2019 - 2026" /></label><label>Space group<input value="Fm-3m" /></label>
-    </section>
-    <section class="layout">
-      <div class="panel">
-        <div class="panel-head">
-          <h2>检索结果</h2>
-          <div class="source-switch"><button class="active">Local</button><button>Alexandria</button><button>HTSC-2025</button><button>All</button></div>
+  <div class="app-shell">
+    <header class="top-app-bar"><div class="brand"><div class="brand-mark">SC</div><span>超导探索</span></div><div class="toolbar"><button class="button tonal">下载 JSON</button><button class="button outlined">导出 RIS</button></div></header>
+    <nav class="rail"><button class="rail-item">上传</button><button class="rail-item">审核</button><button class="rail-item active">检索</button><button class="rail-item">图谱</button><button class="rail-item">问答</button><button class="rail-item">预测</button><button class="rail-item">社区</button></nav>
+    <main class="content">
+      <section class="page-header">
+        <div><p class="eyebrow">Database Discovery</p><h1>比较超导记录并查看完整科研细节</h1><p>默认展示本地数据库，支持元素组合、Formula、Tc、压强、年份、空间群和 DOI 筛选。</p></div>
+        <button class="button filled">进入结果页</button>
+      </section>
+      <article class="card" style="margin-bottom:24px">
+        <h2>检索与筛选</h2>
+        <div class="grid three-col">
+          <div class="field"><label>Formula</label><strong>LaH10</strong></div>
+          <div class="field"><label>Pressure</label><strong>150 - 250 GPa</strong></div>
+          <div class="field"><label>Representative Tc</label><strong>&gt; 150 K</strong></div>
         </div>
-        <table>
-          <thead><tr><th>年份</th><th>体系</th><th>类型</th><th>压强</th><th>代表 Tc</th><th>空间群</th><th>来源</th><th>状态</th><th>DOI</th></tr></thead>
-          <tbody>
-            <tr class="selected"><td>2020</td><td>LaH10</td><td>Hydride</td><td>170 GPa</td><td>250 K · 实验</td><td>Fm-3m</td><td>Local</td><td><span class="tag">APPROVED</span></td><td>10.1038/example</td></tr>
-            <tr><td>2019</td><td>LaH6</td><td>Hydride</td><td>150 GPa</td><td>215 K · Allen-Dynes</td><td>R-3m</td><td>Local</td><td><span class="tag">PENDING</span></td><td>10.1103/example</td></tr>
-            <tr><td>2025</td><td>LaH4</td><td>Hydride</td><td>200 GPa</td><td>188 K · Theory</td><td>P6/mmm</td><td>Alexandria</td><td><span class="tag">EXTERNAL</span></td><td>-</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <aside class="panel">
-        <div class="panel-head"><h2>选中记录</h2><span class="tag">LOCAL RECORD</span></div>
-        <div class="detail">
-          <div class="formula">LaH10</div>
-          <div class="kv-grid">
-            <div class="kv"><span>Representative Tc</span><strong>250 K · experimental_tc</strong></div>
-            <div class="kv"><span>Pressure</span><strong>170 GPa</strong></div>
-            <div class="kv"><span>Structure</span><strong>Fm-3m · 44 atoms</strong></div>
-            <div class="kv"><span>Review</span><strong>Approved for public data</strong></div>
-          </div>
-          <div class="rule">代表 Tc 默认优先级：实验 Tc、各向异性 Eliashberg、各向同性 Eliashberg、Allen-Dynes、McMillan。全部 Tc 字段进入详情，不塞入表格主列。</div>
-        </div>
-      </aside>
-    </section>
-  </main>
+        <div class="toolbar" style="margin-top:16px"><span class="chip primary">本地数据库</span><span class="chip">Alexandria</span><span class="chip">HTSC-2025</span><span class="chip">全部来源</span></div>
+      </article>
+      <section class="grid two-col">
+        <article class="card">
+          <h2>结果表格</h2>
+          <div class="table-wrap"><table class="data-table">
+            <thead><tr><th>年份</th><th>Formula</th><th>类型</th><th>压强</th><th>Tc</th><th>空间群</th><th>来源</th><th>审核</th><th>DOI</th></tr></thead>
+            <tbody>
+              <tr class="selected"><td>2019</td><td>LaH10</td><td>Hydride</td><td>200</td><td>250</td><td>Fm-3m</td><td><span class="chip primary">Local</span></td><td><span class="chip success">Approved</span></td><td>10.1038/...</td></tr>
+              <tr><td>2015</td><td>H3S</td><td>Hydride</td><td>155</td><td>203</td><td>Im-3m</td><td><span class="chip">Local</span></td><td><span class="chip success">Approved</span></td><td>10.1038/...</td></tr>
+              <tr><td>2024</td><td>YH9</td><td>Hydride</td><td>180</td><td>185</td><td>P63/mmc</td><td><span class="chip secondary">External</span></td><td><span class="chip warning">未审核</span></td><td>-</td></tr>
+            </tbody>
+          </table></div>
+        </article>
+        <aside class="card side-sheet">
+          <h2>记录详情</h2>
+          <p class="mono">LaH10 · representative_tc = experimental_tc</p>
+          <div class="toolbar" style="margin:16px 0"><span class="chip success">Approved</span><span class="chip primary">Local</span></div>
+          <h3>超导参数</h3>
+          <p>experimental_tc 250 K，pressure 200 GPa，lambda 和 omega_log 字段按接口返回展示。</p>
+          <h3 style="margin-top:16px">结构信息</h3>
+          <p>空间群 Fm-3m，晶胞参数和体积进入详情分组，缺失字段显示“未提供”。</p>
+        </aside>
+      </section>
+    </main>
+  </div>
 </body>
 </html>

@@ -1,33 +1,31 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>06 AI 辅助 Tc 估算</title>
-  <style>
-    :root { --background: oklch(0.985 0.002 90); --foreground: oklch(0.12 0.01 60); --muted: oklch(0.45 0.02 60); --border: oklch(0.88 0.01 90); --surface: #fff; --surface-subtle: oklch(0.96 0.003 90); --radius: .25rem; }
-    * { box-sizing: border-box; } body { margin: 0; background: var(--background); color: var(--foreground); font-family: "Instrument Sans", Inter, "Microsoft YaHei", system-ui, sans-serif; } main { max-width: 1400px; margin: 0 auto; padding: 48px; }
-    .eyebrow { display: flex; align-items: center; gap: 12px; color: var(--muted); font: 12px "JetBrains Mono", monospace; text-transform: uppercase; letter-spacing: .08em; } .eyebrow::before { content: ""; width: 32px; height: 1px; background: var(--foreground); }
-    h1 { max-width: 1040px; margin: 24px 0 32px; font-family: "Instrument Serif", Georgia, serif; font-size: clamp(3rem, 9vw, 8rem); line-height: .9; letter-spacing: -.04em; font-weight: 400; } .lede { max-width: 760px; color: var(--muted); font-size: 18px; line-height: 1.7; }
-    .layout { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 24px; margin-top: 88px; align-items: start; } .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; } .head { padding: 18px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; gap: 16px; align-items: center; } h2 { margin: 0; font-size: 22px; }
-    .tag { border: 1px solid var(--border); border-radius: 999px; padding: 6px 10px; font: 11px "JetBrains Mono", monospace; text-transform: uppercase; background: var(--surface); } .content { padding: 22px; display: grid; gap: 18px; }
-    .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; } .upload { min-height: 170px; display: grid; place-items: center; text-align: center; padding: 18px; border: 1px dashed var(--foreground); background: repeating-linear-gradient(-45deg, transparent 0 8px, var(--surface-subtle) 8px 9px); } .upload strong { display: block; margin-bottom: 8px; }
-    .config { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; } .kv { border-top: 1px solid var(--border); padding-top: 12px; } .kv span { display: block; color: var(--muted); font: 11px "JetBrains Mono", monospace; text-transform: uppercase; } .kv strong { display: block; margin-top: 6px; font-size: 18px; }
-    .result { font-family: "Instrument Serif", Georgia, serif; font-size: 72px; line-height: .9; } button { width: fit-content; min-height: 42px; border-radius: 999px; border: 1px solid var(--foreground); background: var(--foreground); color: #fff; padding: 0 18px; font-weight: 650; }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; } th, td { padding: 12px 10px; border-bottom: 1px solid var(--border); text-align: left; } th { color: var(--muted); font: 11px "JetBrains Mono", monospace; text-transform: uppercase; background: var(--surface-subtle); }
-    @media (max-width: 1000px) { main { padding: 24px; } .layout, .upload-grid, .config { grid-template-columns: 1fr; } }
-  </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI 辅助 Tc 估算 · Material Demo</title>
+  <link rel="stylesheet" href="../material-demo.css">
 </head>
 <body>
-  <main>
-    <div class="eyebrow">06 AI assisted Tc estimation</div>
-    <h1>Estimate Tc from structure and density inputs.</h1>
-    <p class="lede">预测结果是个人计算辅助，不会自动进入公开数据库。用户需要把结果提交审核，才能成为公开记录候选。</p>
-    <section class="layout">
-      <div class="panel"><div class="head"><h2>输入与模型</h2><span class="tag">READY TO RUN</span></div><div class="content"><div class="upload-grid"><div class="upload"><div><strong>CONTCAR</strong><span>structure file parsed</span></div></div><div class="upload"><div><strong>PDOS_H.dat</strong><span>density input parsed</span></div></div></div><div class="config"><div class="kv"><span>Model</span><strong>SC-predict v0.4</strong></div><div class="kv"><span>Elements</span><strong>La, H</strong></div><div class="kv"><span>Pressure</span><strong>170 GPa</strong></div></div><button>Run prediction →</button></div></div>
-      <aside class="panel"><div class="head"><h2>预测结果</h2><span class="tag">PREDICTED ONLY</span></div><div class="content"><div class="result">238 K</div><div class="kv"><span>Input summary</span><strong>LaH10 · Fm-3m · hydrogen DOS included</strong></div><div class="kv"><span>Review policy</span><strong>Submit for review before public database use</strong></div><button>Submit for review →</button></div></aside>
-    </section>
-    <section class="panel" style="margin-top:24px"><div class="head"><h2>任务历史</h2><span class="tag">LOCAL HISTORY</span></div><table><thead><tr><th>时间</th><th>体系</th><th>模型</th><th>结果</th><th>状态</th></tr></thead><tbody><tr><td>2026-07-03</td><td>LaH10</td><td>v0.4</td><td>238 K</td><td><span class="tag">PREDICTED ONLY</span></td></tr><tr><td>2026-07-02</td><td>H3S</td><td>v0.4</td><td>-</td><td><span class="tag">FAILED WITH REASON</span></td></tr></tbody></table></section>
-  </main>
+  <div class="app-shell">
+    <header class="top-app-bar"><div class="brand"><div class="brand-mark">SC</div><span>SC-predict</span></div><div class="toolbar"><span class="chip primary">model v0.3</span><button class="button filled">运行预测</button></div></header>
+    <nav class="rail"><button class="rail-item">上传</button><button class="rail-item">审核</button><button class="rail-item">检索</button><button class="rail-item">图谱</button><button class="rail-item">问答</button><button class="rail-item active">预测</button><button class="rail-item">社区</button></nav>
+    <main class="content">
+      <section class="page-header"><div><p class="eyebrow">Tc Estimation</p><h1>从结构和电子态输入估算 Tc</h1><p>预测结果只作为候选信息，不会自动进入公开数据库。</p></div><button class="button outlined">查看历史</button></section>
+      <section class="grid two-col">
+        <div class="grid">
+          <article class="card"><h2>输入文件</h2><div class="grid two-col"><div class="card filled"><h3>CONTCAR</h3><span class="chip success">已上传</span></div><div class="card filled"><h3>PDOS_H.dat</h3><span class="chip success">已上传</span></div></div></article>
+          <article class="card"><h2>模型配置</h2><div class="toolbar"><span class="chip primary">SC-predict v0.3</span><span class="chip">Hydride preset</span><span class="chip">GPU queue</span></div></article>
+        </div>
+        <aside class="card side-sheet">
+          <h2>预测结果</h2>
+          <p style="font-size:52px;color:var(--primary);font-weight:800">186 K</p>
+          <p>输入摘要显示结构元素、态密度文件和模型版本。失败原因会在这里显示，而不是只用临时提示。</p>
+          <div class="toolbar" style="margin-top:18px"><span class="chip warning">PREDICTED ONLY</span><button class="button outlined">提交审核候选</button></div>
+        </aside>
+      </section>
+      <article class="card" style="margin-top:24px"><h2>任务历史</h2><div class="table-wrap"><table class="data-table"><thead><tr><th>时间</th><th>Formula</th><th>模型</th><th>状态</th></tr></thead><tbody><tr><td>16:20</td><td>LaH10</td><td>v0.3</td><td><span class="chip success">完成</span></td></tr></tbody></table></div></article>
+    </main>
+  </div>
 </body>
 </html>

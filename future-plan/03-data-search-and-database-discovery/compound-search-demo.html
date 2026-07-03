@@ -1,60 +1,41 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>03 化合物检索详细示例</title>
-  <style>
-    :root { --background: oklch(0.985 0.002 90); --foreground: oklch(0.12 0.01 60); --muted: oklch(0.45 0.02 60); --border: oklch(0.88 0.01 90); --surface: #fff; --surface-subtle: oklch(0.96 0.003 90); --radius: .25rem; }
-    * { box-sizing: border-box; } body { margin: 0; background: var(--background); color: var(--foreground); font-family: "Instrument Sans", Inter, "Microsoft YaHei", system-ui, sans-serif; }
-    main { max-width: 1400px; margin: 0 auto; padding: 48px; } h1 { margin: 18px 0 12px; font-family: "Instrument Serif", Georgia, serif; font-size: clamp(3rem, 8vw, 7rem); line-height: .9; letter-spacing: -.04em; font-weight: 400; }
-    .eyebrow { display: flex; align-items: center; gap: 12px; color: var(--muted); font: 12px "JetBrains Mono", monospace; text-transform: uppercase; letter-spacing: .08em; } .eyebrow::before { content: ""; width: 32px; height: 1px; background: var(--foreground); }
-    p { color: var(--muted); line-height: 1.7; } .toolbar, .tabs { display: flex; flex-wrap: wrap; gap: 8px; } .tabs { margin: 40px 0 18px; }
-    button, .tag { border: 1px solid var(--border); background: transparent; border-radius: 999px; padding: 8px 12px; color: var(--foreground); font: 11px "JetBrains Mono", monospace; text-transform: uppercase; } .active { background: var(--foreground); color: #fff; border-color: var(--foreground); }
-    .filters, .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); } .filters { padding: 16px; display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 18px; }
-    label { display: grid; gap: 8px; color: var(--muted); font-size: 12px; } input, select { min-height: 38px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 8px 10px; font: inherit; }
-    .content { display: grid; grid-template-columns: minmax(720px, 1fr) 390px; gap: 18px; align-items: start; } .head { padding: 18px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; gap: 16px; align-items: center; }
-    h2 { margin: 0; font-size: 22px; } table { width: 100%; border-collapse: collapse; font-size: 13px; } th, td { padding: 13px 10px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; } th { color: var(--muted); font: 11px "JetBrains Mono", monospace; text-transform: uppercase; background: var(--surface-subtle); } tr.selected { background: var(--surface-subtle); box-shadow: inset 3px 0 0 var(--foreground); }
-    .detail { padding: 20px; display: grid; gap: 18px; } .formula { font-family: "Instrument Serif", Georgia, serif; font-size: 52px; line-height: .9; } .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; } .metric { border-top: 1px solid var(--border); padding-top: 10px; } .metric span { display: block; color: var(--muted); font: 11px "JetBrains Mono", monospace; text-transform: uppercase; } .metric strong { display: block; margin-top: 5px; }
-    .record-note { padding: 14px; border: 1px dashed var(--foreground); background: repeating-linear-gradient(-45deg, transparent 0 8px, var(--surface-subtle) 8px 9px); color: var(--muted); line-height: 1.6; }
-    @media (max-width: 1000px) { main { padding: 24px; } .filters, .content { grid-template-columns: 1fr; } }
-  </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>化学式检索 · Material Demo</title>
+  <link rel="stylesheet" href="../material-demo.css">
 </head>
 <body>
-  <main>
-    <div class="eyebrow">Compound search demo</div>
-    <h1>Compare records, then inspect one.</h1>
-    <p>这个页面重写旧的化合物检索 demo：保留表格与右侧详情逻辑，但删除旧蓝绿主题和旧状态色。</p>
-    <div class="tabs"><button class="active">Local database</button><button>Alexandria</button><button>HTSC-2025</button><button>All sources</button></div>
-    <section class="filters">
-      <label>Formula<input value="LaH10" /></label><label>Tc<select><option>Representative</option></select></label><label>Pressure<input value="170" /></label><label>Year<input value="2020" /></label><label>Space group<input value="Fm-3m" /></label><label>Review<select><option>All</option></select></label>
-    </section>
-    <section class="content">
-      <div class="panel">
-        <div class="head"><h2>当前页记录</h2><span class="tag">DETAIL INCLUDED</span></div>
-        <table>
-          <thead><tr><th>年份</th><th>体系</th><th>类型</th><th>压强</th><th>Tc</th><th>空间群</th><th>来源</th><th>状态</th></tr></thead>
-          <tbody>
-            <tr class="selected"><td>2020</td><td>LaH10</td><td>Hydride</td><td>170</td><td>250 K · Exp</td><td>Fm-3m</td><td>Local</td><td><span class="tag">APPROVED</span></td></tr>
-            <tr><td>2019</td><td>LaH6</td><td>Hydride</td><td>150</td><td>215 K · AD</td><td>R-3m</td><td>Local</td><td><span class="tag">PENDING</span></td></tr>
-            <tr><td>2024</td><td>LaH4</td><td>Hydride</td><td>210</td><td>188 K · Theory</td><td>P6/mmm</td><td>External</td><td><span class="tag">EXTERNAL</span></td></tr>
-          </tbody>
-        </table>
-      </div>
-      <aside class="panel">
-        <div class="head"><h2>详情卡片</h2><span class="tag">SELECTED</span></div>
-        <div class="detail">
-          <div class="formula">LaH10</div>
-          <div class="metric-grid">
-            <div class="metric"><span>DOI</span><strong>10.1038/example</strong></div>
-            <div class="metric"><span>Tc source</span><strong>experimental_tc</strong></div>
-            <div class="metric"><span>lambda</span><strong>2.85</strong></div>
-            <div class="metric"><span>omega_log</span><strong>1200 K</strong></div>
-          </div>
-          <div class="record-note">外部来源字段缺失时显示为空或未提供，不强行补齐本地审核字段。</div>
-        </div>
-      </aside>
-    </section>
-  </main>
+  <div class="app-shell">
+    <header class="top-app-bar"><div class="brand"><div class="brand-mark">SC</div><span>化学式检索</span></div><button class="button filled">搜索</button></header>
+    <nav class="rail"><button class="rail-item">上传</button><button class="rail-item">审核</button><button class="rail-item active">检索</button><button class="rail-item">图谱</button><button class="rail-item">问答</button><button class="rail-item">预测</button><button class="rail-item">社区</button></nav>
+    <main class="content">
+      <section class="page-header">
+        <div><p class="eyebrow">Formula Search</p><h1>用化学式快速定位体系</h1><p>支持模糊搜索，选中体系后进入结果表格并下载 JSON 或 RIS。</p></div>
+        <button class="button outlined">清除</button>
+      </section>
+      <section class="grid two-col">
+        <article class="card elevated">
+          <h2>搜索输入</h2>
+          <div class="field"><label>输入 Formula</label><strong>LaH</strong></div>
+          <div class="toolbar" style="margin-top:16px"><span class="chip primary">LaH10</span><span class="chip">LaH6</span><span class="chip">LaH16</span><span class="chip secondary">相似结果</span></div>
+          <div class="card filled" style="margin-top:20px"><h3>搜索规则</h3><p>化学式检索放在元素周期表检索上方，和元素组合模式保持视觉分离。</p></div>
+        </article>
+        <article class="card">
+          <h2>候选体系</h2>
+          <div class="table-wrap"><table class="data-table">
+            <thead><tr><th>Formula</th><th>命中</th><th>最高 Tc</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr class="selected"><td>LaH10</td><td>12</td><td>250 K</td><td><button class="button text">进入</button></td></tr>
+              <tr><td>LaH6</td><td>4</td><td>180 K</td><td><button class="button text">进入</button></td></tr>
+              <tr><td>LaH16</td><td>2</td><td>156 K</td><td><button class="button text">进入</button></td></tr>
+            </tbody>
+          </table></div>
+        </article>
+      </section>
+    </main>
+  </div>
+  <div class="snackbar">已选择 LaH10</div>
 </body>
 </html>
