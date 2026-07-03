@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>03 API 返回结构演示</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #fff;
+      --line: #dce2ea;
+      --text: #1f2933;
+      --muted: #687385;
+      --blue: #276ef1;
+      --green: #178a55;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    main {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    h1 { margin: 0 0 8px; font-size: 26px; }
+    h2 { margin: 0; font-size: 17px; }
+    p { color: var(--muted); line-height: 1.65; }
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      align-items: start;
+      margin-top: 18px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .head {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+    }
+    .badge {
+      color: var(--green);
+      background: #eefaf3;
+      border: 1px solid #9bd8bd;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th, td {
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+      padding: 10px;
+      white-space: nowrap;
+    }
+    th { color: var(--muted); background: #fafbfc; }
+    tr.selected {
+      background: #eef5ff;
+      outline: 2px solid rgba(39, 110, 241, .22);
+      outline-offset: -2px;
+    }
+    .detail {
+      padding: 16px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .kv {
+      background: #f7f9fb;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 10px;
+      font-size: 13px;
+    }
+    .kv span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+    pre {
+      margin: 0;
+      padding: 16px;
+      overflow: auto;
+      background: #101923;
+      color: #dce8f5;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .note {
+      padding: 14px 16px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+    .arrow {
+      color: var(--blue);
+      font-weight: 700;
+    }
+    @media (max-width: 1000px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>03 接口返回结构演示</h1>
+    <p>
+      这个演示说明“摘要 + 当前页详情字段一起返回”是什么意思：后端分页返回当前页的多条记录，
+      每条记录里同时包含表格需要的摘要字段和右侧卡片需要的详情字段。
+      用户点击表格行时，前端不用再请求一次后端，直接用这一行已经带回来的详情字段渲染右侧卡片。
+    </p>
+
+    <section class="layout">
+      <div class="panel">
+        <div class="head">
+          <h2>页面效果：点击行后右侧详情立即切换</h2>
+          <span class="badge">不需要二次请求详情</span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>年份</th>
+              <th>体系名称</th>
+              <th>超导类型</th>
+              <th>压强</th>
+              <th>代表 Tc</th>
+              <th>DOI</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="selected">
+              <td>2020</td>
+              <td>LaH10</td>
+              <td>Hydride</td>
+              <td>170 GPa</td>
+              <td>250 K · 实验</td>
+              <td>10.1038/example.001</td>
+            </tr>
+            <tr>
+              <td>2019</td>
+              <td>LaH6</td>
+              <td>Hydride</td>
+              <td>150 GPa</td>
+              <td>178 K · Allen-Dynes</td>
+              <td>10.1103/example.002</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="detail">
+          <h2>右侧详情卡片：LaH10</h2>
+          <p>下面这些字段不是表格列，但已经跟随当前页记录一起返回，所以点击行时可以直接显示。</p>
+          <div class="grid">
+            <div class="kv"><span>论文标题</span><strong>High-temperature superconductivity in lanthanum hydrides</strong></div>
+            <div class="kv"><span>期刊</span><strong>Nature</strong></div>
+            <div class="kv"><span>实验 Tc</span><strong>250 K</strong></div>
+            <div class="kv"><span>Allen-Dynes Tc</span><strong>232 K</strong></div>
+            <div class="kv"><span>lambda</span><strong>2.18</strong></div>
+            <div class="kv"><span>omega_log</span><strong>1080 K</strong></div>
+            <div class="kv"><span>空间群编号</span><strong>225</strong></div>
+            <div class="kv"><span>计算方法</span><strong>DFT + EPC</strong></div>
+          </div>
+        </div>
+        <div class="note">
+          <span class="arrow">理解方式：</span>
+          表格只展示摘要字段；详情卡片展示同一条记录里的 detail 字段。
+          数据已经在列表接口里一起带回来，前端只是切换选中行。
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="head">
+          <h2>接口返回形态示意</h2>
+          <span class="badge">摘要 + 详情字段</span>
+        </div>
+        <pre>{
+  "items": [
+    {
+      "record_id": 101,
+      "summary": {
+        "year": 2020,
+        "formula": "LaH10",
+        "superconductor_type": "hydride",
+        "pressure_gpa": 170,
+        "representative_tc": 250,
+        "representative_tc_field": "experimental_tc",
+        "space_group_number": 225,
+        "data_source": "本地数据库",
+        "review_status": "approved",
+        "doi": "10.1038/example.001"
+      },
+      "detail": {
+        "paper_title": "High-temperature superconductivity in lanthanum hydrides",
+        "journal": "Nature",
+        "all_tc_values": {
+          "experimental_tc": 250,
+          "anisotropic_eliashberg_tc": 246,
+          "allen_dynes_tc": 232,
+          "mcmillan_tc": 198
+        },
+        "lambda_value": 2.18,
+        "omega_log": 1080,
+        "n_ef_total": 0.72,
+        "s_factor": 1.15,
+        "space_group_symbol": "Fm-3m",
+        "crystal_structure": "cubic",
+        "cell_parameters": "a=5.12 A",
+        "volume": 134.2,
+        "calculation_code": "Quantum ESPRESSO",
+        "method": "DFT + EPC",
+        "note": "结构和参数已人工核验"
+      }
+    }
+  ],
+  "total": 2,
+  "limit": 20,
+  "offset": 0
+}</pre>
+        <div class="note">
+          <span class="arrow">为什么适合第一阶段：</span>
+          当前页一般只返回几十条记录，直接带详情字段实现简单、切换快。
+          后续如果一页数据特别大，再拆成“列表接口 + 详情接口”也可以。
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
