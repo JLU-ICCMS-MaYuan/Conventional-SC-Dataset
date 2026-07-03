@@ -4,15 +4,20 @@ import { useLocation, useParams } from 'react-router-dom'
 import { postJson } from '../lib/apiClient'
 
 interface Record {
-  chemical_formula?: string; tc_value?: number; tc?: number
-  pressure_gpa?: number; pressure?: number
-  article_type?: string; space_group_symbol?: string
-  data_source_note?: string
+  chemical_formula?: string
+  mcmillan_tc?: number; allen_dynes_tc?: number; experimental_tc?: number
+  pressure_gpa?: number; article_type?: string
+  space_group_symbol?: string; note?: string
+}
+
+function recTc(r: Record): string {
+  const v = r.experimental_tc ?? r.allen_dynes_tc ?? r.mcmillan_tc
+  return v != null ? `${v} K` : '-'
 }
 
 interface Paper {
   id?: number; title?: string; doi?: string; year?: number
-  journal?: string; summary?: string; records?: Record[]
+  journal?: string; records?: Record[]
 }
 
 const MODES: Record<string, string> = {
@@ -43,8 +48,9 @@ const CompoundPage: React.FC = () => {
       const body = urlFormula
         ? { mode: 'formula_search', formula: urlFormula, elements }
         : { mode, elements }
-      const data = await postJson<{ papers?: Paper[]; data?: Paper[] }>('/api/papers/search-by-mode', body)
-      setPapers(data.papers || data.data || [])
+      const resp = await postJson<any>('/api/papers/search-by-mode', body)
+      const list = resp?.items || resp?.data?.papers || resp?.papers || []
+      setPapers(Array.isArray(list) ? list : [])
     } catch (err: any) {
       setError(err.message || '加载失败')
     } finally {
@@ -53,16 +59,6 @@ const CompoundPage: React.FC = () => {
   }, [mode, elements, urlFormula])
 
   useEffect(() => { search() }, [search])
-
-  function rcTc(rec: Record): string {
-    const v = rec.tc_value ?? rec.tc
-    return v != null ? `${v} K` : '-'
-  }
-
-  function rcPressure(rec: Record): string {
-    const v = rec.pressure_gpa ?? rec.pressure
-    return v != null ? `${v} GPa` : '-'
-  }
 
   function articleLabel(t: string | undefined): string {
     if (t === 'e') return '实验'
@@ -116,11 +112,11 @@ const CompoundPage: React.FC = () => {
                       {paper.records.map((rec, j) => (
                         <tr key={j}>
                           <td><strong>{rec.chemical_formula || '-'}</strong></td>
-                          <td>{rcTc(rec)}</td>
-                          <td>{rcPressure(rec)}</td>
+                          <td>{recTc(rec)}</td>
+                          <td>{rec.pressure_gpa != null ? `${rec.pressure_gpa} GPa` : '-'}</td>
                           <td>{articleLabel(rec.article_type)}</td>
                           <td>{rec.space_group_symbol || '-'}</td>
-                          <td className="muted">{rec.data_source_note || ''}</td>
+                          <td className="muted">{rec.note || ''}</td>
                         </tr>
                       ))}
                     </tbody>
