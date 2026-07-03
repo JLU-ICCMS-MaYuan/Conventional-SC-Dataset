@@ -51,10 +51,9 @@ temp/
 frontend/node_modules/
 
 #AI
-AGENTS.md
 CLI_GUIDE.md
 INSTALL.md
-CLAUDE.md
+
 .worktrees/
 .claude
 
