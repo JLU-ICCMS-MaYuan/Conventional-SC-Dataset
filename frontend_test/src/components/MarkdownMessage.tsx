@@ -29,7 +29,8 @@ const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content, papers, pape
   const processed = text.replace(
     /\[PID_(\d+)\]/g,
     (_match, pid: string) => {
-      const seq = paperSeqMap?.[pid] || '?'
+      const seq = paperSeqMap?.[pid]
+      if (!seq) return ''  // 不在检索结果中，不显示
       const p = papers?.[pid]
       const doi = p?.doi || ''
       const tooltip = p?.journal && p?.year
