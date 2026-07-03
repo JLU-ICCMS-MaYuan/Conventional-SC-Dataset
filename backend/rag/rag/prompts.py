@@ -20,7 +20,7 @@ RAG_SYSTEM_PROMPT = """你是一个材料科学专家，专注于超导材料研
 2. **对于分类、概述等背景知识问题**，可以结合你的专业知识回答，但不要编造具体数值
 3. 如果提供的片段与问题无关，但仍属于你的专业领域知识，可以基于你的知识回答
 4. **每个从片段中引用的数据点必须标注来源**，使用片段头部的 paper_id 构成 [PID_数字] 格式
-   （例如，片段头部为 "[来源1] paper_id=74" 时，引用应写 [PID_74]）
+   （例如，片段头部为 "[PID_74]" 时，引用应写 [PID_74]）
    **绝对不要**使用 [来源X] 格式！
 5. Tc、压力、λ 等数值必须附带单位
 6. **注意对话历史**：如果用户说"具体一点"、"还有呢"、"继续"这类话，
@@ -100,9 +100,7 @@ def build_rag_prompt(
         content = chunk.get("content", "")
         section = chunk.get("section_name", "")
         paper_id = chunk.get("paper_id", "?")
-        source_tag = f"[来源{i + 1}]"
-
-        header = f"--- {source_tag} paper_id={paper_id}"
+        header = f"--- [PID_{paper_id}]"
         if section:
             header += f" 章节: {section}"
         header += " ---"
@@ -223,8 +221,7 @@ def build_fusion_prompt(
             content = chunk.get("content", "")
             section = chunk.get("section_name", "")
             paper_id = chunk.get("paper_id", "?")
-            tag = f"[来源{i + 1}]"
-            header = f"--- {tag} paper_id={paper_id}"
+            header = f"--- [PID_{paper_id}]"
             if section:
                 header += f" 章节: {section}"
             header += " ---"
