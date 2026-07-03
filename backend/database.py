@@ -2,12 +2,13 @@
 Database configuration.
 """
 import os
+from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 
-DEFAULT_DATABASE_URL = "mysql+pymysql://work:12345678@127.0.0.1:3306/superconductor_dataset?charset=utf8mb4"
+DEFAULT_DATABASE_URL = f"sqlite:///{Path(__file__).resolve().parents[1] / 'data' / 'dev.db'}"
 DATABASE_URL = os.environ.get("DATABASE_URL", DEFAULT_DATABASE_URL)
 
 engine = create_engine(

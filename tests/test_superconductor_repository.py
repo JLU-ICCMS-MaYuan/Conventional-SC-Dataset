@@ -1,5 +1,5 @@
 from backend.db_helpers import build_system_key, normalize_formula
-from backend.models import ChemicalSystem, Superconductor
+from backend.models import ChemicalSystem, Superconductor, SuperconductorRecord
 from backend.repositories.superconductors import search_superconductors
 
 
@@ -33,11 +33,55 @@ def add_superconductor(db, formula):
     return superconductor
 
 
+def add_record(db, superconductor, tc):
+    record = SuperconductorRecord(
+        superconductor_id=superconductor.id,
+        source_label="test",
+        pressure_gpa=0,
+        experimental_tc=tc,
+    )
+    db.add(record)
+    db.commit()
+    return record
+
+
 def test_formula_search_finds_normalized_formula(db_session):
     add_superconductor(db_session, "LaH10")
     result = search_superconductors(db_session, "formula_search", formula="H10La")
     assert [item.chemical_formula for item in result.items] == ["LaH10"]
     assert result.total == 1
+
+
+def test_formula_search_ranks_same_system_by_stoichiometric_closeness(db_session):
+    add_superconductor(db_session, "LaH3")
+    add_superconductor(db_session, "LaH9")
+    add_superconductor(db_session, "LaH10")
+    add_superconductor(db_session, "LaH3S")
+
+    result = search_superconductors(db_session, "formula_search", formula="LaH10")
+
+    assert [item.chemical_formula for item in result.items] == ["LaH10", "LaH9", "LaH3"]
+
+
+def test_formula_search_supports_variable_formula_with_same_element_system(db_session):
+    add_superconductor(db_session, "FeSe0.5Te0.5")
+    add_superconductor(db_session, "FeSe0.7Te0.3")
+    add_superconductor(db_session, "FeSe")
+
+    result = search_superconductors(db_session, "formula_search", formula="FeSe1-xTex")
+
+    assert {item.chemical_formula for item in result.items} == {"FeSe0.5Te0.5", "FeSe0.7Te0.3"}
+
+
+def test_formula_search_can_sort_by_max_tc(db_session):
+    low = add_superconductor(db_session, "LaH9")
+    high = add_superconductor(db_session, "LaH10")
+    add_record(db_session, low, 100)
+    add_record(db_session, high, 250)
+
+    result = search_superconductors(db_session, "formula_search", formula="LaH9", formula_sort="tc_desc")
+
+    assert [item.chemical_formula for item in result.items] == ["LaH10", "LaH9"]
 
 
 def test_elements_exact_search_matches_same_system(db_session):
