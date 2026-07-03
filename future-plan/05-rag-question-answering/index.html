@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>05 RAG 问答</title>
+  <style>
+    :root { --background: oklch(0.985 0.002 90); --foreground: oklch(0.12 0.01 60); --muted: oklch(0.45 0.02 60); --border: oklch(0.88 0.01 90); --surface: #fff; --surface-subtle: oklch(0.96 0.003 90); --radius: .25rem; }
+    * { box-sizing: border-box; } body { margin: 0; background: var(--background); color: var(--foreground); font-family: "Instrument Sans", Inter, "Microsoft YaHei", system-ui, sans-serif; }
+    main { max-width: 1400px; margin: 0 auto; padding: 48px; } .eyebrow { display: flex; align-items: center; gap: 12px; color: var(--muted); font: 12px "JetBrains Mono", monospace; text-transform: uppercase; letter-spacing: .08em; } .eyebrow::before { content: ""; width: 32px; height: 1px; background: var(--foreground); }
+    h1 { max-width: 1040px; margin: 24px 0 32px; font-family: "Instrument Serif", Georgia, serif; font-size: clamp(3rem, 9vw, 8rem); line-height: .9; letter-spacing: -.04em; font-weight: 400; } .lede { max-width: 760px; color: var(--muted); font-size: 18px; line-height: 1.7; }
+    .chat { display: grid; grid-template-columns: 220px minmax(0, 1fr) 340px; gap: 18px; margin-top: 88px; min-height: 680px; } .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; } .head { padding: 16px 18px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; gap: 12px; align-items: center; } h2 { margin: 0; font-size: 20px; }
+    .tag { border: 1px solid var(--border); border-radius: 999px; padding: 6px 10px; font: 11px "JetBrains Mono", monospace; text-transform: uppercase; background: var(--surface); } .list, .evidence { padding: 16px; display: grid; gap: 12px; }
+    .session { padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); } .session.active { background: var(--foreground); color: #fff; border-color: var(--foreground); }
+    .messages { padding: 20px; display: grid; gap: 18px; } .bubble { max-width: 74%; border: 1px solid var(--border); padding: 16px; line-height: 1.65; background: var(--surface); } .bubble.user { margin-left: auto; background: var(--foreground); color: #fff; border-color: var(--foreground); } .bubble.assistant { margin-right: auto; }
+    .composer { border-top: 1px solid var(--border); padding: 16px; display: flex; gap: 10px; } input { flex: 1; min-height: 42px; border: 1px solid var(--border); border-radius: 999px; padding: 0 16px; font: inherit; } button { min-height: 42px; border-radius: 999px; border: 1px solid var(--foreground); background: var(--foreground); color: #fff; padding: 0 18px; font-weight: 650; }
+    .source-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; line-height: 1.55; } .source-card strong { display: block; margin: 8px 0; } .candidate { border: 1px dashed var(--foreground); background: repeating-linear-gradient(-45deg, transparent 0 8px, var(--surface-subtle) 8px 9px); }
+    @media (max-width: 1100px) { main { padding: 24px; } .chat { grid-template-columns: 1fr; } .bubble { max-width: 100%; } }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="eyebrow">05 RAG question answering</div>
+    <h1>Ask the superconductivity literature with evidence.</h1>
+    <p class="lede">RAG 页面必须把回答和证据绑定展示。AI 候选结构化记录只能作为待审核草稿，不能被误认为已入库数据。</p>
+    <section class="chat">
+      <aside class="panel"><div class="head"><h2>会话</h2><span class="tag">NEW</span></div><div class="list"><div class="session active">LaH10 pressure range</div><div class="session">Hydride cage structures</div><div class="session">FeSe isotope effect</div></div></aside>
+      <section class="panel"><div class="head"><h2>对话流</h2><span class="tag">STREAMING</span></div><div class="messages"><div class="bubble user">LaH10 的高 Tc 证据来自哪些论文？</div><div class="bubble assistant">主要证据来自高压氢化物实验和后续理论分析。回答中的每个结论都应链接到论文片段、本地记录或知识图谱关系。</div><div class="bubble assistant">候选结构化记录可以生成，但必须进入审核队列，不能直接成为公开数据库数据。</div></div><div class="composer"><input value="继续追问压力范围和结构来源" /><button>Send →</button></div></section>
+      <aside class="panel"><div class="head"><h2>证据</h2><span class="tag">4 SOURCES</span></div><div class="evidence"><div class="source-card"><span class="tag">PAPER CHUNK</span><strong>Nature 2019 · LaH10</strong><p>实验 Tc 和压力范围片段。</p></div><div class="source-card"><span class="tag">KG RELATION</span><strong>H3S → LaH10</strong><p>材料体系扩展关系。</p></div><div class="source-card"><span class="tag">LOCAL RECORD</span><strong>Record #1024</strong><p>已审核结构化记录。</p></div><div class="source-card candidate"><span class="tag">CANDIDATE · NOT PUBLIC DATA</span><strong>AI generated record draft</strong><p>需要人工审核后才能进入数据库。</p></div></div></aside>
+    </section>
+  </main>
+</body>
+</html>

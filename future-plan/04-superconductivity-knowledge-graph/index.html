@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>04 超导发展知识图谱</title>
+  <style>
+    :root { --background: oklch(0.985 0.002 90); --foreground: oklch(0.12 0.01 60); --muted: oklch(0.45 0.02 60); --border: oklch(0.88 0.01 90); --surface: #fff; --surface-subtle: oklch(0.96 0.003 90); --radius: .25rem; }
+    * { box-sizing: border-box; } body { margin: 0; background: var(--background); color: var(--foreground); font-family: "Instrument Sans", Inter, "Microsoft YaHei", system-ui, sans-serif; }
+    main { max-width: 1400px; margin: 0 auto; padding: 48px; } .eyebrow { display: flex; align-items: center; gap: 12px; color: var(--muted); font: 12px "JetBrains Mono", monospace; text-transform: uppercase; letter-spacing: .08em; } .eyebrow::before { content: ""; width: 32px; height: 1px; background: var(--foreground); }
+    h1 { max-width: 1060px; margin: 24px 0 32px; font-family: "Instrument Serif", Georgia, serif; font-size: clamp(3rem, 9vw, 8rem); line-height: .9; letter-spacing: -.04em; font-weight: 400; } .lede { max-width: 760px; color: var(--muted); font-size: 18px; line-height: 1.7; }
+    .layout { display: grid; grid-template-columns: minmax(720px, 1fr) 380px; gap: 24px; margin-top: 88px; align-items: stretch; } .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .head { padding: 18px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; gap: 16px; align-items: center; } h2 { margin: 0; font-size: 22px; } .tag { border: 1px solid var(--border); border-radius: 999px; padding: 6px 10px; font: 11px "JetBrains Mono", monospace; text-transform: uppercase; background: var(--surface); }
+    .graph { position: relative; min-height: 620px; background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px); background-size: 36px 36px; }
+    .node { position: absolute; width: 150px; min-height: 76px; padding: 12px; border: 1px solid var(--foreground); border-radius: var(--radius); background: color-mix(in oklch, var(--surface) 92%, transparent); font-size: 13px; line-height: 1.35; } .node strong { display: block; margin-bottom: 6px; } .node span { color: var(--muted); font: 10px "JetBrains Mono", monospace; text-transform: uppercase; }
+    .n1 { left: 8%; top: 15%; } .n2 { left: 36%; top: 8%; } .n3 { left: 64%; top: 22%; } .n4 { left: 26%; top: 48%; } .n5 { left: 56%; top: 56%; } .center { left: 42%; top: 32%; background: var(--foreground); color: #fff; } .center span { color: color-mix(in oklch, #fff 72%, transparent); }
+    .edge { position: absolute; height: 1px; background: var(--foreground); transform-origin: left center; opacity: .5; } .e1 { left: 22%; top: 23%; width: 260px; transform: rotate(-8deg); } .e2 { left: 50%; top: 22%; width: 220px; transform: rotate(18deg); } .e3 { left: 39%; top: 45%; width: 220px; transform: rotate(128deg); } .e4 { left: 50%; top: 48%; width: 210px; transform: rotate(36deg); }
+    .edge-label { position: absolute; background: var(--surface); border: 1px solid var(--border); padding: 4px 7px; font: 10px "JetBrains Mono", monospace; text-transform: uppercase; color: var(--muted); }
+    .l1 { left: 28%; top: 18%; } .l2 { right: 21%; top: 26%; } .l3 { left: 31%; bottom: 32%; } .l4 { right: 26%; bottom: 30%; }
+    .detail { padding: 20px; display: grid; gap: 18px; } .detail h3 { margin: 0; font-size: 28px; line-height: 1.1; } .kv { border-top: 1px solid var(--border); padding-top: 10px; } .kv span { display: block; color: var(--muted); font: 11px "JetBrains Mono", monospace; text-transform: uppercase; } .kv strong { display: block; margin-top: 6px; }
+    .relations { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
+    @media (max-width: 1000px) { main { padding: 24px; } .layout { grid-template-columns: 1fr; } .graph { min-height: 720px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="eyebrow">04 Superconductivity knowledge graph</div>
+    <h1>Map superconductivity as a chain of papers.</h1>
+    <p class="lede">知识图谱默认展示论文之间的学术关系，而不是把 Tc、压强和空间群堆成属性节点。参数信息进入右侧详情。</p>
+    <section class="layout">
+      <div class="panel">
+        <div class="head"><h2>里程碑论文图谱</h2><span class="tag">VERIFIED RELATIONS</span></div>
+        <div class="graph">
+          <div class="edge e1"></div><div class="edge e2"></div><div class="edge e3"></div><div class="edge e4"></div>
+          <div class="edge-label l1">theory basis</div><div class="edge-label l2">experimental proof</div><div class="edge-label l3">material extension</div><div class="edge-label l4">same direction</div>
+          <div class="node n1"><strong>BCS theory</strong><span>1957 · foundation</span></div>
+          <div class="node n2"><strong>Cuprates</strong><span>1986 · milestone</span></div>
+          <div class="node center"><strong>Hydride superconductivity</strong><span>selected topic</span></div>
+          <div class="node n3"><strong>LaH10 record</strong><span>2019 · pressure</span></div>
+          <div class="node n4"><strong>H3S discovery</strong><span>2015 · hydride</span></div>
+          <div class="node n5"><strong>Room-temperature claim</strong><span>dispute / revision</span></div>
+        </div>
+      </div>
+      <aside class="panel">
+        <div class="head"><h2>论文详情</h2><span class="tag">SELECTED</span></div>
+        <div class="detail">
+          <h3>Hydride superconductivity under pressure</h3>
+          <div class="kv"><span>Relation type</span><strong>Material system extension</strong></div>
+          <div class="kv"><span>Scope</span><strong>Verified milestone relations</strong></div>
+          <div class="kv"><span>Parameters</span><strong>Tc and pressure stay in detail, not graph nodes</strong></div>
+          <div class="relations"><span class="tag">FIRST DISCOVERY</span><span class="tag">THEORY BASIS</span><span class="tag">DISPUTE</span><span class="tag">FOLLOW-UP</span></div>
+        </div>
+      </aside>
+    </section>
+  </main>
+</body>
+</html>

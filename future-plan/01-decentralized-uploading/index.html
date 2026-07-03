@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>01 去中心化超导数据上传</title>
+  <style>
+    :root { --background: oklch(0.985 0.002 90); --foreground: oklch(0.12 0.01 60); --muted: oklch(0.45 0.02 60); --border: oklch(0.88 0.01 90); --surface: #fff; --surface-subtle: oklch(0.96 0.003 90); --radius: .25rem; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: var(--foreground); background: var(--background); font-family: "Instrument Sans", Inter, "Microsoft YaHei", system-ui, sans-serif; }
+    body::before { content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .45; background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px); background-size: 48px 48px; mask-image: linear-gradient(to bottom, #000, transparent 78%); }
+    main { position: relative; max-width: 1400px; margin: 0 auto; padding: 48px; }
+    .eyebrow { display: flex; align-items: center; gap: 12px; color: var(--muted); font: 12px "JetBrains Mono", monospace; text-transform: uppercase; letter-spacing: .08em; }
+    .eyebrow::before { content: ""; width: 32px; height: 1px; background: var(--foreground); }
+    h1 { max-width: 1040px; margin: 24px 0 32px; font-family: "Instrument Serif", Georgia, serif; font-size: clamp(3rem, 9vw, 8rem); line-height: .9; letter-spacing: -.04em; font-weight: 400; }
+    .lede { max-width: 760px; color: var(--muted); font-size: 18px; line-height: 1.7; }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
+    .button { display: inline-flex; align-items: center; gap: 10px; min-height: 42px; padding: 0 18px; border-radius: 999px; border: 1px solid var(--foreground); background: var(--foreground); color: #fff; font-weight: 650; text-decoration: none; }
+    .button.secondary { background: transparent; color: var(--foreground); border-color: color-mix(in oklch, var(--foreground) 22%, transparent); }
+    .layout { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(320px, .75fr); gap: 32px; margin-top: 96px; align-items: start; }
+    .panel { background: color-mix(in oklch, var(--surface) 92%, transparent); border: 1px solid var(--border); border-radius: var(--radius); }
+    .panel-head { padding: 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; gap: 16px; align-items: start; }
+    h2 { margin: 0; font-size: 26px; line-height: 1.15; font-weight: 650; }
+    .note { color: var(--muted); line-height: 1.65; margin: 8px 0 0; }
+    .form { display: grid; gap: 0; }
+    .section { padding: 28px 24px; border-bottom: 1px solid var(--border); }
+    .section:last-child { border-bottom: 0; }
+    .section-title { font: 12px "JetBrains Mono", monospace; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 20px; color: var(--muted); }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    label { display: grid; gap: 8px; font-size: 13px; color: var(--muted); }
+    input, textarea, select { width: 100%; min-height: 42px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--foreground); font: inherit; }
+    textarea { min-height: 96px; resize: vertical; }
+    .upload { min-height: 160px; display: grid; place-items: center; padding: 24px; text-align: center; background: repeating-linear-gradient(-45deg, transparent 0 8px, var(--surface-subtle) 8px 9px); border: 1px dashed var(--foreground); border-radius: var(--radius); }
+    .upload strong { display: block; font-size: 18px; margin-bottom: 8px; }
+    .sticky { position: sticky; top: 24px; }
+    .preview { padding: 24px; display: grid; gap: 20px; }
+    .formula { font-family: "Instrument Serif", Georgia, serif; font-size: 58px; line-height: .9; }
+    .tags { display: flex; flex-wrap: wrap; gap: 8px; }
+    .tag { border: 1px solid var(--border); border-radius: 999px; padding: 6px 10px; font: 11px "JetBrains Mono", monospace; text-transform: uppercase; background: var(--surface); }
+    .metric-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .metric { border-top: 1px solid var(--border); padding-top: 12px; }
+    .metric span { display: block; color: var(--muted); font: 11px "JetBrains Mono", monospace; text-transform: uppercase; }
+    .metric strong { display: block; margin-top: 6px; font-size: 20px; }
+    .checklist { display: grid; gap: 10px; color: var(--muted); line-height: 1.5; }
+    .checklist div { display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+    @media (max-width: 900px) { main { padding: 24px; } .layout, .grid { grid-template-columns: 1fr; } .sticky { position: static; } }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="eyebrow">01 Decentralized uploading</div>
+    <h1>Submit one verified superconducting record.</h1>
+    <p class="lede">把文献、材料、压强、Tc、晶体结构和来源说明合并成一条完整样本。页面不把论文上传、参数上传和结构补录拆成三个孤立流程。</p>
+    <div class="hero-actions">
+      <a class="button" href="#record-form">Start record <span>→</span></a>
+      <a class="button secondary" href="./网页UI设计.md">Read UI spec</a>
+    </div>
+
+    <section class="layout" id="record-form">
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>完整记录表单</h2>
+            <p class="note">所有字段共同描述同一条 `superconductor_records` 样本。</p>
+          </div>
+          <span class="tag">NEEDS REVIEW</span>
+        </div>
+        <div class="form">
+          <div class="section">
+            <div class="section-title">Literature and material</div>
+            <div class="grid">
+              <label>DOI<input value="10.1038/example.001" /></label>
+              <label>Year<input value="2024" /></label>
+              <label>Paper title<input value="High-pressure superconductivity in La-H system" /></label>
+              <label>Formula<input value="LaH10" /></label>
+              <label>Elements<input value="La, H" /></label>
+              <label>Source type<select><option>User upload</option><option>Experiment</option><option>Theory</option></select></label>
+            </div>
+          </div>
+          <div class="section">
+            <div class="section-title">Pressure and superconducting parameters</div>
+            <div class="grid">
+              <label>Pressure / GPa<input value="170" /></label>
+              <label>Tc / K<input value="250" /></label>
+              <label>Tc method<select><option>experimental_tc</option><option>allen_dynes_tc</option></select></label>
+              <label>lambda<input value="2.85" /></label>
+              <label>omega_log<input value="1200 K" /></label>
+              <label>N(Ef)<input value="0.61 states/eV" /></label>
+            </div>
+          </div>
+          <div class="section">
+            <div class="section-title">Crystal structure</div>
+            <div class="upload">
+              <div>
+                <strong>Drop CIF or POSCAR here</strong>
+                <span class="note">解析后展示空间群、原子数量、晶胞参数和元素列表。</span>
+              </div>
+            </div>
+          </div>
+          <div class="section">
+            <div class="section-title">Source and duplicate check</div>
+            <div class="grid">
+              <label>Structure source<input value="Supplementary CIF" /></label>
+              <label>Same-pressure duplicate<input value="No exact duplicate found" /></label>
+              <label style="grid-column: 1 / -1;">Notes<textarea>Structure parsed successfully. Record still requires reviewer confirmation before public release.</textarea></label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="panel sticky">
+        <div class="panel-head">
+          <h2>记录预览</h2>
+          <span class="tag">LOCAL DRAFT</span>
+        </div>
+        <div class="preview">
+          <div class="formula">LaH10</div>
+          <div class="tags">
+            <span class="tag">STRUCTURE PARSED</span>
+            <span class="tag">MISSING REVIEW</span>
+            <span class="tag">NOT PUBLIC</span>
+          </div>
+          <div class="metric-grid">
+            <div class="metric"><span>Tc</span><strong>250 K</strong></div>
+            <div class="metric"><span>Pressure</span><strong>170 GPa</strong></div>
+            <div class="metric"><span>Space group</span><strong>Fm-3m</strong></div>
+            <div class="metric"><span>Atoms</span><strong>44</strong></div>
+          </div>
+          <div class="checklist">
+            <div><span>DOI</span><strong>READY</strong></div>
+            <div><span>Structure</span><strong>READY</strong></div>
+            <div><span>Tc fields</span><strong>READY</strong></div>
+            <div><span>Reviewer decision</span><strong>PENDING</strong></div>
+          </div>
+        </div>
+      </aside>
+    </section>
+  </main>
+</body>
+</html>

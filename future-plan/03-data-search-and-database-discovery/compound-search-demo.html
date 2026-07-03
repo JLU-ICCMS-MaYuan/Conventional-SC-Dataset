@@ -3,414 +3,55 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>03 化合物检索结果页演示</title>
+  <title>03 化合物检索详细示例</title>
   <style>
-    :root {
-      --bg: #f6f7f9;
-      --panel: #ffffff;
-      --text: #1f2933;
-      --muted: #687385;
-      --line: #dce2ea;
-      --blue: #276ef1;
-      --green: #178a55;
-      --yellow: #b7791f;
-      --red: #c2413b;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: Arial, "Microsoft YaHei", sans-serif;
-      background: var(--bg);
-      color: var(--text);
-    }
-    .page {
-      max-width: 1440px;
-      margin: 0 auto;
-      padding: 24px;
-    }
-    .header {
-      display: flex;
-      justify-content: space-between;
-      gap: 16px;
-      align-items: flex-start;
-      margin-bottom: 18px;
-    }
-    h1 {
-      margin: 0 0 6px;
-      font-size: 26px;
-      letter-spacing: 0;
-    }
-    .subtitle {
-      color: var(--muted);
-      margin: 0;
-      font-size: 14px;
-    }
-    .source-tabs {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-    .tab, .button {
-      border: 1px solid var(--line);
-      background: var(--panel);
-      color: var(--text);
-      padding: 8px 12px;
-      border-radius: 6px;
-      font-size: 14px;
-    }
-    .tab.active {
-      border-color: var(--blue);
-      color: var(--blue);
-      font-weight: 600;
-    }
-    .filters {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 16px;
-      margin-bottom: 16px;
-    }
-    .filter-grid {
-      display: grid;
-      grid-template-columns: repeat(6, minmax(120px, 1fr));
-      gap: 12px;
-      align-items: end;
-    }
-    label {
-      display: block;
-      color: var(--muted);
-      font-size: 12px;
-      margin-bottom: 6px;
-    }
-    input, select {
-      width: 100%;
-      height: 34px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 6px 8px;
-      background: #fff;
-      color: var(--text);
-    }
-    .content {
-      display: grid;
-      grid-template-columns: minmax(720px, 1fr) 380px;
-      gap: 16px;
-      align-items: start;
-    }
-    .panel {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      overflow: hidden;
-    }
-    .panel-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 14px 16px;
-      border-bottom: 1px solid var(--line);
-    }
-    .panel-title {
-      font-size: 16px;
-      font-weight: 700;
-      margin: 0;
-    }
-    .view-toggle {
-      display: flex;
-      gap: 8px;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-    th, td {
-      padding: 11px 10px;
-      border-bottom: 1px solid var(--line);
-      text-align: left;
-      white-space: nowrap;
-    }
-    th {
-      color: var(--muted);
-      font-weight: 600;
-      background: #fafbfc;
-    }
-    tr.selected {
-      background: #eef5ff;
-      outline: 2px solid rgba(39, 110, 241, .25);
-      outline-offset: -2px;
-    }
-    .status {
-      display: inline-block;
-      padding: 3px 8px;
-      border-radius: 999px;
-      font-size: 12px;
-      border: 1px solid;
-    }
-    .approved { color: var(--green); border-color: #9bd8bd; background: #eefaf3; }
-    .pending { color: var(--yellow); border-color: #f1d28c; background: #fff8e8; }
-    .rejected { color: var(--red); border-color: #efb0ab; background: #fff1f0; }
-    .source {
-      color: var(--blue);
-      font-weight: 600;
-    }
-    .card-list {
-      display: grid;
-      gap: 12px;
-      padding: 14px;
-    }
-    .result-card {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 14px;
-      background: #fff;
-    }
-    .card-top {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 10px;
-    }
-    .formula {
-      font-size: 18px;
-      font-weight: 700;
-    }
-    .doi {
-      color: var(--muted);
-      font-size: 12px;
-      margin-top: 4px;
-    }
-    .metrics {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 8px;
-      margin-top: 12px;
-    }
-    .metric {
-      background: #f7f9fb;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 8px;
-    }
-    .metric span {
-      display: block;
-      color: var(--muted);
-      font-size: 11px;
-      margin-bottom: 4px;
-    }
-    .metric strong { font-size: 13px; }
-    .detail {
-      padding: 16px;
-    }
-    .detail h2 {
-      margin: 0 0 6px;
-      font-size: 20px;
-    }
-    .detail-section {
-      border-top: 1px solid var(--line);
-      padding-top: 14px;
-      margin-top: 14px;
-    }
-    .detail-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      font-size: 13px;
-    }
-    .kv {
-      background: #f7f9fb;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 9px;
-    }
-    .kv span {
-      display: block;
-      color: var(--muted);
-      font-size: 11px;
-      margin-bottom: 4px;
-    }
-    .note {
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.6;
-      margin: 8px 0 0;
-    }
-    @media (max-width: 1100px) {
-      .content { grid-template-columns: 1fr; }
-      .filter-grid { grid-template-columns: repeat(3, 1fr); }
-    }
-    @media (max-width: 720px) {
-      .page { padding: 14px; }
-      .header { flex-direction: column; }
-      .filter-grid { grid-template-columns: 1fr 1fr; }
-      .metrics { grid-template-columns: 1fr 1fr; }
-      .table-wrap { overflow-x: auto; }
-    }
+    :root { --background: oklch(0.985 0.002 90); --foreground: oklch(0.12 0.01 60); --muted: oklch(0.45 0.02 60); --border: oklch(0.88 0.01 90); --surface: #fff; --surface-subtle: oklch(0.96 0.003 90); --radius: .25rem; }
+    * { box-sizing: border-box; } body { margin: 0; background: var(--background); color: var(--foreground); font-family: "Instrument Sans", Inter, "Microsoft YaHei", system-ui, sans-serif; }
+    main { max-width: 1400px; margin: 0 auto; padding: 48px; } h1 { margin: 18px 0 12px; font-family: "Instrument Serif", Georgia, serif; font-size: clamp(3rem, 8vw, 7rem); line-height: .9; letter-spacing: -.04em; font-weight: 400; }
+    .eyebrow { display: flex; align-items: center; gap: 12px; color: var(--muted); font: 12px "JetBrains Mono", monospace; text-transform: uppercase; letter-spacing: .08em; } .eyebrow::before { content: ""; width: 32px; height: 1px; background: var(--foreground); }
+    p { color: var(--muted); line-height: 1.7; } .toolbar, .tabs { display: flex; flex-wrap: wrap; gap: 8px; } .tabs { margin: 40px 0 18px; }
+    button, .tag { border: 1px solid var(--border); background: transparent; border-radius: 999px; padding: 8px 12px; color: var(--foreground); font: 11px "JetBrains Mono", monospace; text-transform: uppercase; } .active { background: var(--foreground); color: #fff; border-color: var(--foreground); }
+    .filters, .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); } .filters { padding: 16px; display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 18px; }
+    label { display: grid; gap: 8px; color: var(--muted); font-size: 12px; } input, select { min-height: 38px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 8px 10px; font: inherit; }
+    .content { display: grid; grid-template-columns: minmax(720px, 1fr) 390px; gap: 18px; align-items: start; } .head { padding: 18px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+    h2 { margin: 0; font-size: 22px; } table { width: 100%; border-collapse: collapse; font-size: 13px; } th, td { padding: 13px 10px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; } th { color: var(--muted); font: 11px "JetBrains Mono", monospace; text-transform: uppercase; background: var(--surface-subtle); } tr.selected { background: var(--surface-subtle); box-shadow: inset 3px 0 0 var(--foreground); }
+    .detail { padding: 20px; display: grid; gap: 18px; } .formula { font-family: "Instrument Serif", Georgia, serif; font-size: 52px; line-height: .9; } .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; } .metric { border-top: 1px solid var(--border); padding-top: 10px; } .metric span { display: block; color: var(--muted); font: 11px "JetBrains Mono", monospace; text-transform: uppercase; } .metric strong { display: block; margin-top: 5px; }
+    .record-note { padding: 14px; border: 1px dashed var(--foreground); background: repeating-linear-gradient(-45deg, transparent 0 8px, var(--surface-subtle) 8px 9px); color: var(--muted); line-height: 1.6; }
+    @media (max-width: 1000px) { main { padding: 24px; } .filters, .content { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
-  <main class="page">
-    <header class="header">
-      <div>
-        <h1>La-H 体系检索结果</h1>
-        <p class="subtitle">默认展示本地数据库，可切换 Alexandria、HTSC-2025 或全部来源。</p>
-      </div>
-      <nav class="source-tabs" aria-label="数据来源筛选">
-        <button class="tab active">本地数据库</button>
-        <button class="tab">Alexandria</button>
-        <button class="tab">HTSC-2025</button>
-        <button class="tab">全部来源</button>
-      </nav>
-    </header>
-
-    <section class="filters" aria-label="筛选条件">
-      <div class="filter-grid">
-        <div>
-          <label>Formula 模糊搜索</label>
-          <input value="LaH" />
-        </div>
-        <div>
-          <label>Tc 最小值 K</label>
-          <input value="150" />
-        </div>
-        <div>
-          <label>压强范围 GPa</label>
-          <input value="100 - 250" />
-        </div>
-        <div>
-          <label>年份范围</label>
-          <input value="2015 - 2026" />
-        </div>
-        <div>
-          <label>超导类型</label>
-          <select>
-            <option>Hydride</option>
-            <option>Cuprate</option>
-            <option>Iron-based</option>
-          </select>
-        </div>
-        <div>
-          <label>审核状态</label>
-          <select>
-            <option>全部</option>
-            <option>已审核</option>
-            <option>待审核</option>
-            <option>未背书 / 存疑</option>
-          </select>
-        </div>
-      </div>
+  <main>
+    <div class="eyebrow">Compound search demo</div>
+    <h1>Compare records, then inspect one.</h1>
+    <p>这个页面重写旧的化合物检索 demo：保留表格与右侧详情逻辑，但删除旧蓝绿主题和旧状态色。</p>
+    <div class="tabs"><button class="active">Local database</button><button>Alexandria</button><button>HTSC-2025</button><button>All sources</button></div>
+    <section class="filters">
+      <label>Formula<input value="LaH10" /></label><label>Tc<select><option>Representative</option></select></label><label>Pressure<input value="170" /></label><label>Year<input value="2020" /></label><label>Space group<input value="Fm-3m" /></label><label>Review<select><option>All</option></select></label>
     </section>
-
     <section class="content">
       <div class="panel">
-        <div class="panel-head">
-          <h2 class="panel-title">结果表格：适合排序、筛选、快速比较</h2>
-          <div class="view-toggle">
-            <button class="button">表格</button>
-            <button class="button">卡片</button>
-          </div>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>体系名称</th>
-                <th>代表 Tc</th>
-                <th>压强</th>
-                <th>超导类型</th>
-                <th>空间群</th>
-                <th>数据来源</th>
-                <th>审核状态</th>
-                <th>DOI</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr class="selected">
-                <td>LaH10</td>
-                <td>250 K</td>
-                <td>170 GPa</td>
-                <td>Hydride</td>
-                <td>Fm-3m</td>
-                <td><span class="source">本地数据库</span></td>
-                <td><span class="status approved">已审核</span></td>
-                <td>10.1038/example.001</td>
-              </tr>
-              <tr>
-                <td>LaH6</td>
-                <td>178 K</td>
-                <td>150 GPa</td>
-                <td>Hydride</td>
-                <td>R-3m</td>
-                <td><span class="source">本地数据库</span></td>
-                <td><span class="status pending">待审核</span></td>
-                <td>10.1103/example.002</td>
-              </tr>
-              <tr>
-                <td>LaH4</td>
-                <td>112 K</td>
-                <td>120 GPa</td>
-                <td>Hydride</td>
-                <td>P6/mmm</td>
-                <td><span class="source">本地数据库</span></td>
-                <td><span class="status rejected">未背书 / 存疑</span></td>
-                <td>10.1007/example.003</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="card-list">
-          <article class="result-card">
-            <div class="card-top">
-              <div>
-                <div class="formula">LaH10 · 170 GPa · Fm-3m</div>
-                <div class="doi">DOI: 10.1038/example.001 · 2020 · Nature</div>
-              </div>
-              <span class="status approved">已审核</span>
-            </div>
-            <p class="note">卡片展示表格放不下的细节：多个 Tc 值、计算参数、结构来源、论文信息和备注。点击表格行后，右侧详情同步显示。</p>
-            <div class="metrics">
-              <div class="metric"><span>实验 Tc</span><strong>250 K</strong></div>
-              <div class="metric"><span>Allen-Dynes Tc</span><strong>232 K</strong></div>
-              <div class="metric"><span>lambda</span><strong>2.18</strong></div>
-              <div class="metric"><span>omega_log</span><strong>1080 K</strong></div>
-            </div>
-          </article>
-        </div>
+        <div class="head"><h2>当前页记录</h2><span class="tag">DETAIL INCLUDED</span></div>
+        <table>
+          <thead><tr><th>年份</th><th>体系</th><th>类型</th><th>压强</th><th>Tc</th><th>空间群</th><th>来源</th><th>状态</th></tr></thead>
+          <tbody>
+            <tr class="selected"><td>2020</td><td>LaH10</td><td>Hydride</td><td>170</td><td>250 K · Exp</td><td>Fm-3m</td><td>Local</td><td><span class="tag">APPROVED</span></td></tr>
+            <tr><td>2019</td><td>LaH6</td><td>Hydride</td><td>150</td><td>215 K · AD</td><td>R-3m</td><td>Local</td><td><span class="tag">PENDING</span></td></tr>
+            <tr><td>2024</td><td>LaH4</td><td>Hydride</td><td>210</td><td>188 K · Theory</td><td>P6/mmm</td><td>External</td><td><span class="tag">EXTERNAL</span></td></tr>
+          </tbody>
+        </table>
       </div>
-
       <aside class="panel">
-        <div class="panel-head">
-          <h2 class="panel-title">选中记录详情卡片</h2>
-        </div>
+        <div class="head"><h2>详情卡片</h2><span class="tag">SELECTED</span></div>
         <div class="detail">
-          <h2>LaH10</h2>
-          <p class="subtitle">一条本地展示行对应一条可追溯的超导记录。</p>
-          <div class="detail-section">
-            <div class="detail-grid">
-              <div class="kv"><span>压强</span><strong>170 GPa</strong></div>
-              <div class="kv"><span>空间群</span><strong>Fm-3m</strong></div>
-              <div class="kv"><span>超导类型</span><strong>Hydride</strong></div>
-              <div class="kv"><span>数据来源</span><strong>本地数据库</strong></div>
-              <div class="kv"><span>审核状态</span><strong>已审核</strong></div>
-              <div class="kv"><span>年份</span><strong>2020</strong></div>
-            </div>
+          <div class="formula">LaH10</div>
+          <div class="metric-grid">
+            <div class="metric"><span>DOI</span><strong>10.1038/example</strong></div>
+            <div class="metric"><span>Tc source</span><strong>experimental_tc</strong></div>
+            <div class="metric"><span>lambda</span><strong>2.85</strong></div>
+            <div class="metric"><span>omega_log</span><strong>1200 K</strong></div>
           </div>
-          <div class="detail-section">
-            <h3>全部 Tc 字段</h3>
-            <div class="detail-grid">
-              <div class="kv"><span>实验 Tc</span><strong>250 K</strong></div>
-              <div class="kv"><span>各向异性 Eliashberg Tc</span><strong>246 K</strong></div>
-              <div class="kv"><span>Allen-Dynes Tc</span><strong>232 K</strong></div>
-              <div class="kv"><span>McMillan Tc</span><strong>198 K</strong></div>
-            </div>
-          </div>
-          <div class="detail-section">
-            <h3>论文与计算信息</h3>
-            <p class="note">题名：High-temperature superconductivity in lanthanum hydrides under pressure</p>
-            <p class="note">期刊：Nature · DOI: 10.1038/example.001</p>
-            <p class="note">计算方法：DFT + EPC；N(Ef): 0.72；k-grid: 16x16x16。</p>
-          </div>
+          <div class="record-note">外部来源字段缺失时显示为空或未提供，不强行补齐本地审核字段。</div>
         </div>
       </aside>
     </section>
