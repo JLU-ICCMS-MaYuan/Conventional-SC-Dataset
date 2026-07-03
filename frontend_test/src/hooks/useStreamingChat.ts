@@ -269,20 +269,18 @@ export function useStreamingChat() {
             } else if (eventType === 'done') {
               if (data.papers) { receivedPapers = data.papers; setPapers(data.papers) }
               if (data.top10) { receivedTop10 = data.top10; setTop10(data.top10) }
-              // accumulate filtered papers into savedPapers (deduplicated, sequential numbering)
-              const keptIds = keptIdsRef.current
-              if (keptIds.length > 0 && data.papers) {
+              // accumulate papers into savedPapers (deduplicated, sequential numbering)
+              if (data.papers) {
                 setSavedPapers(prev => {
                   const seen = new Set(prev.map(p => p.pid))
                   const added: Array<{ pid: string; info: PaperInfo }> = []
-                  for (const pid of keptIds) {
+                  for (const pid of Object.keys(data.papers)) {
                     if (!seen.has(pid) && data.papers[pid]) {
                       added.push({ pid, info: data.papers[pid] })
                     }
                   }
                   return added.length > 0 ? [...prev, ...added] : prev
                 })
-                keptIdsRef.current = [] // consumed
               }
               // Brainstorm 会话标记嵌入在 answer 中（<!--BS:json-->），
               // token 事件只含正文不含标记，必须用 data.answer 覆盖 fullAnswer
