@@ -46,7 +46,7 @@ const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content, papers, pape
     <div className="markdown-body" style={{ fontSize: 14, lineHeight: 1.8, color: '#333' }}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeKatex]}
+        rehypePlugins={[[rehypeKatex, { strict: false }]]}
       >
         {processed}
       </ReactMarkdown>
