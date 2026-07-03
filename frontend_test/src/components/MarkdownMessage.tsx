@@ -26,6 +26,11 @@ const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content, papers, pape
   }
   text = text.replace(/\[来源\d+\]（paper_id=\d+）/g, '')
   text = text.replace(/\[来源\d+\]/g, '')
+  // 自动包裹 LLM 输出的裸 LaTeX 命令（如 \mathrm{H}_{24} → $\mathrm{H}_{24}$）
+  text = text.replace(
+    /(\\mathrm\{(?:[^{}]|\{[^{}]*\})*\}(?:_\{[^}]*\})?)/g,
+    '$$1$'
+  )
   const processed = text.replace(
     /\[PID_(\d+)\]/g,
     (_match, pid: string) => {
