@@ -621,3 +621,16 @@ sup.cite-muted {
 .status-message { padding: 8px 16px; border-radius: 8px; font-size: 13px; background: var(--sc-surface); }
 .status-message.error { color: #dc2626; background: #fef2f2; }
 
+
+.compound-header { text-align: center; padding: 40px 0 24px; background: var(--sc-surface); border-bottom: 1px solid var(--sc-border); margin-bottom: 20px; }
+.compound-header h1 { font-size: 28px; font-weight: 700; color: var(--sc-text); margin-bottom: 8px; }
+.compound-body { gap: 16px; padding: 0 20px; }
+.compound-toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.btn-group { display: flex; gap: 4px; }
+.upload-row { display: flex; gap: 8px; align-items: center; padding: 8px 0; }
+.paper-detail { border: 1px solid var(--sc-border); border-radius: 8px; overflow: hidden; background: var(--sc-surface); }
+.paper-summary { padding: 12px 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
+.paper-summary:hover { background: var(--sc-surface-hover); }
+.paper-detail[open] .paper-summary { border-bottom: 1px solid var(--sc-border); }
+.pagination-row { display: flex; gap: 12px; align-items: center; justify-content: center; padding: 16px 0; }
+
