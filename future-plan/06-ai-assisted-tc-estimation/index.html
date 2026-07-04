@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI 辅助 Tc 估算 · Material Demo</title>
+  <link rel="stylesheet" href="../material-demo.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="top-app-bar"><div class="brand"><div class="brand-mark">SC</div><span>SC-predict</span></div><div class="toolbar"><span class="chip primary">model v0.3</span><button class="button filled">运行预测</button></div></header>
+    <nav class="rail"><button class="rail-item">上传</button><button class="rail-item">审核</button><button class="rail-item">检索</button><button class="rail-item">图谱</button><button class="rail-item">问答</button><button class="rail-item active">预测</button><button class="rail-item">社区</button></nav>
+    <main class="content">
+      <section class="page-header"><div><p class="eyebrow">Tc Estimation</p><h1>从结构和电子态输入估算 Tc</h1><p>预测结果只作为候选信息，不会自动进入公开数据库。</p></div><button class="button outlined">查看历史</button></section>
+      <section class="grid two-col">
+        <div class="grid">
+          <article class="card"><h2>输入文件</h2><div class="grid two-col"><div class="card filled"><h3>CONTCAR</h3><span class="chip success">已上传</span></div><div class="card filled"><h3>PDOS_H.dat</h3><span class="chip success">已上传</span></div></div></article>
+          <article class="card"><h2>模型配置</h2><div class="toolbar"><span class="chip primary">SC-predict v0.3</span><span class="chip">Hydride preset</span><span class="chip">GPU queue</span></div></article>
+        </div>
+        <aside class="card side-sheet">
+          <h2>预测结果</h2>
+          <p style="font-size:52px;color:var(--primary);font-weight:800">186 K</p>
+          <p>输入摘要显示结构元素、态密度文件和模型版本。失败原因会在这里显示，而不是只用临时提示。</p>
+          <div class="toolbar" style="margin-top:18px"><span class="chip warning">PREDICTED ONLY</span><button class="button outlined">提交审核候选</button></div>
+        </aside>
+      </section>
+      <article class="card" style="margin-top:24px"><h2>任务历史</h2><div class="table-wrap"><table class="data-table"><thead><tr><th>时间</th><th>Formula</th><th>模型</th><th>状态</th></tr></thead><tbody><tr><td>16:20</td><td>LaH10</td><td>v0.3</td><td><span class="chip success">完成</span></td></tr></tbody></table></div></article>
+    </main>
+  </div>
+</body>
+</html>

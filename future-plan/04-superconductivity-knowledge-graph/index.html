@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>超导知识图谱 · Material Demo</title>
+  <link rel="stylesheet" href="../material-demo.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="top-app-bar"><div class="brand"><div class="brand-mark">SC</div><span>超导知识图谱</span></div><div class="toolbar"><span class="chip primary">里程碑论文</span><button class="button outlined">局部图谱</button></div></header>
+    <nav class="rail"><button class="rail-item">上传</button><button class="rail-item">审核</button><button class="rail-item">检索</button><button class="rail-item active">图谱</button><button class="rail-item">问答</button><button class="rail-item">预测</button><button class="rail-item">社区</button></nav>
+    <main class="content">
+      <section class="page-header"><div><p class="eyebrow">Knowledge Graph</p><h1>论文之间的发现、验证与发展关系</h1><p>默认展示已审核里程碑论文，不把 Tc、压强、空间群等参数画成图谱节点。</p></div><button class="button filled">展开一层关系</button></section>
+      <section class="grid two-col">
+        <article class="card elevated">
+          <h2>图谱画布</h2>
+          <div class="toolbar" style="margin-bottom:16px"><span class="chip primary">首次发现</span><span class="chip secondary">理论基础</span><span class="chip">实验验证</span><span class="chip warning">争议修正</span></div>
+          <div class="chart" aria-label="知识图谱示意">
+            <span class="dot" style="left:18%;top:44%"></span><span class="dot secondary" style="left:42%;top:30%"></span><span class="dot success" style="left:66%;top:54%"></span><span class="dot" style="left:78%;top:22%"></span>
+          </div>
+        </article>
+        <aside class="card side-sheet">
+          <h2>选中论文</h2>
+          <p class="mono">Hydrogen-rich superconductivity · 2019</p>
+          <div class="toolbar" style="margin:16px 0"><span class="chip primary">关系密度高</span><span class="chip">DOI 可追踪</span></div>
+          <p>详情面板展示论文标题、年份、期刊、DOI、贡献摘要、关联材料体系和参数摘要。</p>
+          <div class="card filled" style="margin-top:16px"><h3>关系证据</h3><p>与高压氢化物理论预测论文形成“理论基础 → 实验验证”关系。</p></div>
+        </aside>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>研究者社区与图表论坛 · Material Demo</title>
+  <link rel="stylesheet" href="../material-demo.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="top-app-bar"><div class="brand"><div class="brand-mark">SC</div><span>超导热点与社区图表</span></div><div class="toolbar"><span class="chip success">已自动保存</span><button class="button outlined">恢复默认</button></div></header>
+    <nav class="rail"><button class="rail-item">上传</button><button class="rail-item">审核</button><button class="rail-item">检索</button><button class="rail-item">图谱</button><button class="rail-item">问答</button><button class="rail-item">预测</button><button class="rail-item active">社区</button></nav>
+    <main class="content">
+      <section class="page-header"><div><p class="eyebrow">Research Community</p><h1>个人 Tc-year / Tc-pressure 图表配置</h1><p>隐藏点、添加点和 Tc 类型选择只影响个人视图，不改变公共默认图表。</p></div><div class="toolbar"><button class="button filled">导出图片</button><button class="button outlined">导出 CSV</button></div></section>
+      <section class="grid two-col">
+        <article class="card elevated">
+          <h2>Tc-year</h2>
+          <div class="toolbar" style="margin-bottom:16px"><span class="chip primary">公共默认</span><span class="chip success">个人配置已保存</span></div>
+          <div class="chart"><span class="dot" style="left:18%;top:58%"></span><span class="dot secondary" style="left:44%;top:42%"></span><span class="dot success" style="left:74%;top:24%"></span></div>
+        </article>
+        <article class="card elevated">
+          <h2>Tc-pressure</h2>
+          <div class="toolbar" style="margin-bottom:16px"><span class="chip">隐藏 2 点</span><span class="chip secondary">新增 1 点</span></div>
+          <div class="chart"><span class="dot secondary" style="left:22%;top:62%"></span><span class="dot" style="left:52%;top:36%"></span><span class="dot success" style="left:80%;top:28%"></span></div>
+        </article>
+      </section>
+      <section class="grid two-col" style="margin-top:24px">
+        <article class="card"><h2>搜索本地记录</h2><div class="field"><label>Formula / DOI / 压强</label><strong>LaH10 200 GPa</strong></div></article>
+        <aside class="card"><h2>数据点详情</h2><p class="mono">LaH10 · 200 GPa · Tc 250 K</p><div class="toolbar" style="margin-top:16px"><button class="button tonal">隐藏点</button><button class="button outlined">修改 Tc 类型</button></div></aside>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

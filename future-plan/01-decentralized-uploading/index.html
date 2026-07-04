@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>去中心化超导数据上传 · Material Demo</title>
+  <link rel="stylesheet" href="../material-demo.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="top-app-bar">
+      <div class="brand"><div class="brand-mark">SC</div><span>SC-Wiki Future Plan</span></div>
+      <div class="toolbar"><span class="chip primary">Material Demo</span><button class="button outlined">帮助</button></div>
+    </header>
+    <nav class="rail" aria-label="模块导航">
+      <button class="rail-item active">上传</button><button class="rail-item">审核</button><button class="rail-item">检索</button><button class="rail-item">图谱</button><button class="rail-item">问答</button><button class="rail-item">预测</button><button class="rail-item">社区</button>
+    </nav>
+    <main class="content">
+      <section class="page-header">
+        <div>
+          <p class="eyebrow">Decentralized Uploading</p>
+          <h1>提交一条完整的超导样本</h1>
+          <p>文献、材料、压强、Tc、结构与来源说明在同一条记录中完成，提交后进入审核队列。</p>
+        </div>
+        <div class="toolbar"><button class="button filled">提交审核</button><button class="button outlined">保存草稿</button></div>
+      </section>
+
+      <section class="grid two-col">
+        <div class="grid">
+          <article class="card elevated">
+            <h2>填写进度</h2>
+            <div class="progress"><span style="width: 62%"></span></div>
+            <div class="toolbar" style="margin-top:16px"><span class="chip success">文献已填</span><span class="chip primary">结构解析中</span><span class="chip warning">来源待补充</span></div>
+          </article>
+          <article class="card">
+            <h2>文献与材料</h2>
+            <div class="grid three-col">
+              <div class="field"><label>DOI</label><strong>10.1038/s41586-demo</strong></div>
+              <div class="field"><label>Formula</label><strong>LaH10</strong></div>
+              <div class="field"><label>年份</label><strong>2019</strong></div>
+            </div>
+          </article>
+          <article class="card">
+            <h2>压强与超导参数</h2>
+            <div class="grid three-col">
+              <div class="field"><label>Pressure</label><strong>200 GPa</strong></div>
+              <div class="field"><label>Tc</label><strong>250 K</strong></div>
+              <div class="field"><label>Tc 类型</label><strong>Experimental</strong></div>
+            </div>
+          </article>
+          <article class="card">
+            <h2>晶体结构</h2>
+            <div class="card filled">
+              <h3>拖拽 CIF / POSCAR 到这里</h3>
+              <p>解析后展示空间群、原子数量、晶胞参数和结构元素列表。</p>
+            </div>
+          </article>
+        </div>
+        <aside class="card side-sheet">
+          <h2>记录预览</h2>
+          <p class="mono">LaH10 · 200 GPa · Tc 250 K</p>
+          <div class="toolbar" style="margin:16px 0"><span class="chip success">可保存</span><span class="chip warning">需审核</span></div>
+          <h3>完整性检查</h3>
+          <p>DOI、压强、Tc 已填写；结构来源说明仍需补充。结构解析成功不等于记录可公开。</p>
+        </aside>
+      </section>
+    </main>
+  </div>
+  <button class="fab" aria-label="新增记录">+</button>
+  <div class="snackbar">草稿已自动保存</div>
+</body>
+</html>

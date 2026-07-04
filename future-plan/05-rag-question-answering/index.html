@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>检索增强问答 · Material Demo</title>
+  <link rel="stylesheet" href="../material-demo.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="top-app-bar"><div class="brand"><div class="brand-mark">SC</div><span>SC-chat</span></div><div class="toolbar"><span class="chip success">RAG 可用</span><button class="button outlined">新对话</button></div></header>
+    <nav class="rail"><button class="rail-item">上传</button><button class="rail-item">审核</button><button class="rail-item">检索</button><button class="rail-item">图谱</button><button class="rail-item active">问答</button><button class="rail-item">预测</button><button class="rail-item">社区</button></nav>
+    <main class="content">
+      <section class="page-header"><div><p class="eyebrow">RAG Question Answering</p><h1>回答必须能追溯到证据</h1><p>对话流、引用标记和证据 Side Sheet 联动，候选结构化记录明确标注为待审核。</p></div><button class="button filled">发送问题</button></section>
+      <section class="grid two-col">
+        <article class="card elevated">
+          <h2>对话流</h2>
+          <div class="card filled"><h3>用户</h3><p>LaH10 在 200 GPa 附近的代表 Tc 是多少？</p></div>
+          <div class="card" style="margin-top:16px"><h3>SC-chat</h3><p>本地审核记录中 LaH10 在 200 GPa 附近的 representative Tc 为 250 K。回答依据来自论文片段、本地记录和图谱关系证据。</p><div class="toolbar" style="margin-top:12px"><span class="chip primary">[1] paper</span><span class="chip secondary">[2] local record</span></div></div>
+          <div class="field" style="margin-top:20px"><label>输入问题</label><strong>继续追问压强范围或结构来源...</strong></div>
+        </article>
+        <aside class="card side-sheet">
+          <h2>证据面板</h2>
+          <div class="card filled"><h3>[1] 论文片段</h3><p>包含 DOI、年份、期刊和可追踪段落。</p></div>
+          <div class="card filled" style="margin-top:12px"><h3>[2] 本地记录</h3><p>LaH10 · approved · representative_tc = experimental_tc。</p></div>
+          <div class="card" style="margin-top:12px"><h3>候选记录</h3><span class="chip warning">非公开数据，需审核</span></div>
+        </aside>
+      </section>
+    </main>
+  </div>
+  <div class="snackbar">引用已定位到证据卡片</div>
+</body>
+</html>

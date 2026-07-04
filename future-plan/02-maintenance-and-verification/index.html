@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>数据维护与审核 · Material Demo</title>
+  <link rel="stylesheet" href="../material-demo.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="top-app-bar">
+      <div class="brand"><div class="brand-mark">SC</div><span>审核工作台</span></div>
+      <div class="toolbar"><span class="chip warning">12 条待处理</span><button class="button outlined">管理员</button></div>
+    </header>
+    <nav class="rail"><button class="rail-item">上传</button><button class="rail-item active">审核</button><button class="rail-item">检索</button><button class="rail-item">图谱</button><button class="rail-item">问答</button><button class="rail-item">预测</button><button class="rail-item">社区</button></nav>
+    <main class="content">
+      <section class="page-header">
+        <div><p class="eyebrow">Maintenance</p><h1>公开入库前的审核中心</h1><p>集中查看论文、超导记录、晶体结构和图表可见性的审核状态。</p></div>
+        <button class="button filled">批量审核</button>
+      </section>
+      <section class="grid three-col" style="margin-bottom:24px">
+        <div class="card filled"><h3>论文</h3><strong>18</strong><p>待确认来源</p></div>
+        <div class="card filled"><h3>超导记录</h3><strong>42</strong><p>字段差异待处理</p></div>
+        <div class="card filled"><h3>晶体结构</h3><strong>9</strong><p>结构来源待补充</p></div>
+      </section>
+      <section class="grid two-col">
+        <article class="card">
+          <h2>审核队列</h2>
+          <div class="toolbar" style="margin-bottom:16px"><span class="chip primary">全部</span><span class="chip">论文</span><span class="chip">结构</span><span class="chip">图表</span></div>
+          <div class="table-wrap"><table class="data-table">
+            <thead><tr><th>对象</th><th>类型</th><th>来源</th><th>状态</th></tr></thead>
+            <tbody>
+              <tr class="selected"><td>LaH10 200 GPa</td><td>超导记录</td><td>用户上传</td><td><span class="chip warning">待审核</span></td></tr>
+              <tr><td>H3S chart point</td><td>图表</td><td>管理员整理</td><td><span class="chip primary">待补充</span></td></tr>
+              <tr><td>MgB2 paper</td><td>论文</td><td>PDF 上传</td><td><span class="chip error">退回</span></td></tr>
+            </tbody>
+          </table></div>
+        </article>
+        <aside class="card side-sheet">
+          <h2>详情与差异</h2>
+          <p class="mono">LaH10 · user_1024 · 2026-07-03</p>
+          <div class="toolbar" style="margin:16px 0"><span class="chip warning">压强结构冲突</span><span class="chip">2 个字段差异</span></div>
+          <p>当前记录与同压强已存在结构不同，需要审核结构来源和 Tc 类型。</p>
+          <div class="toolbar" style="margin-top:24px"><button class="button filled">通过</button><button class="button outlined">退回</button><button class="button text">待补充</button></div>
+        </aside>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

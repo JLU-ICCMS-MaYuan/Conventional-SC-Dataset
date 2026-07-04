@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>超导数据检索 · Material Demo</title>
+  <link rel="stylesheet" href="../material-demo.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="top-app-bar"><div class="brand"><div class="brand-mark">SC</div><span>超导探索</span></div><div class="toolbar"><button class="button tonal">下载 JSON</button><button class="button outlined">导出 RIS</button></div></header>
+    <nav class="rail"><button class="rail-item">上传</button><button class="rail-item">审核</button><button class="rail-item active">检索</button><button class="rail-item">图谱</button><button class="rail-item">问答</button><button class="rail-item">预测</button><button class="rail-item">社区</button></nav>
+    <main class="content">
+      <section class="page-header">
+        <div><p class="eyebrow">Database Discovery</p><h1>比较超导记录并查看完整科研细节</h1><p>默认展示本地数据库，支持元素组合、Formula、Tc、压强、年份、空间群和 DOI 筛选。</p></div>
+        <button class="button filled">进入结果页</button>
+      </section>
+      <article class="card" style="margin-bottom:24px">
+        <h2>检索与筛选</h2>
+        <div class="grid three-col">
+          <div class="field"><label>Formula</label><strong>LaH10</strong></div>
+          <div class="field"><label>Pressure</label><strong>150 - 250 GPa</strong></div>
+          <div class="field"><label>Representative Tc</label><strong>&gt; 150 K</strong></div>
+        </div>
+        <div class="toolbar" style="margin-top:16px"><span class="chip primary">本地数据库</span><span class="chip">Alexandria</span><span class="chip">HTSC-2025</span><span class="chip">全部来源</span></div>
+      </article>
+      <section class="grid two-col">
+        <article class="card">
+          <h2>结果表格</h2>
+          <div class="table-wrap"><table class="data-table">
+            <thead><tr><th>年份</th><th>Formula</th><th>类型</th><th>压强</th><th>Tc</th><th>空间群</th><th>来源</th><th>审核</th><th>DOI</th></tr></thead>
+            <tbody>
+              <tr class="selected"><td>2019</td><td>LaH10</td><td>Hydride</td><td>200</td><td>250</td><td>Fm-3m</td><td><span class="chip primary">Local</span></td><td><span class="chip success">Approved</span></td><td>10.1038/...</td></tr>
+              <tr><td>2015</td><td>H3S</td><td>Hydride</td><td>155</td><td>203</td><td>Im-3m</td><td><span class="chip">Local</span></td><td><span class="chip success">Approved</span></td><td>10.1038/...</td></tr>
+              <tr><td>2024</td><td>YH9</td><td>Hydride</td><td>180</td><td>185</td><td>P63/mmc</td><td><span class="chip secondary">External</span></td><td><span class="chip warning">未审核</span></td><td>-</td></tr>
+            </tbody>
+          </table></div>
+        </article>
+        <aside class="card side-sheet">
+          <h2>记录详情</h2>
+          <p class="mono">LaH10 · representative_tc = experimental_tc</p>
+          <div class="toolbar" style="margin:16px 0"><span class="chip success">Approved</span><span class="chip primary">Local</span></div>
+          <h3>超导参数</h3>
+          <p>experimental_tc 250 K，pressure 200 GPa，lambda 和 omega_log 字段按接口返回展示。</p>
+          <h3 style="margin-top:16px">结构信息</h3>
+          <p>空间群 Fm-3m，晶胞参数和体积进入详情分组，缺失字段显示“未提供”。</p>
+        </aside>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
