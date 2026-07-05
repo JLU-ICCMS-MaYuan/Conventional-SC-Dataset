@@ -3,50 +3,539 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>超导数据检索 · Material Demo</title>
+  <title>超导探索三层流程 · Material Demo</title>
   <link rel="stylesheet" href="../material-demo.css">
+  <style>
+    .flow-shell { min-height: 100vh; background: var(--background); }
+    .flow-stage { display: none; }
+    .flow-stage.active { display: block; }
+    .stage-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .formula-search {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: end;
+    }
+    .periodic-workbench { padding: 20px; overflow-x: auto; }
+    .periodic-table {
+      min-width: 1120px;
+      display: grid;
+      grid-template-columns: repeat(18, 56px);
+      grid-auto-rows: 56px;
+      gap: 6px;
+      align-items: stretch;
+    }
+    .pt-element {
+      border: 1px solid var(--outline-soft);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      box-shadow: var(--e1);
+      cursor: pointer;
+      display: grid;
+      grid-template-rows: 16px 1fr;
+      padding: 5px;
+      transition: transform .16s ease, border-color .16s ease, background .16s ease;
+    }
+    .pt-element:hover { transform: translateY(-1px); border-color: var(--primary); }
+    .pt-element.alkali-metal { background: #f4bcc2; }
+    .pt-element.alkaline-earth { background: #e3bd91; }
+    .pt-element.transition-metal { background: #edcda9; }
+    .pt-element.post-transition { background: #ededab; }
+    .pt-element.metalloid { background: #9cd5a8; }
+    .pt-element.nonmetal { background: #a3d7dc; }
+    .pt-element.halogen { background: #b7a0db; }
+    .pt-element.noble-gas { background: #cfb5d6; }
+    .pt-element.lanthanide { background: #cea1ce; }
+    .pt-element.actinide { background: #c782ab; }
+    .pt-element.selected {
+      border-color: #7b7b7b;
+      border-width: 2px;
+      box-shadow: inset 0 0 0 100px rgba(255, 255, 255, .28), var(--e2);
+    }
+    .pt-number { color: var(--muted); font-size: 10px; font-weight: 700; text-align: left; }
+    .pt-symbol { align-self: center; justify-self: center; font-size: 18px; font-weight: 800; }
+    .selected-strip { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .results-layout {
+      display: grid;
+      grid-template-columns: 240px minmax(0, 1fr) 360px;
+      gap: 24px;
+      align-items: start;
+    }
+    .filter-stack { display: grid; gap: 12px; }
+    .record-list { display: grid; gap: 12px; }
+    .record-row {
+      width: 100%;
+      border: 1px solid var(--outline-soft);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+      box-shadow: var(--e1);
+      padding: 16px;
+      display: grid;
+      gap: 8px;
+      text-align: left;
+      cursor: pointer;
+    }
+    .record-row.active {
+      border-color: var(--primary);
+      background: var(--primary-container);
+    }
+    .record-row strong { font-size: 18px; }
+    .record-meta { color: var(--muted); font-size: 13px; line-height: 1.6; }
+    .detail-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      gap: 24px;
+      align-items: start;
+    }
+    .kv-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .detail-section { margin-top: 24px; }
+    .structure-preview {
+      min-height: 240px;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--outline-soft);
+      background:
+        radial-gradient(circle at 22% 28%, var(--primary) 0 9px, transparent 10px),
+        radial-gradient(circle at 66% 34%, var(--secondary) 0 9px, transparent 10px),
+        radial-gradient(circle at 42% 70%, var(--primary) 0 9px, transparent 10px),
+        linear-gradient(145deg, var(--surface), var(--surface-low));
+      position: relative;
+      overflow: hidden;
+    }
+    .structure-preview::before,
+    .structure-preview::after {
+      content: "";
+      position: absolute;
+      left: 25%;
+      right: 25%;
+      top: 34%;
+      height: 2px;
+      background: var(--outline);
+      transform: rotate(18deg);
+    }
+    .structure-preview::after { top: 58%; transform: rotate(-25deg); }
+    .cif-panel { display: none; margin-top: 16px; max-height: 240px; overflow: auto; }
+    .cif-panel.open { display: block; }
+    .stage-tabs {
+      display: inline-flex;
+      gap: 6px;
+      padding: 4px;
+      border-radius: 999px;
+      background: var(--surface-low);
+      border: 1px solid var(--outline-soft);
+    }
+    .stage-pill {
+      border: 0;
+      border-radius: 999px;
+      min-height: 32px;
+      padding: 0 12px;
+      background: transparent;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .stage-pill.active { color: var(--on-primary); background: var(--primary); }
+    @media (max-width: 1100px) {
+      .results-layout, .detail-layout { grid-template-columns: 1fr; }
+      .stage-bar { align-items: flex-start; flex-direction: column; }
+    }
+    @media (max-width: 720px) {
+      .formula-search, .kv-grid { grid-template-columns: 1fr; }
+    }
+  </style>
 </head>
 <body>
-  <div class="app-shell">
-    <header class="top-app-bar"><div class="brand"><div class="brand-mark">SC</div><span>超导探索</span></div><div class="toolbar"><button class="button tonal">下载 JSON</button><button class="button outlined">导出 RIS</button></div></header>
-    <nav class="rail"><button class="rail-item">上传</button><button class="rail-item">审核</button><button class="rail-item active">检索</button><button class="rail-item">图谱</button><button class="rail-item">问答</button><button class="rail-item">预测</button><button class="rail-item">社区</button></nav>
+  <div class="app-shell flow-shell">
+    <header class="top-app-bar">
+      <div class="brand"><div class="brand-mark">SC</div><span>超导探索</span></div>
+      <div class="stage-tabs" aria-label="三层页面状态">
+        <button class="stage-pill active" data-jump="explore">元素搜索</button>
+        <button class="stage-pill" data-jump="results">结果列表</button>
+        <button class="stage-pill" data-jump="detail">详情页面</button>
+      </div>
+    </header>
+    <nav class="rail" aria-label="模块导航">
+      <button class="rail-item">热点</button>
+      <button class="rail-item active">探索</button>
+      <button class="rail-item">分享</button>
+      <button class="rail-item">对话</button>
+      <button class="rail-item">预测</button>
+    </nav>
     <main class="content">
-      <section class="page-header">
-        <div><p class="eyebrow">Database Discovery</p><h1>比较超导记录并查看完整科研细节</h1><p>默认展示本地数据库，支持元素组合、Formula、Tc、压强、年份、空间群和 DOI 筛选。</p></div>
-        <button class="button filled">进入结果页</button>
-      </section>
-      <article class="card" style="margin-bottom:24px">
-        <h2>检索与筛选</h2>
-        <div class="grid three-col">
-          <div class="field"><label>Formula</label><strong>LaH10</strong></div>
-          <div class="field"><label>Pressure</label><strong>150 - 250 GPa</strong></div>
-          <div class="field"><label>Representative Tc</label><strong>&gt; 150 K</strong></div>
+      <section class="flow-stage active" data-stage="explore">
+        <div class="stage-bar">
+          <div>
+            <p class="eyebrow">Layer 1 · SC Explore</p>
+            <h1>用元素周期表选择超导体系</h1>
+            <p>化学式检索作为轻量入口，元素周期表是主工作台；元素符号始终保持英文。</p>
+          </div>
         </div>
-        <div class="toolbar" style="margin-top:16px"><span class="chip primary">本地数据库</span><span class="chip">Alexandria</span><span class="chip">HTSC-2025</span><span class="chip">全部来源</span></div>
-      </article>
-      <section class="grid two-col">
-        <article class="card">
-          <h2>结果表格</h2>
-          <div class="table-wrap"><table class="data-table">
-            <thead><tr><th>年份</th><th>Formula</th><th>类型</th><th>压强</th><th>Tc</th><th>空间群</th><th>来源</th><th>审核</th><th>DOI</th></tr></thead>
-            <tbody>
-              <tr class="selected"><td>2019</td><td>LaH10</td><td>Hydride</td><td>200</td><td>250</td><td>Fm-3m</td><td><span class="chip primary">Local</span></td><td><span class="chip success">Approved</span></td><td>10.1038/...</td></tr>
-              <tr><td>2015</td><td>H3S</td><td>Hydride</td><td>155</td><td>203</td><td>Im-3m</td><td><span class="chip">Local</span></td><td><span class="chip success">Approved</span></td><td>10.1038/...</td></tr>
-              <tr><td>2024</td><td>YH9</td><td>Hydride</td><td>180</td><td>185</td><td>P63/mmc</td><td><span class="chip secondary">External</span></td><td><span class="chip warning">未审核</span></td><td>-</td></tr>
-            </tbody>
-          </table></div>
+
+        <article class="card demo-section">
+          <h2>化学式检索</h2>
+          <div class="formula-search">
+            <div class="field">
+              <label for="formula-input">Formula</label>
+              <input id="formula-input" class="demo-input" value="LaH10" aria-label="输入化学式">
+            </div>
+            <button class="button filled" id="formula-search-btn">搜索</button>
+          </div>
         </article>
-        <aside class="card side-sheet">
-          <h2>记录详情</h2>
-          <p class="mono">LaH10 · representative_tc = experimental_tc</p>
-          <div class="toolbar" style="margin:16px 0"><span class="chip success">Approved</span><span class="chip primary">Local</span></div>
-          <h3>超导参数</h3>
-          <p>experimental_tc 250 K，pressure 200 GPa，lambda 和 omega_log 字段按接口返回展示。</p>
-          <h3 style="margin-top:16px">结构信息</h3>
-          <p>空间群 Fm-3m，晶胞参数和体积进入详情分组，缺失字段显示“未提供”。</p>
-        </aside>
+
+        <article class="card elevated">
+          <div class="stage-bar">
+            <div>
+              <h2>元素周期表检索</h2>
+              <div class="selected-strip" style="margin-top:12px">
+                <span class="demo-muted">已选元素</span>
+                <span class="chip primary" id="selected-chip">未选择</span>
+              </div>
+            </div>
+            <div class="toolbar">
+              <div class="segmented" role="group" aria-label="元素筛选模式">
+                <button class="segment active" data-mode="elements_combination_search">选择元素的组合</button>
+                <button class="segment" data-mode="elements_exact_search">仅包含选择元素</button>
+                <button class="segment" data-mode="elements_contained_search">包含所选元素</button>
+              </div>
+              <button class="button filled" id="enter-results-btn" disabled>进入页面</button>
+              <button class="button outlined" id="clear-elements-btn">清除选择</button>
+            </div>
+          </div>
+          <div class="periodic-workbench">
+            <div class="periodic-table" id="periodic-table" aria-label="完整元素周期表"></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="flow-stage" data-stage="results">
+        <div class="stage-bar">
+          <div>
+            <button class="button text" data-jump="explore">← 返回元素搜索</button>
+            <p class="eyebrow">Layer 2 · Result List</p>
+            <h1><span id="context-title">La-H</span> 体系结果</h1>
+            <p>快速浏览多条记录，点击列表项更新右侧预览卡片。</p>
+          </div>
+          <div class="toolbar">
+            <button class="button tonal" data-download="current-json">下载当前 JSON</button>
+            <button class="button outlined" data-download="current-ris">导出当前 RIS</button>
+          </div>
+        </div>
+        <section class="results-layout">
+          <aside class="card">
+            <h2>筛选</h2>
+            <div class="filter-stack">
+              <button class="chip primary" data-source="Local">本地数据库</button>
+              <button class="chip" data-source="Alexandria">Alexandria</button>
+              <button class="chip" data-source="HTSC-2025">HTSC-2025</button>
+              <button class="chip" data-source="All">全部来源</button>
+              <div class="field"><label>Tc</label><strong>&gt; 150 K</strong></div>
+              <div class="field"><label>年份</label><strong>1900 - 2026</strong></div>
+              <button class="button outlined" id="reset-filters-btn">重置筛选</button>
+            </div>
+          </aside>
+          <article class="card">
+            <h2>结果列表</h2>
+            <div class="record-list" id="record-list"></div>
+          </article>
+          <aside class="card side-sheet" id="preview-card"></aside>
+        </section>
+      </section>
+
+      <section class="flow-stage" data-stage="detail">
+        <div class="stage-bar">
+          <div>
+            <button class="button text" data-jump="results">← 返回结果列表</button>
+            <p class="eyebrow">Layer 3 · Research Record</p>
+            <h1 id="detail-heading">LaH10 详情</h1>
+          </div>
+          <div class="toolbar">
+            <button class="button tonal" data-download="single-json">下载 JSON</button>
+            <button class="button outlined" data-download="single-ris">导出 RIS</button>
+            <button class="button outlined" id="copy-doi-btn">复制 DOI</button>
+          </div>
+        </div>
+        <section class="detail-layout">
+          <article class="card elevated" id="detail-main"></article>
+          <aside class="card side-sheet">
+            <h2>结构预览</h2>
+            <div class="structure-preview" role="img" aria-label="mock 晶体结构预览"></div>
+            <div class="toolbar" style="margin-top:16px">
+              <button class="button filled" id="toggle-cif-btn">查看 mock CIF</button>
+            </div>
+            <pre class="card filled mono cif-panel" id="cif-panel">data_LaH10_mock
+_symmetry_space_group_name_H-M 'Fm-3m'
+_cell_length_a 5.120
+_cell_length_b 5.120
+_cell_length_c 5.120
+loop_
+  _atom_site_label
+  _atom_site_type_symbol
+  La1 La
+  H1 H
+  H2 H
+</pre>
+          </aside>
+        </section>
       </section>
     </main>
   </div>
+  <div class="snackbar" id="snackbar">已更新</div>
+
+  <script>
+    const elements = [
+      ["H",1,1,1,"nonmetal"],["He",2,1,18,"noble-gas"],["Li",3,2,1,"alkali-metal"],["Be",4,2,2,"alkaline-earth"],["B",5,2,13,"metalloid"],["C",6,2,14,"nonmetal"],["N",7,2,15,"nonmetal"],["O",8,2,16,"nonmetal"],["F",9,2,17,"halogen"],["Ne",10,2,18,"noble-gas"],
+      ["Na",11,3,1,"alkali-metal"],["Mg",12,3,2,"alkaline-earth"],["Al",13,3,13,"post-transition"],["Si",14,3,14,"metalloid"],["P",15,3,15,"nonmetal"],["S",16,3,16,"nonmetal"],["Cl",17,3,17,"halogen"],["Ar",18,3,18,"noble-gas"],
+      ["K",19,4,1,"alkali-metal"],["Ca",20,4,2,"alkaline-earth"],["Sc",21,4,3,"transition-metal"],["Ti",22,4,4,"transition-metal"],["V",23,4,5,"transition-metal"],["Cr",24,4,6,"transition-metal"],["Mn",25,4,7,"transition-metal"],["Fe",26,4,8,"transition-metal"],["Co",27,4,9,"transition-metal"],["Ni",28,4,10,"transition-metal"],["Cu",29,4,11,"transition-metal"],["Zn",30,4,12,"transition-metal"],["Ga",31,4,13,"post-transition"],["Ge",32,4,14,"metalloid"],["As",33,4,15,"metalloid"],["Se",34,4,16,"nonmetal"],["Br",35,4,17,"halogen"],["Kr",36,4,18,"noble-gas"],
+      ["Rb",37,5,1,"alkali-metal"],["Sr",38,5,2,"alkaline-earth"],["Y",39,5,3,"transition-metal"],["Zr",40,5,4,"transition-metal"],["Nb",41,5,5,"transition-metal"],["Mo",42,5,6,"transition-metal"],["Tc",43,5,7,"transition-metal"],["Ru",44,5,8,"transition-metal"],["Rh",45,5,9,"transition-metal"],["Pd",46,5,10,"transition-metal"],["Ag",47,5,11,"transition-metal"],["Cd",48,5,12,"transition-metal"],["In",49,5,13,"post-transition"],["Sn",50,5,14,"post-transition"],["Sb",51,5,15,"metalloid"],["Te",52,5,16,"metalloid"],["I",53,5,17,"halogen"],["Xe",54,5,18,"noble-gas"],
+      ["Cs",55,6,1,"alkali-metal"],["Ba",56,6,2,"alkaline-earth"],["La-Lu",57,6,3,"lanthanide"],["Hf",72,6,4,"transition-metal"],["Ta",73,6,5,"transition-metal"],["W",74,6,6,"transition-metal"],["Re",75,6,7,"transition-metal"],["Os",76,6,8,"transition-metal"],["Ir",77,6,9,"transition-metal"],["Pt",78,6,10,"transition-metal"],["Au",79,6,11,"transition-metal"],["Hg",80,6,12,"transition-metal"],["Tl",81,6,13,"post-transition"],["Pb",82,6,14,"post-transition"],["Bi",83,6,15,"post-transition"],["Po",84,6,16,"metalloid"],["At",85,6,17,"halogen"],["Rn",86,6,18,"noble-gas"],
+      ["Fr",87,7,1,"alkali-metal"],["Ra",88,7,2,"alkaline-earth"],["Ac-Lr",89,7,3,"actinide"],["Rf",104,7,4,"transition-metal"],["Db",105,7,5,"transition-metal"],["Sg",106,7,6,"transition-metal"],["Bh",107,7,7,"transition-metal"],["Hs",108,7,8,"transition-metal"],["Mt",109,7,9,"transition-metal"],["Ds",110,7,10,"transition-metal"],["Rg",111,7,11,"transition-metal"],["Cn",112,7,12,"transition-metal"],["Nh",113,7,13,"post-transition"],["Fl",114,7,14,"post-transition"],["Mc",115,7,15,"post-transition"],["Lv",116,7,16,"post-transition"],["Ts",117,7,17,"halogen"],["Og",118,7,18,"noble-gas"],
+      ["La",57,9,3,"lanthanide"],["Ce",58,9,4,"lanthanide"],["Pr",59,9,5,"lanthanide"],["Nd",60,9,6,"lanthanide"],["Pm",61,9,7,"lanthanide"],["Sm",62,9,8,"lanthanide"],["Eu",63,9,9,"lanthanide"],["Gd",64,9,10,"lanthanide"],["Tb",65,9,11,"lanthanide"],["Dy",66,9,12,"lanthanide"],["Ho",67,9,13,"lanthanide"],["Er",68,9,14,"lanthanide"],["Tm",69,9,15,"lanthanide"],["Yb",70,9,16,"lanthanide"],["Lu",71,9,17,"lanthanide"],
+      ["Ac",89,10,3,"actinide"],["Th",90,10,4,"actinide"],["Pa",91,10,5,"actinide"],["U",92,10,6,"actinide"],["Np",93,10,7,"actinide"],["Pu",94,10,8,"actinide"],["Am",95,10,9,"actinide"],["Cm",96,10,10,"actinide"],["Bk",97,10,11,"actinide"],["Cf",98,10,12,"actinide"],["Es",99,10,13,"actinide"],["Fm",100,10,14,"actinide"],["Md",101,10,15,"actinide"],["No",102,10,16,"actinide"],["Lr",103,10,17,"actinide"],
+    ];
+
+    const records = [
+      { formula: "LaH10", year: 2019, type: "Hydride", pressure: "200 GPa", tc: "250 K", tcField: "experimental_tc", source: "Local", status: "Approved", doi: "10.1038/s41586-demo", journal: "Nature", title: "High-pressure superconductivity in lanthanum hydride", spaceGroup: "Fm-3m", lambda: "3.41", omegaLog: "1120 K", nef: "0.48", method: "DFT + EPC", software: "Quantum ESPRESSO", note: "Mock record for future-plan demo." },
+      { formula: "H3S", year: 2015, type: "Hydride", pressure: "155 GPa", tc: "203 K", tcField: "experimental_tc", source: "Local", status: "Approved", doi: "10.1038/s41586-demo2", journal: "Nature", title: "Conventional superconductivity at 203 kelvin", spaceGroup: "Im-3m", lambda: "2.19", omegaLog: "1010 K", nef: "0.36", method: "Experiment + DFT", software: "VASP", note: "Classic sulfur hydride benchmark." },
+      { formula: "YH9", year: 2024, type: "Hydride", pressure: "180 GPa", tc: "185 K", tcField: "allen_dynes_tc", source: "HTSC-2025", status: "External", doi: "-", journal: "External dataset", title: "Predicted high-Tc yttrium hydride", spaceGroup: "P63/mmc", lambda: "1.87", omegaLog: "930 K", nef: "0.31", method: "Screening", software: "Dataset", note: "External source, not locally reviewed." },
+    ];
+
+    const state = { selected: new Set(), mode: "elements_combination_search", currentStage: "explore", selectedRecord: records[0], source: "Local" };
+
+    function qs(selector, root = document) { return root.querySelector(selector); }
+    function qsa(selector, root = document) { return Array.from(root.querySelectorAll(selector)); }
+
+    function toast(message) {
+      const bar = qs("#snackbar");
+      bar.textContent = message;
+      bar.classList.add("demo-toast-visible");
+      clearTimeout(toast.timer);
+      toast.timer = setTimeout(() => bar.classList.remove("demo-toast-visible"), 2200);
+    }
+
+    function setStage(stage) {
+      state.currentStage = stage;
+      location.hash = stage;
+      qsa(".flow-stage").forEach((section) => section.classList.toggle("active", section.dataset.stage === stage));
+      qsa(".stage-pill").forEach((pill) => pill.classList.toggle("active", pill.dataset.jump === stage));
+      if (stage === "results") renderResults();
+      if (stage === "detail") renderDetail();
+    }
+
+    function renderPeriodicTable() {
+      const table = qs("#periodic-table");
+      table.innerHTML = elements.map(([symbol, number, row, col, category]) => `
+        <button class="pt-element ${category}" data-symbol="${symbol}" style="grid-row:${row};grid-column:${col}" aria-label="${symbol}">
+          <span class="pt-number">${number}</span>
+          <span class="pt-symbol">${symbol}</span>
+        </button>
+      `).join("");
+      qsa(".pt-element", table).forEach((tile) => {
+        tile.addEventListener("click", () => {
+          const symbol = tile.dataset.symbol;
+          if (symbol.includes("-")) return toast("请直接选择下方镧系或锕系元素");
+          if (state.selected.has(symbol)) state.selected.delete(symbol);
+          else state.selected.add(symbol);
+          tile.classList.toggle("selected", state.selected.has(symbol));
+          updateSelectedDisplay();
+        });
+      });
+    }
+
+    function updateSelectedDisplay() {
+      const values = Array.from(state.selected).sort();
+      qs("#selected-chip").textContent = values.length ? values.join(", ") : "未选择";
+      qs("#enter-results-btn").disabled = values.length === 0;
+      qs("#context-title").textContent = values.length ? values.join("-") : qs("#formula-input").value.trim();
+    }
+
+    function renderResults() {
+      const list = qs("#record-list");
+      const visible = state.source === "All" ? records : records.filter((record) => record.source === state.source || state.source === "Local" && record.source === "Local");
+      list.innerHTML = visible.map((record) => `
+        <button class="record-row ${record.formula === state.selectedRecord.formula ? "active" : ""}" data-formula="${record.formula}">
+          <strong>${record.formula}</strong>
+          <span class="record-meta">${record.tc} · ${record.pressure} · ${record.type}</span>
+          <span class="record-meta">${record.status} · ${record.source} · ${record.year}</span>
+        </button>
+      `).join("");
+      qsa(".record-row", list).forEach((row) => {
+        row.addEventListener("click", () => {
+          state.selectedRecord = records.find((record) => record.formula === row.dataset.formula);
+          renderResults();
+          toast("右侧结果卡片已更新");
+        });
+      });
+      renderPreview();
+    }
+
+    function renderPreview() {
+      const record = state.selectedRecord;
+      qs("#preview-card").innerHTML = `
+        <h2>${record.formula}</h2>
+        <p style="font-size:48px;color:var(--primary);font-weight:800;margin:8px 0">${record.tc}</p>
+        <p>${record.pressure} · ${record.type}</p>
+        <div class="toolbar" style="margin:16px 0">
+          <span class="chip ${record.status === "Approved" ? "success" : "warning"}">${record.status}</span>
+          <span class="chip primary">${record.source}</span>
+        </div>
+        <div class="field"><label>DOI</label><strong>${record.doi}</strong></div>
+        <div class="field" style="margin-top:12px"><label>结构摘要</label><strong>${record.spaceGroup} · CIF 可查看</strong></div>
+        <div class="toolbar" style="margin-top:18px">
+          <button class="button filled" data-jump="detail">查看详情</button>
+          <button class="button outlined" data-download="single-json">JSON</button>
+          <button class="button outlined" data-download="single-ris">RIS</button>
+        </div>
+      `;
+      wireActionButtons(qs("#preview-card"));
+    }
+
+    function renderDetail() {
+      const record = state.selectedRecord;
+      qs("#detail-heading").textContent = `${record.formula} 详情`;
+      qs("#detail-main").innerHTML = `
+        <div class="toolbar"><span class="chip primary">${record.source}</span><span class="chip ${record.status === "Approved" ? "success" : "warning"}">${record.status}</span><span class="chip">${record.type}</span></div>
+        <p style="font-size:64px;color:var(--primary);font-weight:800;margin:18px 0 0">${record.tc}</p>
+        <p class="mono">representative_tc = ${record.tcField}</p>
+
+        <section class="detail-section">
+          <h2>基础信息</h2>
+          <div class="kv-grid">
+            <div class="field"><label>Formula</label><strong>${record.formula}</strong></div>
+            <div class="field"><label>年份</label><strong>${record.year}</strong></div>
+            <div class="field"><label>DOI</label><strong>${record.doi}</strong></div>
+            <div class="field"><label>期刊</label><strong>${record.journal}</strong></div>
+          </div>
+          <p style="margin-top:12px">${record.title}</p>
+        </section>
+
+        <section class="detail-section">
+          <h2>超导参数</h2>
+          <div class="kv-grid">
+            <div class="field"><label>experimental_tc</label><strong>${record.tcField === "experimental_tc" ? record.tc : "未提供"}</strong></div>
+            <div class="field"><label>allen_dynes_tc</label><strong>${record.tcField === "allen_dynes_tc" ? record.tc : "未提供"}</strong></div>
+            <div class="field"><label>lambda</label><strong>${record.lambda}</strong></div>
+            <div class="field"><label>omega_log</label><strong>${record.omegaLog}</strong></div>
+            <div class="field"><label>N(Ef)</label><strong>${record.nef}</strong></div>
+            <div class="field"><label>mcmillan_tc</label><strong>未提供</strong></div>
+          </div>
+        </section>
+
+        <section class="detail-section">
+          <h2>结构信息</h2>
+          <div class="kv-grid">
+            <div class="field"><label>压强</label><strong>${record.pressure}</strong></div>
+            <div class="field"><label>空间群</label><strong>${record.spaceGroup}</strong></div>
+            <div class="field"><label>晶胞参数</label><strong>a=b=c=5.120 Å</strong></div>
+            <div class="field"><label>体积</label><strong>134.2 Å³</strong></div>
+          </div>
+        </section>
+
+        <section class="detail-section">
+          <h2>计算与备注</h2>
+          <div class="kv-grid">
+            <div class="field"><label>软件</label><strong>${record.software}</strong></div>
+            <div class="field"><label>方法</label><strong>${record.method}</strong></div>
+            <div class="field"><label>赝势</label><strong>PAW / mock</strong></div>
+            <div class="field"><label>k/q 网格</label><strong>24x24x24 / 6x6x6</strong></div>
+          </div>
+          <p style="margin-top:12px">${record.note}</p>
+        </section>
+      `;
+    }
+
+    function downloadMock(kind) {
+      const record = state.selectedRecord;
+      let filename = "sc-wiki-demo.json";
+      let content = JSON.stringify(kind.includes("current") ? { query: qs("#context-title").textContent, records } : record, null, 2);
+      let type = "application/json";
+      if (kind.includes("ris")) {
+        filename = kind.includes("current") ? "sc-wiki-current-results.ris" : `${record.formula}.ris`;
+        content = `TY  - JOUR\nTI  - ${record.title}\nPY  - ${record.year}\nDO  - ${record.doi}\nER  -`;
+        type = "application/x-research-info-systems";
+      } else if (kind.includes("single")) {
+        filename = `${record.formula}.json`;
+      } else {
+        filename = "sc-wiki-current-results.json";
+      }
+      const blob = new Blob([content], { type });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast(`已生成 ${filename}`);
+    }
+
+    function wireActionButtons(root = document) {
+      qsa("[data-jump]", root).forEach((button) => button.addEventListener("click", () => setStage(button.dataset.jump)));
+      qsa("[data-download]", root).forEach((button) => button.addEventListener("click", () => downloadMock(button.dataset.download)));
+    }
+
+    function init() {
+      renderPeriodicTable();
+      wireActionButtons();
+      qsa(".segment").forEach((button) => {
+        button.addEventListener("click", () => {
+          qsa(".segment").forEach((item) => item.classList.remove("active"));
+          button.classList.add("active");
+          state.mode = button.dataset.mode;
+          toast(`筛选模式：${button.textContent.trim()}`);
+        });
+      });
+      qsa("[data-source]").forEach((button) => {
+        button.addEventListener("click", () => {
+          qsa("[data-source]").forEach((item) => item.classList.remove("primary"));
+          button.classList.add("primary");
+          state.source = button.dataset.source;
+          renderResults();
+        });
+      });
+      qs("#clear-elements-btn").addEventListener("click", () => {
+        state.selected.clear();
+        qsa(".pt-element").forEach((tile) => tile.classList.remove("selected"));
+        updateSelectedDisplay();
+        toast("已清除元素选择");
+      });
+      qs("#enter-results-btn").addEventListener("click", () => setStage("results"));
+      qs("#formula-search-btn").addEventListener("click", () => {
+        qs("#context-title").textContent = qs("#formula-input").value.trim() || "LaH10";
+        setStage("results");
+      });
+      qs("#reset-filters-btn").addEventListener("click", () => {
+        state.source = "Local";
+        qsa("[data-source]").forEach((item) => item.classList.toggle("primary", item.dataset.source === "Local"));
+        renderResults();
+        toast("筛选已重置");
+      });
+      qs("#toggle-cif-btn").addEventListener("click", () => qs("#cif-panel").classList.toggle("open"));
+      qs("#copy-doi-btn").addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(state.selectedRecord.doi);
+          toast("DOI 已复制");
+        } catch {
+          toast(`DOI：${state.selectedRecord.doi}`);
+        }
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && state.currentStage === "explore" && state.selected.size > 0) setStage("results");
+      });
+      const initial = location.hash.replace("#", "");
+      if (["explore", "results", "detail"].includes(initial)) setStage(initial);
+      else updateSelectedDisplay();
+    }
+
+    init();
+  </script>
 </body>
 </html>
