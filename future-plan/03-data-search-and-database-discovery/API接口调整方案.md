@@ -31,6 +31,8 @@ API 需要支持结果列表、右侧详情卡片和未来独立详情页。
 - `year_max`：年份最大值。
 - `superconductor_type`：超导类型。
 - `space_group_number`：空间群编号。
+- `space_group_min`：空间群编号范围最小值。
+- `space_group_max`：空间群编号范围最大值。
 - `review_status`：审核状态。
 - `keyword`：DOI / 标题 / 关键词。
 - `show_in_chart`：是否进入默认图表。
@@ -46,7 +48,9 @@ API 需要支持结果列表、右侧详情卡片和未来独立详情页。
 - `htsc2025`
 - `all`
 
-空间群筛选只接收 `space_group_number`，不提供空间群字符串筛选。
+空间群筛选只接收 `space_group_number` 或 `space_group_min` / `space_group_max`，不提供空间群字符串筛选。
+
+`keyword` 是接口兼容字段，但 03 静态 demo 的第二层筛选不展示 DOI / 标题 / 关键词筛选。
 
 ### 响应字段
 
@@ -206,7 +210,7 @@ Alexandria 和 HTSC-2025 使用同一详情接口，但只返回该来源能提�
 - 列表接口默认 `source_scope = local`。
 - 列表接口默认按代表 Tc 降序。
 - 列表接口响应字段能支撑 9 列表格展示。
-- 列表接口支持 Formula、代表 Tc、压强、年份、超导类型、空间群编号、数据来源、审核状态、DOI / 关键词、`show_in_chart` 筛选。
+- 列表接口支持 Formula、代表 Tc、压强、年份、超导类型、空间群编号或空间群编号范围、数据来源、审核状态、DOI / 关键词、`show_in_chart` 筛选。
 - 详情接口支持 `local`、`alexandria`、`htsc2025`。
 - 本地详情返回全部 Tc 字段、超导参数、结构信息、计算信息和论文信息。
 - 外部详情缺失字段不伪造。
