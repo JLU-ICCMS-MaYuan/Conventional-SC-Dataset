@@ -417,6 +417,17 @@ def search_papers_by_mode(
             "has_prev": False,
             "has_next": False,
         }
+
+    # 提取前端筛选参数
+    tc_min = getattr(request, 'tc_min', None)
+    tc_max = getattr(request, 'tc_max', None)
+    pressure_min = getattr(request, 'pressure_min', None)
+    pressure_max = getattr(request, 'pressure_max', None)
+    sc_type = getattr(request, 'superconductor_type', None)
+    space_min = getattr(request, 'space_group_min', None)
+    space_max = getattr(request, 'space_group_max', None)
+    chart_only = getattr(request, 'chart_only', None)
+
     if mode == "formula_search":
         papers = _query_papers_preserving_superconductor_order(
             db,
@@ -443,7 +454,115 @@ def search_papers_by_mode(
         sort_by=request.sort_by or "year",
         sort_order=request.sort_order or "desc",
     )
-    return _paginate(query, request.limit, request.offset)
+    papers = query.all()
+
+    # 后端筛选 records：Tc/压强/类型/空间群/图表
+    for paper in papers:
+        paper.records = [
+            r for r in paper.records
+            if (tc_min is None or (r.tc_max is not None and r.tc_max >= tc_min))
+            and (tc_max is None or (r.tc_max is not None and r.tc_max <= tc_max))
+            and (pressure_min is None or (r.pressure_gpa is not None and r.pressure_gpa >= pressure_min))
+            and (pressure_max is None or (r.pressure_gpa is not None and r.pressure_gpa <= pressure_max))
+            and (sc_type is None or sc_type == 'All' or r.superconductor_type == sc_type or (hasattr(r, 'superconductor') and r.superconductor and r.superconductor.superconductor_type == sc_type))
+            and (space_min is None or (r.space_group_number is not None and r.space_group_number >= space_min))
+            and (space_max is None or (r.space_group_number is not None and r.space_group_number <= space_max))
+            and (not chart_only or r.show_in_chart)
+        ]
+    # 移除 records 全部被筛掉的 paper
+    papers = [p for p in papers if p.records]
+    total = len(papers)
+    return _paginate_paper_items(papers, request.limit, request.offset)
+
+
+@router.post("/search/records")
+def search_records_flat(
+    request: schemas.PaperModeSearchRequest,
+    db: Session = Depends(get_db),
+):
+    """返回扁平记录列表，每条 9 个字段"""
+    mode_map = {
+        "only": "elements_exact_search", "combination": "elements_combination_search",
+        "contains": "elements_contained_search", "formula_search": "formula_search",
+        "elements_exact_search": "elements_exact_search", "elements_combination_search": "elements_combination_search",
+        "elements_contained_search": "elements_contained_search",
+    }
+    mode = mode_map.get(request.mode, request.mode)
+    result = search_superconductors(db, mode, formula=request.formula, elements=request.elements,
+                                     formula_sort=request.formula_sort or "relevance", limit=10000, offset=0)
+    if not result.items:
+        return {"items": [], "total": 0}
+
+    query = _query_papers_for_superconductors(
+        db, [item.id for item in result.items],
+        keyword=request.keyword, year_min=request.year_min, year_max=request.year_max,
+        journal=request.journal, crystal_structure=request.crystal_structure,
+        review_status=request.review_status,
+        sort_by=request.sort_by or "year", sort_order=request.sort_order or "desc",
+    )
+    papers = query.all()
+
+    # 筛选参数
+    tc_min = getattr(request, 'tc_min', None)
+    tc_max = getattr(request, 'tc_max', None)
+    pressure_min = getattr(request, 'pressure_min', None)
+    pressure_max = getattr(request, 'pressure_max', None)
+    sc_type = getattr(request, 'superconductor_type', None)
+    space_min = getattr(request, 'space_group_min', None)
+    space_max = getattr(request, 'space_group_max', None)
+    chart_only = getattr(request, 'chart_only', None)
+
+    sc_type_map = {'h': '高压氢化物', 'c': '碳基', 'cb': '铜基', 'ot': '其他超导',
+                   'cuprate': '铜基', 'iron_based': '铁基', 'nickel_based': '镍基',
+                   'hydride': '高压氢化物', 'carbon': '碳基', 'organic': '有机', 'others': '其他超导'}
+    status_map = {'pending': 'Pending', 'approved': 'Approved', 'reviewed': 'Approved', 'rejected': 'Rejected'}
+
+    records = []
+    for paper in papers:
+        sc_types = (paper.superconductor_types or []) if hasattr(paper, 'superconductor_types') else []
+        sc_type_label = sc_type_map.get(sc_types[0] if sc_types else '', 'Unknown')
+        for rec in paper.records:
+            rec_formula = rec.superconductor.chemical_formula if rec.superconductor else paper.chemical_formula
+            # 只保留 formula 包含全部搜索元素的记录
+            if request.elements and len(request.elements) > 0:
+                if not all(el.lower() in (rec_formula or '').lower() for el in request.elements):
+                    continue
+            # 计算 tc_max
+            tc_vals = [v for v in [rec.mcmillan_tc, rec.allen_dynes_tc, rec.isotropic_eliashberg_tc, rec.anisotropic_eliashberg_tc, rec.experimental_tc] if v is not None]
+            tc_max_val = max(tc_vals) if tc_vals else None
+            if tc_min is not None and (tc_max_val is None or tc_max_val < tc_min): continue
+            if tc_max is not None and (tc_max_val is not None and tc_max_val > tc_max): continue
+            if pressure_min is not None and (rec.pressure_gpa is None or rec.pressure_gpa < pressure_min): continue
+            if pressure_max is not None and (rec.pressure_gpa is not None and rec.pressure_gpa > pressure_max): continue
+            if sc_type and sc_type != 'All':
+                all_types = list({r.superconductor_type for r in paper.records if r.superconductor_type})
+                if sc_type not in [t.lower() for t in all_types]: continue
+            if space_min is not None and (rec.space_group_number is None or rec.space_group_number < space_min): continue
+            if space_max is not None and (rec.space_group_number is not None and rec.space_group_number > space_max): continue
+            if chart_only and not rec.show_in_chart: continue
+            if tc_max_val is None: continue
+            # 类型标签从 paper.records 中收集
+            all_types = list({r.superconductor_type for r in paper.records if r.superconductor_type})
+            type_label = sc_type_map.get(all_types[0] if all_types else '', 'Unknown')
+            records.append({
+                "record_id": rec.id,
+                "paper_id": paper.id,
+                "year": paper.year or 0,
+                "formula": rec_formula or "-",
+                "type": type_label,
+                "pressure": f"{rec.pressure_gpa} GPa" if rec.pressure_gpa is not None else "-",
+                "tc": f"{tc_max_val:.1f} K",
+                "space_group": rec.space_group_symbol or "-",
+                "source": "Local",
+                "status": status_map.get(paper.review_status, "Pending"),
+                "doi": paper.doi or "-",
+            })
+
+    total = len(records)
+    page_size = request.limit or 50
+    offset = request.offset or 0
+    page_items = records[offset:offset + page_size]
+    return {"items": page_items, "total": total}
 
 
 @router.get("/crystal-structures")
