@@ -6,11 +6,11 @@ import {
 } from '@mui/material'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import PeriodicTable from '../components/PeriodicTable'
-import { ELEMENTS } from '../data/elements'
+import { ELEMENTS } from '../lib/periodicElements'
 import { api } from '../lib/api'
 
 /* ── mock data matching 03 demo records exactly ── */
-interface Record {
+interface SuperconductorRecord {
   sourceSystem: string; sourceRecordId: string; formula: string; year: number
   type: string; pressureValue: number; pressure: string; tcValue: number; tc: string
   tcField: string; source: string; status: string; doi: string; journal: string
@@ -19,7 +19,7 @@ interface Record {
   record_id?: number; paper_id?: number
 }
 
-const MOCK_RECORDS: Record[] = [
+const MOCK_RECORDS: SuperconductorRecord[] = [
   { sourceSystem:'local',sourceRecordId:'123',formula:'LaH10',year:2019,type:'Hydride',pressureValue:200,pressure:'200 GPa',tcValue:250,tc:'250 K',tcField:'experimental_tc',source:'Local',status:'Approved',doi:'10.1038/s41586-demo',journal:'Nature',title:'High-pressure superconductivity in lanthanum hydride',spaceGroupNumber:225,spaceGroup:'Fm-3m',showInChart:true,lambda:'3.41',omegaLog:'1120 K',nef:'0.48',method:'DFT + EPC',software:'Quantum ESPRESSO',note:'Mock record for future-plan demo.' },
   { sourceSystem:'local',sourceRecordId:'124',formula:'H3S',year:2015,type:'Hydride',pressureValue:155,pressure:'155 GPa',tcValue:203,tc:'203 K',tcField:'experimental_tc',source:'Local',status:'Approved',doi:'10.1038/s41586-demo2',journal:'Nature',title:'Conventional superconductivity at 203 kelvin',spaceGroupNumber:229,spaceGroup:'Im-3m',showInChart:true,lambda:'2.19',omegaLog:'1010 K',nef:'0.36',method:'Experiment + DFT',software:'VASP',note:'Classic sulfur hydride benchmark.' },
   { sourceSystem:'htsc2025',sourceRecordId:'456',formula:'YH9',year:2024,type:'Hydride',pressureValue:180,pressure:'180 GPa',tcValue:185,tc:'185 K',tcField:'allen_dynes_tc',source:'HTSC-2025',status:'External',doi:'-',journal:'External dataset',title:'Predicted high-Tc yttrium hydride',spaceGroupNumber:194,spaceGroup:'P63/mmc',showInChart:false,lambda:'1.87',omegaLog:'930 K',nef:'0.31',method:'Screening',software:'Dataset',note:'External source, not locally reviewed.' },
@@ -37,7 +37,7 @@ const REVIEW_MAP: {[k:string]:string} = {
 }
 
 /* ── helpers ── */
-const CAT_COLORS: Record<string,string> = {
+const CAT_COLORS: globalThis.Record<string,string> = {
   'alkali-metal':'#f4bcc2','alkaline-earth':'#e3bd91','transition-metal':'#edcda9',
   'post-transition':'#ededab','metalloid':'#9cd5a8','nonmetal':'#a3d7dc',
   'halogen':'#b7a0db','noble-gas':'#cfb5d6','lanthanide':'#cea1ce','actinide':'#c782ab',
@@ -56,14 +56,14 @@ const SearchPage: React.FC = () => {
   const [mode, setMode] = useState(initMode)
   const [formula, setFormula] = useState(initElements.join(''))
   const [source, setSource] = useState('Local')
-  const [selectedRecord, setSelectedRecord] = useState<Record>(MOCK_RECORDS[0])
+  const [selectedRecord, setSelectedRecord] = useState<SuperconductorRecord>(MOCK_RECORDS[0])
   const [detailOpen, setDetailOpen] = useState(false)
   const [snackbar, setSnackbar] = useState('')
   const [loading, setLoading] = useState(false)
   const [paperDetail, setPaperDetail] = useState<any>(null)
   const [structureData, setStructureData] = useState<any>(null)
   const [apiError, setApiError] = useState('')
-  const [apiRecords, setApiRecords] = useState<Record[]>([])
+  const [apiRecords, setApiRecords] = useState<SuperconductorRecord[]>([])
 
   const [filters, setFilters] = useState({
     formula:'', tcMin:0, tcMax:9999, pMin:0, pMax:9999,
@@ -112,7 +112,7 @@ const SearchPage: React.FC = () => {
     api.post(url, body)
     .then((res: any) => {
       const items = (res.items || []).filter((r: any) => r._type !== 'section')
-      const rows: Record[] = []
+      const rows: SuperconductorRecord[] = []
       const searchElements = elementList.map((s: string) => s.toLowerCase())
       const addRow = (rec: any, paper: any, src: string) => {
         // 后端扁平记录：year/formula/type/pressure/tc/space_group/source/status/doi

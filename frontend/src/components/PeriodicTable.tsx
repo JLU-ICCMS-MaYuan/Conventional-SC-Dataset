@@ -1,6 +1,6 @@
 import React from 'react'
 import { Box, Typography } from '@mui/material'
-import { ELEMENTS, CATEGORY_COLORS, ElementData } from '../data/elements'
+import { ELEMENTS, CATEGORY_COLORS, ElementData } from '../lib/periodicElements'
 
 interface PeriodicTableProps {
   selected: Set<string>

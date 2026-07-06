@@ -64,6 +64,7 @@ docs/local-mysql-import.md
 
 # React 构建产物
 frontend/static/assets/
+frontend/*.tsbuildinfo
 frontend_old
 
 # 测试截图 & 快照
