@@ -59,7 +59,7 @@ CLAUDE.md
 
 # 数据库
 hydride_literature_image_ai.db
-data/
+/data/
 docs/local-mysql-import.md
 
 # React 构建产物
