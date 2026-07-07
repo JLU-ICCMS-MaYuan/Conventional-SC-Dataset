@@ -5,7 +5,7 @@ import HomePage from './pages/HomePage'
 import SearchPage from './pages/SearchPage'
 import RagPage from './pages/RagPage'
 import TcPredictPage from './pages/TcPredictPage'
-import ChartsPage from './pages/ChartsPage'
+import NewsPage from './pages/NewsPage'
 
 const App: React.FC = () => (
   <Routes>
@@ -14,7 +14,7 @@ const App: React.FC = () => (
       <Route path="/search" element={<SearchPage />} />
       <Route path="/rag" element={<RagPage />} />
       <Route path="/tc-predict" element={<TcPredictPage />} />
-      <Route path="/charts" element={<ChartsPage />} />
+      <Route path="/news" element={<NewsPage />} />
     </Route>
   </Routes>
 )
