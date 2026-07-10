@@ -6,6 +6,7 @@
 
 - 当前业务与模块事实：[domains/README.md](domains/README.md)
 - 当前运行、部署和恢复事实：[operations/README.md](operations/README.md)
+- 历史设计与实施归档：[specs/README.md](specs/README.md)
 - 长期背景、产品定位和术语：[memory/README.md](memory/README.md)
 - GitHub Issue 类型与关闭规则：[governance/issue-types.md](governance/issue-types.md)
 

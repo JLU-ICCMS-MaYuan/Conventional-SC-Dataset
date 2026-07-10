@@ -1,27 +1,38 @@
-# Product
+# 产品
 
-## Register
+## 定位
 
-product
+面向研究任务的超导材料工作区。
 
-## Users
-Superconductivity researchers, students, and database maintainers who need to search element systems, find related superconducting formulas, upload literature, export references, ask RAG-backed questions, and run Tc prediction workflows during research work.
+## 用户
 
-## Product Purpose
-SC-Wiki is a task-focused superconducting materials workspace organized around element systems, chemical formulas, papers, and structured physical records. Success means users can move from a system or formula to useful literature and data with minimal visual noise.
+需要检索元素体系、查找相关超导化学式、上传论文、导出引用、提出 RAG 支持的问题并
+运行 Tc 估算工作流的超导研究者、学生和数据库维护者。
 
-## Brand Personality
-Clear, breathable, and research-minded. The product should feel young and fresh through restraint, low-saturation color, generous spacing, and precise interaction states rather than decoration.
+## 产品目标
 
-## Anti-references
-Avoid old enterprise gray-blue dashboards, purple sci-fi glow, dense marketing-style cards, large gradients, decorative panels, and pages that compete with the user's search task.
+SC-Wiki 围绕元素体系、化学式、论文和结构化物理记录组织超导材料研究工作。成功的
+标准是：用户能从某个体系或化学式出发，以尽可能少的视觉干扰找到有用的文献和数据。
 
-## Design Principles
-- Keep only the controls needed for the current task in the first viewport.
-- Use space, alignment, and quiet separators before cards or shadows.
-- Let low-saturation surface color carry freshness; reserve stronger color for selected states and primary actions.
-- Preserve research credibility with readable typography and standard controls.
-- Keep navigation stable so users always know which workflow they are in.
+## 品牌气质
 
-## Accessibility & Inclusion
-Target WCAG AA contrast, clear keyboard focus states, readable Chinese and English labels, reduced-motion-safe transitions, and color choices that do not rely on hue alone for meaning.
+清晰、舒展且具有研究感。产品通过克制、低饱和度色彩、充足留白和精确交互状态体现
+年轻与清新，而不依赖装饰。
+
+## 避免的风格
+
+避免陈旧的企业灰蓝仪表盘、紫色科幻光晕、密集营销式卡片、大面积渐变、装饰面板，
+以及会与用户检索任务争夺注意力的页面。
+
+## 设计原则
+
+- 首屏只保留完成当前任务所需的控件。
+- 优先使用留白、对齐和克制的分隔线，再考虑卡片或阴影。
+- 以低饱和度表面色承载清新感；更强的颜色只用于选中状态和主要操作。
+- 通过易读字体和标准控件保持研究场景的可信度。
+- 保持稳定导航，让用户始终知道自己处于哪个工作流。
+
+## 无障碍与包容性
+
+目标为 WCAG AA 对比度，提供清晰的键盘焦点状态、易读的中英文标签、尊重减少动态
+效果偏好的过渡，以及不单靠色相表达语义的颜色选择。

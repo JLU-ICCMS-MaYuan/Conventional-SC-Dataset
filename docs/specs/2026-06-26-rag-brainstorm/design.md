@@ -72,7 +72,7 @@
 |------|------|------|
 | `backend/rag/rag/brainstorm.py` | **新建** | 状态机 + 会话管理 + 各阶段 prompt |
 | `backend/rag/rag/engine.py` | 修改 | 检测探索性意图 → 提议 brainstorm → 切换到 brainstorm 管线 |
-| `backend/rag/rag/prompts.py` | 修改 | 新增 BRAINSTORM_PHASE_PROMPTS（5阶段 prompt）、更新主 Agent system prompt |
+| `backend/rag/rag/prompts.py` | 修改 | 新增 BRAINSTORM_PHASE_PROMPTS（5 阶段提示词）、更新主代理系统提示词 |
 | `backend/rag/config.py` | 修改 | 新增 brainstorm 配置（最大追问轮数、超时等） |
 | `backend/api/rag.py` | 修改 | SSE 新增 `brainstorm_enter` / `brainstorm_phase` / `brainstorm_options` / `brainstorm_exit` 事件 |
 | `frontend_test/src/hooks/useStreamingChat.ts` | 修改 | 处理 brainstorm SSE 事件、跟踪 brainstorm 状态 |
@@ -82,7 +82,8 @@
 
 ### 5.1 `brainstorm.py` — 会话管理 + 子 Agent
 
-Brainstorm 是一个递归 Agent，内部可调用 `search_kg` 和 `search_rag` 两个工具（通过 DeepSeek Function Calling 实现）。与主 Agent 的区别：
+Brainstorm 是一个递归代理，内部可调用 `search_kg` 和 `search_rag` 两个工具（通过
+DeepSeek Function Calling 实现）。它与主代理的区别如下：
 - 主 Agent 工具: `[search_kg, search_rag, brainstorm]`
 - Brainstorm 子 Agent 工具: `[search_kg, search_rag]`（无 brainstorm 递归）
 
@@ -189,7 +190,7 @@ class BrainstormSession:
 输出后加 [BRAINSTORM_END] 退出模式。
 ```
 
-### 5.3 主 Agent System Prompt 更新
+### 5.3 主代理系统提示词更新
 
 在现有 `FUSION_SYSTEM_PROMPT` 前加入模块能力声明：
 

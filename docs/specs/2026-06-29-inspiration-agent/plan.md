@@ -1,12 +1,17 @@
 # Inspiration Agent 实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **面向代理执行者：** 必须使用子技能 `superpowers:subagent-driven-development`
+> （推荐）或 `superpowers:executing-plans` 按任务执行本计划；步骤使用
+> 复选框（`- [ ]`）跟踪。
 
-**Goal:** 将旧的 brainstorm 管线替换为领域专精的 Inspiration Agent（5 种思考模式 + 证据绑定 + 双角色自省）
+**目标：** 将旧的 brainstorm 管线替换为领域专精的 Inspiration Agent（5 种思考模式、
+证据绑定和双角色自省）。
 
-**Architecture:** 分层切片架构：ModeRouter → Retrieval → EvidenceBuilder → DualReviewer，每层通过 dataclass 接口通信，engine.py 仅加路由分支
+**架构：** 分层切片架构：`ModeRouter → Retrieval → EvidenceBuilder → DualReviewer`，
+每层通过 dataclass 接口通信，`engine.py` 只增加路由分支。
 
-**Tech Stack:** Python 3.10+ / FastAPI SSE / OpenAI-compatible API (DeepSeek) / React + TypeScript
+**技术栈：** Python 3.10+、FastAPI SSE、OpenAI-compatible API（DeepSeek）、React 和
+TypeScript。
 
 ---
 
@@ -2247,4 +2252,3 @@ git add -A
 git commit -m "chore: final verification — all tests pass, imports clean"
 ```
 ```
-

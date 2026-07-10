@@ -1,18 +1,22 @@
 # RAG Brainstorm 头脑风暴模式 — 实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **面向代理执行者：** 必须使用子技能 `superpowers:subagent-driven-development`
+> （推荐）或 `superpowers:executing-plans` 按任务执行本计划；步骤使用
+> 复选框（`- [ ]`）跟踪。
 
-**Goal:** 在 RAG AI 文献助手中集成 Brainstorm 头脑风暴模式，支持 5 阶段交互式对话引导。
+**目标：** 在 RAG AI 文献助手中集成 Brainstorm 头脑风暴模式，支持 5 阶段交互式对话引导。
 
-**Architecture:** 两级 Agent — 主 Agent 使用 DeepSeek Function Calling（工具: search_kg, search_rag, brainstorm），Brainstorm 子 Agent 递归调用 search_kg/search_rag 最多 3 轮。状态机管理 5 阶段推进。Frontend 通过 SSE 事件渲染过程 UI。
+**架构：** 两级代理：主代理使用 DeepSeek Function Calling（工具：`search_kg`、
+`search_rag`、`brainstorm`），Brainstorm 子代理递归调用 `search_kg/search_rag`
+最多 3 轮。状态机管理 5 阶段推进；前端通过 SSE 事件渲染过程 UI。
 
-**Tech Stack:** Python/FastAPI, DeepSeek API (Function Calling), TypeScript/React, SSE
+**技术栈：** Python/FastAPI、DeepSeek API（Function Calling）、TypeScript/React、SSE。
 
-**Spec:** `docs/superpowers/specs/2026-06-26-rag-brainstorm-design.md`
+**设计规格：** `docs/specs/2026-06-26-rag-brainstorm/design.md`
 
 ---
 
-## File Structure
+## 文件结构
 
 ```
 backend/rag/
@@ -522,7 +526,7 @@ git commit -m "feat: create brainstorm session manager with 5-phase state machin
 **Files:**
 - Modify: `backend/rag/rag/prompts.py`
 
-- [ ] **Step 1: 添加主 Agent System Prompt**
+- [ ] **步骤 1：添加主代理系统提示词**
 
 在 `backend/rag/rag/prompts.py` 文件末尾添加：
 
@@ -1292,7 +1296,7 @@ kill %1 2>/dev/null
 - ✅ 5阶段状态机 → Task 2 (brainstorm.py), Task 4 (engine.py routing)
 - ✅ 两级Agent架构 → Task 2 (sub-agent), Task 4 (engine integration)
 - ✅ 各阶段 Prompt → Task 2 (PHASE_PROMPTS dict)
-- ✅ 主 Agent System Prompt → Task 3 (MAIN_AGENT_SYSTEM_PROMPT)
+- ✅ 主代理系统提示词 → 任务 3（`MAIN_AGENT_SYSTEM_PROMPT`）
 - ✅ SSE 事件 → Task 4 (engine.py yield), Task 6 (frontend hook)
 - ✅ 前端 UI → Task 7 (RagPage.tsx)
 - ✅ 探索性意图检测 → Task 4 (_detect_explorative_intent)
@@ -1306,5 +1310,5 @@ kill %1 2>/dev/null
 **3. Type consistency:**
 - `BrainstormSession` from Task 2 used in Task 4, 6
 - `BrainstormState` from Task 6 used in Task 7
-- SSE event types consistent across backend (Task 4) and frontend (Task 6)
+- 后端（任务 4）与前端（任务 6）的 SSE 事件类型保持一致。
 - `CachedMeta.brainstorm` matches `BrainstormState` type

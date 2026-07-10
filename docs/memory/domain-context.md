@@ -1,17 +1,22 @@
-# SC-Wiki
+# SC-Wiki 领域上下文
 
-SC-Wiki is a database-style superconductivity site organized around element systems, superconducting formulas, papers, and structured physical records.
+SC-Wiki 是一个以元素体系、超导化学式、论文和结构化物理记录为核心的数据库式超导
+研究网站。
 
-## Language
+## 受控术语
 
-**Chemical Formula Similarity Search**:
-A structured search mode where a user-provided chemical formula expression identifies superconductors in the same element system and ranks them by formula identity, stoichiometric closeness, and satisfiable variable or range constraints. It does not return superconductors with extra, missing, or only partially overlapping elements.
-_Avoid_: Formula keyword search, cross-system fuzzy formula search
+**化学式相似检索**：
+一种结构化检索模式：用户提供化学式表达式后，系统只在相同元素体系内识别超导体，
+并按化学式一致性、化学计量接近度以及可满足的变量或范围约束排序。它不会返回含有
+额外元素、缺少元素或仅部分元素重合的超导体。
+_避免混用_：化学式关键词检索、跨体系模糊化学式检索。
 
-**SC Explore**:
-The user-facing exploration workspace for finding superconducting systems by chemical formula or by selecting elements from the periodic table. It is a primary navigation destination for general users.
-_Avoid_: Admin review workflows, user permission management
+**SC Explore**：
+面向普通用户的探索工作区。用户可以通过化学式或周期表选取元素来发现超导体系；它
+是主要导航入口之一。
+_避免混用_：管理员审核工作流、用户权限管理。
 
-**Admin Tools**:
-Permissioned workflows for reviewing papers, maintaining literature records, and managing users. They are operational tools for authenticated administrators, not primary discovery destinations for general users.
-_Avoid_: Main exploration navigation, public literature discovery
+**管理员工具**：
+用于审核论文、维护文献记录和管理用户的权限化工作流。它服务于已认证管理员，不是
+普通用户的主要发现入口。
+_避免混用_：主探索导航、公开文献发现。

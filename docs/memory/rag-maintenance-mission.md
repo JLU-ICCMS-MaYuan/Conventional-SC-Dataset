@@ -1,17 +1,22 @@
-# Mission: Extend SC-Wiki RAG
+# 使命：扩展 SC-Wiki RAG
 
-## Why
-Learn how the SC-Wiki RAG subsystem is built so the user can modify, debug, and extend it independently in future development work.
+## 目的
 
-## Success looks like
-- Trace a user question from the `/api/rag` endpoint through retrieval, prompt construction, generation, and frontend streaming.
-- Modify retrieval behavior without breaking structured-data queries or citation grounding.
-- Add or adjust RAG features with targeted tests around the changed path.
+理解 SC-Wiki RAG 子系统的构成，使用户能在后续开发中独立修改、调试和扩展它。
 
-## Constraints
-- Teach from the actual SC-Wiki codebase first, using external RAG concepts only when they clarify the local implementation.
-- Keep each lesson narrow and tied to code the user can inspect immediately.
+## 成功标准
 
-## Out of scope
-- Building a new RAG framework from scratch.
-- Deep theory of language models beyond what is needed to maintain this repository.
+- 能从 `/api/rag` 端点追踪一个用户问题经过检索、提示词构造、生成和前端流式输出的
+  完整路径。
+- 能修改检索行为，同时不破坏结构化数据查询或引用依据。
+- 能围绕改动路径添加或调整 RAG 功能，并配套有针对性的测试。
+
+## 约束
+
+- 优先从实际 SC-Wiki 代码库讲解；仅在有助于说明本地实现时引入外部 RAG 概念。
+- 每次讲解保持聚焦，并直接关联用户能立即检查的代码。
+
+## 不在范围内
+
+- 从零构建新的 RAG 框架。
+- 超出维护本仓库所需范围的语言模型深层理论。

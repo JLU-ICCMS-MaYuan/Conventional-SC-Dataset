@@ -1,5 +1,5 @@
-# SC-Wiki RAG Glossary
+# SC-Wiki RAG 术语表
 
-This glossary will record terms only after they are understood well enough to use consistently while modifying the SC-Wiki RAG code.
+本术语表只记录已被充分理解、并可在修改 SC-Wiki RAG 代码时保持一致使用的术语。
 
-## Terms
+## 术语
