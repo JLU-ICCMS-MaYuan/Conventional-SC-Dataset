@@ -3,9 +3,10 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { Box, AppBar, Toolbar, Typography } from '@mui/material'
 
 const NAV_ITEMS = [
-  { label: '热点', path: '/charts' },
+  { label: '热点', path: '/news' },
   { label: '探索', path: '/search' },
-  { label: '分享', path: '/share' },
+  { label: '脉络', path: '/knowledge' },
+  { label: '社区', path: '/share' },
   { label: '对话', path: '/rag' },
   { label: '预测', path: '/tc-predict' },
 ]
@@ -32,7 +33,19 @@ const AppShell: React.FC = () => {
         </Toolbar>
       </AppBar>
 
-      <Box component="nav" sx={{ bgcolor: 'background.paper', borderRight: '1px solid', borderColor: 'divider', display: 'flex', flexDirection: 'column', gap: 1, p: '16px 10px' }}>
+      <Box component="nav" sx={{
+        bgcolor: 'background.paper', borderRight: '1px solid', borderColor: 'divider',
+        display: 'flex', flexDirection: 'column', gap: 1, p: '16px 10px', position: 'relative',
+      }}>
+        {/* Sliding pill — moves to active item */}
+        <Box sx={{
+          position: 'absolute', left: 10, top: 16,
+          width: 68, height: 60, borderRadius: '18px',
+          bgcolor: '#e0e7ff',
+          transform: `translateY(${NAV_ITEMS.findIndex(i => location.pathname.startsWith(i.path)) * 68}px)`,
+          transition: 'transform 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+          ...(NAV_ITEMS.every(i => !location.pathname.startsWith(i.path)) && { opacity: 0 }),
+        }} />
         {NAV_ITEMS.map((item) => {
           const isActive = location.pathname.startsWith(item.path)
           return (
@@ -42,11 +55,12 @@ const AppShell: React.FC = () => {
               onClick={() => navigate(item.path)}
               sx={{
                 border: 0, width: 68, minHeight: 60, borderRadius: '18px',
-                display: 'grid', placeItems: 'center',
+                display: 'grid', placeItems: 'center', position: 'relative', zIndex: 1,
                 color: isActive ? '#312e81' : 'text.secondary',
-                bgcolor: isActive ? '#e0e7ff' : 'transparent',
+                bgcolor: 'transparent',
                 fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                '&:hover': { bgcolor: isActive ? '#e0e7ff' : 'action.hover' },
+                transition: 'color 0.25s',
+                '&:hover': { color: '#312e81' },
               }}
             >
               {item.label}
