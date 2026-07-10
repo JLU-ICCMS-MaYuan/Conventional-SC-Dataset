@@ -56,13 +56,13 @@ RAG/ChromaDB.
 - Modify: `docs/README.md`
 - Modify: `docs/memory/README.md`
 
-- [ ] Define `docs/domains/` as the sole current-fact layer for business and
+- [x] Define `docs/domains/` as the sole current-fact layer for business and
   module behavior.
-- [ ] Define `docs/operations/` as the sole current-fact layer for deployment,
+- [x] Define `docs/operations/` as the sole current-fact layer for deployment,
   persistence, environment, imports, and recovery.
-- [ ] Add links from the documentation root and Memory Bank without duplicating
+- [x] Add links from the documentation root and Memory Bank without duplicating
   detailed content.
-- [ ] Verify all Markdown links introduced by these indexes resolve locally.
+- [x] Verify all Markdown links introduced by these indexes resolve locally.
 
 ## Task 2: Backfill core catalog, discovery, and contribution domains
 
@@ -77,11 +77,11 @@ RAG/ChromaDB.
 `backend/services/structure_storage.py`, `frontend/src/App.tsx`, and related
 tests under `tests/01_*`, `tests/02_*`, and `tests/03_*`.
 
-- [ ] Record entities, module boundaries, public behavior, invariants, code
+- [x] Record entities, module boundaries, public behavior, invariants, code
   entry points, tests, and known gaps for each domain.
-- [ ] State that the ordinary `CompoundPage` paper-upload call is not a
+- [x] State that the ordinary `CompoundPage` paper-upload call is not a
   completed end-to-end workflow; do not represent it as available behavior.
-- [ ] Record structure approval's representative-selection rule and its
+- [x] Record structure approval's representative-selection rule and its
   API/test evidence.
 - [ ] Convert unimplemented unified uploads, bulk-cleaning, and unverified UI
   workflows into linked GitHub ideas or document debt rather than current facts.
@@ -98,14 +98,14 @@ tests under `tests/01_*`, `tests/02_*`, and `tests/03_*`.
 `backend/rag/ingest/pipeline.py`, `backend/api/tc_predict.py`, and related
 tests under `tests/04_*` through `tests/07_*`.
 
-- [ ] Describe the knowledge graph only as an internal RAG query projection,
+- [x] Describe the knowledge graph only as an internal RAG query projection,
   not as a public standalone graph feature.
-- [ ] Record RAG's separate database/vector assets and the PDF ingestion
+- [x] Record RAG's separate database/vector assets and the PDF ingestion
   boundary; explicitly flag unverified authentication and review integration as
   gaps.
-- [ ] Record Tc estimation as immediate CONTCAR/PDOS feature computation with
+- [x] Record Tc estimation as immediate CONTCAR/PDOS feature computation with
   no persisted prediction history.
-- [ ] Rename the historical community/forum concept to the verified
+- [x] Rename the historical community/forum concept to the verified
   contribution-metrics domain; do not assert forum capability.
 
 ## Task 4: Backfill runtime operations
@@ -121,14 +121,14 @@ tests under `tests/04_*` through `tests/07_*`.
 `backend/import_data.py`, `backend/rag/ingest/*.py`, `.gitignore`, and
 `docs/deploy.md`.
 
-- [ ] Make `start.sh` the documented full startup path and document the
+- [x] Make `start.sh` the documented full startup path and document the
   limitations of direct `Procfile` Uvicorn startup.
-- [ ] Document the main database, RAG relational database, and Chroma assets as
+- [x] Document the main database, RAG relational database, and Chroma assets as
   separate persistence responsibilities, including relevant environment
   variables and persistence requirements.
-- [ ] Document destructive imports and collection rebuilds with backup,
+- [x] Document destructive imports and collection rebuilds with backup,
   validation, recovery, and external API-cost preconditions.
-- [ ] Remove historical deployment claims that reference missing `.env.example`
+- [x] Remove historical deployment claims that reference missing `.env.example`
   or treat missing initialization as an acceptable runtime path.
 
 ## Task 5: Record verified documentation debt and delete legacy documents
@@ -150,9 +150,9 @@ tests under `tests/04_*` through `tests/07_*`.
   incomplete frontend build inputs.
 - [ ] Create or link GitHub `type:idea` Issues for forum, standalone graph, and
   other historical planned capabilities that should remain discoverable.
-- [ ] Remove all 28 old Markdown files and numbered directories only after
+- [x] Remove all 28 old Markdown files and numbered directories only after
   their verified facts are present in `docs/domains/` or `docs/operations/`.
-- [ ] Replace the seven-module table in `docs/README.md` with the new domain and
+- [x] Replace the seven-module table in `docs/README.md` with the new domain and
   operations navigation.
 
 ## Task 6: Verify the migration
@@ -160,14 +160,14 @@ tests under `tests/04_*` through `tests/07_*`.
 **Files:**
 - Verify: `docs/**/*.md`, `AGENTS.md`
 
-- [ ] Run `git diff --check`.
-- [ ] Verify no Markdown links refer to the deleted `docs/01-*` through
+- [x] Run `git diff --check`.
+- [x] Verify no Markdown links refer to the deleted `docs/01-*` through
   `docs/07-*` paths.
-- [ ] Verify each domain page includes evidence paths and known gaps.
+- [x] Verify each domain page includes evidence paths and known gaps.
 - [ ] Run targeted existing tests only for documented behavior that was
   revalidated during the migration; report any unrelated test failures without
   changing code.
-- [ ] Confirm `git status --short` shows only the approved documentation and
+- [x] Confirm `git status --short` shows only the approved documentation and
   existing user changes; do not stage or commit.
 
 ## Execution Handoff
@@ -176,3 +176,13 @@ Implementation requires one explicit confirmation because Task 5 deletes 28
 existing Markdown files and their seven directories. After confirmation, use
 `superpowers:executing-plans` for staged implementation and verify each task
 before continuing.
+
+## Execution Notes
+
+- GitHub Issue creation was outside the confirmed migration scope. The two
+  unchecked Issue-conversion tasks remain follow-up work.
+- The `sc-wiki` Conda baseline run used `PYTHONPATH=.` and produced 125 passed,
+  1 failed, and 7 skipped tests. The failed RAG page test expects
+  `frontend_build/index.html`, while the committed static asset is under
+  `frontend/static/`; no business code was changed to address this pre-existing
+  deployment mismatch.
