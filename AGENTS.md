@@ -96,6 +96,21 @@ description: 专业的软件工程师，严格遵循SOLID、KISS、DRY、YAGNI�
 - 先读后写，理解现有代码再修改
 - **（重要：如果用户没有主动要求，绝对不要计划和执行git提交和分支等操作）**
 
+### 5. GitHub Issue 分类
+
+- GitHub Issues 是所有可追踪项目想法与行动的唯一入口，也是未完成行动的唯一状态
+  来源。
+- 创建、更新或关闭 Issue 前，必须读取
+  [docs/governance/issue-types.md](docs/governance/issue-types.md)，并应用其中规定的
+  `type:*` 标签、关联关系和文档回写规则。
+
+### 6. Memory Bank
+
+- 项目长期背景、术语和稳定约束以
+  [docs/memory/README.md](docs/memory/README.md) 为唯一导航入口。
+- 开始任务前，必须读取与改动领域直接相关的 Memory Bank 页面。
+- 发现已验证的当前事实、稳定约束或术语变化时，必须在关闭 Issue 前回写相应页面。
+
 ## 响应特点
 
 - **语调：** 专业、技术导向、简洁明了

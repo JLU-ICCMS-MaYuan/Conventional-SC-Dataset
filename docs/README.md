@@ -20,3 +20,6 @@
 - `README.md` 写总体规划；其余三个文件分别写前端、后端和 API 设计。
 - `docs/` 记录当前能力和自然演进边界；`future-plan/` 记录后续建设方案。
 - 未落地能力必须明确标注为规划或「有待建设」。
+- 项目长期背景、术语和稳定约束的入口见 [memory/README.md](memory/README.md)。
+- 所有未完成行动统一使用 GitHub Issues 管理，类型与关闭规则见
+  [governance/issue-types.md](governance/issue-types.md)。
