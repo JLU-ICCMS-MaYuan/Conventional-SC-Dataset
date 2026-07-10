@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SC-Wiki RAG Lesson 01 - Main Chain</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, "Microsoft YaHei", sans-serif;
+      color: #1f2933;
+      background: #f7f9fb;
+      line-height: 1.7;
+    }
+    main {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 48px 28px 72px;
+    }
+    h1 { font-size: 32px; margin: 0 0 10px; }
+    h2 { font-size: 22px; margin-top: 34px; }
+    p { margin: 10px 0; }
+    code {
+      padding: 2px 6px;
+      border-radius: 5px;
+      background: #eef2f6;
+      font-family: Consolas, monospace;
+      font-size: 0.95em;
+    }
+    .card {
+      background: white;
+      border: 1px solid #d9e2ec;
+      border-radius: 10px;
+      padding: 20px 22px;
+      margin: 18px 0;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+    }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .node {
+      border: 1px solid #8aa8c5;
+      background: #eaf3fb;
+      border-radius: 8px;
+      padding: 14px;
+      min-height: 74px;
+      font-weight: 700;
+      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .node.gray {
+      border-color: #87919d;
+      background: #f0f2f4;
+    }
+    .node.green {
+      border-color: #7aa889;
+      background: #e8f4ec;
+    }
+    .arrow {
+      text-align: center;
+      color: #667085;
+      font-weight: 700;
+      margin: 4px 0;
+    }
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+    ul { padding-left: 22px; }
+    .exercise {
+      border-left: 4px solid #6f95bc;
+      background: #ffffff;
+      padding: 16px 18px;
+      border-radius: 8px;
+    }
+    @media (max-width: 760px) {
+      .flow, .two-col { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Lesson 01: 先读懂 SC-Wiki RAG 的主链路</h1>
+  <p>学习目标：不是背 RAG 概念，而是能从代码里追踪一个用户问题如何进入系统、被检索、被组织成 prompt，并最终流式返回前端。</p>
+
+  <section class="card">
+    <h2>1. 先抓住四层结构</h2>
+    <p>这套 RAG 的主链路可以先压缩成四层。读代码时不要一开始钻进细节，先确认自己站在哪一层。</p>
+    <div class="flow">
+      <div class="node">API layer<br><code>api/rag.py</code></div>
+      <div class="node gray">Service facade<br><code>service.py</code></div>
+      <div class="node green">RAG engine<br><code>rag/engine.py</code></div>
+      <div class="node">Frontend stream<br><code>useStreamingChat.ts</code></div>
+    </div>
+    <div class="arrow">request -> availability checks -> retrieval/generation -> SSE events</div>
+  </section>
+
+  <section class="card">
+    <h2>2. 一个问题如何流过系统</h2>
+    <p>用户在前端提问后，请求会进入 <code>/api/rag/chat/stream</code>。API 层只做输入校验、history 格式化和 SSE 包装，然后把问题交给 <code>service.chat_stream()</code>。</p>
+    <p><code>service.py</code> 是边界层。它先检查 RAG 数据库、Chroma 向量库和 LLM 配置是否可用；可用后才调用 <code>backend.rag.rag.engine.ask_stream()</code>。</p>
+    <p><code>engine.py</code> 是核心。它会判断问题意图：事实型问题走结构化查询，解释型问题走语义检索，两者都有时构造融合 prompt。最后 LLM 生成 token，API 再把这些 token 作为 SSE 事件发给前端。</p>
+  </section>
+
+  <section class="card two-col">
+    <div>
+      <h2>3. 你现在要记住的文件</h2>
+      <ul>
+        <li><code>backend/api/rag.py</code>: 请求入口和 SSE 输出。</li>
+        <li><code>backend/rag/service.py</code>: 可用性检查和异常边界。</li>
+        <li><code>backend/rag/rag/engine.py</code>: 意图解析、检索选择、融合、生成。</li>
+        <li><code>frontend/src/lib/useStreamingChat.ts</code>: 前端如何读取 SSE。</li>
+      </ul>
+    </div>
+    <div>
+      <h2>4. 暂时不要急着看的文件</h2>
+      <ul>
+        <li><code>ingest/*</code>: 这是数据如何进入 RAG，属于第二阶段。</li>
+        <li><code>inspiration/*</code>: 探索模式更复杂，等普通问答链路清楚后再看。</li>
+        <li><code>models/*</code>: 先知道有哪些表，不必一开始逐字段读完。</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="exercise">
+    <h2>小练习</h2>
+    <p>不用改代码。请你在代码里找到三处函数，并用一句话说出它们各自负责什么：</p>
+    <ul>
+      <li><code>rag_chat_stream()</code></li>
+      <li><code>chat_stream()</code></li>
+      <li><code>ask_stream()</code></li>
+    </ul>
+    <p>如果你能把这三个函数串起来，就已经读懂了 RAG 主链路的骨架。</p>
+  </section>
+</main>
+</body>
+</html>
