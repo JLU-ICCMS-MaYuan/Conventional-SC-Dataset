@@ -74,3 +74,4 @@ frontend_old
 *-current.yml
 .superpowers/
 frontend/static/index.html
+node_modules/
