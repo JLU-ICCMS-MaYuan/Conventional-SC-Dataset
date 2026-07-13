@@ -97,29 +97,6 @@ const NewsPage: React.FC = () => {
         </Box>
       </Paper>
 
-      {/* Charts */}
-      <Typography variant="overline" sx={{ mb: 2, display: 'block' }}>数据可视化</Typography>
-      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 3 }}>
-        <Tab label="Tc vs Pressure" />
-        <Tab label="Tc vs Year" />
-      </Tabs>
-      <Paper sx={{ p: 2.5, borderRadius: 4 }}>
-        <Typography variant="h2" gutterBottom>{tab === 0 ? 'Tc-Pressure 分布' : 'Tc-Year 演变'}</Typography>
-        <ResponsiveContainer width="100%" height={400}>
-          <ScatterChart>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis type="number" dataKey="x" domain={tab === 0 ? [0, 'auto'] : [1900, 'auto']}
-              label={{ value: tab === 0 ? 'Pressure (GPa)' : 'Year', position: 'bottom' }} />
-            <YAxis type="number" dataKey="y" domain={[0, 'auto']}
-              label={{ value: 'Tc (K)', angle: -90, position: 'insideLeft' }} />
-            <Tooltip />
-            <Legend />
-            <Scatter name="实验" data={chartData.filter(d => d.type === 'experimental')} fill="#4f46e5" shape="square" onClick={(p: any) => setSelected(p)} />
-            <Scatter name="理论" data={chartData.filter(d => d.type === 'theoretical')} fill="#82ca9d" shape="triangle" onClick={(p: any) => setSelected(p)} />
-          </ScatterChart>
-        </ResponsiveContainer>
-      </Paper>
-
       <Drawer anchor="right" open={!!selected} onClose={() => setSelected(null)} PaperProps={{ sx: { width: 360, p: 3 } }}>
         {selected && (
           <Box>
