@@ -22,7 +22,11 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-.agents
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/overview-maintainer/
+!.agents/skills/overview-maintainer/**
 .specify
 
 
