@@ -36,7 +36,7 @@ async def _enrich_and_ingest(paper_id: int) -> None:
         print(f"  [管线] paper_id={paper_id} 富化失败，跳过 key_properties 写入")
 
 
-async def ingest_pdf(file_path: Path, original_filename: str) -> dict[str, Any]:
+async def ingest_pdf(file_path: Path, original_filename: str, uploaded_by_user_id: int | None = None) -> dict[str, Any]:
     """完整管线：PDF → papers → KG 富化 → key_properties"""
     text = extract_text_from_pdf(file_path)
     if len(text) < 50:
@@ -45,7 +45,7 @@ async def ingest_pdf(file_path: Path, original_filename: str) -> dict[str, Any]:
     result = extract_from_markdown(text)
 
     async with async_session_factory() as session:
-        paper_id = await store_extraction(result, f"upload/{original_filename}", session)
+        paper_id = await store_extraction(result, f"upload/{original_filename}", session, uploaded_by_user_id)
 
     if paper_id:
         from backend.ingest.embedder import chunk_and_embed

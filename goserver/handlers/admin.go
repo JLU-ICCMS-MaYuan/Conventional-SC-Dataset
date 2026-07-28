@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -77,7 +78,7 @@ func GetPaperDetail(c *gin.Context) {
 	c.JSON(http.StatusOK, paper)
 }
 
-// UpdatePaper 编辑论文
+// UpdatePaper 编辑论文（含 key_properties 增删改）
 // PUT /api/admin/papers/:id
 func UpdatePaper(c *gin.Context) {
 	id := c.Param("id")
@@ -93,20 +94,174 @@ func UpdatePaper(c *gin.Context) {
 		return
 	}
 
-	// 只更新允许的字段
+	// 更新论文级字段
 	allowed := []string{"doi", "title", "authors", "journal", "volume", "pages",
 		"year", "abstract", "review_comment", "review_status",
 		"summary", "paper_type", "keywords_tags", "source_file_path",
 		"methodology", "key_finding", "rationale"}
 	updates := make(map[string]interface{})
 	for _, k := range allowed {
-		if v, ok := body[k]; ok { // ok = key 存在
+		if v, ok := body[k]; ok {
 			updates[k] = v
 		}
 	}
-
 	database.DB.Model(&paper).Updates(updates)
+
+	// 处理 key_properties 增删改
+	kpsRaw, ok := body["key_properties"]
+	if ok {
+		if kps, isArray := kpsRaw.([]interface{}); isArray {
+			kpFields := []string{"material", "name", "name_raw", "name_note",
+				"value_min", "value_max", "value_raw", "unit",
+				"pressure_gpa", "temperature_k", "is_primary",
+				"superconductor_type", "article_type", "condition_note",
+				"structure_text", "structure_format"}
+
+			// 收集提交中的 KP ID 列表（排除新增和标记删除的）
+			keepIds := make(map[uint]bool)
+
+			for _, kpRaw := range kps {
+				kpMap, isMap := kpRaw.(map[string]interface{})
+				if !isMap {
+					continue
+				}
+
+				// 处理删除标记
+				if deleted, _ := kpMap["_deleted"].(bool); deleted {
+					if kpId, ok := getFloatAsUint(kpMap["id"]); ok && kpId > 0 {
+						database.DB.Where("id = ? AND paper_id = ?", kpId, paper.ID).
+							Delete(&models.KeyProperty{})
+					}
+					continue
+				}
+
+				kpId, hasId := getFloatAsUint(kpMap["id"])
+
+				// ── 审查验证 ──────────────────────────────
+				material, _ := kpMap["material"].(string)
+				name, _ := kpMap["name"].(string)
+				if material == "" {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "物性 material 不能为空"})
+					return
+				}
+				if name == "" {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "物性 name 不能为空"})
+					return
+				}
+				// 数值范围校验：value_min <= value_max
+				vmin, hasMin := kpMap["value_min"].(float64)
+				vmax, hasMax := kpMap["value_max"].(float64)
+				if hasMin && hasMax && vmin > vmax {
+					c.JSON(http.StatusBadRequest, gin.H{
+						"error": fmt.Sprintf("物性 %s: value_min(%.4f) 不能大于 value_max(%.4f)", material, vmin, vmax),
+					})
+					return
+				}
+				// 压强/温度非负校验
+				if pg, ok := kpMap["pressure_gpa"].(float64); ok && pg < 0 {
+					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("物性 %s: pressure_gpa 不能为负", material)})
+					return
+				}
+				if tk, ok := kpMap["temperature_k"].(float64); ok && tk < 0 {
+					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("物性 %s: temperature_k 不能为负", material)})
+					return
+				}
+				// ──────────────────────────────────────────
+
+				if hasId && kpId > 0 {
+					// 更新已有 KP
+					keepIds[kpId] = true
+					var kp models.KeyProperty
+					if err := database.DB.Where("id = ? AND paper_id = ?", kpId, paper.ID).First(&kp).Error; err == nil {
+						kpUpdates := make(map[string]interface{})
+						for _, f := range kpFields {
+							if v, exists := kpMap[f]; exists {
+								kpUpdates[f] = v
+							}
+						}
+						if isPrimary, exists := kpMap["is_primary"]; exists {
+							if b, ok := isPrimary.(bool); ok {
+								kpUpdates["is_primary"] = b
+							}
+						}
+						database.DB.Model(&kp).Updates(kpUpdates)
+					}
+				} else {
+					// 新增 KP
+					newKp := models.KeyProperty{
+						PaperID: paper.ID,
+					}
+					if v, ok := kpMap["material"].(string); ok {
+						newKp.Material = v
+					}
+					if v, ok := kpMap["name"].(string); ok {
+						newKp.Name = v
+					}
+					if v, ok := kpMap["name_raw"].(string); ok {
+						newKp.NameRaw = v
+					}
+					if v, ok := kpMap["name_note"].(string); ok {
+						newKp.NameNote = &v
+					}
+					if v, ok := kpMap["value_min"].(float64); ok {
+						newKp.ValueMin = &v
+					}
+					if v, ok := kpMap["value_max"].(float64); ok {
+						newKp.ValueMax = &v
+					}
+					if v, ok := kpMap["value_raw"].(string); ok {
+						newKp.ValueRaw = &v
+					}
+					if v, ok := kpMap["unit"].(string); ok {
+						newKp.Unit = &v
+					}
+					if v, ok := kpMap["pressure_gpa"].(float64); ok {
+						newKp.PressureGpa = &v
+					}
+					if v, ok := kpMap["temperature_k"].(float64); ok {
+						newKp.TemperatureK = &v
+					}
+					if v, ok := kpMap["condition_note"].(string); ok {
+						newKp.ConditionNote = &v
+					}
+					if v, ok := kpMap["superconductor_type"].(string); ok {
+						newKp.SuperconductorType = &v
+					}
+					if v, ok := kpMap["article_type"].(string); ok {
+						newKp.ArticleType = &v
+					}
+					if v, ok := kpMap["is_primary"].(bool); ok {
+						newKp.IsPrimary = v
+					}
+					if v, ok := kpMap["structure_text"].(string); ok {
+						newKp.StructureText = &v
+					}
+					if v, ok := kpMap["structure_format"].(string); ok {
+						newKp.StructureFormat = &v
+					}
+					newKp.SourceLabel = "manual"
+					database.DB.Create(&newKp)
+				}
+			}
+		}
+	}
+
+	// 重新加载 paper（含更新后的 key_properties）
+	database.DB.Preload("KeyProperties").First(&paper, id)
 	c.JSON(http.StatusOK, gin.H{"message": "已更新", "paper": paper})
+}
+
+// getFloatAsUint 将 JSON number (float64) 安全转为 uint
+func getFloatAsUint(v interface{}) (uint, bool) {
+	switch n := v.(type) {
+	case float64:
+		return uint(n), true
+	case int:
+		return uint(n), true
+	case int64:
+		return uint(n), true
+	}
+	return 0, false
 }
 
 // ReviewPaper 审核论文
@@ -151,6 +306,45 @@ func DeletePaper(c *gin.Context) {
 	database.DB.Where("paper_id = ?", id).Delete(&models.KeyProperty{})
 	database.DB.Delete(&models.Paper{}, id)
 	c.JSON(http.StatusOK, gin.H{"message": "已删除"})
+}
+
+// ═══════════════════════════════════════════════
+// 我的上传
+// ═══════════════════════════════════════════════
+
+// GetMyUploads 当前用户的上传记录
+// GET /api/papers/my-uploads?limit=20&offset=0
+func GetMyUploads(c *gin.Context) {
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+
+	email, exists := c.Get("user_email")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+		return
+	}
+
+	var user models.User
+	if err := database.DB.Where("email = ?", email).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "用户不存在"})
+		return
+	}
+
+	var total int64
+	query := database.DB.Model(&models.Paper{}).Where("uploaded_by_user_id = ?", user.ID)
+	query.Count(&total)
+
+	var papers []models.Paper
+	query.Preload("KeyProperties").
+		Order("created_at DESC").
+		Limit(limit).Offset(offset).
+		Find(&papers)
+
+	c.JSON(http.StatusOK, gin.H{
+		"items":     papers,
+		"total":     total,
+		"page_size": limit,
+	})
 }
 
 // ═══════════════════════════════════════════════

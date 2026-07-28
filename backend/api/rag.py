@@ -3,19 +3,46 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 from pathlib import Path
 from typing import Any, Literal
 
 import anyio
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, File, Header, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
+from jose import jwt
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 
 from backend.rag import service
 
 
 router = APIRouter(prefix="/api/rag", tags=["rag"])
+
+JWT_SECRET = os.getenv("JWT_SECRET_KEY", "fallback-insecure-key-for-dev-only")
+
+
+def _get_user_id_from_token(authorization: str | None) -> int | None:
+    """从 Authorization Bearer token 中解析 user_id"""
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    try:
+        token = authorization[len("Bearer "):]
+        claims = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        email = claims.get("sub")
+        if not email:
+            return None
+        from backend.database import SessionLocal
+        from backend.models import User
+        db = SessionLocal()
+        try:
+            user = db.query(User).filter(User.email == email).first()
+            return user.id if user else None
+        finally:
+            db.close()
+    except Exception:
+        return None
 
 
 class RagMessage(BaseModel):
@@ -209,11 +236,15 @@ async def rag_superconductor_detail(superconductor_id: int):
 
 
 @router.post("/upload-pdf")
-async def rag_upload_pdf(file: UploadFile = File(...)):
+async def rag_upload_pdf(
+    file: UploadFile = File(...),
+    authorization: str | None = Header(None),
+):
     filename = file.filename or "uploaded.pdf"
     if not filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="只支持 PDF 文件")
 
+    user_id = _get_user_id_from_token(authorization)
     suffix = Path(filename).suffix or ".pdf"
     temp_path: Path | None = None
     try:
@@ -221,7 +252,7 @@ async def rag_upload_pdf(file: UploadFile = File(...)):
             temp_path = Path(tmp.name)
             while chunk := await file.read(1024 * 1024):
                 tmp.write(chunk)
-        data = await service.upload_pdf(temp_path, filename)
+        data = await service.upload_pdf(temp_path, filename, uploaded_by_user_id=user_id)
     except Exception as exc:
         raise _map_internal_error(exc) from exc
     finally:
@@ -233,7 +264,10 @@ async def rag_upload_pdf(file: UploadFile = File(...)):
 
 
 @router.post("/upload-text")
-async def rag_upload_text(file: UploadFile = File(...)):
+async def rag_upload_text(
+    file: UploadFile = File(...),
+    authorization: str | None = Header(None),
+):
     """上传 TXT/MD 文本文件，从 extractor 开始走摄入管线"""
     filename = file.filename or "uploaded.txt"
     suffix = Path(filename).suffix.lower()
@@ -251,11 +285,12 @@ async def rag_upload_text(file: UploadFile = File(...)):
     finally:
         await file.close()
 
+    user_id = _get_user_id_from_token(authorization)
     from backend.ingest.extractor import extract_from_markdown
     from backend.ingest.store_papers import store_extraction
     from backend.rag.database import async_session_factory
 
     result = extract_from_markdown(content)
     async with async_session_factory() as session:
-        paper_id = await store_extraction(result, filename, session)
+        paper_id = await store_extraction(result, filename, session, uploaded_by_user_id=user_id)
         return {"ok": True, "paper_id": paper_id, "title": result.paper.get("title", "")}

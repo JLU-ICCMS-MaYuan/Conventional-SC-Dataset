@@ -379,7 +379,7 @@ async def superconductor_detail(superconductor_id: int) -> dict[str, Any]:
         raise RagInternalError(str(exc)) from exc
 
 
-async def upload_pdf(file_path: Path, original_filename: str) -> dict[str, Any]:
+async def upload_pdf(file_path: Path, original_filename: str, uploaded_by_user_id: int | None = None) -> dict[str, Any]:
     _ensure_chat_available()
     try:
         from backend.ingest.pipeline import ingest_pdf
@@ -387,6 +387,7 @@ async def upload_pdf(file_path: Path, original_filename: str) -> dict[str, Any]:
         raise RagInternalError("PDF 摄入模块尚未接入") from exc
 
     try:
-        return await ingest_pdf(file_path=file_path, original_filename=original_filename)
+        return await ingest_pdf(file_path=file_path, original_filename=original_filename,
+                                uploaded_by_user_id=uploaded_by_user_id)
     except Exception as exc:
         raise RagInternalError(str(exc)) from exc

@@ -44,6 +44,13 @@ func main() {
 	r.POST("/api/auth/login", handlers.Login)
 	r.GET("/api/admin/stats", handlers.GetStats) // 仪表盘可公开
 
+	// 认证路由组（普通用户可访问，仅需登录）
+	auth := r.Group("/api")
+	auth.Use(middleware.AuthRequired)
+	{
+		auth.GET("/papers/my-uploads", handlers.GetMyUploads)
+	}
+
 	// 管理员路由组
 	// Group 类似 FastAPI 的 APIRouter(prefix="/api/admin")
 	admin := r.Group("/api/admin")

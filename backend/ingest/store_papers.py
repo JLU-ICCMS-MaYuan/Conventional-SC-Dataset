@@ -22,6 +22,7 @@ async def store_extraction(
     result: ExtractionResult,
     source_file_path: str,
     session: AsyncSession,
+    uploaded_by_user_id: int | None = None,
 ) -> int | None:
     """存储提取结果到数据库。
 
@@ -92,6 +93,7 @@ async def store_extraction(
         keywords_tags=json.dumps(result.keywords_tags, ensure_ascii=False) if result.keywords_tags else None,
         source_file_path=source_file_path,
         paper_type=result.paper_type,
+        uploaded_by_user_id=uploaded_by_user_id,
     )
     session.add(paper)
     await session.flush()

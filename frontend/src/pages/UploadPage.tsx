@@ -1,14 +1,20 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Box, Typography, Card, CardContent, Button, TextField,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Paper, Chip, Alert, Snackbar, CircularProgress, LinearProgress,
-  IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions,
+  IconButton, Tooltip, Tabs, Tab,
 } from '@mui/material'
-import { CloudUpload, Check, PictureAsPdf, Description, Code, Edit, Delete } from '@mui/icons-material'
+import {
+  CloudUpload, Check, PictureAsPdf, Description, Code,
+  Refresh as RefreshIcon, ChevronRight as ChevronRightIcon,
+} from '@mui/icons-material'
 import { useAuth } from '../context/AuthContext'
+import AuthDialog from '../components/AuthDialog'
+import PaperEditView from '../components/PaperEditView'
 import { api } from '../lib/api'
+
+/* ── Types ────────────────────────────────────── */
 
 interface ParsedGroup {
   name: string
@@ -16,50 +22,101 @@ interface ParsedGroup {
   items: any[]
 }
 
-interface UploadedFile {
-  id: string
-  name: string
-  size: number
-  type: 'json' | 'pdf' | 'text'
-  status: 'uploading' | 'done' | 'error'
-  paperId?: number
-  title?: string
-  error?: string
+interface UploadRecord {
+  id: number
+  title: string | null
+  doi: string | null
+  journal: string | null
+  year: number | null
+  review_status: string
+  source_file_path: string | null
+  created_at: string
+  key_properties: any[] | null
+  record_count?: number
 }
+
+/* ── Constants ────────────────────────────────── */
 
 const ACCEPTED_TYPES = ['.json', '.pdf', '.txt', '.md']
 const ACCEPTED_STR = ACCEPTED_TYPES.join(',')
 
+const STATUS_CONFIG: Record<string, { label: string; color: 'warning' | 'info' | 'success' | 'error' }> = {
+  parsing:   { label: '解析中',   color: 'warning' },
+  pending:   { label: '待审核',   color: 'info' },
+  approved:  { label: '审核完成', color: 'success' },
+  rejected:  { label: '已拒绝',   color: 'error' },
+  needs_revision: { label: '需修改', color: 'warning' },
+}
+
+function getDisplayStatus(record: UploadRecord): string {
+  if (record.review_status === 'pending' &&
+      (!record.key_properties || record.key_properties.length === 0)) {
+    return 'parsing'
+  }
+  return record.review_status || 'pending'
+}
+
+/* ═══════════════════════════════════════════════ */
 const UploadPage: React.FC = () => {
   const { user } = useAuth()
   const navigate = useNavigate()
   const fileInput = useRef<HTMLInputElement>(null)
 
+  /* ── Stage ─────────────────────────────────── */
+  const [stage, setStage] = useState<'list' | 'detail'>('list')
+  const [detailPaperId, setDetailPaperId] = useState<number | null>(null)
+
+  /* ── Auth dialog ───────────────────────────── */
+  const [authOpen, setAuthOpen] = useState(false)
+
+  /* ── Tab (paper / json) ────────────────────── */
+  const [tab, setTab] = useState(0)
+
+  /* ── File upload state ─────────────────────── */
   const [dragOver, setDragOver] = useState(false)
   const [file, setFile] = useState<File | null>(null)
   const [fileType, setFileType] = useState<'json' | 'paper' | ''>('')
+  const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+
+  /* ── JSON import state ─────────────────────── */
   const [parsed, setParsed] = useState<ParsedGroup | null>(null)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
-  const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
-  const [uploading, setUploading] = useState(false)
+
+  /* ── Upload history ────────────────────────── */
+  const [uploads, setUploads] = useState<UploadRecord[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+
+  /* ── Snackbar & error ──────────────────────── */
   const [snackbar, setSnackbar] = useState('')
+  const [error, setError] = useState('')
 
-  // Upload history
-  const [uploads, setUploads] = useState<UploadedFile[]>([])
-
-  // Edit dialog
-  const [editDlg, setEditDlg] = useState<{ open: boolean; item: UploadedFile | null }>({ open: false, item: null })
-  const [editTitle, setEditTitle] = useState('')
-  const [editDoi, setEditDoi] = useState('')
-  const [editSaving, setEditSaving] = useState(false)
-
+  /* ── Helpers ───────────────────────────────── */
   const isPaperFile = (f: File) =>
     f.name.endsWith('.pdf') || f.name.endsWith('.txt') || f.name.endsWith('.md')
-
   const isJsonFile = (f: File) => f.name.endsWith('.json')
+  const formatSize = (s: number) =>
+    s > 1024 * 1024 ? `${(s / 1024 / 1024).toFixed(1)} MB` : `${(s / 1024).toFixed(1)} KB`
 
+  /* ── Load history ──────────────────────────── */
+  const loadHistory = useCallback(async () => {
+    if (!user) return
+    setHistoryLoading(true)
+    try {
+      const res = await api.get<{ items: UploadRecord[]; total: number }>('/api/papers/my-uploads?limit=50')
+      setUploads(res.items || [])
+    } catch {
+      // 端点可能尚未部署，静默失败
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [user])
+
+  useEffect(() => { loadHistory() }, [loadHistory])
+
+  /* ── JSON parsing ──────────────────────────── */
   const parseJson = (f: File) => {
     const reader = new FileReader()
     reader.onload = (e) => {
@@ -82,6 +139,7 @@ const UploadPage: React.FC = () => {
     reader.readAsText(f)
   }
 
+  /* ── File handling ─────────────────────────── */
   const handleFile = (f: File) => {
     setError('')
     setParsed(null)
@@ -102,6 +160,56 @@ const UploadPage: React.FC = () => {
     if (f) handleFile(f)
   }
 
+  /* ── Paper upload with progress ────────────── */
+  const handleUploadPaper = () => {
+    if (!file) return
+    setUploading(true)
+    setUploadProgress(0)
+
+    const formData = new FormData()
+    formData.append('file', file)
+    const token = localStorage.getItem('auth_token')
+    const isText = file.name.endsWith('.txt') || file.name.endsWith('.md')
+    const url = isText ? '/api/rag/upload-text' : '/api/rag/upload-pdf'
+
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', url)
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        setUploadProgress(Math.round((e.loaded / e.total) * 100))
+      }
+    }
+
+    xhr.onload = () => {
+      setUploading(false)
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const data = JSON.parse(xhr.responseText)
+          setSnackbar('上传成功')
+          setFile(null); setFileType('')
+          loadHistory()
+        } catch {
+          setError('响应解析失败')
+        }
+      } else {
+        try {
+          const err = JSON.parse(xhr.responseText)
+          setError(err.detail || '上传失败')
+        } catch { setError('上传失败') }
+      }
+    }
+
+    xhr.onerror = () => {
+      setUploading(false)
+      setError('网络错误，上传失败')
+    }
+
+    xhr.send(formData)
+  }
+
+  /* ── JSON group save ───────────────────────── */
   const handleSaveGroup = async () => {
     if (!parsed || !name.trim()) return
     setSaving(true)
@@ -111,8 +219,11 @@ const UploadPage: React.FC = () => {
         await api.post('/api/chart-groups/import', body)
       } else {
         const stored = JSON.parse(localStorage.getItem('scwiki_local_groups') || '[]')
-        stored.push({ id: Date.now(), ...body, is_preset: false, is_public: false,
-          item_count: parsed.items.length, created_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        stored.push({
+          id: Date.now(), ...body, is_preset: false, is_public: false,
+          item_count: parsed.items.length, created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
         localStorage.setItem('scwiki_local_groups', JSON.stringify(stored))
       }
       setSnackbar('组合导入成功')
@@ -121,54 +232,16 @@ const UploadPage: React.FC = () => {
     finally { setSaving(false) }
   }
 
-  const handleUploadPaper = async () => {
-    if (!file) return
-    const id = `${Date.now()}`
-    const newItem: UploadedFile = { id, name: file.name, size: file.size, type: file.name.endsWith('.pdf') ? 'pdf' : 'text', status: 'uploading' }
-    setUploads(prev => [newItem, ...prev])
-    setUploading(true)
-    try {
-      const formData = new FormData(); formData.append('file', file)
-      const token = localStorage.getItem('auth_token')
-      const isText = file.name.endsWith('.txt') || file.name.endsWith('.md')
-      const url = isText ? '/api/rag/upload-text' : '/api/rag/upload-pdf'
-      const res = await fetch(url, { method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {}, body: formData })
-      if (!res.ok) throw new Error((await res.json()).detail || '上传失败')
-      const data = await res.json()
-      setUploads(prev => prev.map(u => u.id === id
-        ? { ...u, status: 'done', paperId: data.paper_id, title: data.title || data.data?.title }
-        : u))
-      setSnackbar('上传成功')
-      setFile(null); setFileType('')
-    } catch (e: any) {
-      setUploads(prev => prev.map(u => u.id === id ? { ...u, status: 'error', error: e.message } : u))
-    } finally { setUploading(false) }
+  const handleDetailOpen = (paperId: number) => {
+    setDetailPaperId(paperId)
+    setStage('detail')
   }
 
-  const handleEditOpen = (item: UploadedFile) => {
-    setEditDlg({ open: true, item })
-    setEditTitle(item.title || item.name)
-    setEditDoi('')
+  const handleDetailBack = () => {
+    setStage('list')
+    setDetailPaperId(null)
+    loadHistory()
   }
-
-  const handleEditSave = async () => {
-    if (!editDlg.item?.paperId) return
-    setEditSaving(true)
-    try {
-      await api.put(`/api/admin/papers/${editDlg.item.paperId}`, { title: editTitle, doi: editDoi || undefined })
-      setUploads(prev => prev.map(u => u.id === editDlg.item!.id ? { ...u, title: editTitle } : u))
-      setSnackbar('已更新')
-      setEditDlg({ open: false, item: null })
-    } catch (e: any) { setSnackbar(`保存失败: ${e.message}`) }
-    finally { setEditSaving(false) }
-  }
-
-  const handleDeleteUpload = (id: string) => {
-    setUploads(prev => prev.filter(u => u.id !== id))
-  }
-
-  const formatSize = (s: number) => s > 1024 * 1024 ? `${(s / 1024 / 1024).toFixed(1)} MB` : `${(s / 1024).toFixed(1)} KB`
 
   const getFileIcon = () => {
     if (!file) return <CloudUpload sx={{ fontSize: 48, color: 'text.disabled', mb: 2 }} />
@@ -177,169 +250,304 @@ const UploadPage: React.FC = () => {
     return <Description sx={{ fontSize: 48, color: 'info.main', mb: 2 }} />
   }
 
+  /* ═══════════════════════════════════════════════ */
+  /* Detail Stage                                  */
+  /* ═══════════════════════════════════════════════ */
+  if (stage === 'detail' && detailPaperId) {
+    return (
+      <PaperEditView
+        paperId={detailPaperId}
+        onBack={handleDetailBack}
+        onDeleted={() => { handleDetailBack() }}
+      />
+    )
+  }
+
+  /* ═══════════════════════════════════════════════ */
+  /* Unauthenticated                               */
+  /* ═══════════════════════════════════════════════ */
+  if (!user) {
+    return (
+      <Box sx={{ maxWidth: 560, mx: 'auto', textAlign: 'center', py: 8 }}>
+        <CloudUpload sx={{ fontSize: 64, color: 'text.disabled', mb: 3 }} />
+        <Typography variant="h5" fontWeight={700} gutterBottom>请登录后使用上传功能</Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
+          登录后可以上传超导论文 PDF/TXT/MD 文件，系统会自动解析并富化物性数据。
+        </Typography>
+        <Button variant="contained" size="large" onClick={() => setAuthOpen(true)}
+          sx={{ borderRadius: '999px', px: 6, py: 1.5, fontSize: 16 }}>
+          登录 / 注册
+        </Button>
+        <AuthDialog open={authOpen} onClose={() => setAuthOpen(false)} />
+      </Box>
+    )
+  }
+
+  /* ═══════════════════════════════════════════════ */
+  /* List Stage                                    */
+  /* ═══════════════════════════════════════════════ */
   return (
-    <Box sx={{ maxWidth: 720, mx: 'auto' }}>
-      <Typography variant="overline" color="text.secondary">Upload</Typography>
-      <Typography variant="h4" fontWeight={800} sx={{ mb: 3 }}>上传</Typography>
+    <Box sx={{ maxWidth: 840, mx: 'auto' }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+        <Box>
+          <Typography variant="overline" color="text.secondary">Upload</Typography>
+          <Typography variant="h4" fontWeight={800}>上传</Typography>
+        </Box>
+        <Button variant="text" startIcon={<RefreshIcon />} onClick={loadHistory} disabled={historyLoading}>
+          刷新
+        </Button>
+      </Box>
 
-      {!parsed && (
-        <Card variant="outlined"
-          onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-          onDragLeave={() => setDragOver(false)} onDrop={handleDrop}
-          onClick={() => fileInput.current?.click()}
-          sx={{ cursor: 'pointer', borderStyle: 'dashed', borderWidth: 2,
-            borderColor: dragOver ? 'primary.main' : 'divider',
-            bgcolor: dragOver ? '#eef2ff' : 'transparent', transition: 'all 0.2s' }}>
-          <CardContent sx={{ textAlign: 'center', py: 8 }}>
-            {getFileIcon()}
-            {file ? (
-              <>
-                <Typography variant="h6" gutterBottom>{file.name}</Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  {formatSize(file.size)} · {fileType === 'json' ? '组合 JSON' : '论文文件'}
-                </Typography>
-                {fileType === 'paper' && (
-                  <Button variant="contained" onClick={handleUploadPaper}
-                    disabled={uploading} startIcon={uploading ? <CircularProgress size={18} /> : <CloudUpload />}>
-                    {uploading ? '上传中…' : '上传论文'}
-                  </Button>
-                )}
-              </>
-            ) : (
-              <>
-                <Typography variant="h6" gutterBottom>拖拽文件到此处</Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  支持 JSON (组合) · PDF · TXT · MD (论文)
-                </Typography>
-              </>
-            )}
-            <input ref={fileInput} type="file" accept={ACCEPTED_STR} hidden onChange={handleFileChange} />
-            <Button variant="outlined" onClick={(e) => { e.stopPropagation(); fileInput.current?.click() }}>
-              选择文件
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+      {/* Tabs: Paper / JSON */}
+      <Tabs value={tab} onChange={(_, v) => { setTab(v); setFile(null); setError(''); setParsed(null); }}
+        sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}>
+        <Tab label="论文上传" />
+        <Tab label="组合导入 (JSON)" />
+      </Tabs>
 
-      {/* Upload list */}
-      {uploads.length > 0 && (
-        <Card variant="outlined" sx={{ mt: 2 }}>
-          <CardContent sx={{ pb: 1 }}>
-            <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
-              上传记录 ({uploads.length})
-            </Typography>
-            <TableContainer component={Paper} variant="outlined">
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>文件</TableCell>
-                    <TableCell sx={{ width: 80 }}>大小</TableCell>
-                    <TableCell sx={{ width: 60 }}>状态</TableCell>
-                    <TableCell sx={{ width: 100 }}>标题</TableCell>
-                    <TableCell sx={{ width: 80 }} align="right">操作</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {uploads.map(u => (
-                    <TableRow key={u.id}>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          {u.type === 'pdf' ? <PictureAsPdf fontSize="small" color="error" />
-                            : u.type === 'json' ? <Code fontSize="small" color="primary" />
-                            : <Description fontSize="small" color="info" />}
-                          <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>{u.name}</Typography>
+      {/* ── TAB 0: Paper upload ── */}
+      {tab === 0 && !parsed && (
+        <>
+          {/* Upload drop zone */}
+          <Card variant="outlined"
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+            onDragLeave={() => setDragOver(false)} onDrop={handleDrop}
+            onClick={() => fileInput.current?.click()}
+            sx={{
+              cursor: 'pointer', borderStyle: 'dashed', borderWidth: 2,
+              borderColor: dragOver ? 'primary.main' : 'divider',
+              bgcolor: dragOver ? '#eef2ff' : 'transparent', transition: 'all 0.2s',
+            }}>
+            <CardContent sx={{ textAlign: 'center', py: 6 }}>
+              {getFileIcon()}
+              {file ? (
+                <>
+                  <Typography variant="h6" gutterBottom>{file.name}</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    {formatSize(file.size)} · {fileType === 'json' ? '组合 JSON' : '论文文件'}
+                  </Typography>
+                  {fileType === 'paper' && (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                      <Button variant="contained" onClick={(e) => { e.stopPropagation(); handleUploadPaper() }}
+                        disabled={uploading}
+                        startIcon={uploading ? <CircularProgress size={18} /> : <CloudUpload />}>
+                        {uploading ? '上传中…' : '上传论文'}
+                      </Button>
+                      {uploading && (
+                        <Box sx={{ width: '100%', maxWidth: 320, mt: 1 }}>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                            <Typography variant="caption" color="text.secondary">上传进度</Typography>
+                            <Typography variant="caption" fontWeight={700}>{uploadProgress}%</Typography>
+                          </Box>
+                          <LinearProgress variant="determinate" value={uploadProgress}
+                            sx={{ height: 6, borderRadius: 3 }} />
                         </Box>
-                      </TableCell>
-                      <TableCell>{formatSize(u.size)}</TableCell>
-                      <TableCell>
-                        {u.status === 'uploading' ? <CircularProgress size={16} />
-                          : u.status === 'done' ? <Chip size="small" label="已上传" color="success" />
-                          : <Chip size="small" label="失败" color="error" />}
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" noWrap sx={{ maxWidth: 100 }}>
-                          {u.title || u.name}
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="right">
-                        <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
-                          {u.status === 'done' && u.paperId && (
-                            <Tooltip title="编辑"><IconButton size="small"
-                              onClick={() => handleEditOpen(u)}><Edit fontSize="small" /></IconButton></Tooltip>
-                          )}
-                          <Tooltip title="移除"><IconButton size="small"
-                            onClick={() => handleDeleteUpload(u.id)}><Delete fontSize="small" /></IconButton></Tooltip>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* JSON preview */}
-      {parsed && (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-          <Card variant="outlined">
-            <CardContent>
-              <Typography variant="h6" fontWeight={600} gutterBottom>组合预览</Typography>
-              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, mb: 2 }}>
-                <TextField label="组合名称" size="small" value={name} onChange={e => setName(e.target.value)} />
-                <TextField label="描述" size="small" value={description} onChange={e => setDescription(e.target.value)} />
-              </Box>
-              <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-                <Chip size="small" label={`${parsed.items.length} 个数据点`} variant="outlined" />
-                <Chip size="small" label={user ? '保存到数据库' : '保存到本地'} color={user ? 'primary' : 'default'} variant="outlined" />
-              </Box>
-              {parsed.items.length > 0 && (
-                <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 320 }}>
-                  <Table size="small" stickyHeader>
-                    <TableHead><TableRow>
-                      <TableCell>材料</TableCell><TableCell sx={{ width: 70 }}>Tc(K)</TableCell>
-                      <TableCell sx={{ width: 70 }}>P(GPa)</TableCell><TableCell sx={{ width: 70 }}>类型</TableCell>
-                    </TableRow></TableHead>
-                    <TableBody>
-                      {parsed.items.map((it: any, i: number) => (
-                        <TableRow key={i}>
-                          <TableCell><Typography variant="body2" noWrap sx={{ maxWidth: 180 }}>{it.material || it.label || it.custom_label || it.formula || '-'}</Typography></TableCell>
-                          <TableCell>{it.tc ?? it.custom_tc ?? it.value_max ?? '-'}</TableCell>
-                          <TableCell>{it.pressure ?? it.custom_pressure ?? '-'}</TableCell>
-                          <TableCell><Chip size="small" label={it.type ?? it.custom_type ?? it.superconductor_type ?? '-'} sx={{ fontSize: 10, height: 18 }} /></TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                      )}
+                    </Box>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Typography variant="h6" gutterBottom>拖拽文件到此处</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    支持 PDF · TXT · MD (超导论文)
+                  </Typography>
+                </>
               )}
+              <input ref={fileInput} type="file" accept={ACCEPTED_STR} hidden onChange={handleFileChange} />
+              <Button variant="outlined" onClick={(e) => { e.stopPropagation(); fileInput.current?.click() }}>
+                选择文件
+              </Button>
             </CardContent>
           </Card>
-          <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
-            <Button variant="outlined" onClick={() => { setParsed(null); setFile(null); setError('') }}>重新上传</Button>
-            <Button variant="contained" onClick={handleSaveGroup} disabled={saving || !name.trim()}
-              startIcon={saving ? <CircularProgress size={18} /> : <Check />}>{saving ? '保存中…' : '保存组合'}</Button>
+
+          {error && <Alert severity="error" sx={{ mt: 2 }} onClose={() => setError('')}>{error}</Alert>}
+
+          {/* Upload history */}
+          <Box sx={{ mt: 4 }}>
+            <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
+              上传记录
+              {uploads.length > 0 && (
+                <Chip size="small" label={uploads.length} sx={{ ml: 1, fontWeight: 700 }} />
+              )}
+            </Typography>
+
+            {historyLoading && <LinearProgress sx={{ mb: 2, borderRadius: 999 }} />}
+
+            {uploads.length === 0 && !historyLoading && (
+              <Card variant="outlined" sx={{ textAlign: 'center', py: 4 }}>
+                <Typography variant="body2" color="text.secondary">
+                  暂无上传记录。拖拽 PDF/TXT/MD 文件到上方区域开始上传。
+                </Typography>
+              </Card>
+            )}
+
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+              {uploads.map(record => {
+                const status = getDisplayStatus(record)
+                const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.pending
+                const sourcePath = record.source_file_path || ''
+                const fileName = sourcePath.replace(/^upload\//, '') || '-'
+                const isPdf = fileName.endsWith('.pdf')
+
+                return (
+                  <Card key={record.id} variant="outlined"
+                    sx={{
+                      cursor: 'pointer', transition: 'all 0.15s',
+                      '&:hover': { borderColor: 'primary.main', boxShadow: '0 2px 12px rgba(79,70,229,.08)' },
+                    }}
+                    onClick={() => handleDetailOpen(record.id)}>
+                    <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 2, '&:last-child': { pb: 2 } }}>
+                      {/* File icon */}
+                      <Box sx={{
+                        width: 44, height: 44, borderRadius: 2, display: 'flex', alignItems: 'center',
+                        justifyContent: 'center', bgcolor: isPdf ? '#fee2e2' : '#e0f2fe', flexShrink: 0,
+                      }}>
+                        {isPdf
+                          ? <PictureAsPdf sx={{ color: '#b3261e' }} />
+                          : <Description sx={{ color: '#0891b2' }} />}
+                      </Box>
+
+                      {/* Content */}
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography variant="body1" fontWeight={700} noWrap>
+                          {record.title || fileName}
+                        </Typography>
+                        <Box sx={{ display: 'flex', gap: 1.5, mt: 0.25, flexWrap: 'wrap' }}>
+                          <Typography variant="caption" color="text.secondary">
+                            {fileName}
+                          </Typography>
+                          {record.year && (
+                            <Typography variant="caption" color="text.secondary">
+                              {record.year}
+                            </Typography>
+                          )}
+                          <Typography variant="caption" color="text.secondary">
+                            {record.created_at ? new Date(record.created_at).toLocaleDateString('zh-CN') : '-'}
+                          </Typography>
+                        </Box>
+                      </Box>
+
+                      {/* Status + arrow */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
+                        <Chip
+                          size="small"
+                          label={cfg.label}
+                          color={cfg.color}
+                          sx={{ fontWeight: 700, minWidth: 72 }}
+                        />
+                        <ChevronRightIcon sx={{ color: 'text.disabled' }} />
+                      </Box>
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </Box>
           </Box>
-        </Box>
+        </>
       )}
 
-      {/* Edit dialog */}
-      <Dialog open={editDlg.open} onClose={() => setEditDlg({ open: false, item: null })} maxWidth="sm" fullWidth>
-        <DialogTitle>编辑论文信息</DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-          <TextField label="标题" size="small" fullWidth value={editTitle} onChange={e => setEditTitle(e.target.value)} />
-          <TextField label="DOI" size="small" fullWidth value={editDoi} onChange={e => setEditDoi(e.target.value)} />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditDlg({ open: false, item: null })}>取消</Button>
-          <Button variant="contained" onClick={handleEditSave} disabled={editSaving}>保存</Button>
-        </DialogActions>
-      </Dialog>
+      {/* ── TAB 1: JSON import ── */}
+      {tab === 1 && (
+        <>
+          {!parsed ? (
+            <Card variant="outlined"
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+              onDragLeave={() => setDragOver(false)} onDrop={handleDrop}
+              onClick={() => fileInput.current?.click()}
+              sx={{
+                cursor: 'pointer', borderStyle: 'dashed', borderWidth: 2,
+                borderColor: dragOver ? 'primary.main' : 'divider',
+                bgcolor: dragOver ? '#eef2ff' : 'transparent', transition: 'all 0.2s',
+              }}>
+              <CardContent sx={{ textAlign: 'center', py: 8 }}>
+                <Code sx={{ fontSize: 48, color: 'text.disabled', mb: 2 }} />
+                <Typography variant="h6" gutterBottom>导入 JSON 组合文件</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  需要包含 name 和 items 字段，用于 Tc-P 图表可视化
+                </Typography>
+                <input ref={fileInput} type="file" accept=".json" hidden onChange={handleFileChange} />
+                <Button variant="outlined" onClick={(e) => { e.stopPropagation(); fileInput.current?.click() }}>
+                  选择 JSON 文件
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Card variant="outlined">
+                <CardContent>
+                  <Typography variant="h6" fontWeight={600} gutterBottom>组合预览</Typography>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, mb: 2 }}>
+                    <TextField label="组合名称" size="small" value={name}
+                      onChange={e => setName(e.target.value)} />
+                    <TextField label="描述" size="small" value={description}
+                      onChange={e => setDescription(e.target.value)} />
+                  </Box>
+                  <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+                    <Chip size="small" label={`${parsed.items.length} 个数据点`} variant="outlined" />
+                    <Chip size="small" label={user ? '保存到数据库' : '保存到本地'}
+                      color={user ? 'primary' : 'default'} variant="outlined" />
+                  </Box>
+                  {parsed.items.length > 0 && (
+                    <Paper variant="outlined" sx={{ maxHeight: 320, overflow: 'auto' }}>
+                      <Box component="table" sx={{
+                        width: '100%', borderCollapse: 'collapse', fontSize: 13,
+                      }}>
+                        <Box component="thead">
+                          <Box component="tr">
+                            {['材料', 'Tc(K)', 'P(GPa)', '类型'].map(h => (
+                              <Box key={h} component="th" sx={{
+                                p: '8px 12px', borderBottom: '2px solid', borderColor: 'divider',
+                                textAlign: 'left', color: 'text.secondary', fontSize: 12,
+                                whiteSpace: 'nowrap',
+                              }}>{h}</Box>
+                            ))}
+                          </Box>
+                        </Box>
+                        <Box component="tbody">
+                          {parsed.items.map((it: any, i: number) => (
+                            <Box component="tr" key={i}>
+                              <Box component="td" sx={{ p: '8px 12px', borderBottom: '1px solid', borderColor: 'divider' }}>
+                                <Typography variant="body2" noWrap sx={{ maxWidth: 180 }}>
+                                  {it.material || it.label || it.custom_label || it.formula || '-'}
+                                </Typography>
+                              </Box>
+                              <Box component="td" sx={{ p: '8px 12px', borderBottom: '1px solid', borderColor: 'divider' }}>
+                                {it.tc ?? it.custom_tc ?? it.value_max ?? '-'}
+                              </Box>
+                              <Box component="td" sx={{ p: '8px 12px', borderBottom: '1px solid', borderColor: 'divider' }}>
+                                {it.pressure ?? it.custom_pressure ?? '-'}
+                              </Box>
+                              <Box component="td" sx={{ p: '8px 12px', borderBottom: '1px solid', borderColor: 'divider' }}>
+                                <Chip size="small"
+                                  label={it.type ?? it.custom_type ?? it.superconductor_type ?? '-'}
+                                  sx={{ fontSize: 10, height: 18 }} />
+                              </Box>
+                            </Box>
+                          ))}
+                        </Box>
+                      </Box>
+                    </Paper>
+                  )}
+                </CardContent>
+              </Card>
+              <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                <Button variant="outlined" onClick={() => { setParsed(null); setFile(null); setError('') }}>
+                  重新上传
+                </Button>
+                <Button variant="contained" onClick={handleSaveGroup} disabled={saving || !name.trim()}
+                  startIcon={saving ? <CircularProgress size={18} /> : <Check />}>
+                  {saving ? '保存中…' : '保存组合'}
+                </Button>
+              </Box>
+            </Box>
+          )}
+          {error && <Alert severity="error" sx={{ mt: 2 }} onClose={() => setError('')}>{error}</Alert>}
+        </>
+      )}
 
-      {uploading && <LinearProgress sx={{ mt: 2 }} />}
-      {error && <Alert severity="error" sx={{ mt: 2 }} onClose={() => setError('')}>{error}</Alert>}
-      <Snackbar open={!!snackbar} autoHideDuration={2000} onClose={() => setSnackbar('')}>
+      <Snackbar open={!!snackbar} autoHideDuration={3000} onClose={() => setSnackbar('')}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
         <Alert severity="success" variant="filled">{snackbar}</Alert>
       </Snackbar>
     </Box>
