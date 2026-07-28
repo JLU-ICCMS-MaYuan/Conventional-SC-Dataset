@@ -1,4 +1,4 @@
-"""Chroma 向量搜索工具 — 论文正文语义检索"""
+"""向量搜索工具 — 论文正文语义检索（Qdrant 后端）。"""
 
 from __future__ import annotations
 

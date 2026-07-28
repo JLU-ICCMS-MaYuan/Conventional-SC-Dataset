@@ -1,59 +1,65 @@
 """
-向量数据库模块（Chroma 封装）。
+向量数据库模块（Qdrant 封装）。
 
-Chroma 是一个本地向量数据库：
-- 数据存在本地文件系统，不需要单独起服务
-- PersistentClient 同步操作，适合摄入管线和搜索场景
-- 每个 document 存 chunk 文本 + metadata（paper_id, chunk_index 等）
+通过 Qdrant gRPC/HTTP API 提供高并发向量搜索能力：
+- 默认连接本地 Qdrant 服务 (http://127.0.0.1:6333)
+- 每个集合对应一个 Qdrant collection
+- 搜索返回 cosine distance，越小越相似
 
 搜索流程：
-  用户问题 → embedding API → 向量 → Chroma query → 返回相关 chunks
+  用户问题 → embedding API → 向量 → Qdrant search → 返回相关文档
 """
 
 from __future__ import annotations
 
-import chromadb
-import threading
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, PointStruct, VectorParams
 
 from backend.rag.config import settings as rag_settings
-from chromadb.config import Settings
 
-CHROMA_DIR = rag_settings.chroma_path
-
+# ── 默认集合名 ───────────────────────────────────────────────────────────
 COLLECTION_NAME = "paper_chunks"
 REVIEW_COLLECTION_NAME = "review_chunks"
 
-_thread_local = threading.local()
+# ── Qdrant 客户端（全局单例，线程安全）───────────────────────────────────
+
+_client: QdrantClient | None = None
 
 
-def _get_client() -> chromadb.PersistentClient:
-    """获取线程安全的 PersistentClient。每个线程独立实例。"""
-    if not hasattr(_thread_local, "client") or _thread_local.client is None:
-        _thread_local.client = chromadb.PersistentClient(
-            path=str(CHROMA_DIR),
-            settings=Settings(anonymized_telemetry=False),
+def _get_client() -> QdrantClient:
+    """获取 Qdrant 客户端单例。
+
+    QdrantClient 内置连接池，线程安全，无需每个线程独立实例。
+    """
+    global _client
+    if _client is None:
+        _client = QdrantClient(
+            host=rag_settings.qdrant_host,
+            port=rag_settings.qdrant_port,
         )
-    return _thread_local.client
+    return _client
 
 
-def _get_collection(name: str = COLLECTION_NAME):
-    """获取 collection，不存在则创建。"""
+def _ensure_collection(name: str, dim: int = 1536) -> None:
+    """确保集合存在，不存在则创建。"""
     client = _get_client()
     try:
-        return client.get_collection(name)
+        client.get_collection(name)
     except Exception:
-        return client.create_collection(
-            name=name,
-            metadata={"hnsw:space": "cosine"},
+        client.create_collection(
+            collection_name=name,
+            vectors_config=VectorParams(size=dim, distance=Distance.COSINE),
         )
 
+
+# ── 公共 API（与旧 ChromaDB 接口兼容）───────────────────────────────────
 
 def add_chunks(
     chunks: list[dict],
     embeddings: list[list[float]],
     collection: str = COLLECTION_NAME,
 ) -> list[str]:
-    """批量添加 chunks 到 Chroma。
+    """批量添加文档块到 Qdrant。
 
     Args:
         chunks: [{"id": str, "paper_id": int, "chunk_index": int,
@@ -64,25 +70,25 @@ def add_chunks(
     Returns:
         添加成功的 chunk id 列表
     """
-    col = _get_collection(collection)
-    ids = [str(c["id"]) for c in chunks]
-    documents = [c["content"] for c in chunks]
-    metadatas = [
-        {
+    dim = len(embeddings[0]) if embeddings else 1536
+    _ensure_collection(collection, dim)
+
+    points = []
+    ids_out = []
+    for i, c in enumerate(chunks):
+        cid = str(c["id"])
+        payload = {
+            "document": c["content"],
             "paper_id": str(c["paper_id"]),
             "chunk_index": c["chunk_index"],
             "section_name": c.get("section_name", ""),
         }
-        for c in chunks
-    ]
+        point_id = int(cid) if cid.isdigit() else abs(hash(cid)) % (10 ** 15)
+        points.append(PointStruct(id=point_id, vector=embeddings[i], payload=payload))
+        ids_out.append(cid)
 
-    col.add(
-        ids=ids,
-        embeddings=embeddings,
-        documents=documents,
-        metadatas=metadatas,
-    )
-    return ids
+    _get_client().upsert(collection_name=collection, points=points)
+    return ids_out
 
 
 def search_chunks(
@@ -97,37 +103,44 @@ def search_chunks(
         query_embedding: 用户问题的向量
         top_k: 返回多少条
         where: 过滤条件，如 {"paper_id": "42"}
-        collection: 搜索的集合名，默认 paper_chunks
+        collection: 搜索的集合名
 
     Returns:
         [{"id": str, "paper_id": int, "chunk_index": int,
           "section_name": str, "content": str, "distance": float}, ...]
     """
-    col = _get_collection(collection)
-    results = col.query(
-        query_embeddings=[query_embedding],
-        n_results=top_k,
-        where=where,
-        include=["documents", "metadatas", "distances"],
-    )
+    client = _get_client()
+
+    # 构建 Qdrant 过滤条件
+    query_filter = None
+    if where:
+        from qdrant_client.models import Filter, FieldCondition, MatchValue
+        conditions = []
+        for key, value in where.items():
+            conditions.append(
+                FieldCondition(key=key, match=MatchValue(value=str(value)))
+            )
+        if conditions:
+            query_filter = Filter(must=conditions)
+
+    results = client.query_points(
+        collection_name=collection,
+        query=query_embedding,
+        limit=top_k,
+        query_filter=query_filter,
+        with_payload=True,
+    ).points
 
     out = []
-    if not results["ids"]:
-        return out
-
-    ids = results["ids"][0]
-    documents = results["documents"][0]
-    metadatas = results["metadatas"][0]
-    distances = results["distances"][0]
-
-    for i in range(len(ids)):
+    for r in results:
+        payload = r.payload or {}
         out.append({
-            "id": ids[i],
-            "paper_id": int(metadatas[i]["paper_id"]),
-            "chunk_index": metadatas[i]["chunk_index"],
-            "section_name": metadatas[i].get("section_name", ""),
-            "content": documents[i],
-            "distance": distances[i] if distances[i] is not None else 0.0,
+            "id": str(r.id),
+            "paper_id": int(payload.get("paper_id", 0)),
+            "chunk_index": payload.get("chunk_index", 0),
+            "section_name": payload.get("section_name", ""),
+            "content": payload.get("document", ""),
+            "distance": r.score if r.score is not None else 0.0,
         })
 
     return out
@@ -135,8 +148,15 @@ def search_chunks(
 
 def delete_paper_chunks(paper_id: int, collection: str = COLLECTION_NAME) -> None:
     """删除某篇论文的所有 chunks。"""
-    col = _get_collection(collection)
-    col.delete(where={"paper_id": str(paper_id)})
+    client = _get_client()
+    from qdrant_client.models import Filter, FieldCondition, MatchValue
+
+    client.delete(
+        collection_name=collection,
+        points_selector=Filter(
+            must=[FieldCondition(key="paper_id", match=MatchValue(value=str(paper_id)))]
+        ),
+    )
 
 
 def get_chunks(
@@ -144,27 +164,64 @@ def get_chunks(
     include_embeddings: bool = False,
     collection: str = COLLECTION_NAME,
 ) -> dict:
-    """从集合中获取 chunks（可选含 embedding 向量）。
+    """从集合中获取 chunks（含 payload）。
 
     Args:
         where: 过滤条件，如 {"paper_id": "42"}
-        include_embeddings: 是否返回 embedding 向量
+        include_embeddings: 是否返回向量（Qdrant 不支持通过 filter 获取向量）
         collection: 集合名
 
     Returns:
-        {"ids": [...], "documents": [...], "metadatas": [...], "embeddings": [...]}
+        {"ids": [...], "documents": [...], "metadatas": [...]}
     """
-    col = _get_collection(collection)
-    include = ["documents", "metadatas"]
+    client = _get_client()
+    from qdrant_client.models import Filter, FieldCondition, MatchValue
+
+    conditions = []
+    for key, value in where.items():
+        conditions.append(
+            FieldCondition(key=key, match=MatchValue(value=str(value)))
+        )
+
+    # Scroll 获取所有匹配的点
+    records, _ = client.scroll(
+        collection_name=collection,
+        scroll_filter=Filter(must=conditions) if conditions else None,
+        with_payload=True,
+        with_vectors=include_embeddings,
+        limit=10000,
+    )
+
+    ids = []
+    documents = []
+    metadatas = []
+    embeddings = []
+
+    for r in records:
+        ids.append(str(r.id))
+        payload = r.payload or {}
+        documents.append(payload.get("document", ""))
+        metadatas.append({
+            k: v for k, v in payload.items()
+            if k != "document"
+        })
+        if include_embeddings and r.vector:
+            embeddings.append(r.vector)
+
+    result = {"ids": ids, "documents": documents, "metadatas": metadatas}
     if include_embeddings:
-        include.append("embeddings")
-    return col.get(where=where, include=include)
+        result["embeddings"] = embeddings
+    return result
 
 
 def collection_stats(collection: str = COLLECTION_NAME) -> dict:
-    """返回 collection 统计信息。"""
-    col = _get_collection(collection)
-    return {
-        "name": col.name,
-        "count": col.count(),
-    }
+    """返回集合统计信息。"""
+    client = _get_client()
+    try:
+        info = client.get_collection(collection)
+        return {
+            "name": collection,
+            "count": info.points_count,
+        }
+    except Exception:
+        return {"name": collection, "count": 0}

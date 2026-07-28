@@ -17,6 +17,11 @@ class RagSettings(BaseSettings):
     rag_database_url: str | None = None
     rag_chroma_path: Path | None = None
 
+    # Qdrant 配置
+    qdrant_host: str = "127.0.0.1"
+    qdrant_port: int = 6333
+    qdrant_grpc_port: int = 6334
+
     deepseek_api_key: str = ""
     deepseek_base_url: str = "https://api.deepseek.com"
     deepseek_model: str = "deepseek-chat"
@@ -66,11 +71,9 @@ class RagSettings(BaseSettings):
 
     @property
     def chroma_path(self) -> Path:
+        """已废弃 - ChromaDB 已迁移至 Qdrant。保留以兼容旧配置。"""
         if self.rag_chroma_path is not None:
             return self.rag_chroma_path.expanduser().resolve()
-        env_path = os.environ.get("RAG_CHROMA_PATH")
-        if env_path:
-            return Path(env_path).expanduser().resolve()
         return self.data_root / "data" / "chroma_db"
 
     @property

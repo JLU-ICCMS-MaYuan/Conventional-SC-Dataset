@@ -42,9 +42,19 @@ def _loads_json(value: str | None, fallback: Any) -> Any:
 def health() -> dict[str, Any]:
     settings = get_rag_settings()
     database_available = settings.database_available
-    chroma_available = settings.chroma_path.exists()
+
+    # 检查 Qdrant 连接
+    qdrant_available = False
+    try:
+        from qdrant_client import QdrantClient
+        client = QdrantClient(host=settings.qdrant_host, port=settings.qdrant_port)
+        client.get_collections()
+        qdrant_available = True
+    except Exception:
+        pass
+
     chat_available = settings.chat_configured
-    available = database_available and chroma_available
+    available = database_available and qdrant_available
 
     if not available:
         message = "AI 文献助手数据不可用"
@@ -56,7 +66,7 @@ def health() -> dict[str, Any]:
     return {
         "available": available,
         "database_available": database_available,
-        "chroma_available": chroma_available,
+        "qdrant_available": qdrant_available,
         "chat_available": chat_available,
         "message": message,
     }
@@ -222,16 +232,16 @@ async def stats() -> dict[str, Any]:
             )).all()
 
         try:
-            chroma_chunks = collection_stats().get("count", 0)
+            qdrant_chunks = collection_stats().get("count", 0)
         except Exception:
-            chroma_chunks = 0
+            qdrant_chunks = 0
 
         return {
             "papers": paper_count,
             "superconductors": sc_count,
             "records": record_count,
             "chunks": chunk_count,
-            "chroma_chunks": chroma_chunks,
+            "qdrant_chunks": qdrant_chunks,
             "chemical_systems": sys_count,
             "paper_types": {row[0] or "unknown": row[1] for row in paper_type_rows},
         }
