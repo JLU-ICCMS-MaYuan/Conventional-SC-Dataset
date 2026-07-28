@@ -2,8 +2,10 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"time"
 
 	"scwiki/server/config"
 	"scwiki/server/database"
@@ -52,9 +54,8 @@ func main() {
 	}
 
 	// 管理员路由组
-	// Group 类似 FastAPI 的 APIRouter(prefix="/api/admin")
 	admin := r.Group("/api/admin")
-	admin.Use(middleware.AuthRequired) // 组级中间件 = 所有子路由都要验证
+	admin.Use(middleware.AuthRequired, middleware.AdminRequired)
 	{
 		admin.GET("/papers/all", handlers.GetPapers)
 		admin.GET("/papers/:id", handlers.GetPaperDetail)
@@ -70,9 +71,16 @@ func main() {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
-	// 7. 反向代理：转发未匹配请求到 Python
-	pyURL, _ := url.Parse("http://127.0.0.1:8000")
+	// 7. 反向代理：转发未匹配请求到 Python（配置连接池）
+	pyURL, _ := url.Parse(cfg.PythonBackend)
 	proxy := httputil.NewSingleHostReverseProxy(pyURL)
+	proxy.Transport = &http.Transport{
+		MaxIdleConns:          100,
+		MaxIdleConnsPerHost:   100,
+		MaxConnsPerHost:       200,
+		IdleConnTimeout:       90 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+	}
 	r.NoRoute(func(c *gin.Context) {
 		proxy.ServeHTTP(c.Writer, c.Request)
 	})

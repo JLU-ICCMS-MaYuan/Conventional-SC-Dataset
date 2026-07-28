@@ -16,7 +16,7 @@ from sqlalchemy import create_engine, text as sqla_text
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 CLEAN_DIR = Path(__file__).resolve().parents[1] / "data" / "clean_results"
-DEV_DB = Path("/home/work/workshop/git/SC-Wiki-modules/dev.db")
+DEV_DB = BASE_DIR / "data" / "dev.db"
 from backend.database import DATABASE_URL as MYSQL_URL
 
 PROMPT = """你是超导材料研究专家。请根据以下论文信息完成七项分析。

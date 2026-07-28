@@ -9,7 +9,7 @@ from fastapi import APIRouter, Query
 
 router = APIRouter(prefix="/api/knowledge-graph", tags=["knowledge-graph"])
 
-GRAPH_FILE = Path("/home/work/workshop/bak/graph.json")
+GRAPH_FILE = Path(__file__).resolve().parents[2] / "data" / "graph.json"
 
 RELATION_LABELS = {
     "first_discovery": "首次发现",

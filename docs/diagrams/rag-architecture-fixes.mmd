@@ -1,0 +1,53 @@
+flowchart TB
+    subgraph entry["入口 - rag.py"]
+        API["/api/rag/chat/stream"]
+        Explore["explore=true?"]
+    end
+
+    subgraph route["service.py - P1 手动if分支"]
+        SVC["chat_stream()"]
+        Note1["P1 应改为统一路由表"]
+    end
+
+    Explore -->|true| IG_Entry
+    Explore -->|false| MG_Entry
+
+    subgraph MG["Mentor Graph"]
+        MG_Entry["mentor_node"]
+        Tools["7 Tool - P2 结果无截断 - P3 无参数校验"]
+        MG_Router["router"]
+        MG_Entry --> Tools
+        Tools --> MG_Router
+        MG_Router -->|tool| MG_Entry
+    end
+
+    subgraph IG["Inspiration Graph"]
+        IG_Entry["Stage1 clarify"]
+        IG_Router["design_router"]
+        IG_Search["design_search"]
+        IG_Curator["design_curator"]
+        IG_Evidence["design_evidence - P4 marker脆弱"]
+        IG_Discuss["Stage3 discuss"]
+        IG_Entry --> IG_Router
+        IG_Router --> IG_Search
+        IG_Search --> IG_Curator
+        IG_Curator --> IG_Evidence
+        IG_Evidence --> IG_Discuss
+        IG_Discuss -->|REVISE| IG_Router
+    end
+
+    subgraph store["检索层"]
+        QD[("Qdrant")]
+        MS[("MySQL")]
+        N4[("Neo4j")]
+    end
+
+    subgraph fixes["P5-P6 外部依赖"]
+        P5["P5 DeepSeek/Embedding 无限流无重试"]
+        P6["P6 无HyDE查询重写 - 口语直搜"]
+    end
+
+    Tools --> MS
+    Tools --> N4
+    Tools --> QD
+    IG_Search --> QD

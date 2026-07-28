@@ -10,6 +10,7 @@ import (
 	"scwiki/server/models"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // ═══════════════════════════════════════════════
@@ -426,7 +427,22 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	// TODO: 验证密码（bcrypt）
+	// 验证密码（bcrypt）
+	if user.PasswordHash == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "账号未设置密码，请通过注册流程创建"})
+		return
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(body.Password)); err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "邮箱或密码错误"})
+		return
+	}
+
+	// 检查审批状态
+	if !user.IsApproved {
+		c.JSON(http.StatusForbidden, gin.H{"error": "账号尚未通过审批"})
+		return
+	}
+
 	token, err := middleware.GenerateToken(user.Email)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "生成 token 失败"})

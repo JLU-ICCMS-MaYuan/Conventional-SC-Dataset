@@ -5,6 +5,9 @@ import (
 	"strings"
 	"time"
 
+	"scwiki/server/database"
+	"scwiki/server/models"
+
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -63,5 +66,22 @@ func AuthRequired(c *gin.Context) {
 
 // AdminRequired 管理员权限检查（需在 AuthRequired 之后）
 func AdminRequired(c *gin.Context) {
-	c.Next() // 暂时放行，后续查 DB 验证角色
+	email, exists := c.Get("user_email")
+	if !exists {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+		return
+	}
+
+	var user models.User
+	if err := database.DB.Where("email = ?", email).First(&user).Error; err != nil {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "用户不存在"})
+		return
+	}
+
+	if user.Role != "admin" && user.Role != "superadmin" {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "需要管理员权限"})
+		return
+	}
+
+	c.Next()
 }

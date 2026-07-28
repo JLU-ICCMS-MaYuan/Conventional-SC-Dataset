@@ -49,13 +49,25 @@ async def ingest_pdf(file_path: Path, original_filename: str, uploaded_by_user_i
 
     if paper_id:
         from backend.ingest.embedder import chunk_and_embed
-        await asyncio.gather(
-            asyncio.to_thread(chunk_and_embed, text, paper_id),
-            _enrich_and_ingest(paper_id),
-        )
+        # 后台异步：不阻塞上传响应
+        asyncio.create_task(_background_enrich(text, paper_id))
 
     return {
         "status": "ok",
         "paper_id": paper_id,
         "title": result.paper.get("title"),
     }
+
+
+async def _background_enrich(text: str, paper_id: int) -> None:
+    """后台富化：向量化 + LLM 深度分析，失败不影响已入库的论文"""
+    from backend.ingest.embedder import chunk_and_embed
+
+    try:
+        await asyncio.gather(
+            asyncio.to_thread(chunk_and_embed, text, paper_id),
+            _enrich_and_ingest(paper_id),
+        )
+        print(f"  [管线] paper_id={paper_id} 后台富化完成")
+    except Exception as exc:
+        print(f"  [管线] paper_id={paper_id} 后台富化失败: {exc}")

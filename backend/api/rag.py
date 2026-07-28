@@ -9,18 +9,71 @@ from pathlib import Path
 from typing import Any, Literal
 
 import anyio
-from fastapi import APIRouter, File, Header, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, Header, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from jose import jwt
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from backend.rag import service
-
+from backend.security import SECRET_KEY as JWT_SECRET
 
 router = APIRouter(prefix="/api/rag", tags=["rag"])
 
-JWT_SECRET = os.getenv("JWT_SECRET_KEY", "fallback-insecure-key-for-dev-only")
+UPLOAD_DIR = Path(__file__).resolve().parents[2] / "data" / "uploads"
+
+
+def _save_upload(file: UploadFile, filename: str) -> Path:
+    """保存上传文件到持久目录"""
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    dest = UPLOAD_DIR / filename
+    with open(dest, "wb") as f:
+        f.write(file.file.read())
+    file.file.seek(0)
+    return dest
+
+
+async def _process_upload_background(
+    file_path: Path, filename: str, user_id: int | None, is_text: bool
+) -> None:
+    """后台处理上传文件：提取→入库→富化→向量化"""
+    try:
+        from backend.ingest.pipeline import ingest_pdf
+        from backend.ingest.extractor import extract_from_markdown
+        from backend.ingest.store_papers import store_extraction
+        from backend.rag.database import async_session_factory
+
+        if is_text:
+            content = file_path.read_text()
+            result = extract_from_markdown(content)
+            async with async_session_factory() as session:
+                paper_id = await store_extraction(result, f"upload/{filename}", session, uploaded_by_user_id=user_id)
+            if paper_id:
+                from backend.ingest.embedder import chunk_and_embed
+                import asyncio as _asyncio
+                _asyncio.create_task(_background_enrich_text(content, paper_id))
+        else:
+            await ingest_pdf(file_path, filename, uploaded_by_user_id=user_id)
+
+        # 清理上传文件
+        await anyio.Path(file_path).unlink(missing_ok=True)
+        print(f"  [上传] {filename} 后台处理完成")
+    except Exception as exc:
+        print(f"  [上传] {filename} 后台处理失败: {exc}")
+
+
+async def _background_enrich_text(text: str, paper_id: int) -> None:
+    """文本上传的富化"""
+    try:
+        import asyncio as _asyncio
+        from backend.ingest.embedder import chunk_and_embed
+        from backend.ingest.pipeline import _enrich_and_ingest
+        await _asyncio.gather(
+            _asyncio.to_thread(chunk_and_embed, text, paper_id),
+            _enrich_and_ingest(paper_id),
+        )
+    except Exception as exc:
+        print(f"  [上传] paper_id={paper_id} 富化失败: {exc}")
 
 
 def _get_user_id_from_token(authorization: str | None) -> int | None:
@@ -237,6 +290,7 @@ async def rag_superconductor_detail(superconductor_id: int):
 
 @router.post("/upload-pdf")
 async def rag_upload_pdf(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     authorization: str | None = Header(None),
 ):
@@ -245,52 +299,68 @@ async def rag_upload_pdf(
         raise HTTPException(status_code=400, detail="只支持 PDF 文件")
 
     user_id = _get_user_id_from_token(authorization)
-    suffix = Path(filename).suffix or ".pdf"
-    temp_path: Path | None = None
-    try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            temp_path = Path(tmp.name)
-            while chunk := await file.read(1024 * 1024):
-                tmp.write(chunk)
-        data = await service.upload_pdf(temp_path, filename, uploaded_by_user_id=user_id)
-    except Exception as exc:
-        raise _map_internal_error(exc) from exc
-    finally:
-        if temp_path is not None:
-            await anyio.Path(temp_path).unlink(missing_ok=True)
-        await file.close()
 
-    return {"ok": True, "data": data}
+    # 1. 立即保存文件
+    dest = _save_upload(file, filename)
+
+    # 2. 创建占位论文记录（无元数据 → 前端显示"解析中"）
+    try:
+        from backend.rag.database import async_session_factory
+        from backend.rag.models import Paper
+        async with async_session_factory() as session:
+            paper = Paper(
+                title=filename,
+                source_file_path=f"upload/{filename}",
+                review_status="pending",
+                uploaded_by_user_id=user_id,
+            )
+            session.add(paper)
+            await session.commit()
+            paper_id = paper.id
+    except Exception:
+        paper_id = None
+
+    # 3. 后台处理
+    background_tasks.add_task(_process_upload_background, dest, filename, user_id, is_text=False)
+
+    return {"ok": True, "paper_id": paper_id, "status": "parsing", "filename": filename}
 
 
 @router.post("/upload-text")
 async def rag_upload_text(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     authorization: str | None = Header(None),
 ):
-    """上传 TXT/MD 文本文件，从 extractor 开始走摄入管线"""
+    """上传 TXT/MD 文本文件，保存后后台处理"""
     filename = file.filename or "uploaded.txt"
     suffix = Path(filename).suffix.lower()
     if suffix not in (".txt", ".md"):
         raise HTTPException(status_code=400, detail="只支持 TXT/MD 文件")
 
-    try:
-        content = (await file.read()).decode("utf-8")
-    except UnicodeDecodeError:
-        try:
-            await file.seek(0)
-            content = (await file.read()).decode("gbk")
-        except Exception:
-            raise HTTPException(status_code=400, detail="无法解码文件内容，请使用 UTF-8 编码")
-    finally:
-        await file.close()
-
     user_id = _get_user_id_from_token(authorization)
-    from backend.ingest.extractor import extract_from_markdown
-    from backend.ingest.store_papers import store_extraction
-    from backend.rag.database import async_session_factory
 
-    result = extract_from_markdown(content)
-    async with async_session_factory() as session:
-        paper_id = await store_extraction(result, filename, session, uploaded_by_user_id=user_id)
-        return {"ok": True, "paper_id": paper_id, "title": result.paper.get("title", "")}
+    # 1. 立即保存文件
+    dest = _save_upload(file, filename)
+
+    # 2. 创建占位论文记录
+    try:
+        from backend.rag.database import async_session_factory
+        from backend.rag.models import Paper
+        async with async_session_factory() as session:
+            paper = Paper(
+                title=filename,
+                source_file_path=f"upload/{filename}",
+                review_status="pending",
+                uploaded_by_user_id=user_id,
+            )
+            session.add(paper)
+            await session.commit()
+            paper_id = paper.id
+    except Exception:
+        paper_id = None
+
+    # 3. 后台处理
+    background_tasks.add_task(_process_upload_background, dest, filename, user_id, is_text=True)
+
+    return {"ok": True, "paper_id": paper_id, "status": "parsing", "filename": filename}

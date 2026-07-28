@@ -2,7 +2,36 @@
 - [x] 管理员界面（论文审核/用户管理/图表管理）
 - [x] 上传界面（PDF/TXT/MD/JSON → 管线）
 - [x] 图表界面（散点图+组合管理+CSV映射+AI兜底）
-- [ ] 修复 RAG bug
-- [ ] Chroma 工作方式梳理/修复
+- [x] 修复 RAG bug
+- [x] Chroma → Qdrant 向量数据库迁移（19 集合 / 79,425 条 / 并发提升 10x）
 - [x] 知识图谱可视化（KnowledgeGraphPage + Neo4j 同步）
 - [x] 物性名 CSV 映射 + AI 追加
+--------------------------------------------RAG----------------------------------------
+- [ ] RAG 父子索引：小粒度检索 + 大粒度喂 LLM（chunk 已有 paper_id/section_name 元数据基础）
+- [ ] RAG 模式重写：统一普通模式(Mentor) + 灵感模式(Inspiration) 两套状态机入口
+- [ ] RAG 提示词重写：各状态机 Prompt 从旧 core/prompts.py 迁移到 agent/ 内部
+- [ ] RAG 拼接语序调整：上下文构造层统一为 System→DB概况→结构化数据→文献片段→历史→问题
+- [ ] RAG 记忆力机制改进：Inspiration 会话状态从消息内 marker 改为服务端存储（Redis/DB 会话表）
+- [ ] RAG Tool 结果裁剪：Mentor 模式下 ToolMessage 原样拼接 → 增加摘要/截断，防上下文噪声堆积
+- [ ] RAG 安全防护：System Prompt 加固 + 检索结果清洗（防间接注入）+ 输入正则检测
+- [ ] RAG Tool 安全控制：参数注入防护（正则校验+clamp）+ 输出硬截断（≤5条/≤2000字）+ 公开/登录权限分层
+- [ ] 限流系统：/rag/chat/stream 用户级令牌桶（3次/分钟）+ LLM API 调用队列 + 全局限流兜底
+- [ ] Go 后端迁移 Phase 1：补齐密码验证 + 注册/邮箱验证
+- [ ] Go 后端迁移 Phase 2：元素/周期表/化学式搜索 API
+- [ ] 热点首页（HomePage）完成
+- [ ] 登录认证流程闭环
+--------------------------------------------架构问题--------------------------------------------
+- [x] Go 登录密码 bcrypt 校验：Login handler 补充 bcrypt.CompareHashAndPassword + is_approved 检查 + AdminRequired 实现并挂载到路由组 [8464b51]
+- [x] Go 代理连接池：MaxIdleConnsPerHost=100 + MaxConnsPerHost=200 + ResponseHeaderTimeout=30s
+- [x] uvicorn --workers 4：Python 侧多 worker 匹配 Go 并发能力
+- [x] 前端 Vite 代理目标：8000→8080 统一入口 [8464b51]
+- [ ] 配置安全加固：移除 Go/Python DSN 默认凭据(work:12345678)，JWT_SECRET_KEY 缺失时启动失败而非用 fallback-insecure-key
+- [ ] Go/Python 职责边界统一：Go admin 路由弱权限(仅 AuthRequired) vs Python admin API 正确实现(get_current_admin/superadmin)。方案：Go 仅保留业务 API + 认证代理，admin 操作全部走 Python
+- [ ] 外部依赖降级：Neo4j(rag/tools/neo4j.py 无任何 try/except)、DeepSeek(enrich_papers 有 timeout=120 但无重试)、Embedding API(embedder.py 无 timeout/重试)、Qdrant(无连接池配置) — 需要重试+退避+备选路径
+- [ ] 双 ORM 统一：backend/models.py(Column 旧式,25+列) vs backend/rag/models/(Mapped 2.0,14列) 同一张 papers/key_properties/users 表有两套不同定义，schema drift 风险高
+- [ ] 遗留代码清理：ingest/bak/ 9个废弃脚本(含 /home/work/ 硬编码路径且引用不存在的模块) + data/clean_results copy/ 8MB 冗余副本
+- [ ] Docker Compose：一键启动 MySQL + Neo4j + Qdrant + Go + Python
+- [ ] /api/admin/stats 无认证公开暴露用户数/论文数/待审批数 — 加 AuthRequired 中间件
+- [ ] Go paper delete 无存在性检查：DeletePaper 不检查记录是否存在，始终返回 200 "已删除"
+- [ ] Go 注册端点缺失：无 POST /api/auth/register，注册流程完全依赖 Python 入口（但 Python 有 hash_password 正确实现）
+--------------------------------------------mysql web--------------------------------------------
