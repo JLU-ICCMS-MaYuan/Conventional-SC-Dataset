@@ -50,6 +50,9 @@ temp/
 *.tmp
 *:Zone.Identifier
 
+# 遗留代码
+legacy/
+
 #AI
 AGENTS.md
 CLI_GUIDE.md

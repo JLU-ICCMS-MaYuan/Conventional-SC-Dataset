@@ -19,7 +19,9 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # JWT 配置
 # 从环境变量读取密钥，生产环境必须设置
-SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "fallback-insecure-key-for-dev-only")
+SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError("JWT_SECRET_KEY 环境变量未设置，拒绝以不安全默认值启动")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 60  # Token 有效期：60天
 

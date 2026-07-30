@@ -8,9 +8,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 
-# v2 库：papers 富化列 + key_properties 通用物性表（由 rebuild_from_clean_results.py 重建）
-DEFAULT_DATABASE_URL = "mysql+pymysql://work:12345678@127.0.0.1:3306/superconductor_dataset_v2?charset=utf8mb4"
-DATABASE_URL = os.environ.get("DATABASE_URL", DEFAULT_DATABASE_URL)
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL 环境变量未设置，拒绝以不安全默认值启动")
 
 engine = create_engine(
     DATABASE_URL,

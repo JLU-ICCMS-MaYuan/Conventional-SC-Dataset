@@ -51,7 +51,7 @@
 
 ━━━ 数据访问层 (ORM / 存储接口) ━━━
 - [x] Go UpdatePaper 支持 key_properties 增删改 + 审查校验 [8464b51]
-- [ ] 双 ORM 统一：models.py(25列) vs rag/models/(14列) — 同表两套定义，schema drift 风险
+- [x] 双 ORM 统一：models.py(25列) vs rag/models/(14列) — 已统一为单一 models.py [d946a5e]
 
 ━━━ 数据层 (MySQL / Qdrant / Neo4j) ━━━
 - [x] Chroma → Qdrant 向量数据库迁移
@@ -61,4 +61,4 @@
 - [x] 硬编码路径/凭据修复：knowledge_graph/enrich_papers/alembic/Go PythonBackend/JWT去重 [0cd2924]
 - [x] uvicorn --workers 4 [9908ea2]
 - [ ] 配置安全加固：默认凭据(work:12345678)移除，JWT_SECRET_KEY 缺失时启动失败
-- [ ] 遗留代码清理：ingest/bak/ 9个废弃脚本 + data/clean_results copy/ 8MB 冗余
+- [x] 遗留代码清理：ingest/bak/ + data/clean_results copy/ → legacy/ [已整理]
