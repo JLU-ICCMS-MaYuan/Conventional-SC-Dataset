@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react'
 import {
   Box, Typography, Card, CardContent, Button,
   Select, MenuItem, FormControl, InputLabel, IconButton, Tooltip,
+  Drawer, CircularProgress, Chip, Alert, Snackbar,
 } from '@mui/material'
 import {
-  Edit, ContentCopy, FileDownload,
+  Edit, ContentCopy, FileDownload, Close, OpenInNew,
 } from '@mui/icons-material'
 import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
@@ -24,6 +25,7 @@ interface DataPoint {
   isInGroup: boolean
   isCustom: boolean
   label: string
+  paperId?: number
 }
 
 // ── Constants ──
@@ -64,6 +66,12 @@ const SharePage: React.FC = () => {
     groupName: string
   }>({ groupId: null, groupName: '' })
 
+  // ── Paper detail drawer ──
+  const [selectedPaperId, setSelectedPaperId] = useState<number | null>(null)
+  const [paperDetail, setPaperDetail] = useState<any>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailError, setDetailError] = useState('')
+
   // ── Editor dialog ──
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingGroupId, setEditingGroupId] = useState<number | null>(null)
@@ -83,6 +91,18 @@ const SharePage: React.FC = () => {
     api.get<any[]>('/api/papers/stats/tc-pressure').then(setPressureData).catch(() => {})
     api.get<any[]>('/api/papers/stats/tc-year').then(setYearData).catch(() => {})
   }, [])
+
+  // ── Fetch paper detail when paperId changes ──
+  useEffect(() => {
+    if (!selectedPaperId) return
+    setDetailLoading(true)
+    setDetailError('')
+    setPaperDetail(null)
+    api.get<any>(`/api/papers/${selectedPaperId}`)
+      .then(data => setPaperDetail(data))
+      .catch(() => setDetailError('加载论文详情失败'))
+      .finally(() => setDetailLoading(false))
+  }, [selectedPaperId])
 
   // ── Refresh groups ──
   const refreshGroups = () => { loadAllGroups() }
@@ -122,6 +142,7 @@ const SharePage: React.FC = () => {
         isInGroup: false,
         isCustom: false,
         label: d.label || d.formula || '?',
+        paperId: d.paper_id || undefined,
       }))
   }
 
@@ -146,6 +167,7 @@ const SharePage: React.FC = () => {
         isInGroup: true,
         isCustom: it.source === 'custom',
         label: it.material,
+        paperId: it.paper_id || undefined,
       }))
   }
 
@@ -257,6 +279,7 @@ const SharePage: React.FC = () => {
               visibleTypes={visibleTypes}
               showBackground={!chart1.groupId}
               onToggleType={toggleType}
+              onPointClick={(p) => { if (p.paperId) setSelectedPaperId(p.paperId) }}
             />
           </Box>
         </CardContent>
@@ -279,10 +302,144 @@ const SharePage: React.FC = () => {
               visibleTypes={visibleTypes}
               showBackground={!chart2.groupId}
               onToggleType={toggleType}
+              onPointClick={(p) => { if (p.paperId) setSelectedPaperId(p.paperId) }}
             />
           </Box>
         </CardContent>
       </Card>
+
+      {/* ═══ Paper Detail Drawer ═══ */}
+      <Drawer
+        anchor="right"
+        open={!!selectedPaperId}
+        onClose={() => { setSelectedPaperId(null); setPaperDetail(null); setDetailError('') }}
+        PaperProps={{ sx: { width: { xs: '100%', sm: 520 } } }}
+      >
+        <Box sx={{ p: 3, height: '100%', overflow: 'auto' }}>
+          {/* Header */}
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+            <Typography variant="h6" fontWeight={700}>论文详情</Typography>
+            <IconButton
+              onClick={() => { setSelectedPaperId(null); setPaperDetail(null); setDetailError('') }}
+            >
+              <Close />
+            </IconButton>
+          </Box>
+
+          {/* Loading */}
+          {detailLoading && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+              <CircularProgress />
+            </Box>
+          )}
+
+          {/* Content */}
+          {paperDetail && !detailLoading && (
+            <>
+              {/* 基础信息 */}
+              <Box component="details" open sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, mb: 1.5, overflow: 'hidden' }}>
+                <Box component="summary" sx={{ cursor: 'pointer', p: 2, fontSize: 16, fontWeight: 800 }}>基础信息</Box>
+                <Box sx={{ px: 2, pb: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
+                    <Box><Typography variant="caption" color="text.secondary">Formula</Typography>
+                      <Typography fontWeight={600}>{paperDetail.key_properties?.[0]?.material || '-'}</Typography></Box>
+                    <Box><Typography variant="caption" color="text.secondary">年份</Typography>
+                      <Typography fontWeight={600}>{paperDetail.year || '-'}</Typography></Box>
+                    <Box><Typography variant="caption" color="text.secondary">DOI</Typography>
+                      <Typography fontWeight={600} noWrap>{paperDetail.doi || '-'}</Typography></Box>
+                    <Box><Typography variant="caption" color="text.secondary">期刊</Typography>
+                      <Typography fontWeight={600}>{paperDetail.journal || '-'}</Typography></Box>
+                    <Box sx={{ gridColumn: '1/-1' }}><Typography variant="caption" color="text.secondary">论文标题</Typography>
+                      <Typography fontWeight={600}>{paperDetail.title || '-'}</Typography></Box>
+                    {paperDetail.summary && (
+                      <Box sx={{ gridColumn: '1/-1' }}><Typography variant="caption" color="text.secondary">论文总结</Typography>
+                        <Typography variant="body2" sx={{ lineHeight: 1.8 }}>{paperDetail.summary}</Typography></Box>
+                    )}
+                  </Box>
+                  {paperDetail.doi && (
+                    <Button size="small" variant="outlined" sx={{ mt: 1.5 }}
+                      onClick={() => window.open(`https://doi.org/${paperDetail.doi}`, '_blank')}
+                      endIcon={<OpenInNew />}>打开原文</Button>
+                  )}
+                </Box>
+              </Box>
+
+              {/* 关键物性 */}
+              <Box component="details" open sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, mb: 1.5, overflow: 'hidden' }}>
+                <Box component="summary" sx={{ cursor: 'pointer', p: 2, fontSize: 16, fontWeight: 800 }}>关键物性</Box>
+                <Box sx={{ px: 2, pb: 2, borderTop: '1px solid', borderColor: 'divider', overflowX: 'auto' }}>
+                  {Array.isArray(paperDetail.key_properties) && paperDetail.key_properties.length > 0 ? (
+                    <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, mt: 1 }}>
+                      <Box component="thead">
+                        <Box component="tr">
+                          {['材料', '物性', '数值', '条件', '备注'].map(h => (
+                            <Box key={h} component="th" sx={{ p: '4px 8px', borderBottom: '2px solid', borderColor: 'divider', textAlign: 'left', color: 'text.secondary', fontSize: 11, whiteSpace: 'nowrap' }}>{h}</Box>
+                          ))}
+                        </Box>
+                      </Box>
+                      <Box component="tbody">
+                        {paperDetail.key_properties.map((kp: any) => (
+                          <Box component="tr" key={kp.id} sx={{ bgcolor: kp.is_primary ? '#eef2ff' : 'transparent' }}>
+                            <Box component="td" sx={{ p: '4px 8px', borderBottom: '1px solid', borderColor: 'divider', whiteSpace: 'nowrap', fontWeight: 600 }}>{kp.material}</Box>
+                            <Box component="td" sx={{ p: '4px 8px', borderBottom: '1px solid', borderColor: 'divider', whiteSpace: 'nowrap' }}>
+                              {kp.label}{kp.is_primary ? ' ★' : ''}</Box>
+                            <Box component="td" sx={{ p: '4px 8px', borderBottom: '1px solid', borderColor: 'divider', whiteSpace: 'nowrap', fontWeight: 700, color: 'primary.main' }}>
+                              {kp.value_min != null
+                                ? (kp.value_min !== kp.value_max ? `${kp.value_min}–${kp.value_max}` : `${kp.value_max}`)
+                                : (kp.value_raw || '-')}{kp.unit ? ` ${kp.unit}` : ''}</Box>
+                            <Box component="td" sx={{ p: '4px 8px', borderBottom: '1px solid', borderColor: 'divider', whiteSpace: 'nowrap', color: 'text.secondary' }}>
+                              {[kp.pressure_gpa != null ? `${kp.pressure_gpa} GPa` : null, kp.temperature_k != null ? `${kp.temperature_k} K` : null].filter(Boolean).join(' · ') || '-'}</Box>
+                            <Box component="td" sx={{ p: '4px 8px', borderBottom: '1px solid', borderColor: 'divider', color: 'text.secondary', minWidth: 140 }}>
+                              {[kp.name_note, kp.condition_note].filter(Boolean).join('；') || '-'}</Box>
+                          </Box>
+                        ))}
+                      </Box>
+                    </Box>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>该论文暂无结构化物性数据</Typography>
+                  )}
+                </Box>
+              </Box>
+
+              {/* 研究方法与发现 */}
+              <Box component="details" sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, mb: 1.5, overflow: 'hidden' }}>
+                <Box component="summary" sx={{ cursor: 'pointer', p: 2, fontSize: 16, fontWeight: 800 }}>研究方法与发现</Box>
+                <Box sx={{ px: 2, pb: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+                  <Box sx={{ display: 'grid', gap: 1.5, mt: 1 }}>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">研究方法</Typography>
+                      <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', mt: 0.5 }}>
+                        {(() => {
+                          try {
+                            const m = JSON.parse(paperDetail?.methodology || '[]')
+                            return Array.isArray(m) && m.length
+                              ? m.map((x: string) => <Chip key={x} label={x} size="small" variant="outlined" />)
+                              : <Typography fontWeight={600}>-</Typography>
+                          } catch { return <Typography fontWeight={600}>{paperDetail?.methodology || '-'}</Typography> }
+                        })()}
+                      </Box>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">核心发现</Typography>
+                      <Typography fontWeight={600} sx={{ lineHeight: 1.8 }}>
+                        {(() => {
+                          try { return JSON.parse(paperDetail?.key_finding || '""') || '-' }
+                          catch { return paperDetail?.key_finding || '-' }
+                        })()}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Box>
+              </Box>
+            </>
+          )}
+        </Box>
+      </Drawer>
+
+      {/* Snackbar */}
+      <Snackbar open={!!detailError} autoHideDuration={3000} onClose={() => setDetailError('')}>
+        <Alert severity="error" variant="filled" onClose={() => setDetailError('')}>{detailError}</Alert>
+      </Snackbar>
 
       {/* ═══ Group Editor Dialog ═══ */}
       <ChartGroupEditor

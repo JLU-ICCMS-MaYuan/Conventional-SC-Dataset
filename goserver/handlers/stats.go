@@ -30,12 +30,14 @@ func TcPressureChart(c *gin.Context) {
 		Pressure float64 `gorm:"column:x"`
 		SCType   string  `gorm:"column:sc_type"`
 		Type     string  `gorm:"column:type"`
+		PaperID  uint    `gorm:"column:paper_id"`
 	}
 	var rows []row
 	database.DB.Raw(`
 		SELECT material, value_max AS y, COALESCE(pressure_gpa,0) AS x,
 			COALESCE(superconductor_type,'others') AS sc_type,
-			CASE WHEN article_type='e' THEN 'experimental' ELSE 'theoretical' END AS type
+			CASE WHEN article_type='e' THEN 'experimental' ELSE 'theoretical' END AS type,
+			paper_id
 		FROM key_properties
 		WHERE name = 'critical_temperature' AND value_max IS NOT NULL
 		AND pressure_gpa IS NOT NULL AND is_primary = true
@@ -44,11 +46,13 @@ func TcPressureChart(c *gin.Context) {
 	for _, r := range rows {
 		t := r.Type
 		if t == "" { t = "theoretical" }
-		result = append(result, gin.H{
-			"material": r.Material, "formula": r.Material, "label": r.Material,
+		item := gin.H{
+			"formula": r.Material,
 			"y": r.Tc, "x": r.Pressure,
 			"sc_type": r.SCType, "type": t,
-		})
+		}
+		if r.PaperID > 0 { item["paper_id"] = r.PaperID }
+		result = append(result, item)
 	}
 	cache.Set(cacheKey, result, 0) // 永久缓存
 	c.JSON(http.StatusOK, result)
@@ -71,13 +75,15 @@ func TcYearChart(c *gin.Context) {
 		SCType   string  `gorm:"column:sc_type"`
 		Material string  `gorm:"column:formula"`
 		DOI      string  `gorm:"column:doi"`
+		PaperID  uint    `gorm:"column:paper_id"`
 	}
 	var rows []row
 	database.DB.Raw(`
 		SELECT p.year AS x, kp.value_max AS y,
 			CASE WHEN kp.article_type='e' THEN 'experimental' ELSE 'theoretical' END AS type,
 			COALESCE(kp.superconductor_type,'others') AS sc_type,
-			kp.material AS formula, COALESCE(p.doi,'') AS doi
+			kp.material AS formula, COALESCE(p.doi,'') AS doi,
+			kp.paper_id AS paper_id
 		FROM key_properties kp JOIN papers p ON kp.paper_id = p.id
 		WHERE kp.name = 'critical_temperature' AND kp.value_max IS NOT NULL
 		AND p.year IS NOT NULL AND kp.is_primary = true
@@ -87,10 +93,12 @@ func TcYearChart(c *gin.Context) {
 	for _, r := range rows {
 		t := r.Type
 		if t == "" { t = "theoretical" }
-		result = append(result, gin.H{
+		item := gin.H{
 			"x": r.Year, "y": r.Tc, "type": t,
 			"sc_type": r.SCType, "formula": r.Material, "doi": r.DOI,
-		})
+		}
+		if r.PaperID > 0 { item["paper_id"] = r.PaperID }
+		result = append(result, item)
 	}
 	cache.Set(cacheKey, result, 0) // 永久缓存
 	c.JSON(http.StatusOK, result)

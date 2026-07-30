@@ -20,6 +20,7 @@ interface DataPoint {
   isInGroup: boolean
   isCustom: boolean
   label: string
+  paper_id?: number
 }
 
 interface Props {
@@ -33,6 +34,7 @@ interface Props {
   showBackground: boolean
   onToggleType: (scType: string) => void
   tooltipFormatter?: (point: DataPoint) => React.ReactNode
+  onPointClick?: (point: DataPoint) => void
 }
 
 const CustomTooltip: React.FC<{ active?: boolean; payload?: any[]; tooltipFormatter?: (point: DataPoint) => React.ReactNode }> = ({ active, payload, tooltipFormatter }) => {
@@ -67,7 +69,7 @@ const SHAPE_ICONS: Record<string, string> = {
 const ChartScatter: React.FC<Props> = ({
   title, data, xLabel, yLabel, xDomain, yDomain,
   visibleTypes, showBackground, onToggleType,
-  tooltipFormatter,
+  tooltipFormatter, onPointClick,
 }) => {
   const scTypes = Object.keys(SC_TYPE_CONFIG)
 
@@ -101,7 +103,12 @@ const ChartScatter: React.FC<Props> = ({
   return (
     <Box>
       <ResponsiveContainer width="100%" aspect={2}>
-        <ScatterChart margin={{ top: 10, right: 10, bottom: 30, left: 0 }}>
+        <ScatterChart margin={{ top: 10, right: 10, bottom: 30, left: 0 }}
+          onClick={(e: any) => {
+            if (e?.activePayload?.[0]?.payload) {
+              onPointClick?.(e.activePayload[0].payload as DataPoint)
+            }
+          }}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis type="number" dataKey="x" domain={xDomain || [0, 'auto']}
             label={{ value: xLabel, position: 'bottom', offset: -5 }} />
@@ -114,13 +121,15 @@ const ChartScatter: React.FC<Props> = ({
           {showBackground && bgSeries.map(s => (
             <Scatter key={s.key} name={s.key} data={s.data}
               fill={s.fill} opacity={BACKGROUND_OPACITY}
-              shape={s.shape} />
+              shape={s.shape}
+              onClick={(e: any) => onPointClick?.(e?.payload as DataPoint)} />
           ))}
 
           {/* 组合内点：实验红 / 理论蓝 */}
           {groupSeries.map(s => (
             <Scatter key={s.key} name={s.key} data={s.data}
-              fill={s.fill} opacity={0.9} shape={s.shape} />
+              fill={s.fill} opacity={0.9} shape={s.shape}
+              onClick={(e: any) => onPointClick?.(e?.payload as DataPoint)} />
           ))}
         </ScatterChart>
       </ResponsiveContainer>

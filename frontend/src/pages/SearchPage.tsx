@@ -124,8 +124,9 @@ const SearchPage: React.FC = () => {
   // 从 URL 参数读取初始值
   const initElements = (searchParams.get('elements') || 'La,H').split(',').filter(Boolean)
   const initMode = searchParams.get('mode') || 'elements_combination_search'
+  const initPaperId = searchParams.get('paper_id')
   const [stage, setStage] = useState<'explore'|'results'|'detail'>(
-    searchParams.get('elements') ? 'results' : 'explore'
+    initPaperId ? 'detail' : (searchParams.get('elements') ? 'results' : 'explore')
   )
   const [selected, setSelected] = useState<Set<string>>(new Set(initElements))
   const [mode, setMode] = useState(initMode)
@@ -151,8 +152,27 @@ const SearchPage: React.FC = () => {
   const elementsKey = [...selected].sort().join(',')
   const filtersKey = JSON.stringify(filters)
 
-  // 检索条件变化时回到第一页
-  useEffect(() => { setPage(0) }, [source, mode, elementsKey, filtersKey])
+  // 直接从图表跳转——加载论文详情
+  useEffect(() => {
+    if (!initPaperId) return
+    const pid = parseInt(initPaperId)
+    api.get<any>(`/api/papers/${pid}`).then(data => {
+      const r: SuperconductorRecord = {
+        sourceSystem: 'local', sourceRecordId: String(pid),
+        formula: data.key_properties?.[0]?.material || data.chemical_formula || '-',
+        year: data.year || 0, type: data.superconductor_types?.[0] || '',
+        pressureValue: 0, pressure: '-', tcValue: 0, tc: '-', tcField: '',
+        source: 'Local', status: data.review_status || 'Pending',
+        doi: data.doi || '', journal: data.journal || '',
+        title: data.title || '', spaceGroupNumber: 0, spaceGroup: '-',
+        showInChart: false, lambda: '', omegaLog: '', nef: '',
+        method: '', software: '', note: '',
+        paper_id: pid,
+      }
+      setSelectedRecord(r)
+      setStage('detail')
+    }).catch(() => {})
+  }, [initPaperId])
 
   useEffect(() => {
     if (stage !== 'results') return
