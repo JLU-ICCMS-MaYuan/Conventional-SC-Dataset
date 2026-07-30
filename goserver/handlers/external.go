@@ -124,11 +124,10 @@ func SearchHTSC(c *gin.Context) {
 	if len(body.Elements) > 0 {
 		var ids []uint
 		for _, mat := range allHTSCMaterials() {
-			elemStr := ""
-			if mat.Elements != nil {
-				elemStr = *mat.Elements
+			matElements := parseElementsList(mat.Elements)
+			if len(matElements) == 0 {
+				continue
 			}
-			matElements := parseElementsList(elemStr)
 			selected := stringSet(body.Elements)
 			if matchesElements(matElements, selected, body.Mode) {
 				ids = append(ids, mat.ID)

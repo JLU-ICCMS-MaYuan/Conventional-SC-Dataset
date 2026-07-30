@@ -167,13 +167,13 @@ func (AlexandriaElementIdx) TableName() string { return "alexandria_element_idx"
 
 // HTSCMaterial HTSC-2025 外部数据集
 type HTSCMaterial struct {
-	ID        uint    `gorm:"primaryKey" json:"id"`
-	Name      *string `gorm:"size:200" json:"name"`
-	Formula   *string `gorm:"size:200" json:"formula"`
-	ClassName *string `gorm:"size:100" json:"class_name"`
+	ID        uint     `gorm:"primaryKey" json:"id"`
+	Name      *string  `gorm:"size:200" json:"name"`
+	Formula   *string  `gorm:"size:200" json:"formula"`
+	ClassName *string  `gorm:"size:100" json:"class_name"`
 	Tc        *float64 `json:"tc"`
-	Elements  *string  `json:"elements"`
-	Composition *string `json:"composition"`
+	Elements  string   `gorm:"type:json" json:"elements"`
+	Composition string `gorm:"type:json" json:"composition"`
 }
 
 func (HTSCMaterial) TableName() string { return "htsc2025_materials" }

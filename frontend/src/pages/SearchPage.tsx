@@ -139,7 +139,6 @@ const SearchPage: React.FC = () => {
   const [structureMsg, setStructureMsg] = useState('该记录暂无结构数据')
   const [apiError, setApiError] = useState('')
   const [apiRecords, setApiRecords] = useState<SuperconductorRecord[]>([])
-  const [detailRecord, setDetailRecord] = useState<SuperconductorRecord | null>(null)
   const [page, setPage] = useState(0)
   const [total, setTotal] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
@@ -162,7 +161,7 @@ const SearchPage: React.FC = () => {
     const isFormulaSearch = elementList.length === 0 && !!formulaQuery
     if (elementList.length === 0 && !isFormulaSearch) return
     if (isFormulaSearch && source !== 'Local') {
-      setApiRecords([]); setTotal(0); setTotalPages(0); setDetailRecord(null)
+      setApiRecords([]); setTotal(0); setTotalPages(0); 
       setApiError('化学式检索仅支持 Local 数据源，请选择元素或切回 Local')
       return
     }
@@ -283,7 +282,7 @@ const SearchPage: React.FC = () => {
           items.forEach((item: any) => addRow(item, null, 'Local'))
         }
         setApiRecords(rows)
-        setDetailRecord(null)
+        
         // 后端真分页：total/total_pages 来自服务端
         const totalCount = res.total ?? rows.length
         setTotal(totalCount)
@@ -549,7 +548,7 @@ const SearchPage: React.FC = () => {
                   <Box component="tbody">
                     {apiRecords.map((r,i)=>(
                       <Box key={i} component="tr"
-                        onClick={()=>setDetailRecord(detailRecord===r?null:r)}
+                        onClick={()=>{setSelectedRecord(r);setStage('detail')}}
                         sx={{ cursor:'pointer','&:hover':{bgcolor:'grey.50'} }}>
                         <Box component="td" sx={{ p:'14px 12px',borderBottom:'1px solid',borderColor:'divider',whiteSpace:'nowrap' }}>{r.year}</Box>
                         <Box component="td" sx={{ p:'14px 12px',borderBottom:'1px solid',borderColor:'divider',whiteSpace:'nowrap' }}>{r.formula}</Box>
@@ -559,20 +558,7 @@ const SearchPage: React.FC = () => {
                         <Box component="td" sx={{ p:'14px 12px',borderBottom:'1px solid',borderColor:'divider',whiteSpace:'nowrap' }}>{r.spaceGroup}</Box>
                         <Box component="td" sx={{ p:'14px 12px',borderBottom:'1px solid',borderColor:'divider',whiteSpace:'nowrap' }}><Chip label={r.source} size="small" color={r.source==='Local'?'primary':r.source==='Alexandria'?'secondary':'default'} /></Box>
                         <Box component="td" sx={{ p:'14px 12px',borderBottom:'1px solid',borderColor:'divider',whiteSpace:'nowrap' }}><Chip label={r.status} size="small" color={r.status==='Approved'?'success':r.status==='Pending'?'warning':'default'} /></Box>
-                        <Box component="td" sx={{ p:'14px 12px',borderBottom:'1px solid',borderColor:'divider',whiteSpace:'nowrap',position:'relative' }}>
-                          {r.doi}
-                          <Button variant="contained" size="small" sx={{
-                            position:'absolute', right:0, top:'50%',
-                            opacity: detailRecord===r ? 1 : 0,
-                            transform: detailRecord===r ? 'translateY(-50%) translateX(-60px)' : 'translateY(-50%) translateX(120px)',
-                            transition: 'opacity 0.2s ease, transform 0.25s ease',
-                            pointerEvents: detailRecord===r ? 'auto' : 'none',
-                            whiteSpace:'nowrap',
-                          }}
-                            onClick={(e)=>{e.stopPropagation();setSelectedRecord(r);setStage('detail')}}>
-                            查看详情
-                          </Button>
-                        </Box>
+                        <Box component="td" sx={{ p:'14px 12px',borderBottom:'1px solid',borderColor:'divider',whiteSpace:'nowrap' }}>{r.doi}</Box>
                       </Box>
                     ))}
                     {apiRecords.length===0&&(

@@ -494,9 +494,7 @@ func searchAlexandriaAll(elements []string, mode string) []gin.H {
 	for _, e := range entries {
 		tc := e.TcMax
 		if tc == nil { tc = e.TcAllenDynes }
-		elemStr := ""
-		if e.Elements != nil { elemStr = *e.Elements }
-		elems := parseElementsList(elemStr)
+		elems := parseElementsList(*e.Elements)
 		elemSlice := make([]string, 0, len(elems))
 		for k := range elems { elemSlice = append(elemSlice, k) }
 		sort.Strings(elemSlice)
@@ -521,10 +519,8 @@ func searchHTSCAll(elements []string, mode string) []gin.H {
 	selected := stringSet(elements)
 	result := make([]gin.H, 0)
 	for _, m := range mats {
-		elemStr := ""
-		if m.Elements != nil { elemStr = *m.Elements }
-		matElems := parseElementsList(elemStr)
-		if !matchesElements(matElems, selected, mode) { continue }
+		matElems := parseElementsList(m.Elements)
+		if len(matElems) == 0 || !matchesElements(matElems, selected, mode) { continue }
 
 		elemSlice := make([]string, 0, len(matElems))
 		for k := range matElems { elemSlice = append(elemSlice, k) }
