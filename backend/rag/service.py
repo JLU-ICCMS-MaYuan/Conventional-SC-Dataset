@@ -218,7 +218,7 @@ async def stats() -> dict[str, Any]:
     _ensure_data_available()
     try:
         from backend.rag.database import async_session_factory
-        from backend.rag.models import ChemicalSystem, KeyProperty, Paper, PaperChunk, Superconductor
+        from backend.models import ChemicalSystem, KeyProperty, Paper, PaperChunk, Superconductor
         from backend.rag.vectordb import collection_stats
 
         async with async_session_factory() as session:
@@ -253,7 +253,7 @@ async def list_papers(keyword: str | None = None, limit: int = 20) -> list[dict[
     _ensure_data_available()
     try:
         from backend.rag.database import async_session_factory
-        from backend.rag.models import Paper
+        from backend.models import Paper
         from backend.rag.search.sql_search import search_papers
 
         async with async_session_factory() as session:
@@ -309,7 +309,7 @@ async def search_superconductors(
     _ensure_data_available()
     try:
         from backend.rag.database import async_session_factory
-        from backend.rag.models import Superconductor
+        from backend.models import Superconductor
         from backend.rag.search.sql_search import search_by_elements_exact, search_by_formula
 
         async with async_session_factory() as session:
@@ -340,7 +340,7 @@ async def superconductor_detail(superconductor_id: int) -> dict[str, Any]:
     _ensure_data_available()
     try:
         from backend.rag.database import async_session_factory
-        from backend.rag.models import KeyProperty, Superconductor
+        from backend.models import KeyProperty, Superconductor
         from backend.rag.search.sql_search import _format_property
 
         async with async_session_factory() as session:

@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import func
 
-from backend.rag.models import (
+from backend.models import (
     ChemicalSystem,
     KeyProperty,
     Paper,

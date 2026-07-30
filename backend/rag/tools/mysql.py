@@ -15,7 +15,7 @@ from sqlalchemy.sql import func
 
 from backend.ingest.prop_names import PROP_LABELS
 from backend.rag.database import async_session_factory
-from backend.rag.models import KeyProperty, Paper
+from backend.models import KeyProperty, Paper
 
 # 中文谓词 → 规范物性名
 PREDICATE_MAP = {

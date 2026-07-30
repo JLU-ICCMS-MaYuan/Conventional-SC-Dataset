@@ -264,7 +264,7 @@ async def ask(
     # ── 3. 构造 Prompt ──
     from sqlalchemy import select, func as sa_func
     from backend.rag.database import async_session_factory
-    from backend.rag.models import KeyProperty, Paper, Superconductor
+    from backend.models import KeyProperty, Paper, Superconductor
     async with async_session_factory() as sess:
         p_cnt = (await sess.execute(sa_func.count(Paper.id))).scalar() or 0
         r_cnt = (await sess.execute(sa_func.count(KeyProperty.id))).scalar() or 0
@@ -353,7 +353,7 @@ async def ask_stream(
     # ── DB 上下文（探索模式和普通模式共用） ──
     from sqlalchemy import select, func as sa_func
     from backend.rag.database import async_session_factory
-    from backend.rag.models import KeyProperty, Paper, Superconductor
+    from backend.models import KeyProperty, Paper, Superconductor
     async with async_session_factory() as sess:
         p_cnt = (await sess.execute(sa_func.count(Paper.id))).scalar() or 0
         r_cnt = (await sess.execute(sa_func.count(KeyProperty.id))).scalar() or 0
@@ -441,7 +441,7 @@ async def ask_stream(
                     idea_pids.add(f["paper_id"])
         deep_context = ""
         if idea_pids:
-            from backend.rag.models import PaperChunk
+            from backend.models import PaperChunk
             async with async_session_factory() as sess:
                 r = await sess.execute(
                     select(PaperChunk).where(PaperChunk.paper_id.in_(list(idea_pids)))
@@ -473,7 +473,7 @@ async def ask_stream(
                 paper_ids.add(c["paper_id"])
         papers_dict = {}
         if paper_ids:
-            from backend.rag.models import Paper
+            from backend.models import Paper
             async with async_session_factory() as sess:
                 q = await sess.execute(
                     select(Paper).where(Paper.id.in_(list(paper_ids)))

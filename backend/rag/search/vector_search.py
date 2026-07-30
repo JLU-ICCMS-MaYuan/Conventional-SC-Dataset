@@ -66,7 +66,7 @@ async def search_by_keywords_in_chunks(
     """
     from sqlalchemy import select
     from backend.rag.database import async_session_factory
-    from backend.rag.models import PaperChunk
+    from backend.models import PaperChunk
 
     pattern = f"%{query}%"
 

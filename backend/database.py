@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 
 # v2 库：papers 富化列 + key_properties 通用物性表（由 rebuild_from_clean_results.py 重建）
@@ -25,7 +25,9 @@ SessionLocal = sessionmaker(
     future=True,
 )
 
-Base = declarative_base()
+
+class Base(DeclarativeBase):
+    """统一 ORM 基类。models.py 和 rag 模型继承同一个 Base。"""
 
 
 def get_db():

@@ -21,17 +21,44 @@
 - [ ] 热点首页（HomePage）完成
 - [ ] 登录认证流程闭环
 --------------------------------------------架构问题--------------------------------------------
-- [x] Go 登录密码 bcrypt 校验：Login handler 补充 bcrypt.CompareHashAndPassword + is_approved 检查 + AdminRequired 实现并挂载到路由组 [8464b51]
-- [x] Go 代理连接池：MaxIdleConnsPerHost=100 + MaxConnsPerHost=200 + ResponseHeaderTimeout=30s
-- [x] uvicorn --workers 4：Python 侧多 worker 匹配 Go 并发能力
+一个网站的标准五层：
+
+  浏览器 → [表现层] → [网关层] → [业务层] → [数据访问层] → [数据层]
+
+每一层的问题：
+
+━━━ 表现层 (React 前端) ━━━
+- [x] 前端上传页重构：登录门控 + 历史上传卡片 + 可编辑详情(PaperEditView) [8464b51]
 - [x] 前端 Vite 代理目标：8000→8080 统一入口 [8464b51]
-- [ ] 配置安全加固：移除 Go/Python DSN 默认凭据(work:12345678)，JWT_SECRET_KEY 缺失时启动失败而非用 fallback-insecure-key
-- [ ] Go/Python 职责边界统一：Go admin 路由弱权限(仅 AuthRequired) vs Python admin API 正确实现(get_current_admin/superadmin)。方案：Go 仅保留业务 API + 认证代理，admin 操作全部走 Python
-- [ ] 外部依赖降级：Neo4j(rag/tools/neo4j.py 无任何 try/except)、DeepSeek(enrich_papers 有 timeout=120 但无重试)、Embedding API(embedder.py 无 timeout/重试)、Qdrant(无连接池配置) — 需要重试+退避+备选路径
-- [ ] 双 ORM 统一：backend/models.py(Column 旧式,25+列) vs backend/rag/models/(Mapped 2.0,14列) 同一张 papers/key_properties/users 表有两套不同定义，schema drift 风险高
-- [ ] 遗留代码清理：ingest/bak/ 9个废弃脚本(含 /home/work/ 硬编码路径且引用不存在的模块) + data/clean_results copy/ 8MB 冗余副本
+- [ ] 热点首页（HomePage）完成
+- [ ] 登录认证流程闭环
+
+━━━ 网关层 (Go :8080) ━━━
+- [x] 登录密码 bcrypt 校验 + is_approved 检查 [9908ea2]
+- [x] AdminRequired 中间件实现并挂载到 /api/admin/* [9908ea2]
+- [x] 反向代理连接池配置(MaxIdleConnsPerHost=100 + Timeout=30s) [9908ea2]
+- [ ] /api/admin/stats 无认证公开暴露 — 加 AuthRequired
+- [ ] Go 注册端点缺失：无 POST /api/auth/register
+- [ ] Go/Python 职责边界：Go admin 路由弱权限 vs Python admin 正确实现。应统一为 Go 认证代理 + Python 业务逻辑
+
+━━━ 业务层 (Python FastAPI :8000) ━━━
+- [x] 上传管线异步改造：文件保存即返回，全链路后台执行 [5794d71]
+- [x] 上传管线 uploaded_by_user_id 追踪 [8464b51]
+- [x] Go 新增 GET /api/papers/my-uploads [8464b51]
+- [x] 知识图谱 GRAPH_FILE 路径修复 [0cd2924]
+- [x] 物性名下拉栏：18种预设规范名 [8464b51]
+- [ ] 外部依赖降级：Neo4j/DeepSeek/Embedding/Qdrant 断连时重试+退避+备选路径
+
+━━━ 数据访问层 (ORM / 存储接口) ━━━
+- [x] Go UpdatePaper 支持 key_properties 增删改 + 审查校验 [8464b51]
+- [ ] 双 ORM 统一：models.py(25列) vs rag/models/(14列) — 同表两套定义，schema drift 风险
+
+━━━ 数据层 (MySQL / Qdrant / Neo4j) ━━━
+- [x] Chroma → Qdrant 向量数据库迁移
 - [ ] Docker Compose：一键启动 MySQL + Neo4j + Qdrant + Go + Python
-- [ ] /api/admin/stats 无认证公开暴露用户数/论文数/待审批数 — 加 AuthRequired 中间件
-- [ ] Go paper delete 无存在性检查：DeletePaper 不检查记录是否存在，始终返回 200 "已删除"
-- [ ] Go 注册端点缺失：无 POST /api/auth/register，注册流程完全依赖 Python 入口（但 Python 有 hash_password 正确实现）
---------------------------------------------mysql web--------------------------------------------
+
+━━━ 横切关注点 (所有层) ━━━
+- [x] 硬编码路径/凭据修复：knowledge_graph/enrich_papers/alembic/Go PythonBackend/JWT去重 [0cd2924]
+- [x] uvicorn --workers 4 [9908ea2]
+- [ ] 配置安全加固：默认凭据(work:12345678)移除，JWT_SECRET_KEY 缺失时启动失败
+- [ ] 遗留代码清理：ingest/bak/ 9个废弃脚本 + data/clean_results copy/ 8MB 冗余

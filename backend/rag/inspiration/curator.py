@@ -14,7 +14,7 @@ from sqlalchemy import select
 
 from backend.rag.config import settings
 from backend.rag.database import async_session_factory
-from backend.rag.models import Paper
+from backend.models import Paper
 from backend.rag.inspiration.prompts import CURATOR_SYSTEM
 
 logger = logging.getLogger(__name__)

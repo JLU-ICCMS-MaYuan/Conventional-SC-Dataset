@@ -306,7 +306,7 @@ async def rag_upload_pdf(
     # 2. 创建占位论文记录（无元数据 → 前端显示"解析中"）
     try:
         from backend.rag.database import async_session_factory
-        from backend.rag.models import Paper
+        from backend.models import Paper
         async with async_session_factory() as session:
             paper = Paper(
                 title=filename,
@@ -346,7 +346,7 @@ async def rag_upload_text(
     # 2. 创建占位论文记录
     try:
         from backend.rag.database import async_session_factory
-        from backend.rag.models import Paper
+        from backend.models import Paper
         async with async_session_factory() as session:
             paper = Paper(
                 title=filename,

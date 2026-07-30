@@ -14,7 +14,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.rag.models import Paper
+from backend.models import Paper
 from backend.ingest.extractor import ExtractionResult
 
 

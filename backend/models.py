@@ -303,3 +303,16 @@ class SuperconductorStructure(Base):
         back_populates="created_structures",
         foreign_keys=[created_by_user_id],
     )
+
+
+class PaperChunk(Base):
+    """论文文本块（向量检索用，向量存 Qdrant，文本存 MySQL）"""
+    __tablename__ = "paper_chunks"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    paper_id = Column(Integer, ForeignKey("papers.id"), nullable=False, index=True)
+    chunk_index = Column(Integer, nullable=False, comment="块编号，从 0 开始")
+    section_name = Column(String(500), nullable=True, comment="章节名如 Introduction/Results")
+    heading = Column(String(500), nullable=True, comment="小节标题原文")
+    content = Column(Text, nullable=False, comment="块文本内容")
+    token_count = Column(Integer, nullable=True, comment="近似 token 数")
