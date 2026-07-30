@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"scwiki/server/cache"
 	"scwiki/server/database"
 	"scwiki/server/middleware"
 	"scwiki/server/models"
@@ -296,6 +297,8 @@ func ReviewPaper(c *gin.Context) {
 		"reviewed_by_user_id":  user.ID,
 	})
 
+		cache.FlushPattern("chart:*")
+	cache.FlushPattern("search:*")
 	c.JSON(http.StatusOK, gin.H{"message": "审核完成", "paper": paper})
 }
 
@@ -306,6 +309,8 @@ func DeletePaper(c *gin.Context) {
 	// 先删 key_properties
 	database.DB.Where("paper_id = ?", id).Delete(&models.KeyProperty{})
 	database.DB.Delete(&models.Paper{}, id)
+		cache.FlushPattern("chart:*")
+	cache.FlushPattern("search:*")
 	c.JSON(http.StatusOK, gin.H{"message": "已删除"})
 }
 
@@ -391,6 +396,8 @@ func UpdateUser(c *gin.Context) {
 func DeleteUser(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
 	database.DB.Delete(&models.User{}, uint(id))
+		cache.FlushPattern("chart:*")
+	cache.FlushPattern("search:*")
 	c.JSON(http.StatusOK, gin.H{"message": "已删除"})
 }
 

@@ -1,11 +1,14 @@
 package handlers
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
 	"strings"
 
+	"scwiki/server/cache"
 	"scwiki/server/database"
 	"scwiki/server/models"
 
@@ -63,6 +66,16 @@ func SearchRecords(c *gin.Context) {
 
 	if body.Limit <= 0 {
 		body.Limit = 50
+	}
+
+	// 缓存：以请求参数组合为 key
+	rawKey := fmt.Sprintf("search:%s|%s|%s", strings.Join(body.Elements, ","), body.Mode, body.Formula)
+	cacheKey := fmt.Sprintf("search:%x", sha256.Sum256([]byte(rawKey)))
+
+	var cached gin.H
+	if cache.Get(cacheKey, &cached) {
+		c.JSON(http.StatusOK, cached)
+		return
 	}
 
 	// 元素匹配 → 查 superconductors 表
@@ -139,7 +152,9 @@ func SearchRecords(c *gin.Context) {
 		items = append(items, flatRecordToDict(r.KeyProperty, r.Paper))
 	}
 
-	c.JSON(http.StatusOK, gin.H{"items": items, "total": total})
+	result := gin.H{"items": items, "total": total}
+	cache.Set(cacheKey, result, 0) // 永久缓存
+	c.JSON(http.StatusOK, result)
 }
 
 // ── helpers ────────────────────────────────────

@@ -103,19 +103,20 @@ func main() {
 			admin.POST("/papers/batch-delete", handlers.BatchDelete)
 		admin.GET("/users", handlers.GetUsers)
 		admin.PUT("/users/:id", handlers.UpdateUser)
-			admin.PUT("/users/:id/permissions", handlers.UpdateUser)
-			admin.DELETE("/users/:id", handlers.DeleteUser)
-			admin.GET("/all-users", handlers.AllUsers)
-			admin.GET("/stats", handlers.GetStats)
-			admin.POST("/news", handlers.CreateNews)
-			admin.PUT("/news/:id", handlers.UpdateNews)
-			admin.DELETE("/news/:id", handlers.DeleteNews)
+		admin.PUT("/users/:id/permissions", handlers.UpdateUser)
+		admin.DELETE("/users/:id", handlers.DeleteUser)
+		admin.GET("/all-users", handlers.AllUsers)
+		admin.GET("/stats", handlers.GetStats)
+		admin.POST("/news", handlers.CreateNews)
+		admin.PUT("/news/:id", handlers.UpdateNews)
+		admin.DELETE("/news/:id", handlers.DeleteNews)
 	}
 
-		// 统计 API
-		r.GET("/api/papers/stats/tc-pressure", handlers.TcPressureChart)
-		r.GET("/api/papers/stats/tc-year", handlers.TcYearChart)
-		r.GET("/api/papers/stats/chart-data", handlers.TcPressureChart)
+	// 统计 API
+	r.GET("/api/papers/stats/tc-pressure", handlers.TcPressureChart)
+	r.GET("/api/papers/stats/tc-year", handlers.TcYearChart)
+	r.GET("/api/papers/stats/chart-data", handlers.TcPressureChart)
+
 	// 健康检查
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
