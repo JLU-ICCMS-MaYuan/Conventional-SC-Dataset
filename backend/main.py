@@ -8,7 +8,6 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pathlib import Path
 
-from backend.api import elements, compounds, papers, admin, auth_routes, tc_predict, alexandria, htsc2025, structures, rag, knowledge_graph, kg, chart_groups
 
 app = FastAPI(
     title="超导文献数据库 API",
@@ -19,20 +18,11 @@ app = FastAPI(
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-app.include_router(elements.router)
-app.include_router(compounds.router)
-app.include_router(papers.router)
 app.include_router(auth_routes.router)
-app.include_router(admin.router)
 app.include_router(tc_predict.router)
-app.include_router(alexandria.router)
-app.include_router(htsc2025.router)
 app.include_router(structures.router)
 app.include_router(rag.router)
-app.include_router(knowledge_graph.router)
 app.include_router(kg.router)
-app.include_router(chart_groups.router)
-
 BASE_DIR = Path(__file__).resolve().parent.parent
 STATIC_DIR = BASE_DIR / "frontend" / "static"
 

@@ -29,7 +29,10 @@ func main() {
 	// gin.Default() = 带 Logger + Recovery 中间件
 	r := gin.Default()
 
-	// 5. 注册路由
+	// 5. 加载知识图谱数据
+	handlers.LoadGraph(cfg.DataDir + "/graph.json")
+
+	// 6. 注册路由
 	// CORS
 	r.Use(func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
@@ -45,6 +48,38 @@ func main() {
 	// 公开路由（不需要 JWT）
 	r.POST("/api/auth/login", handlers.Login)
 	r.GET("/api/admin/stats", handlers.GetStats) // 仪表盘可公开
+
+	// 论文公开 API（替代 Python /api/papers/*）
+	papers := r.Group("/api/papers")
+	{
+		papers.GET("/:id", handlers.GetPaper)
+		papers.POST("/search/records", handlers.SearchRecords)
+			papers.POST("/search/all", handlers.SearchAll)
+	}
+
+	// 知识图谱 API（替代 Python /api/knowledge-graph/*）
+	kg := r.Group("/api/knowledge-graph")
+	{
+		kg.GET("/overview", handlers.KGOverview)
+		kg.GET("/papers/:paper_id", handlers.KGPaperDetail)
+		kg.GET("/papers/:paper_id/neighbors", handlers.KGNeighbors)
+		kg.GET("/stats", handlers.KGGraphStats)
+	}
+
+	// 外部数据源 API（替代 Python /api/alexandria/* + /api/htsc2025/*）
+	r.POST("/api/alexandria/search", handlers.SearchAlexandria)
+	r.POST("/api/htsc2025/search", handlers.SearchHTSC)
+
+	// 图表组合 API（替代 Python /api/chart-groups/*）
+	cg := r.Group("/api/chart-groups")
+	{
+		cg.GET("", handlers.ListChartGroups)
+		cg.GET("/:id", handlers.GetChartGroup)
+		cg.POST("", handlers.CreateChartGroup)
+		cg.PUT("/:id", handlers.UpdateChartGroup)
+		cg.DELETE("/:id", handlers.DeleteChartGroup)
+		cg.PATCH("/:id/public", handlers.ToggleChartGroupPublic)
+	}
 
 	// 认证路由组（普通用户可访问，仅需登录）
 	auth := r.Group("/api")
@@ -62,10 +97,19 @@ func main() {
 		admin.PUT("/papers/:id", handlers.UpdatePaper)
 		admin.POST("/papers/:id/review", handlers.ReviewPaper)
 		admin.DELETE("/papers/:id", handlers.DeletePaper)
+			admin.POST("/papers/batch-review", handlers.BatchReview)
+			admin.POST("/papers/batch-delete", handlers.BatchDelete)
 		admin.GET("/users", handlers.GetUsers)
 		admin.PUT("/users/:id", handlers.UpdateUser)
+			admin.PUT("/users/:id/permissions", handlers.UpdateUser)
+			admin.DELETE("/users/:id", handlers.DeleteUser)
+			admin.GET("/all-users", handlers.AllUsers)
 	}
 
+		// 统计 API
+		r.GET("/api/papers/stats/tc-pressure", handlers.TcPressureChart)
+		r.GET("/api/papers/stats/tc-year", handlers.TcYearChart)
+		r.GET("/api/papers/stats/chart-data", handlers.TcPressureChart)
 	// 健康检查
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})

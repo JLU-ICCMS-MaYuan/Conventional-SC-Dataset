@@ -386,6 +386,14 @@ func UpdateUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "已更新", "user": user})
 }
 
+// DeleteUser 删除用户
+// DELETE /api/admin/users/:id
+func DeleteUser(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+	database.DB.Delete(&models.User{}, uint(id))
+	c.JSON(http.StatusOK, gin.H{"message": "已删除"})
+}
+
 // ═══════════════════════════════════════════════
 // 仪表盘统计
 // ═══════════════════════════════════════════════

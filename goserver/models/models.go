@@ -87,6 +87,14 @@ type KeyProperty struct {
 	Superconductor *Superconductor `gorm:"foreignKey:SuperconductorID" json:"-"`
 }
 
+// ChemicalSystem 化学体系
+type ChemicalSystem struct {
+	ID           uint   `gorm:"primaryKey" json:"id"`
+	SystemKey    string `gorm:"size:100" json:"system_key"`
+	ElementsList string `json:"elements_list"`
+	ElementCount int    `json:"element_count"`
+}
+
 // Superconductor 超导材料
 type Superconductor struct {
 	ID               uint   `gorm:"primaryKey" json:"id"`
@@ -126,3 +134,46 @@ type ChartGroupItem struct {
 	CustomArticleType *string `gorm:"size:10" json:"custom_article_type"`
 	CustomYear       *int    `json:"custom_year"`
 }
+
+// AlexandriaEntry Alexandria 外部数据集
+type AlexandriaEntry struct {
+	ID           uint    `gorm:"primaryKey" json:"id"`
+	MatID        string  `gorm:"size:100" json:"mat_id"`
+	Formula      *string `gorm:"size:200" json:"formula"`
+	Elements     *string `json:"elements"`
+	NSites       *int    `json:"nsites"`
+	SPG          *int    `json:"spg"`
+	LambdaVal    *float64 `json:"lambda_val"`
+	TcMax        *float64 `json:"tc_max"`
+	TcMcMillan   *float64 `json:"tc_mcmillan"`
+	TcAllenDynes *float64 `json:"tc_allen_dynes"`
+	TcEliashberg *float64 `json:"tc_eliashberg"`
+	WLog         *float64 `json:"wlog"`
+	DosEf        *float64 `json:"dos_ef"`
+	BandGap      *float64 `json:"band_gap"`
+	EAboveHull   *float64 `json:"e_above_hull"`
+	StructureCIF *string  `json:"structure_cif"`
+}
+
+func (AlexandriaEntry) TableName() string { return "alexandria_entries" }
+
+// AlexandriaElementIdx 元素→Alexandria 条目映射
+type AlexandriaElementIdx struct {
+	Element string `gorm:"size:5;primaryKey" json:"element"`
+	EntryID uint   `gorm:"primaryKey" json:"entry_id"`
+}
+
+func (AlexandriaElementIdx) TableName() string { return "alexandria_element_idx" }
+
+// HTSCMaterial HTSC-2025 外部数据集
+type HTSCMaterial struct {
+	ID        uint    `gorm:"primaryKey" json:"id"`
+	Name      *string `gorm:"size:200" json:"name"`
+	Formula   *string `gorm:"size:200" json:"formula"`
+	ClassName *string `gorm:"size:100" json:"class_name"`
+	Tc        *float64 `json:"tc"`
+	Elements  *string  `json:"elements"`
+	Composition *string `json:"composition"`
+}
+
+func (HTSCMaterial) TableName() string { return "htsc2025_materials" }
