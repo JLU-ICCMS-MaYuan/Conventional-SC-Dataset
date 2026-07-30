@@ -81,6 +81,8 @@ func main() {
 		cg.PATCH("/:id/public", handlers.ToggleChartGroupPublic)
 	}
 
+		// 快讯 API
+		r.GET("/api/news", handlers.ListNews)
 	// 认证路由组（普通用户可访问，仅需登录）
 	auth := r.Group("/api")
 	auth.Use(middleware.AuthRequired)
@@ -105,6 +107,9 @@ func main() {
 			admin.DELETE("/users/:id", handlers.DeleteUser)
 			admin.GET("/all-users", handlers.AllUsers)
 			admin.GET("/stats", handlers.GetStats)
+			admin.POST("/news", handlers.CreateNews)
+			admin.PUT("/news/:id", handlers.UpdateNews)
+			admin.DELETE("/news/:id", handlers.DeleteNews)
 	}
 
 		// 统计 API

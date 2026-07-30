@@ -19,6 +19,7 @@ import {
 import { useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
 import ChartGroupEditor from '../components/ChartGroupEditor'
+import NewsManager from '../components/NewsManager'
 
 /* ── Types ───────────────────────────────────── */
 interface UserRecord {
@@ -292,6 +293,7 @@ const AdminPage: React.FC = () => {
         <Tab label={`论文审核${papersStatus === 'pending' ? ` (${papersTotal})` : ''}`} />
         {isSuper && <Tab label="用户管理" icon={<AdminIcon fontSize="small" />} iconPosition="start" />}
         <Tab label="图表管理" />
+        <Tab label="快讯管理" />
       </Tabs>
 
       {/* ═══════════════════════════════════════════ */}
@@ -529,6 +531,12 @@ const AdminPage: React.FC = () => {
       {/* ═══════════════════════════════════════════ */}
       {/* TAB: Chart Groups */}
       {/* ═══════════════════════════════════════════ */}
+      {tab === (isSuper ? 4 : 3) && (
+        /* ── News Management ── */
+        <Box>
+          <NewsManager />
+        </Box>
+      )}
       {tab === (isSuper ? 3 : 2) && (
         <Box>
           <Box sx={{ display: 'flex', gap: 1, mb: 2, alignItems: 'center' }}>

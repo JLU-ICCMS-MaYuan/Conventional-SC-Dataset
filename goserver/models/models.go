@@ -177,3 +177,12 @@ type HTSCMaterial struct {
 }
 
 func (HTSCMaterial) TableName() string { return "htsc2025_materials" }
+
+// NewsItem 快讯
+type NewsItem struct {
+	ID        uint   `gorm:"primaryKey" json:"id"`
+	EventDate string `gorm:"size:20" json:"event_date"`
+	Title     string `gorm:"size:500" json:"title"`
+	Summary   string `json:"summary"`
+	Link      string `gorm:"size:1000" json:"link"`
+}

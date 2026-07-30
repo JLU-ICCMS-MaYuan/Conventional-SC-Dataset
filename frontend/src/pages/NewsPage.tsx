@@ -4,19 +4,38 @@ import { Box, Typography, Paper, Button, Chip, Tabs, Tab, Drawer } from '@mui/ma
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { api } from '../lib/api'
 
-const NEWS = [
-  { date: '2024', title: 'LaBeH8 在 100 GPa 下 Tc 突破 170 K', summary: '吉林大学研究团队发现新型镧铍氢化物在高压下展现优异超导性能，为室温超导研究提供新方向。' },
-  { date: '2023', title: 'LK-99 引发全球室温超导热潮', summary: '韩国团队声称合成常压室温超导体 LK-99，虽后续实验未能复现，但极大推动了公众对超导领域的关注。' },
-  { date: '2019', title: 'LaH10 在 170 GPa 达到 250 K', summary: '德国马普所发现十氢化镧在高压下 Tc 接近室温，创造氢化物超导新纪录。' },
-  { date: '2015', title: 'H3S 在 155 GPa 达到 203 K', summary: 'Drozdov 等人首次在硫化氢体系中突破 200 K，开创高压氢化物超导新纪元。' },
-]
 
 const NOBEL_MILESTONES = [
-  { year: 1913, name: 'Heike Kamerlingh Onnes', feat: '液化氦气，发现汞在 4.2 K 的超导现象' },
-  { year: 1972, name: 'Bardeen, Cooper, Schrieffer', feat: '提出 BCS 理论，解释常规超导微观机制' },
-  { year: 1973, name: 'Esaki, Giaever, Josephson', feat: '发现隧穿效应，奠定超导电子学基础' },
-  { year: 1987, name: 'Bednorz, M&uuml;ller', feat: '发现铜氧化物高温超导体，Tc 突破液氮温区' },
-  { year: 2003, name: 'Abrikosov, Ginzburg, Leggett', feat: '超导涡旋态理论和超流理论' },
+  {
+    year: 1913,
+    name: 'Heike Kamerlingh Onnes',
+    title: '液氦制备与超导电性的发现',
+    feat: '1908年首次液化氦气（沸点4.2K），1911年发现汞在4.2K时电阻突然降至零——人类第一次观测到超导现象。这不仅证明了极低温下物质的新物态，更开启了长达百年的超导研究序幕。Onnes 当时在笔记中写下「Mercury practically zero」，这一时刻被铭刻在物理学的历史上。',
+  },
+  {
+    year: 1972,
+    name: 'John Bardeen, Leon Cooper, John Schrieffer',
+    title: 'BCS 超导微观理论',
+    feat: '1957年三人提出以姓氏命名的 BCS 理论，首次从量子力学微观机制完整解释了超导电性：电子通过晶格振动（声子）交换形成库珀对（Cooper Pair），在无电阻的宏观量子态中运动。Bardeen 因此成为历史上唯一两次获得诺贝尔物理学奖的人（第一次是1956年发明晶体管）。BCS 理论至今仍是凝聚态物理最重要的理论基石之一。',
+  },
+  {
+    year: 1973,
+    name: '江崎玲於奈, Ivar Giaever, Brian Josephson',
+    title: '半导体与超导体中的隧穿效应',
+    feat: '江崎玲於奈于1957年发现半导体中的电子隧穿效应（Esaki Diode），Giaever 于1960年实验验证了超导体中的单电子隧穿，而当时年仅22岁的研究生 Josephson 则从理论上预言了超导隧道结中库珀对的隧穿效应——即著名的约瑟夫森效应（Josephson Effect）。这一预言后来被精确验证（误差<10⁻¹²），成为超导电子学、SQUID 磁强计和电压标准的物理基础。',
+  },
+  {
+    year: 1987,
+    name: 'Georg Bednorz, Alex Müller',
+    title: '铜氧化物高温超导体的突破',
+    feat: '1986年，IBM 苏黎世实验室的 Bednorz 和 Müller 在镧钡铜氧（LaBaCuO）陶瓷材料中发现35K的超导电性，打破了此前 Nb₃Ge 保持13年的23K记录。更重要的是，这种氧化物陶瓷是传统 BCS 理论无法解释的新型超导体。这一发现引发了全球「超导淘金热」，随后朱经武、赵忠贤等人迅速将 Tc 推至液氮温区（77K）以上，使超导应用成本骤降，彻底改变了超导技术的产业化前景。',
+  },
+  {
+    year: 2003,
+    name: 'Alexei Abrikosov, Vitaly Ginzburg, Anthony Leggett',
+    title: '第二类超导体与超流理论',
+    feat: 'Ginzburg 和 Landau 于1950年提出超导相变的唯象理论（GL 理论），成功描述了超导态的宏观波函数行为。Abrikosov 在1957年基于 GL 理论预言了第二类超导体中的磁通涡旋晶格——即著名的 Abrikosov 涡旋，直接解释了实用超导磁体（如 MRI、粒子加速器磁铁）在高场下的工作机制。Leggett 则因超流³He 的理论工作分享了该奖项。这三位科学家的贡献共同奠定了现代超导应用的理论基础。',
+  },
 ]
 
 const NewsPage: React.FC = () => {
@@ -25,10 +44,12 @@ const NewsPage: React.FC = () => {
   const [tab, setTab] = useState(0)
   const [chartData, setChartData] = useState<any[]>([])
   const [selected, setSelected] = useState<any>(null)
+  const [news, setNews] = useState<any[]>([])
 
   useEffect(() => {
     api.get<any[]>('/api/papers/stats/chart-data').then((d) => setStats(d?.length || 0)).catch(() => {})
     api.get<any[]>('/api/papers/stats/tc-pressure').then(setChartData).catch(() => {})
+    api.get<any[]>('/api/news').then(setNews).catch(() => {})
   }, [])
 
   return (
@@ -70,10 +91,13 @@ const NewsPage: React.FC = () => {
       {/* News Section */}
       <Typography variant="overline" sx={{ mb: 2, display: 'block' }}>超导快讯</Typography>
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' }, gap: 3, mb: 6 }}>
-        {NEWS.map((item) => (
-          <Paper key={item.title} sx={{ p: 2.5, borderRadius: 4, borderLeft: '4px solid', borderColor: 'primary.main' }}>
+        {news.map((item) => (
+          <Paper key={item.id} sx={{ p: 2.5, borderRadius: 4, borderLeft: '4px solid', borderColor: 'primary.main' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-              <Chip label={item.date} size="small" color="primary" />
+              <Chip label={item.event_date} size="small" color="primary" />
+              {item.link && (
+                <Chip label="报导" size="small" variant="outlined" component="a" href={item.link} target="_blank" clickable sx={{ cursor: 'pointer' }} />
+              )}
             </Box>
             <Typography variant="h3" gutterBottom>{item.title}</Typography>
             <Typography variant="body2" sx={{ color: 'text.secondary', lineHeight: 1.7 }}>{item.summary}</Typography>
@@ -86,11 +110,12 @@ const NewsPage: React.FC = () => {
       <Paper sx={{ p: 3, borderRadius: 4, mb: 6 }}>
         <Box sx={{ display: 'grid', gap: 2 }}>
           {NOBEL_MILESTONES.map((item) => (
-            <Box key={item.year} sx={{ display: 'flex', gap: 2, alignItems: 'baseline', pb: 2, borderBottom: '1px solid', borderColor: 'divider', '&:last-child': { borderBottom: 0, pb: 0 } }}>
-              <Typography variant="h3" sx={{ color: 'primary.main', minWidth: 52 }}>{item.year}</Typography>
-              <Box>
-                <Typography fontWeight={700}>{item.name}</Typography>
-                <Typography variant="body2" sx={{ color: 'text.secondary' }}>{item.feat}</Typography>
+            <Box key={item.year} sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', pb: 3, borderBottom: '1px solid', borderColor: 'divider', '&:last-child': { borderBottom: 0, pb: 0 } }}>
+              <Typography variant="h3" sx={{ color: 'primary.main', minWidth: 56, fontWeight: 800 }}>{item.year}</Typography>
+              <Box sx={{ flex: 1 }}>
+                <Typography fontWeight={700} fontSize={16}>{item.name}</Typography>
+                <Typography variant="subtitle2" color="primary.main" sx={{ mb: 0.5 }}>{item.title}</Typography>
+                <Typography variant="body2" sx={{ color: 'text.secondary', lineHeight: 1.8 }}>{item.feat}</Typography>
               </Box>
             </Box>
           ))}
