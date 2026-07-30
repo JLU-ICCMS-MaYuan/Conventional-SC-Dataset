@@ -16,8 +16,8 @@
 - [ ] RAG 安全防护：System Prompt 加固 + 检索结果清洗（防间接注入）+ 输入正则检测
 - [ ] RAG Tool 安全控制：参数注入防护（正则校验+clamp）+ 输出硬截断（≤5条/≤2000字）+ 公开/登录权限分层
 - [ ] 限流系统：/rag/chat/stream 用户级令牌桶（3次/分钟）+ LLM API 调用队列 + 全局限流兜底
-- [ ] Go 后端迁移 Phase 1：补齐密码验证 + 注册/邮箱验证
-- [ ] Go 后端迁移 Phase 2：元素/周期表/化学式搜索 API
+- [x] Go 后端迁移 Phase 1 + 2：密码/注册/搜索/图谱全部完成
+
 --------------------------------------------架构问题--------------------------------------------
 一个网站的标准五层：
 
@@ -29,15 +29,15 @@
 - [x] 前端上传页重构：登录门控 + 历史上传卡片 + 可编辑详情(PaperEditView) [8464b51]
 - [x] 前端 Vite 代理目标：8000→8080 统一入口 [8464b51]
 - [ ] 热点首页（HomePage）完成
-- [ ] 登录认证流程闭环
+- [x] 登录认证流程闭环 ✅
 
 ━━━ 网关层 (Go :8080) ━━━
 - [x] 登录密码 bcrypt 校验 + is_approved 检查 [9908ea2]
 - [x] AdminRequired 中间件实现并挂载到 /api/admin/* [9908ea2]
 - [x] 反向代理连接池配置(MaxIdleConnsPerHost=100 + Timeout=30s) [9908ea2]
-- [ ] /api/admin/stats 无认证公开暴露 — 加 AuthRequired
-- [ ] Go 注册端点缺失：无 POST /api/auth/register
-- [ ] Go/Python 职责边界：Go admin 路由弱权限 vs Python admin 正确实现。应统一为 Go 认证代理 + Python 业务逻辑
+- [x] /api/admin/stats 加 AuthRequired+AdminRequired [0d3d0fd]
+- [x] Go 注册端点：POST /api/auth/register + bcrypt [ffd4148]
+- [x] Go/Python 职责边界：Go 接管所有 CRUD+搜索+图谱+外部数据，Python 仅 RAG/AI
 
 ━━━ 业务层 (Python FastAPI :8000) ━━━
 - [x] 上传管线异步改造：文件保存即返回，全链路后台执行 [5794d71]

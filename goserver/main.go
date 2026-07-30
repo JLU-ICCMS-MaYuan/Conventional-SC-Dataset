@@ -47,7 +47,7 @@ func main() {
 
 	// 公开路由（不需要 JWT）
 	r.POST("/api/auth/login", handlers.Login)
-	r.GET("/api/admin/stats", handlers.GetStats) // 仪表盘可公开
+		r.POST("/api/auth/register", handlers.Register)
 
 	// 论文公开 API（替代 Python /api/papers/*）
 	papers := r.Group("/api/papers")
@@ -104,6 +104,7 @@ func main() {
 			admin.PUT("/users/:id/permissions", handlers.UpdateUser)
 			admin.DELETE("/users/:id", handlers.DeleteUser)
 			admin.GET("/all-users", handlers.AllUsers)
+			admin.GET("/stats", handlers.GetStats)
 	}
 
 		// 统计 API

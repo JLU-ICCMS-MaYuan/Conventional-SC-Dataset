@@ -471,3 +471,54 @@ func Login(c *gin.Context) {
 		},
 	})
 }
+
+// Register 注册
+// POST /api/auth/register
+func Register(c *gin.Context) {
+	var body struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+		RealName string `json:"real_name"`
+		IsAdmin  bool   `json:"is_admin"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil || body.Email == "" || body.Password == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "邮箱和密码不能为空"})
+		return
+	}
+
+	var existing models.User
+	if database.DB.Where("email = ?", body.Email).First(&existing).Error == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "该邮箱已注册"})
+		return
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(body.Password), bcrypt.DefaultCost)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "密码加密失败"})
+		return
+	}
+
+	role := "user"
+	if body.IsAdmin {
+		role = "admin"
+	}
+
+	user := models.User{
+		Email:        body.Email,
+		PasswordHash: string(hash),
+		RealName:     body.RealName,
+		Role:         role,
+		IsApproved:   false,
+	}
+	database.DB.Create(&user)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "注册成功，等待管理员审核",
+		"user": gin.H{
+			"id":       user.ID,
+			"email":    user.Email,
+			"real_name": user.RealName,
+			"role":     user.Role,
+		},
+	})
+}
