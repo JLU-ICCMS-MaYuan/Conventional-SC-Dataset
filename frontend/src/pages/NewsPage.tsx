@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Box, Typography, Paper, Button, Chip, Tabs, Tab, Drawer } from '@mui/material'
-import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { Box, Typography, Paper, Button, Chip } from '@mui/material'
 import { api } from '../lib/api'
 
 
@@ -40,15 +39,9 @@ const NOBEL_MILESTONES = [
 
 const NewsPage: React.FC = () => {
   const navigate = useNavigate()
-  const [stats, setStats] = useState(0)
-  const [tab, setTab] = useState(0)
-  const [chartData, setChartData] = useState<any[]>([])
-  const [selected, setSelected] = useState<any>(null)
   const [news, setNews] = useState<any[]>([])
 
   useEffect(() => {
-    api.get<any[]>('/api/papers/stats/chart-data').then((d) => setStats(d?.length || 0)).catch(() => {})
-    api.get<any[]>('/api/papers/stats/tc-pressure').then(setChartData).catch(() => {})
     api.get<any[]>('/api/news').then(setNews).catch(() => {})
   }, [])
 
@@ -125,18 +118,6 @@ const NewsPage: React.FC = () => {
         </Box>
       </Paper>
 
-      <Drawer anchor="right" open={!!selected} onClose={() => setSelected(null)} PaperProps={{ sx: { width: 360, p: 3 } }}>
-        {selected && (
-          <Box>
-            <Typography variant="h3" gutterBottom>{selected.label || selected.formula}</Typography>
-            <Typography variant="body2">Tc: {selected.y} K</Typography>
-            <Typography variant="body2">压强: {selected.x} GPa</Typography>
-            <Typography variant="body2">类型: {selected.type === 'experimental' ? '实验' : '理论'}</Typography>
-            {selected.space_group && <Typography variant="body2">空间群: {selected.space_group}</Typography>}
-            {selected.doi && <Typography variant="body2">DOI: {selected.doi}</Typography>}
-          </Box>
-        )}
-      </Drawer>
     </Box>
   )
 }

@@ -1,28 +1,27 @@
-import React from 'react'
-import { Routes, Route } from 'react-router-dom'
+import React, { Suspense, lazy } from 'react'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import { Box, CircularProgress } from '@mui/material'
 import AppShell from './components/AppShell'
-import HomePage from './pages/HomePage'
-import SearchPage from './pages/SearchPage'
-import RagPage from './pages/RagPage'
-import TcPredictPage from './pages/TcPredictPage'
-import NewsPage from './pages/NewsPage'
-import SharePage from './pages/share'
-import KnowledgeGraphPage from './pages/KnowledgeGraphPage'
-import AdminPage from './pages/AdminPage'
-import UploadPage from './pages/UploadPage'
+
+// 首页 — 唯一在主 bundle 中的 lazy import
+const NewsPage = lazy(() => import('./pages/NewsPage'))
+
+// 其他页面的 import() 藏在 LazyRoutes 中惰性加载
+// 避免主 bundle 包含其路径，防止浏览器预取 recharts / react-markdown 等重型库
+const LazyRoutes = lazy(() => import('./LazyRoutes'))
+
+const PageLoader: React.FC = () => (
+  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+    <CircularProgress />
+  </Box>
+)
 
 const App: React.FC = () => (
   <Routes>
     <Route element={<AppShell />}>
-      <Route path="/" element={<HomePage />} />
-      <Route path="/search" element={<SearchPage />} />
-      <Route path="/share" element={<SharePage />} />
-      <Route path="/upload" element={<UploadPage />} />
-      <Route path="/rag" element={<RagPage />} />
-      <Route path="/tc-predict" element={<TcPredictPage />} />
-      <Route path="/news" element={<NewsPage />} />
-      <Route path="/knowledge" element={<KnowledgeGraphPage />} />
-      <Route path="/admin" element={<AdminPage />} />
+      <Route path="/" element={<Navigate to="/news" replace />} />
+      <Route path="/news" element={<Suspense fallback={<PageLoader />}><NewsPage /></Suspense>} />
+      <Route path="*" element={<Suspense fallback={<PageLoader />}><LazyRoutes /></Suspense>} />
     </Route>
   </Routes>
 )
