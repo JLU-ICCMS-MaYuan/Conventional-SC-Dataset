@@ -34,6 +34,7 @@ wheels/
 # 日志
 *.log
 .play*
+tests/web_test
 
 # 环境变量
 .env
@@ -80,3 +81,7 @@ frontend_old
 frontend/static/index.html
 node_modules/
 goserver/goserver
+frontend/static/
+
+# Docker 部署产物（大文件 + 冗余副本）
+/docker

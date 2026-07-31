@@ -20,7 +20,7 @@ interface DataPoint {
   isInGroup: boolean
   isCustom: boolean
   label: string
-  paper_id?: number
+  paperId?: number
 }
 
 interface Props {
@@ -121,15 +121,13 @@ const ChartScatter: React.FC<Props> = ({
           {showBackground && bgSeries.map(s => (
             <Scatter key={s.key} name={s.key} data={s.data}
               fill={s.fill} opacity={BACKGROUND_OPACITY}
-              shape={s.shape}
-              onClick={(e: any) => onPointClick?.(e?.payload as DataPoint)} />
+              shape={s.shape} />
           ))}
 
           {/* 组合内点：实验红 / 理论蓝 */}
           {groupSeries.map(s => (
             <Scatter key={s.key} name={s.key} data={s.data}
-              fill={s.fill} opacity={0.9} shape={s.shape}
-              onClick={(e: any) => onPointClick?.(e?.payload as DataPoint)} />
+              fill={s.fill} opacity={0.9} shape={s.shape} />
           ))}
         </ScatterChart>
       </ResponsiveContainer>

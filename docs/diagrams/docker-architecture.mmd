@@ -1,0 +1,42 @@
+flowchart TB
+    Internet((🌐 互联网))
+
+    subgraph Server["🖥️ 服务器"]
+        Nginx["Nginx :80/:443 / HTTPS / 静态文件 + 反向代理"]
+
+        subgraph App["应用层"]
+            GoServer["Go :8080 / 论文检索/详情/图表/知识图谱/管理"]
+            Python["Python :8000 / RAG/上传/解析管线"]
+            Worker["Worker / Embedding向量化 + LLM富化 (按需)"]
+        end
+
+        subgraph Data["💾 数据层"]
+            MySQL[("MySQL :3306 / papers/users/key_properties")]
+            Redis[("Redis :6379 / 图表缓存")]
+            Neo4j[("Neo4j :7687 / 知识图谱 415节点/5000边")]
+            Qdrant[("Qdrant :6333 / 向量检索 79425条")]
+        end
+
+        subgraph Volumes["📁 数据卷"]
+            VMySQL["data/mysql/"]
+            VRedis["data/redis/"]
+            VNeo4j["data/neo4j/"]
+            VQdrant["data/qdrant_storage/"]
+            VFiles["data/uploads/ + graph.json + clean_results/"]
+        end
+    end
+
+    Internet <-->|"HTTPS"| Nginx
+    Nginx -->|"/api/*"| GoServer
+    Nginx -->|"/api/rag/*"| Python
+    GoServer --> MySQL & Redis & Neo4j
+    Python --> MySQL & Qdrant
+    Python -.->|"DeepSeek / OpenAI"| Internet
+    Worker --> MySQL & Qdrant
+    Worker -.->|"Embedding API"| Internet
+    MySQL -.- VMySQL
+    Redis -.- VRedis
+    Neo4j -.- VNeo4j
+    Qdrant -.- VQdrant
+    GoServer -.- VFiles
+    Python -.- VFiles
