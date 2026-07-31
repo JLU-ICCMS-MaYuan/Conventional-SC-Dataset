@@ -1,7 +1,6 @@
 """
-Admin APIs for users, paper review, and chart visibility.
+Admin APIs for users, paper review, and data management (v2 key_properties).
 """
-
 from datetime import datetime
 from typing import Optional
 
@@ -36,11 +35,6 @@ class UserPermissionRequest(BaseModel):
     is_admin: Optional[bool] = None
     is_superadmin: Optional[bool] = None
     is_approved: bool
-
-
-class ChartVisibilityRequest(BaseModel):
-    paper_ids: list[int]
-    show: bool
 
 
 class BatchReviewRequest(BaseModel):
@@ -86,58 +80,18 @@ def _user_to_dict(db: Session, user: models.User) -> dict:
     }
 
 
-def _record_to_dict(record: models.SuperconductorRecord) -> dict:
-    return {
-        "id": record.id,
-        "superconductor_id": record.superconductor_id,
-        "paper_id": record.paper_id,
-        "chemical_formula": record.superconductor.chemical_formula if record.superconductor else None,
-        "source_label": record.source_label,
-        "pressure_gpa": record.pressure_gpa,
-        "space_group_symbol": record.space_group_symbol,
-        "space_group_number": record.space_group_number,
-        "crystal_structure": record.crystal_structure,
-        "thermodynamically_stable": record.thermodynamically_stable,
-        "dynamically_stable": record.dynamically_stable,
-        "energy_above_hull": record.energy_above_hull,
-        "mcmillan_tc": record.mcmillan_tc,
-        "allen_dynes_tc": record.allen_dynes_tc,
-        "isotropic_eliashberg_tc": record.isotropic_eliashberg_tc,
-        "anisotropic_eliashberg_tc": record.anisotropic_eliashberg_tc,
-        "experimental_tc": record.experimental_tc,
-        "lambda_value": record.lambda_value,
-        "omega_log": record.omega_log,
-        "n_ef_total": record.n_ef_total,
-        "element_n_ef": record.element_n_ef,
-        "pseudopotential_type": record.pseudopotential_type,
-        "pseudopotential_name": record.pseudopotential_name,
-        "exchange_correlation_functional": record.exchange_correlation_functional,
-        "calculation_code": record.calculation_code,
-        "k_grid": record.k_grid,
-        "q_grid": record.q_grid,
-        "energy_cutoff_value": record.energy_cutoff_value,
-        "energy_cutoff_unit": record.energy_cutoff_unit,
-        "show_in_chart": record.show_in_chart,
-        "article_type": record.article_type,
-        "superconductor_type": record.superconductor_type,
-        "s_factor": record.s_factor,
-        "method": record.method,
-        "note": record.note,
-        "created_at": record.created_at.isoformat() if record.created_at else None,
-        "updated_at": record.updated_at.isoformat() if record.updated_at else None,
-    }
-
-
-def _paper_to_dict(paper: models.Paper, include_records: bool = False) -> dict:
+def _paper_to_dict(paper: models.Paper) -> dict:
+    """v2: 用 key_properties 替代 superconductor_records"""
     reviewer = paper.reviewed_by_user
     uploader = paper.uploaded_by_user
-    first_record = paper.records[0] if paper.records else None
-    first_sc = first_record.superconductor if first_record else None
-    # 聚合 records 中的类型信息
-    article_types = list({r.article_type for r in paper.records if r.article_type})
-    sc_types = list({r.superconductor_type for r in paper.records if r.superconductor_type})
-    s_factors = [r.s_factor for r in paper.records if r.s_factor is not None]
-    payload = {
+    kps = paper.key_properties or []
+
+    # 从 key_properties 聚合信息
+    materials = list({kp.material for kp in kps})
+    article_types = list({kp.article_type for kp in kps if kp.article_type})
+    sc_types = list({kp.superconductor_type for kp in kps if kp.superconductor_type})
+
+    return {
         "id": paper.id,
         "doi": paper.doi,
         "title": paper.title,
@@ -156,16 +110,40 @@ def _paper_to_dict(paper: models.Paper, include_records: bool = False) -> dict:
         "uploader_name": uploader.real_name if uploader else None,
         "created_at": paper.created_at.isoformat() if paper.created_at else None,
         "updated_at": paper.updated_at.isoformat() if paper.updated_at else None,
-        "record_count": len(paper.records),
-        "show_in_chart": any(record.show_in_chart for record in paper.records),
-        "compound_symbols": "-".join(first_sc.elements_list) if first_sc else None,
+        "summary": paper.summary,
+        "paper_type": paper.paper_type,
+        "keywords_tags": paper.keywords_tags,
+        "source_file_path": paper.source_file_path,
+        "methodology": paper.methodology,
+        "key_finding": paper.key_finding,
+        "rationale": paper.rationale,
+        "record_count": len(kps),
+        "show_in_chart": False,
+        "compound_symbols": materials[:3] if materials else None,
         "article_types": article_types,
         "superconductor_types": sc_types,
-        "s_factor": round(sum(s_factors) / len(s_factors), 2) if s_factors else None,
+        "materials": materials,
+        "key_properties": [
+            {
+                "id": kp.id,
+                "material": kp.material,
+                "name": kp.name,
+                "name_raw": kp.name_raw,
+                "value_min": kp.value_min,
+                "value_max": kp.value_max,
+                "value_raw": kp.value_raw,
+                "unit": kp.unit,
+                "pressure_gpa": kp.pressure_gpa,
+                "temperature_k": kp.temperature_k,
+                "is_primary": kp.is_primary,
+                "superconductor_type": kp.superconductor_type,
+                "article_type": kp.article_type,
+                "name_note": kp.name_note,
+                "condition_note": kp.condition_note,
+            }
+            for kp in kps
+        ],
     }
-    if include_records:
-        payload["records"] = [_record_to_dict(record) for record in paper.records]
-    return payload
 
 
 def _paper_query(
@@ -173,6 +151,7 @@ def _paper_query(
     *,
     status_filter: Optional[str] = None,
     keyword: Optional[str] = None,
+    material: Optional[str] = None,
     year_min: Optional[int] = None,
     year_max: Optional[int] = None,
 ):
@@ -188,12 +167,21 @@ def _paper_query(
                 models.Paper.journal.like(pattern),
             )
         )
+    if material:
+        sub = db.query(models.KeyProperty.paper_id).filter(
+            models.KeyProperty.material.like(f"%{material}%")
+        ).subquery()
+        query = query.filter(models.Paper.id.in_(sub))
     if year_min is not None:
         query = query.filter(models.Paper.year >= year_min)
     if year_max is not None:
         query = query.filter(models.Paper.year <= year_max)
     return query
 
+
+# ═══════════════════════════════════════════════
+# User Management
+# ═══════════════════════════════════════════════
 
 @router.get("/all-users", summary="获取所有用户列表（仅超级管理员）")
 async def get_all_users(
@@ -284,6 +272,10 @@ async def get_all_admins(
     return [_user_to_dict(db, user) for user in users]
 
 
+# ═══════════════════════════════════════════════
+# Paper Review
+# ═══════════════════════════════════════════════
+
 @router.post("/papers/{paper_id}/review", summary="更新文献审核状态")
 async def review_paper(
     paper_id: int,
@@ -301,6 +293,17 @@ async def review_paper(
     paper.reviewed_by_user_id = current_user.id
     paper.reviewed_at = datetime.utcnow()
     db.commit()
+
+    # 审批通过后同步到 Neo4j
+    if request.status == "approved":
+        try:
+            from backend.ingest.sync_neo4j import KGSync
+            kg = KGSync()
+            kg.sync_single(paper_id)
+            kg.close()
+        except Exception:
+            pass  # Neo4j 不可用时不阻塞审批流程
+
     return {"message": "审核状态已更新", "paper": _paper_to_dict(paper)}
 
 
@@ -329,6 +332,7 @@ async def get_my_reviews(
 @router.get("/papers/all", summary="获取所有文献（支持筛选）")
 async def get_all_papers(
     keyword: Optional[str] = None,
+    material: Optional[str] = None,
     review_status: Optional[str] = None,
     year_min: Optional[int] = None,
     year_max: Optional[int] = None,
@@ -341,6 +345,7 @@ async def get_all_papers(
         db,
         status_filter=review_status,
         keyword=keyword,
+        material=material,
         year_min=year_min,
         year_max=year_max,
     ).order_by(models.Paper.created_at.desc())
@@ -365,7 +370,7 @@ async def get_paper_detail(
     paper = db.query(models.Paper).filter(models.Paper.id == paper_id).first()
     if not paper:
         raise HTTPException(status_code=404, detail="文献不存在")
-    return _paper_to_dict(paper, include_records=True)
+    return _paper_to_dict(paper)
 
 
 @router.put("/papers/{paper_id}", summary="编辑文献基础信息")
@@ -378,29 +383,34 @@ async def update_paper(
     paper = db.query(models.Paper).filter(models.Paper.id == paper_id).first()
     if not paper:
         raise HTTPException(status_code=404, detail="文献不存在")
-    for field in ("doi", "title", "authors", "journal", "volume", "pages", "year", "abstract", "review_comment", "review_status", "show_in_chart"):
+    editable = ("doi", "title", "authors", "journal", "volume", "pages", "year", "abstract",
+                "review_comment", "review_status",
+                "summary", "paper_type", "keywords_tags", "source_file_path",
+                "methodology", "key_finding", "rationale")
+    for field in editable:
         if field in payload:
             setattr(paper, field, payload[field])
-    if "records" in payload and isinstance(payload["records"], list):
-        for rd in payload["records"]:
-            rid = rd.get("id")
-            if rid:
-                rec = db.query(models.SuperconductorRecord).filter_by(id=rid, paper_id=paper.id).first()
-                if rec:
-                    for rf in ("chemical_formula", "source_label", "pressure_gpa", "space_group_symbol",
-                               "space_group_number", "crystal_structure", "thermodynamically_stable",
-                               "dynamically_stable", "energy_above_hull", "mcmillan_tc", "allen_dynes_tc",
-                               "isotropic_eliashberg_tc", "anisotropic_eliashberg_tc", "experimental_tc",
-                               "lambda_value", "omega_log", "n_ef_total", "element_n_ef",
-                               "pseudopotential_type", "pseudopotential_name",
-                               "exchange_correlation_functional", "calculation_code",
-                               "k_grid", "q_grid", "energy_cutoff_value", "energy_cutoff_unit",
-                               "show_in_chart", "article_type", "superconductor_type",
-                               "s_factor", "method", "note"):
-                        if rf in rd:
-                            setattr(rec, rf, rd[rf])
+
+    # 更新 key_properties
+    kps_in = payload.get("key_properties")
+    if isinstance(kps_in, list):
+        for kp_data in kps_in:
+            kp_id = kp_data.get("id")
+            if not kp_id:
+                continue
+            kp = db.query(models.KeyProperty).filter_by(id=kp_id, paper_id=paper_id).first()
+            if not kp:
+                continue
+            kp_fields = ("material", "name", "name_raw", "name_note",
+                         "value_min", "value_max", "value_raw", "unit",
+                         "pressure_gpa", "temperature_k", "is_primary",
+                         "superconductor_type", "article_type", "condition_note")
+            for f in kp_fields:
+                if f in kp_data:
+                    setattr(kp, f, kp_data[f])
+
     db.commit()
-    return {"message": "文献信息已更新", "paper": _paper_to_dict(paper, include_records=True)}
+    return {"message": "文献信息已更新", "paper": _paper_to_dict(paper)}
 
 
 @router.delete("/papers/{paper_id}", summary="删除文献（仅超级管理员）")
@@ -412,8 +422,8 @@ async def delete_paper(
     paper = db.query(models.Paper).filter(models.Paper.id == paper_id).first()
     if not paper:
         raise HTTPException(status_code=404, detail="文献不存在")
-    for record in paper.records:
-        db.delete(record)
+    # v2: 删除关联的 key_properties
+    db.query(models.KeyProperty).filter(models.KeyProperty.paper_id == paper_id).delete()
     db.delete(paper)
     db.commit()
     return {"message": "文献已删除"}
@@ -434,20 +444,19 @@ async def batch_review_papers(
         paper.reviewed_by_user_id = current_user.id
         paper.reviewed_at = datetime.utcnow()
     db.commit()
+
+    # 审批通过后同步到 Neo4j
+    if request.status == "approved":
+        try:
+            from backend.ingest.sync_neo4j import KGSync
+            kg = KGSync()
+            for pid in request.paper_ids:
+                kg.sync_single(pid)
+            kg.close()
+        except Exception:
+            pass
+
     return {"message": "批量审核完成", "updated": len(papers)}
-
-
-@router.post("/papers/batch-chart-visibility", summary="批量设置图表显示")
-async def batch_chart_visibility(
-    request: ChartVisibilityRequest,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_admin),
-):
-    records = db.query(models.SuperconductorRecord).filter(models.SuperconductorRecord.paper_id.in_(request.paper_ids)).all()
-    for record in records:
-        record.show_in_chart = request.show
-    db.commit()
-    return {"message": "图表显示状态已更新", "updated": len(records)}
 
 
 @router.post("/papers/batch-delete", summary="批量删除文献（仅超级管理员）")
@@ -456,58 +465,48 @@ async def batch_delete_papers(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_superadmin),
 ):
+    db.query(models.KeyProperty).filter(models.KeyProperty.paper_id.in_(request.paper_ids)).delete()
     papers = db.query(models.Paper).filter(models.Paper.id.in_(request.paper_ids)).all()
     for paper in papers:
-        for record in paper.records:
-            db.delete(record)
         db.delete(paper)
     db.commit()
     return {"message": "批量删除完成", "deleted": len(papers)}
 
 
-def _record_to_item(record: models.SuperconductorRecord) -> dict:
-    """将超导记录转为前端展示用的字典"""
-    paper = record.paper
-    sc = record.superconductor
+# ═══════════════════════════════════════════════
+# Key Properties (v2 replacement for records)
+# ═══════════════════════════════════════════════
+
+def _kp_to_item(kp: models.KeyProperty) -> dict:
+    paper = kp.paper
+    sc = kp.superconductor
     return {
-        "id": record.id,
-        "paper_id": record.paper_id,
+        "id": kp.id,
+        "paper_id": kp.paper_id,
         "paper_title": paper.title if paper else None,
         "paper_doi": paper.doi if paper else None,
         "paper_year": paper.year if paper else None,
-        "chemical_formula": sc.chemical_formula if sc else None,
-        "compound_symbols": "-".join(sc.elements_list) if sc else None,
-        "pressure_gpa": record.pressure_gpa,
-        "space_group_symbol": record.space_group_symbol,
-        "space_group_number": record.space_group_number,
-        "crystal_structure": record.crystal_structure,
-        "mcmillan_tc": record.mcmillan_tc,
-        "allen_dynes_tc": record.allen_dynes_tc,
-        "isotropic_eliashberg_tc": record.isotropic_eliashberg_tc,
-        "anisotropic_eliashberg_tc": record.anisotropic_eliashberg_tc,
-        "experimental_tc": record.experimental_tc,
-        "lambda_value": record.lambda_value,
-        "omega_log": record.omega_log,
-        "n_ef_total": record.n_ef_total,
-        "thermodynamically_stable": record.thermodynamically_stable,
-        "dynamically_stable": record.dynamically_stable,
-        "energy_above_hull": record.energy_above_hull,
-        "show_in_chart": record.show_in_chart,
-        "article_type": record.article_type,
-        "superconductor_type": record.superconductor_type,
-        "calculation_code": record.calculation_code,
-        "method": record.method,
-        "note": record.note,
+        "material": kp.material,
+        "name": kp.name,
+        "name_raw": kp.name_raw,
+        "value_min": kp.value_min,
+        "value_max": kp.value_max,
+        "unit": kp.unit,
+        "pressure_gpa": kp.pressure_gpa,
+        "temperature_k": kp.temperature_k,
+        "is_primary": kp.is_primary,
+        "article_type": kp.article_type,
+        "superconductor_type": kp.superconductor_type,
         "review_status": paper.review_status if paper else None,
+        "structure_format": kp.structure_format,
     }
 
 
-@router.get("/records/all", summary="获取所有超导数据（支持筛选）")
+@router.get("/records/all", summary="获取所有物性数据（支持筛选）")
 async def get_all_records(
     review_status: Optional[str] = Query(None),
     article_type: Optional[str] = Query(None),
     superconductor_type: Optional[str] = Query(None),
-    show_in_chart: Optional[str] = Query(None),
     year_min: Optional[int] = Query(None),
     year_max: Optional[int] = Query(None),
     keyword: Optional[str] = Query(None),
@@ -516,65 +515,34 @@ async def get_all_records(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_admin),
 ):
-    query = db.query(models.SuperconductorRecord).join(models.Paper)
+    query = db.query(models.KeyProperty).join(models.Paper)
 
     if review_status:
         query = query.filter(models.Paper.review_status == review_status)
     if article_type:
-        query = query.filter(models.SuperconductorRecord.article_type == article_type)
+        query = query.filter(models.KeyProperty.article_type == article_type)
     if superconductor_type:
-        query = query.filter(models.SuperconductorRecord.superconductor_type == superconductor_type)
-    if show_in_chart:
-        query = query.filter(models.SuperconductorRecord.show_in_chart == (show_in_chart.lower() == "true"))
+        query = query.filter(models.KeyProperty.superconductor_type == superconductor_type)
     if year_min:
         query = query.filter(models.Paper.year >= year_min)
     if year_max:
         query = query.filter(models.Paper.year <= year_max)
     if keyword:
         kw = f"%{keyword}%"
-        query = query.join(models.Superconductor).filter(
+        query = query.filter(
             or_(
                 models.Paper.title.ilike(kw),
                 models.Paper.doi.ilike(kw),
-                models.Superconductor.chemical_formula.ilike(kw),
+                models.KeyProperty.material.ilike(kw),
             )
         )
 
     total = query.count()
-    records = query.order_by(models.SuperconductorRecord.id.desc()).offset(offset).limit(limit).all()
-    items = [_record_to_item(r) for r in records]
+    kps = query.order_by(models.KeyProperty.id.desc()).offset(offset).limit(limit).all()
+    items = [_kp_to_item(kp) for kp in kps]
 
     return {
         "items": items,
         "total": total,
         "page_size": limit,
     }
-
-
-class BatchRecordIdsRequest(BaseModel):
-    record_ids: list[int]
-
-
-@router.post("/records/batch-chart-visibility", summary="批量设置超导数据图表显示")
-async def batch_record_chart_visibility(
-    request: dict,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_superadmin),
-):
-    record_ids = request.get("record_ids", [])
-    show = request.get("show", True)
-    updated = db.query(models.SuperconductorRecord).filter(
-        models.SuperconductorRecord.id.in_(record_ids)
-    ).update({models.SuperconductorRecord.show_in_chart: show}, synchronize_session=False)
-    db.commit()
-    return {"message": "已更新", "updated_count": updated}
-
-
-@router.get("/papers/{paper_id}/images", summary="获取文献的所有图片")
-async def get_paper_images(paper_id: int):
-    raise HTTPException(status_code=status.HTTP_410_GONE, detail="文献图片存储已下线")
-
-
-@router.delete("/papers/{paper_id}/images/{image_id}", summary="删除文献截图")
-async def delete_paper_image(paper_id: int, image_id: int):
-    raise HTTPException(status_code=status.HTTP_410_GONE, detail="文献图片存储已下线")

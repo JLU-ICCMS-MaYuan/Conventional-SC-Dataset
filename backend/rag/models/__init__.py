@@ -5,6 +5,7 @@ from backend.rag.models.paper import Paper
 from backend.rag.models.paper_chunk import PaperChunk
 from backend.rag.models.user import User
 from backend.rag.models.superconductor_record import SuperconductorRecord
+from backend.rag.models.key_property import KeyProperty
 
 __all__ = [
     "PeriodicTableElement",
@@ -13,5 +14,6 @@ __all__ = [
     "Paper",
     "PaperChunk",
     "User",
-    "SuperconductorRecord",
+    "SuperconductorRecord",  # 遗留（v2 无此表，仅供摄入管线 import，待迁移）
+    "KeyProperty",
 ]

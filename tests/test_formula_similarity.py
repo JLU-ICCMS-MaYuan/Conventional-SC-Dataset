@@ -1,4 +1,4 @@
-from backend.formula_similarity import parse_formula_expression
+from backend.services.formula_similarity import parse_formula_expression
 
 
 def test_parse_formula_expression_supports_fractional_amounts():

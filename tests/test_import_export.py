@@ -1,8 +1,8 @@
 import pytest
 
 from backend import crud, models
-from backend.export_data import SCHEMA_VERSION, build_export_payload
-from backend.import_data import import_payload
+from backend.scripts.export_data import SCHEMA_VERSION, build_export_payload
+from backend.scripts.import_data import import_payload
 
 
 def test_build_export_payload_uses_redesigned_schema(db_session):

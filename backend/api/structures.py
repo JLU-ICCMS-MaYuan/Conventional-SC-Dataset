@@ -16,7 +16,6 @@ from backend.security import get_current_admin, get_current_user
 from backend.services.structure_storage import (
     approve_structure,
     create_structure,
-    default_structure_for_record,
     reject_structure,
     representative_structure_for,
     serialize_structure,
@@ -109,20 +108,35 @@ async def review_structure(
     return serialize_structure(structure)
 
 
-@router.get("/by-record/{record_id}")
-async def get_structure_by_record(
-    record_id: int,
+@router.get("/by-property/{kp_id}")
+async def get_structure_by_property(
+    kp_id: int,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(_require_user),
 ):
-    record = db.get(models.SuperconductorRecord, record_id)
-    if record is None:
-        raise HTTPException(status_code=404, detail="Superconductor record not found.")
+    """v2: 从 key_properties.structure_text 读取结构"""
+    kp = db.get(models.KeyProperty, kp_id)
+    if kp is None:
+        raise HTTPException(status_code=404, detail="Key property not found.")
+    if not kp.structure_text:
+        raise HTTPException(status_code=404, detail="该物性记录没有关联结构数据")
 
-    structure = default_structure_for_record(db, record)
-    if structure is None:
-        raise HTTPException(status_code=404, detail="Structure not found.")
-    return serialize_structure(structure)
+    # 同时查 superconductors_structures 表
+    sc = kp.superconductor
+    structure = None
+    if sc:
+        structure = db.query(models.SuperconductorStructure).filter(
+            models.SuperconductorStructure.superconductor_id == sc.id,
+            models.SuperconductorStructure.review_status == "approved",
+        ).first()
+
+    return {
+        "key_property_id": kp.id,
+        "material": kp.material,
+        "structure_text": kp.structure_text,
+        "structure_format": kp.structure_format or "cif",
+        "from_table": serialize_structure(structure) if structure else None,
+    }
 
 
 @router.get("/representative")

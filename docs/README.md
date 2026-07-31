@@ -9,7 +9,7 @@
 | I | Decentralized Uploading of Superconductivity Data | 已部分落地 | [01-decentralized-uploading.md](01-decentralized-uploading.md) |
 | II | Decentralized Maintenance and Verification | 已部分落地 | [02-maintenance-and-verification.md](02-maintenance-and-verification.md) |
 | III | Superconductivity Data Search and Database Discovery | 已落地 | [03-data-search-and-database-discovery.md](03-data-search-and-database-discovery.md) |
-| IV | Superconductivity Development Knowledge Graph | 部分落地 | [04-superconductivity-knowledge-graph.md](04-superconductivity-knowledge-graph.md) |
+| IV | Superconductivity Development Knowledge Graph | 已落地 | [04-superconductivity-knowledge-graph.md](04-superconductivity-knowledge-graph.md) |
 | V | Retrieval-Augmented AI Question Answering | 已落地 | [05-rag-question-answering.md](05-rag-question-answering.md) |
 | VI | AI-Assisted Estimation of Superconducting Transition Temperatures | 已落地但实验性 | [06-ai-assisted-tc-estimation.md](06-ai-assisted-tc-estimation.md) |
 | VII | Researcher Community Forum | 社区基础部分落地，论坛未落地 | [07-researcher-community-forum.md](07-researcher-community-forum.md) |
@@ -46,16 +46,19 @@ RAG 子系统还使用 `paper_chunks`、Chroma 向量库和独立配置的数据
 | `/admin/superadmin` | 超级管理员审批和权限管理 |
 | `/admin/papers` | 全局文献管理 |
 | `/admin/users` | 用户管理 |
-| `/rag` | AI 文献助手 |
+| `/knowledge` | 知识图谱可视化 |
+| `/rag` | AI 文献助手（普通问答 + 探索模式） |
 | `/tc-pre` | Tc 预测实验页 |
+| `/api/knowledge-graph/*` | 知识图谱用户 API |
+| `/api/kg/*` | 知识图谱 RAG API |
 | `/api/alexandria/*` | Alexandria 外部数据库接口 |
 | `/api/htsc2025/*` | HTSC-2025 外部数据集接口 |
 
 ## 功能边界
 
-已经落地的能力包括周期表与化学式检索、组合页论文和超导记录浏览、Alexandria/HTSC-2025 外部数据发现、论文与超导记录上传、CIF/POSCAR 结构上传与审核、管理员维护、RAG 问答、Tc 预测实验、首页 Tc-Year/Tc-Pressure 图表和贡献者排行。
+已经落地的能力包括周期表与化学式检索、组合页论文和超导记录浏览、Alexandria/HTSC-2025 外部数据发现、论文与超导记录上传、CIF/POSCAR 结构上传与审核、管理员维护、RAG 问答（Mentor + Inspiration Agent）、知识图谱可视化与 API、Tc 预测实验、首页 Tc-Year/Tc-Pressure 图表和贡献者排行。
 
-部分落地的能力包括去中心化维护、研究者社区、知识图谱产品化和批量导入。它们有数据库字段、后台能力、统计接口或内部查询基础，但还没有形成完整的面向终端用户的闭环。
+部分落地的能力包括去中心化维护、研究者社区和批量导入。它们有数据库字段、后台能力、统计接口或内部查询基础，但还没有形成完整的面向终端用户的闭环。
 
 未落地的能力包括真正的论坛帖子、评论区、弹幕、点赞、浏览量、热度排序、审核者排行的完整前端展示、图表点击联动检索、预测结果持久化和预测结果审核入库。
 

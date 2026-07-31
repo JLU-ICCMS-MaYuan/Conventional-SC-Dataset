@@ -1,0 +1,8 @@
+- [x] 文件上传与审核
+- [x] 管理员界面（论文审核/用户管理/图表管理）
+- [x] 上传界面（PDF/TXT/MD/JSON → 管线）
+- [x] 图表界面（散点图+组合管理+CSV映射+AI兜底）
+- [ ] 修复 RAG bug
+- [ ] Chroma 工作方式梳理/修复
+- [x] 知识图谱可视化（KnowledgeGraphPage + Neo4j 同步）
+- [x] 物性名 CSV 映射 + AI 追加

@@ -15,6 +15,12 @@ const PeriodicTable: React.FC<PeriodicTableProps> = ({ selected, onToggle, disab
   const rows = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
   const cols = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
 
+  // 主表中镧系/锕系的占位块（实体元素在第 9/10 行副表）
+  const PLACEHOLDERS: Record<string, { range: string; label: string; category: 'lanthanide' | 'actinide' }> = {
+    '6-3': { range: '57-71', label: 'La-Lu', category: 'lanthanide' },
+    '7-3': { range: '89-103', label: 'Ac-Lr', category: 'actinide' },
+  }
+
   return (
     <Box sx={{
       display: 'grid', gridTemplateColumns: 'repeat(18, 60px)', gap: '3px', justifyContent: 'center',
@@ -24,7 +30,24 @@ const PeriodicTable: React.FC<PeriodicTableProps> = ({ selected, onToggle, disab
       {rows.map((row) =>
         cols.map((col) => {
           const el = grid.get(`${row}-${col}`)
-          if (!el) return <Box key={`${row}-${col}`} sx={{ width: 60, height: 60, '@media (max-width:1160px)':{ width:50,height:50 }, '@media (max-width:768px)':{ width:40,height:40 } }} />
+          if (!el) {
+            const ph = PLACEHOLDERS[`${row}-${col}`]
+            if (ph) {
+              return (
+                <Box key={`${row}-${col}`} sx={{
+                  width:60, height:60, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+                  border:'1px dashed #999', borderRadius:'4px', bgcolor:CATEGORY_COLORS[ph.category], opacity:0.75, userSelect:'none',
+                  '@media (max-width:1160px)':{ width:50, height:50 }, '@media (max-width:768px)':{ width:40, height:40 },
+                }}>
+                  <Typography sx={{ fontSize:8, color:'#666', lineHeight:1 }}>{ph.range}</Typography>
+                  <Typography sx={{ fontSize:12, fontWeight:'bold', lineHeight:1.3, '@media (max-width:768px)':{ fontSize:10 } }}>
+                    {ph.label}
+                  </Typography>
+                </Box>
+              )
+            }
+            return <Box key={`${row}-${col}`} sx={{ width: 60, height: 60, '@media (max-width:1160px)':{ width:50,height:50 }, '@media (max-width:768px)':{ width:40,height:40 } }} />
+          }
 
           const isSelected = selected.has(el.symbol)
           const isDisabled = disabledElements?.has(el.symbol) || false

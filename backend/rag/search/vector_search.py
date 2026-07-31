@@ -6,7 +6,7 @@ vector_search.py — 向量语义搜索模块。
 
 from __future__ import annotations
 
-from backend.rag.ingest.embedder import embed_texts
+from backend.ingest.embedder import embed_texts
 from backend.rag.vectordb import search_chunks as chroma_search
 
 

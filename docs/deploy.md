@@ -12,6 +12,7 @@
 | Node.js | >= 18 | `node --version` |
 | npm | >= 9 | `npm --version` |
 | MySQL | 5.7+ 或 8.0 | `mysql --version` |
+| Neo4j | 5.x Community | `cypher-shell --version` |
 | pip | 最新 | `pip install --upgrade pip` |
 
 ## 2. 克隆项目
@@ -48,6 +49,11 @@ DEEPSEEK_MODEL="deepseek-chat"
 # Embedding（向量化用，独立配置，回退到 OPENAI_*）
 EMBEDDING_API_KEY="sk-your-embedding-key"
 EMBEDDING_BASE_URL="https://api.openai.com/v1"
+
+# Neo4j 图数据库
+NEO4J_URI="bolt://localhost:7687"
+NEO4J_USER="neo4j"
+NEO4J_PASSWORD="scwiki123"
 
 # ChromaDB
 RAG_CHROMA_PATH="data/chroma_db"
@@ -135,6 +141,7 @@ curl -s http://localhost:8000/api/rag/health
 - `/` — 首页
 - `/elements` — 周期表
 - `/compound/La-H` — La-H 体系文献
+- `/knowledge` — 知识图谱可视化
 - `/rag` — AI 文献助手（普通问答 + 🔬 探索模式）
 - `/tc-pre` — Tc 预测
 - `/admin/dashboard` — 管理员审核
@@ -146,16 +153,23 @@ SC-Wiki/
 ├── .env                  # 环境配置（不提交）
 ├── backend/              # FastAPI 后端
 │   ├── main.py           # 入口
-│   ├── api/              # API 路由
-│   ├── rag/              # RAG 引擎 + Inspiration Agent
-│   └── ...
+│   ├── api/              # API 路由 (kg.py, knowledge_graph.py, rag.py, ...)
+│   ├── rag/              # RAG 引擎
+│   │   ├── agent/        # LangGraph Agent (graph + mentor + tools)
+│   │   ├── tools/        # 数据源工具 (neo4j + mysql + chroma)
+│   │   ├── core/         # RAG 核心引擎
+│   │   ├── inspiration/  # 探索模式
+│   │   └── search/       # 搜索
+│   ├── ingest/           # 摄入管线 (data/ + kg/)
+│   ├── scripts/          # 数据工具脚本
+│   └── services/         # 业务服务
 ├── frontend/             # React 前端源码
 │   ├── src/
-│   ├── static/           # npm run build 产物
-│   └── ...
+│   └── static/           # npm run build 产物
 ├── data/
-│   ├── chroma_db/        # ChromaDB 向量库（~1.2GB）
-│   └── ...
+│   ├── chroma_db/        # ChromaDB 向量库（20集合）
+│   └── clean_results/    # LLM 富化结果 (638 JSON + LOG)
+├── docs/                 # 项目文档 + 流程图
 ├── requirements.txt
 └── start.sh
 ```

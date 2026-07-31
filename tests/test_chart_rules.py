@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from backend.chart_rules import (
+from backend.services.chart_rules import (
     include_in_tc_pressure_chart,
     include_in_tc_year_chart,
     representative_tc,

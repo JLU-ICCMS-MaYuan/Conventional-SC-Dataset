@@ -26,6 +26,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 60  # Token 有效期：60天
 
 # HTTPBearer 用于从请求头提取 token
 security = HTTPBearer()
+security_optional = HTTPBearer(auto_error=False)
 
 
 def hash_password(password: str) -> str:
@@ -96,6 +97,23 @@ async def get_current_user(
         )
 
     return user
+
+
+async def get_current_user_optional(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_optional),
+    db: Session = Depends(get_db)
+) -> Optional[User]:
+    """获取当前登录用户（可选，未登录返回None）"""
+    if credentials is None:
+        return None
+    token = credentials.credentials
+    payload = decode_access_token(token)
+    if payload is None:
+        return None
+    email: str = payload.get("sub")
+    if email is None:
+        return None
+    return db.query(User).filter(User.email == email).first()
 
 
 async def get_current_admin(

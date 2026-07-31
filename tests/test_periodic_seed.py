@@ -1,4 +1,4 @@
-from backend.init_db import seed_periodic_table_elements
+from backend.scripts.init_db import seed_periodic_table_elements
 from backend.models import PeriodicTableElement
 
 

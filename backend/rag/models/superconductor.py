@@ -49,6 +49,7 @@ class Superconductor(Base):
 
     chemical_system = relationship("ChemicalSystem", back_populates="superconductors")
     records = relationship("SuperconductorRecord", back_populates="superconductor")
+    key_properties = relationship("KeyProperty", back_populates="superconductor")
 
     def __repr__(self) -> str:
         return f"<Superconductor {self.display_name or self.chemical_formula}>"

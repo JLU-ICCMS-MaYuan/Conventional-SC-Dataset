@@ -2,67 +2,91 @@
 
 ## Definition
 
-Superconductivity Development Knowledge Graph 指围绕超导体、论文、物性参数和结构化记录建立的可查询关系网络。当前代码中的知识图谱主要服务于 RAG 问答：它把超导体作为 subject，把 Tc、压力、lambda、omega_log 等物性作为 predicate/object 进行结构化查询。
+Superconductivity Development Knowledge Graph 是 SC-Wiki 围绕论文、材料、物性、研究者和论文间学术关系构建的图数据库系统。它包含 Neo4j 图数据库（639 篇论文、1459 种材料、1481 位研究者、6753 条关系）、前端可视化页面（`/knowledge`）和两套 API（用户可视化 API + RAG Agent API）。
 
 ## Current Status
 
-当前状态是部分落地。`backend/rag/knowledge_graph.py` 已经提供知识图谱式查询，RAG 引擎会在回答某些问题时调用 KG 查询。但目前没有独立的知识图谱页面、可视化网络图、图数据库后端或用户可交互探索界面。
+当前状态已落地。Neo4j 图数据库包含 Paper、Material、Property、Researcher 四种节点和 STUDIES、RELATES_TO、BUILDS_ON、AUTHORED、HAS_PROPERTY 五种关系。前端 `/knowledge` 页面提供 vis-network 力导向图可视化。API 层分为用户面向的 `/api/knowledge-graph/*`（读 graph.json）和 RAG Agent 面向的 `/api/kg/*`（读 Neo4j）。
 
 ## What Exists Today
 
-当前知识图谱能力主要体现在三个方面。
+### Neo4j 图数据库
 
-第一，结构化属性查询。代码可以查询已审核论文关联的超导记录，把超导体化学式、物性谓词和数值结果组织为 KG 结果。它支持按谓词、操作符和值进行过滤。
+| 节点类型 | 数量 | 说明 |
+|---------|------|------|
+| Paper | 639 | 论文节点，含 title/year/journal/summary/methodology/key_finding 等 |
+| Material | 1459 | 材料节点，以 chemical_formula 为唯一标识 |
+| Property | 316 | 物性节点（Tc/λ/ω_log），含 pressure 条件 |
+| Researcher | 1481 | 研究者节点，从 author_list JSON 解析 |
 
-第二，属性汇总。`get_all_properties(subject)` 可以围绕某个超导体返回已知属性，用于回答某个材料的物性详情问题。
+| 关系类型 | 数量 | 说明 |
+|---------|------|------|
+| STUDIES | 1416 | Paper → Material（discovers/investigates/predicts） |
+| RELATES_TO | 771 | Paper → Paper（8 种子类型：首次发现/实验验证/理论基础等） |
+| BUILDS_ON | 541 | Paper → Paper，前驱工作依赖 |
+| AUTHORED | 3709 | Researcher → Paper |
+| HAS_PROPERTY | 316 | Material → Property |
 
-第三，RAG 融合。RAG 引擎会根据意图决定是否调用 KG 查询。如果用户问“哪些材料 Tc 高于 200K”或“某材料的 Tc 是多少”，系统更倾向使用结构化 KG 结果；如果用户问机理、综述或解释类问题，则更多依赖文本检索。
+### 前端可视化
 
-## Relationship With RAG
+`/knowledge` 页面：vis-network 力导向图。支持节点选中高亮（1-hop 邻居清晰，其余透明）、展开节点（BFS 遍历锁定子图）、关系类型筛选、边证据原文展示、论文详情侧边栏。
 
-知识图谱不是 RAG 的同义词。RAG 是完整问答系统，包含意图解析、KG 查询、向量检索、重排序、prompt 构造和 LLM 生成。知识图谱是其中更结构化、更适合事实和数值问题的一层。
+### API
 
-当前把知识图谱单列为第四大功能，是因为它承接了前面三步沉淀出的可信结构化数据，并为后续 RAG 提供可递归调用的结构化索引层。它表达了项目未来可以从“文献问答”走向“超导发展脉络和材料关系网络”的方向。但从代码现状看，它还不是独立产品化模块。
+用户可视化 API（`/api/knowledge-graph/*`，读 graph.json）：
+- `GET /overview` — 首页图谱 top-K 边
+- `GET /papers/{id}/neighbors` — 展开一层关联
+- `GET /papers/{id}` — 论文详情
+- `GET /stats` — 图谱统计
+
+RAG Agent API（`/api/kg/*`，读 Neo4j）：
+- `GET /traverse?paper_id=&depth=` — 多跳图遍历
+- `GET /path?from_paper=&to_paper=` — 最短路径
+- `GET /around?paper_id=` — 论文上下文（材料+关联+前驱+作者）
+- `GET /material/{formula}` — 材料全貌（研究论文+物性）
+- `GET /search?q=` — 模糊搜索
+
+### 构建流水线
+
+位于 `backend/ingest/kg/`，7 步流水线：
+1. `extract_relations.py` — LLM 从 34 篇综述提取论文间关系
+2. `fix_resolve.py` — V2+V1 双通道解析 paper_id
+3. `merge_relations.py` — 合并去重 → graph.json (771 边/335 节点)
+4. `kg_enrich.py` — LLM 富化 638 篇论文（7 项结构化数据）
+5. `kg_sync.py` — MySQL + clean_results → Neo4j 全量同步
+6. `kg_import_relations.py` — graph.json → Neo4j RELATES_TO 边
+7. API 暴露 → `/api/knowledge-graph/*` + `/api/kg/*`
 
 ## Code and API Evidence
 
 核心代码：
+- `backend/ingest/kg/` — KG 构建流水线
+- `backend/rag/tools/neo4j.py` — Neo4j 图查询工具
+- `backend/rag/tools/mysql.py` — MySQL 物性查询
+- `backend/api/knowledge_graph.py` — 用户可视化 API
+- `backend/api/kg.py` — RAG Agent API
+- `frontend/src/pages/KnowledgeGraphPage.tsx` — 可视化页面
 
-- `backend/rag/knowledge_graph.py`
-- `backend/rag/rag/engine.py`
-- `backend/rag/rag/prompts.py`
-- `backend/rag/service.py`
-
-间接入口：
-
-- `POST /api/rag/chat`
-- `POST /api/rag/chat/stream`
-- `GET /api/rag/superconductors`
-- `GET /api/rag/superconductors/{superconductor_id}`
-
-当前没有 `/knowledge-graph` 页面，也没有 `/api/knowledge-graph/*` 独立路由。
+页面入口：
+- `/knowledge` — 知识图谱可视化
 
 ## Data Sources
 
-知识图谱主要从论文、超导体和超导记录中抽取结构化关系。关键字段包括：
+Neo4j 数据来源：
+- MySQL `papers` 表 → Paper 节点基础字段
+- MySQL `superconductors` 表 → Material 节点
+- MySQL `superconductor_records` 表 → Property 节点 + HAS_PROPERTY
+- `data/clean_results/*.json` → Paper 节点的 LLM 富化字段（methodology/builds_on/key_finding 等）
+- `graph.json` → Paper-Paper RELATES_TO 关系
 
-- `Superconductor.chemical_formula`
-- `Paper.review_status`
-- `SuperconductorRecord.pressure_gpa`
-- `SuperconductorRecord.mcmillan_tc`
-- `SuperconductorRecord.allen_dynes_tc`
-- `SuperconductorRecord.isotropic_eliashberg_tc`
-- `SuperconductorRecord.anisotropic_eliashberg_tc`
-- `SuperconductorRecord.experimental_tc`
-- `SuperconductorRecord.lambda_value`
-- `SuperconductorRecord.omega_log`
+## Limitations
 
-旧 RAG 迁移设计还提到 `paper_chunks` 表和 MySQL/SQLite 双配置边界，这影响 KG 和 RAG 的数据来源一致性。
-
-## Boundary
-
-当前 KG 只表达被代码显式查询的结构化关系，不应夸大为完整学科知识图谱。它没有覆盖所有材料关系、研究团队关系、引用网络、历史事件、争议观点、实验路线或社区互动。
+- SHARES_STRUCTURE 关系返回 0（Material.space_group 字段未填充）
+- BUILDS_ON 的 target 使用 paper_id:-1 占位符（未做模糊匹配）
 
 ## Future Direction
 
-后续可以把 KG 产品化为独立页面，支持按元素、化学式、年份、压力、Tc、论文和结构关系浏览。也可以增加图谱可视化、时间线、引用网络、研究者节点，以及与外部数据库结果的关系融合。
+- BUILDS_ON 占位符匹配到真实 paper_id
+- 挂载 Inspiration Agent 的图遍历推理
+- 按年份切片的时序演化分析
+- Node2Vec / GraphSAGE 材料相似度 embedding

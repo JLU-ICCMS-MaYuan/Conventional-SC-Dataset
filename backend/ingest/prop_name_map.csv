@@ -1,0 +1,27 @@
+raw_pattern,canonical_name,label
+tc,critical_temperature,超导临界温度
+critical temperature,critical_temperature,超导临界温度
+superconducting transition temperature,critical_temperature,超导临界温度
+lambda,electron_phonon_coupling,电声耦合常数 λ
+λ,electron_phonon_coupling,电声耦合常数 λ
+electron-phonon coupling,electron_phonon_coupling,电声耦合常数 λ
+epc,electron_phonon_coupling,电声耦合常数 λ
+omega_log,omega_log,对数平均声子频率 ω_log
+ω_log,omega_log,对数平均声子频率 ω_log
+superconducting gap,superconducting_gap,超导能隙
+hc2,upper_critical_field,上临界磁场
+upper critical field,upper_critical_field,上临界磁场
+critical current density,critical_current_density,临界电流密度
+coulomb pseudopotential,coulomb_pseudopotential,库仑赝势 μ*
+dos at fermi,dos_fermi,费米面态密度
+n(ef),dos_fermi,费米面态密度
+debye temperature,debye_temperature,德拜温度
+metallization pressure,metallization_pressure,金属化压力
+synthesis pressure,synthesis_pressure,合成压力
+stability pressure,stability_pressure,稳定压力
+transition pressure,transition_pressure,相变压力
+lattice parameter,lattice_parameter,晶格常数
+formation enthalpy,formation_enthalpy,形成焓
+band gap,band_gap,带隙
+diffusivity,diffusivity,扩散系数
+hydrogen storage,hydrogen_storage_capacity,储氢容量

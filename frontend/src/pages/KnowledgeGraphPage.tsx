@@ -37,6 +37,7 @@ const KnowledgeGraphPage: React.FC = () => {
   const networkRef = useRef<Network | null>(null)
   const nodesDs = useRef<DataSet<any>>(new DataSet([]))
   const edgesDs = useRef<DataSet<any>>(new DataSet([]))
+  const expandedRef = useRef(false)  // 展开后锁定，空白点击不恢复
 
   const [loading, setLoading] = useState(true)
   const [selectedNode, setSelectedNode] = useState<any>(null)
@@ -44,6 +45,34 @@ const KnowledgeGraphPage: React.FC = () => {
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set())
   const [paperDetail, setPaperDetail] = useState<any>(null)
   const [totalEdges, setTotalEdges] = useState(0)
+
+  // BFS 找所有可达节点
+  const getReachable = (startId: string): Set<string> => {
+    const adj = new Map<string, Set<string>>()
+    edgesDs.current.forEach((e: any) => {
+      if (!adj.has(e.from)) adj.set(e.from, new Set())
+      if (!adj.has(e.to)) adj.set(e.to, new Set())
+      adj.get(e.from)!.add(e.to)
+      adj.get(e.to)!.add(e.from)
+    })
+    const visited = new Set<string>()
+    const queue = [startId]
+    visited.add(startId)
+    while (queue.length) {
+      const cur = queue.shift()!
+      for (const nb of adj.get(cur) || []) {
+        if (!visited.has(nb)) { visited.add(nb); queue.push(nb) }
+      }
+    }
+    return visited
+  }
+
+  const filterReachable = (centerId: string) => {
+    const reachable = getReachable(centerId)
+    nodesDs.current.forEach((n: any) => {
+      nodesDs.current.update({ id: n.id, hidden: !reachable.has(n.id), opacity: 1.0 })
+    })
+  }
 
   const initNetwork = useCallback(() => {
     if (!containerRef.current) return
@@ -55,7 +84,7 @@ const KnowledgeGraphPage: React.FC = () => {
       },
       edges: {
         arrows: { to: { enabled: true, scaleFactor: 0.5 } },
-        smooth: { type: 'continuous' as const },
+        smooth: { enabled: true, type: 'continuous', roundness: 0.5 },
         font: { size: 9, color: '#666', strokeWidth: 2, align: 'top' as const },
       },
       nodes: {
@@ -69,12 +98,30 @@ const KnowledgeGraphPage: React.FC = () => {
     })
     networkRef.current = net
 
+    // 选中节点：1-hop 邻居透明，其他节点透明
+    const highlightNeighbors = (nodeId: string) => {
+      const direct = new Set<string>([nodeId])
+      edgesDs.current.forEach((e: any) => {
+        if (e.from === nodeId) direct.add(e.to)
+        if (e.to === nodeId) direct.add(e.from)
+      })
+      nodesDs.current.forEach((n: any) => {
+        nodesDs.current.update({ id: n.id, opacity: direct.has(n.id) ? 1.0 : 0.12 })
+      })
+    }
+    const unhighlightAll = () => {
+      if (expandedRef.current) return  // 展开后锁定，不可恢复
+      nodesDs.current.forEach((n: any) => {
+        nodesDs.current.update({ id: n.id, opacity: 1.0, hidden: false })
+      })
+    }
+
     net.on('click', (p: any) => {
       if (p.nodes.length) {
         const n = nodesDs.current.get(p.nodes[0]) as any
         setSelectedNode({ id: p.nodes[0], ...n })
         setSelectedEdge(null)
-        // fetch paper detail
+        highlightNeighbors(p.nodes[0])
         if (n.paper_id) {
           api.get<any>(`/api/papers/${n.paper_id}`).then(d => setPaperDetail(d)).catch(() => setPaperDetail(null))
         } else {
@@ -87,6 +134,7 @@ const KnowledgeGraphPage: React.FC = () => {
         setPaperDetail(null)
       } else {
         setSelectedNode(null); setSelectedEdge(null); setPaperDetail(null)
+        unhighlightAll()
       }
     })
     return net
@@ -145,6 +193,10 @@ const KnowledgeGraphPage: React.FC = () => {
     try {
       const data = await api.get<any>(`/api/knowledge-graph/papers/${encodeURIComponent(nodeId)}/neighbors?limit=10`)
       const existingIds = new Set(nodesDs.current.getIds())
+      // 获取中心节点位置，新节点放在附近（避免 (0,0) 导致边不可见）
+      const positions = networkRef.current?.getPositions([nodeId])
+      const cx = positions?.[nodeId]?.x ?? 0
+      const cy = positions?.[nodeId]?.y ?? 0
       for (const n of data.new_nodes || []) {
         if (!existingIds.has(n.id)) {
           const hasPid = n.id.startsWith('paper_')
@@ -155,22 +207,29 @@ const KnowledgeGraphPage: React.FC = () => {
               : { background: '#90a4ae', border: '#607d8b' },
             size: hasPid ? 14 : 8,
             font: { size: hasPid ? 11 : 9 },
+            x: cx + (Math.random() - 0.5) * 300,
+            y: cy + (Math.random() - 0.5) * 300,
             paper_id: n.paper_id,
           })
         }
       }
       for (const e of data.new_edges || []) {
-        edgesDs.current.add({
-          id: `${e.source}_${e.target}_${e.type}`,
-          from: e.source, to: e.target,
-          label: TYPE_LABELS[e.type] || '',
-          color: { color: TYPE_COLORS[e.type] || '#999', opacity: 0.7 },
-          width: Math.max(1.2, (e.importance || 0.5) * 3),
-          type: e.type, importance: e.importance, evidence: e.evidence,
-        })
+        const eid = `${e.source}_${e.target}_${e.type}`
+        const existingEdge = edgesDs.current.get(eid)
+        if (!existingEdge) {
+          edgesDs.current.add({
+            id: eid, from: e.source, to: e.target,
+            label: TYPE_LABELS[e.type] || '',
+            color: { color: TYPE_COLORS[e.type] || '#999', opacity: 0.7 },
+            width: Math.max(1.2, (e.importance || 0.5) * 3),
+            type: e.type, importance: e.importance, evidence: e.evidence,
+          })
+        }
       }
-      // highlight center node
+      // highlight center + BFS: 可达节点显示，其余消失，锁定不可恢复
       nodesDs.current.update({ id: nodeId, borderWidth: 3, color: { background: '#ff9800', border: '#e65100' } })
+      expandedRef.current = true
+      filterReachable(nodeId)
     } catch (e) { console.error(e) }
   }, [])
 
@@ -229,16 +288,6 @@ const KnowledgeGraphPage: React.FC = () => {
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                 点击论文节点查看详情和关联关系，点击边查看关系证据原文。
               </Typography>
-              <Divider sx={{ my: 2 }} />
-              <Typography variant="caption" color="text.secondary">
-                关系类型图例：
-              </Typography>
-              <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
-                {Object.entries(TYPE_LABELS).map(([key, label]) => (
-                  <Chip key={key} label={label} size="small" variant="outlined"
-                    sx={{ borderColor: TYPE_COLORS[key], color: TYPE_COLORS[key], fontSize: 11 }} />
-                ))}
-              </Stack>
             </>
           )}
 

@@ -48,6 +48,7 @@ bak
 tmp/
 temp/
 *.tmp
+*:Zone.Identifier
 
 #AI
 AGENTS.md
@@ -75,6 +76,4 @@ frontend_old
 .superpowers/
 frontend/static/index.html
 node_modules/
-package.json
-package-lock.json
-src/
+goserver/goserver

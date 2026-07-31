@@ -33,7 +33,7 @@ Superconductivity Data Search and Database Discovery 是 SC-Wiki 的发现入口
 
 外部数据库发现是这个功能的第二层，用于把本地数据库之外的候选材料也纳入探索范围。
 
-Alexandria 能力主要面向电声耦合相关材料数据。代码中有 `backend/alexandria_db.py`、`backend/alexandria_import.py` 和 `backend/api/alexandria.py`。接口支持按元素搜索、列出元素、查看材料详情、下载材料数据、查看统计和生成 CIF。
+Alexandria 能力主要面向电声耦合相关材料数据。代码中有 `backend/services/alexandria_db.py`、`backend/services/alexandria_import.py` 和 `backend/api/alexandria.py`。接口支持按元素搜索、列出元素、查看材料详情、下载材料数据、查看统计和生成 CIF。
 
 HTSC-2025 能力主要面向常压高温超导体基准数据集。代码中有 `backend/api/htsc2025.py`。接口支持按元素搜索、查看统计和按名称查看详情。
 

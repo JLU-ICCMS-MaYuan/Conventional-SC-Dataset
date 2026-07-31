@@ -47,6 +47,11 @@ class HTSC2025SearchRequest(BaseModel):
     elements: List[str] = Field(..., description="元素符号列表")
     mode: str = Field("contains", description="筛选模式: only, combination, contains")
     min_tc: Optional[float] = Field(None, description="最低 Tc (K)")
+    # 与前端筛选栏对齐的通用筛选参数
+    tc_min: Optional[float] = Field(None, description="最低 Tc (K)，与 min_tc 等价且优先")
+    tc_max: Optional[float] = Field(None, description="最高 Tc (K)")
+    pressure_min: Optional[float] = Field(None, description="最低压强 (GPa)，数据集为常压（0 GPa）")
+    pressure_max: Optional[float] = Field(None, description="最高压强 (GPa)")
     limit: int = Field(50, ge=1, le=200)
     offset: int = Field(0, ge=0)
 
@@ -67,13 +72,21 @@ def search_htsc2025(request: HTSC2025SearchRequest):
     data = _load_dataset()
     records = data.get("records", [])
     query_set = set(request.elements)
+    min_tc = request.tc_min if request.tc_min is not None else request.min_tc
 
     matched = []
     for r in records:
         entry_els = set(r.get("elements", []))
         if not _entry_matches(entry_els, query_set, request.mode):
             continue
-        if request.min_tc is not None and r["tc"] < request.min_tc:
+        if min_tc is not None and r["tc"] < min_tc:
+            continue
+        if request.tc_max is not None and r["tc"] > request.tc_max:
+            continue
+        # 数据集均为常压材料，压强按 0 GPa 参与区间筛选
+        if request.pressure_min is not None and request.pressure_min > 0:
+            continue
+        if request.pressure_max is not None and request.pressure_max < 0:
             continue
         matched.append(r)
 

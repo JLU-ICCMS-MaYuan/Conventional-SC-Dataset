@@ -1,8 +1,26 @@
+import { getStoredToken } from '../context/AuthContext'
+
+function authHeaders(): HeadersInit {
+  const token = getStoredToken()
+  if (token) {
+    return { Authorization: `Bearer ${token}` }
+  }
+  return {}
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init)
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      ...authHeaders(),
+      ...(init?.headers as Record<string, string>),
+    },
+  })
   if (!response.ok) {
     const message = await response.text()
-    throw new Error(message || `HTTP ${response.status}`)
+    const error = new Error(message || `HTTP ${response.status}`) as Error & { status?: number }
+    error.status = response.status
+    throw error
   }
   return response.json() as Promise<T>
 }
@@ -28,10 +46,27 @@ export const api = {
       body: buildBody(data),
     }),
 
+  put: <T>(url: string, data?: unknown) =>
+    request<T>(url, {
+      method: 'PUT',
+      headers: buildHeaders(data),
+      body: buildBody(data),
+    }),
+
+  patch: <T>(url: string, data?: unknown) =>
+    request<T>(url, {
+      method: 'PATCH',
+      headers: buildHeaders(data),
+      body: buildBody(data),
+    }),
+
+  del: <T>(url: string) =>
+    request<T>(url, { method: 'DELETE' }),
+
   postStream: (url: string, data?: unknown) =>
     fetch(url, {
       method: 'POST',
-      headers: buildHeaders(data),
+      headers: { ...authHeaders(), ...buildHeaders(data) },
       body: buildBody(data),
     }),
 }

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
-import { Box, Typography, Button, IconButton, Chip, TextField, Paper } from '@mui/material'
+import { Box, Typography, Button, IconButton, Chip, TextField, Paper, CircularProgress } from '@mui/material'
 import SendIcon from '@mui/icons-material/Send'
 import { useStreamingChat } from '../lib/useStreamingChat'
 import MarkdownMessage from '../components/MarkdownMessage'
@@ -18,7 +18,7 @@ const SUGGESTIONS = ['LaH10 的 Tc 是多少?', '超导温度高于 200K 的有�
 const RagPage: React.FC = () => {
   const {
     convs, activeId, messages, loading, papers, top10,
-    ideas, reviews, statusLog, savedPapers,
+    ideas, reviews, statusLog, savedPapers, inspiration,
     newConversation, switchConversation, deleteConversation, send,
   } = useStreamingChat()
 
@@ -121,6 +121,14 @@ const RagPage: React.FC = () => {
         <Box sx={{ display: 'flex', flexDirection: 'column' }}>
           <Paper sx={{ p: 2.5, borderRadius: 4, boxShadow: '0 2px 6px rgba(15,23,42,.14), 0 4px 12px rgba(15,23,42,.08)', height: 'calc(100vh - 300px)', display: 'flex', flexDirection: 'column' }}>
             <Typography variant="h2" gutterBottom>对话流</Typography>
+            {inspiration.active && inspiration.statusMessage && (
+              <Box sx={{ mb: 1, p: '6px 12px', borderRadius: 1, bgcolor: '#eef2ff', display: 'flex', alignItems: 'center', gap: 1 }}>
+                <CircularProgress size={14} sx={{ color: '#4f46e5' }} />
+                <Typography variant="body2" fontWeight={600} color="#4f46e5">
+                  {inspiration.statusMessage}
+                </Typography>
+              </Box>
+            )}
             <Box ref={chatBoxRef} sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
               {messages.length === 0 && (
                 <Paper sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 4, mb: 2 }}>
@@ -162,11 +170,26 @@ const RagPage: React.FC = () => {
                     )}
 
                     {isAssistant && !msg.content && loading && (
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: 1 }}>
-                        <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#999', animation: 'blink 1.2s infinite' }} />
-                        <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#999', animation: 'blink 1.2s infinite', animationDelay: '0.2s' }} />
-                        <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#999', animation: 'blink 1.2s infinite', animationDelay: '0.4s' }} />
-                        <Typography variant="body2" sx={{ ml: 0.5 }}>思考中...</Typography>
+                      <Box sx={{ py: 1 }}>
+                        {statusLog.length > 0 ? (
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                            {statusLog.map((s, i) => (
+                              <Typography key={i} variant="body2" color="text.secondary" sx={{ fontSize: 12, fontFamily: 'monospace' }}>
+                                {s}
+                              </Typography>
+                            ))}
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#4f46e5', animation: 'blink 1.2s infinite' }} />
+                            </Box>
+                          </Box>
+                        ) : (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#999', animation: 'blink 1.2s infinite' }} />
+                            <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#999', animation: 'blink 1.2s infinite', animationDelay: '0.2s' }} />
+                            <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#999', animation: 'blink 1.2s infinite', animationDelay: '0.4s' }} />
+                            <Typography variant="body2" color="text.secondary" sx={{ ml: 0.5, fontSize: 12 }}>等待响应...</Typography>
+                          </Box>
+                        )}
                       </Box>
                     )}
                   </Box>

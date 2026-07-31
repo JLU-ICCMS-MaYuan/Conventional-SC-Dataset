@@ -138,17 +138,24 @@ class PaperModeSearchRequest(BaseModel):
     review_status: Optional[str] = Field(None, description="审核状态")
     sort_by: Optional[str] = Field("year", description="排序字段：created_at, year")
     sort_order: Optional[str] = Field("desc", description="排序顺序：asc, desc")
+    # 记录级筛选（search/records、search-by-mode 使用）
+    tc_min: Optional[float] = Field(None, description="最低 Tc (K)")
+    tc_max: Optional[float] = Field(None, description="最高 Tc (K)")
+    pressure_min: Optional[float] = Field(None, description="最低压强 (GPa)")
+    pressure_max: Optional[float] = Field(None, description="最高压强 (GPa)")
+    superconductor_type: Optional[str] = Field(None, description="超导类型")
+    space_group_min: Optional[int] = Field(None, description="空间群编号下限")
+    space_group_max: Optional[int] = Field(None, description="空间群编号上限")
+    chart_only: Optional[bool] = Field(None, description="仅返回进入图表的记录")
     limit: int = Field(50, ge=1, le=200, description="返回数量限制")
     offset: int = Field(0, ge=0, description="偏移量")
 
     @validator('elements')
     def validate_mode_search_elements(cls, v):
-        if not v:
-            raise ValueError("至少需要选择一个元素")
         return sorted(set(v))
 
     @validator('mode')
-    def validate_mode_search_mode(cls, v):
+    def validate_mode_search_mode(cls, v, values):
         allowed = {
             'only',
             'combination',
@@ -160,6 +167,15 @@ class PaperModeSearchRequest(BaseModel):
         }
         if v not in allowed:
             raise ValueError(f"筛选模式必须是: {', '.join(allowed)}")
+        # 化学式检索允许不选元素，其余模式必须至少选择一个元素
+        if v != 'formula_search' and not values.get('elements'):
+            raise ValueError("至少需要选择一个元素")
+        return v
+
+    @validator('formula', always=True)
+    def validate_formula_for_formula_search(cls, v, values):
+        if values.get('mode') == 'formula_search' and not (v and v.strip()):
+            raise ValueError("化学式检索需要 formula")
         return v
 
 
@@ -198,18 +214,11 @@ class PaperCreate(BaseModel):
 
     @validator('superconductor_type')
     def validate_superconductor_type(cls, v):
-        legacy_map = {
-            'carbon_organic': 'carbon',
-            'conventional': 'others',
-            'other_conventional': 'others',
-            'unconventional': 'others',
-            'other_unconventional': 'others',
-            'unknown': 'others'
-        }
-        normalized = legacy_map.get(v, v)
-        allowed_types = ['cuprate', 'iron_based', 'nickel_based', 'hydride', 'carbon', 'organic', 'others']
-        if normalized not in allowed_types:
-            raise ValueError(f"超导体类型必须是: {', '.join(allowed_types)}")
+        # 统一走规范归一（含历史缩写 h/c/cb/ot 与 legacy 别名）
+        from backend.sc_types import SC_TYPE_LABELS, normalize_sc_type
+        normalized = normalize_sc_type(v)
+        if normalized is None:
+            raise ValueError(f"超导体类型必须是: {', '.join(SC_TYPE_LABELS)}")
         return normalized
 
 class PaperData(BaseModel):

@@ -15,77 +15,56 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from backend import crud, models, schemas
-from backend.chart_rules import (
-    include_in_tc_pressure_chart,
-    include_in_tc_year_chart,
-    representative_tc,
-)
 from backend.database import get_db
 from backend.db_helpers import build_system_key
 from backend.repositories.superconductors import search_superconductors
+from backend.sc_types import SC_TYPE_LABELS, normalize_sc_type
 from backend.utils.citation import generate_aps_citation, generate_bibtex_citation
 
 
 router = APIRouter(prefix="/api/papers", tags=["papers"])
 
-def _record_to_dict(record: models.SuperconductorRecord) -> dict[str, Any]:
+# 化学式中的元素符号（大写字母 + 可选小写字母），用于集合语义的元素匹配
+_ELEMENT_TOKEN_RE = re.compile(r"[A-Z][a-z]?")
+
+
+def _formula_element_set(formula: str | None) -> set[str]:
+    """从化学式提取元素符号集合，如 LaH10 → {'La', 'H'}"""
+    return set(_ELEMENT_TOKEN_RE.findall(formula or ""))
+
+
+def _kp_to_dict(kp: models.KeyProperty) -> dict[str, Any]:
+    """key_properties 序列化（含规范名中文标签与范围值）"""
+    from backend.ingest.prop_names import PROP_LABELS
     return {
-        "id": record.id,
-        "superconductor_id": record.superconductor_id,
-        "chemical_formula": record.superconductor.chemical_formula if record.superconductor else None,
-        "source_label": record.source_label,
-        "pressure_gpa": record.pressure_gpa,
-        "space_group_symbol": record.space_group_symbol,
-        "space_group_number": record.space_group_number,
-        "crystal_structure": record.crystal_structure,
-        "thermodynamically_stable": record.thermodynamically_stable,
-        "dynamically_stable": record.dynamically_stable,
-        "energy_above_hull": record.energy_above_hull,
-        "mcmillan_tc": record.mcmillan_tc,
-        "allen_dynes_tc": record.allen_dynes_tc,
-        "isotropic_eliashberg_tc": record.isotropic_eliashberg_tc,
-        "anisotropic_eliashberg_tc": record.anisotropic_eliashberg_tc,
-        "experimental_tc": record.experimental_tc,
-        "tc_max": max(
-            v for v in [
-                record.mcmillan_tc,
-                record.allen_dynes_tc,
-                record.isotropic_eliashberg_tc,
-                record.anisotropic_eliashberg_tc,
-                record.experimental_tc,
-            ] if v is not None
-        ) if any(
-            v is not None for v in [
-                record.mcmillan_tc,
-                record.allen_dynes_tc,
-                record.isotropic_eliashberg_tc,
-                record.anisotropic_eliashberg_tc,
-                record.experimental_tc,
-            ]
-        ) else None,
-        "article_type": record.article_type,
-        "lambda_value": record.lambda_value,
-        "omega_log": record.omega_log,
-        "n_ef_total": record.n_ef_total,
-        "element_n_ef": record.element_n_ef,
-        "pseudopotential_type": record.pseudopotential_type,
-        "pseudopotential_name": record.pseudopotential_name,
-        "exchange_correlation_functional": record.exchange_correlation_functional,
-        "calculation_code": record.calculation_code,
-        "k_grid": record.k_grid,
-        "q_grid": record.q_grid,
-        "energy_cutoff_value": record.energy_cutoff_value,
-        "energy_cutoff_unit": record.energy_cutoff_unit,
-        "show_in_chart": record.show_in_chart,
-        "s_factor": record.s_factor,
-        "method": record.method,
-        "note": record.note,
+        "id": kp.id,
+        "paper_id": kp.paper_id,
+        "superconductor_id": kp.superconductor_id,
+        "material": kp.material,
+        "name": kp.name,
+        "label": PROP_LABELS.get(kp.name, kp.name),
+        "name_raw": kp.name_raw,
+        "name_note": kp.name_note,
+        "value_min": kp.value_min,
+        "value_max": kp.value_max,
+        "value_raw": kp.value_raw,
+        "unit": kp.unit,
+        "pressure_gpa": kp.pressure_gpa,
+        "temperature_k": kp.temperature_k,
+        "condition_json": kp.condition_json,
+        "condition_note": kp.condition_note,
+        "is_primary": kp.is_primary,
+        "superconductor_type": kp.superconductor_type,
+        "article_type": kp.article_type,
+        "source_label": kp.source_label,
+        "structure_text": kp.structure_text,
+        "structure_format": kp.structure_format,
     }
 
 
 def _paper_to_dict(paper: models.Paper, include_records: bool = True) -> dict[str, Any]:
-    first_record = paper.records[0] if paper.records else None
-    first_superconductor = first_record.superconductor if first_record else None
+    kps = paper.key_properties
+    first_sc = next((kp.superconductor for kp in kps if kp.superconductor), None)
     payload = {
         "id": paper.id,
         "doi": paper.doi,
@@ -96,35 +75,33 @@ def _paper_to_dict(paper: models.Paper, include_records: bool = True) -> dict[st
         "pages": paper.pages,
         "year": paper.year,
         "abstract": paper.abstract,
+        "summary": paper.summary,
+        "paper_type": paper.paper_type,
+        "keywords_tags": paper.keywords_tags,
+        "methodology": paper.methodology,
+        "key_finding": paper.key_finding,
+        "rationale": paper.rationale,
         "review_status": paper.review_status,
         "review_comment": paper.review_comment,
         "reviewed_by_user_id": paper.reviewed_by_user_id,
         "reviewed_at": paper.reviewed_at,
         "uploaded_by_user_id": paper.uploaded_by_user_id,
-        "chemical_formula": first_superconductor.chemical_formula if first_superconductor else None,
-        "compound_symbols": "-".join(first_superconductor.elements_list) if first_superconductor else None,
+        "chemical_formula": first_sc.chemical_formula if first_sc else None,
+        "compound_symbols": "-".join(first_sc.elements_list) if first_sc else None,
         "created_at": paper.created_at,
         "updated_at": paper.updated_at,
     }
-    # Tc 摘要 — 从任意 record 取第一个非空值
-    def _first_tc(attr: str):
-        for r in paper.records:
-            val = getattr(r, attr, None)
-            if val is not None:
-                return val
-        return None
-    payload["mcmillan_tc"] = _first_tc("mcmillan_tc")
-    payload["allen_dynes_tc"] = _first_tc("allen_dynes_tc")
-    payload["isotropic_eliashberg_tc"] = _first_tc("isotropic_eliashberg_tc")
-    payload["anisotropic_eliashberg_tc"] = _first_tc("anisotropic_eliashberg_tc")
-    payload["experimental_tc"] = _first_tc("experimental_tc")
-    # 聚合摘要 — 从所有 records 去重提取
-    payload["article_types"] = list({r.article_type for r in paper.records if r.article_type})
-    payload["superconductor_types"] = list({r.superconductor_type for r in paper.records if r.superconductor_type})
-    payload["pressures_gpa"] = sorted({r.pressure_gpa for r in paper.records if r.pressure_gpa is not None})
-    payload["space_groups"] = list({r.space_group_symbol for r in paper.records if r.space_group_symbol})
+    # Tc 摘要 — critical_temperature 物性的最大值
+    tc_values = [kp.value_max for kp in kps
+                 if kp.name == "critical_temperature" and kp.value_max is not None]
+    payload["tc_max"] = max(tc_values) if tc_values else None
+    # 聚合摘要
+    payload["article_types"] = list({kp.article_type for kp in kps if kp.article_type})
+    payload["superconductor_types"] = list({kp.superconductor_type for kp in kps if kp.superconductor_type})
+    payload["pressures_gpa"] = sorted({kp.pressure_gpa for kp in kps if kp.pressure_gpa is not None})
+    payload["materials"] = list({kp.material for kp in kps})
     if include_records:
-        payload["records"] = [_record_to_dict(record) for record in paper.records]
+        payload["key_properties"] = [_kp_to_dict(kp) for kp in kps]
     return payload
 
 
@@ -147,10 +124,9 @@ def _build_ris_content(papers: list[models.Paper]) -> str:
             lines.append(f"SP  - {paper.pages}")
         if paper.doi:
             lines.append(f"DO  - {paper.doi}")
-        first_record = paper.records[0] if paper.records else None
-        first_superconductor = first_record.superconductor if first_record else None
-        if first_superconductor:
-            lines.append(f"N1  - 化学式 {first_superconductor.chemical_formula}")
+        first_sc = next((kp.superconductor for kp in paper.key_properties if kp.superconductor), None)
+        if first_sc:
+            lines.append(f"N1  - 化学式 {first_sc.chemical_formula}")
         lines.append("ER  - ")
         entries.append("\n".join(lines))
     return "\n\n".join(entries)
@@ -195,18 +171,9 @@ def _query_papers_for_superconductors(
 ):
     query = (
         db.query(models.Paper)
-        .join(models.SuperconductorRecord)
-        .join(models.Superconductor)
+        .join(models.KeyProperty)
+        .join(models.Superconductor, models.KeyProperty.superconductor_id == models.Superconductor.id)
         .filter(models.Superconductor.id.in_(superconductor_ids))
-        .filter(
-            or_(
-                models.SuperconductorRecord.mcmillan_tc.isnot(None),
-                models.SuperconductorRecord.allen_dynes_tc.isnot(None),
-                models.SuperconductorRecord.isotropic_eliashberg_tc.isnot(None),
-                models.SuperconductorRecord.anisotropic_eliashberg_tc.isnot(None),
-                models.SuperconductorRecord.experimental_tc.isnot(None),
-            )
-        )
         .distinct()
     )
     if keyword:
@@ -225,8 +192,7 @@ def _query_papers_for_superconductors(
         query = query.filter(models.Paper.year <= year_max)
     if journal:
         query = query.filter(models.Paper.journal.like(f"%{journal}%"))
-    if crystal_structure:
-        query = query.filter(models.SuperconductorRecord.crystal_structure.like(f"%{crystal_structure}%"))
+    # crystal_structure：v2 物性表无该字段，条件忽略
     if review_status:
         query = query.filter(models.Paper.review_status == review_status)
 
@@ -423,7 +389,7 @@ def search_papers_by_mode(
     tc_max = getattr(request, 'tc_max', None)
     pressure_min = getattr(request, 'pressure_min', None)
     pressure_max = getattr(request, 'pressure_max', None)
-    sc_type = getattr(request, 'superconductor_type', None)
+    sc_type = normalize_sc_type(getattr(request, 'superconductor_type', None))
     space_min = getattr(request, 'space_group_min', None)
     space_max = getattr(request, 'space_group_max', None)
     chart_only = getattr(request, 'chart_only', None)
@@ -456,22 +422,22 @@ def search_papers_by_mode(
     )
     papers = query.all()
 
-    # 后端筛选 records：Tc/压强/类型/空间群/图表
-    for paper in papers:
-        paper.records = [
-            r for r in paper.records
-            if (tc_min is None or (r.tc_max is not None and r.tc_max >= tc_min))
-            and (tc_max is None or (r.tc_max is not None and r.tc_max <= tc_max))
-            and (pressure_min is None or (r.pressure_gpa is not None and r.pressure_gpa >= pressure_min))
-            and (pressure_max is None or (r.pressure_gpa is not None and r.pressure_gpa <= pressure_max))
-            and (sc_type is None or sc_type == 'All' or r.superconductor_type == sc_type or (hasattr(r, 'superconductor') and r.superconductor and r.superconductor.superconductor_type == sc_type))
-            and (space_min is None or (r.space_group_number is not None and r.space_group_number >= space_min))
-            and (space_max is None or (r.space_group_number is not None and r.space_group_number <= space_max))
-            and (not chart_only or r.show_in_chart)
-        ]
-    # 移除 records 全部被筛掉的 paper
-    papers = [p for p in papers if p.records]
-    total = len(papers)
+    # 论文级筛选：其 critical_temperature 物性满足 Tc/压强/类型/图表条件
+    def _paper_matches(paper) -> bool:
+        for kp in paper.key_properties:
+            if kp.name != "critical_temperature" or kp.value_max is None:
+                continue
+            if tc_min is not None and kp.value_max < tc_min: continue
+            if tc_max is not None and (kp.value_min or kp.value_max) > tc_max: continue
+            if pressure_min is not None and (kp.pressure_gpa is None or kp.pressure_gpa < pressure_min): continue
+            if pressure_max is not None and (kp.pressure_gpa is not None and kp.pressure_gpa > pressure_max): continue
+            if sc_type and (kp.superconductor_type or '').lower() != sc_type: continue
+            if chart_only and not kp.is_primary: continue
+            return True
+        return False
+
+    if any(v is not None for v in (tc_min, tc_max, pressure_min, pressure_max)) or sc_type or chart_only:
+        papers = [p for p in papers if _paper_matches(p)]
     return _paginate_paper_items(papers, request.limit, request.offset)
 
 
@@ -480,7 +446,7 @@ def search_records_flat(
     request: schemas.PaperModeSearchRequest,
     db: Session = Depends(get_db),
 ):
-    """返回扁平记录列表，每条 9 个字段"""
+    """返回扁平记录列表（基于 key_properties 的 critical_temperature 物性）"""
     mode_map = {
         "only": "elements_exact_search", "combination": "elements_combination_search",
         "contains": "elements_contained_search", "formula_search": "formula_search",
@@ -492,88 +458,87 @@ def search_records_flat(
                                      formula_sort=request.formula_sort or "relevance", limit=10000, offset=0)
     if not result.items:
         return {"items": [], "total": 0}
-
-    query = _query_papers_for_superconductors(
-        db, [item.id for item in result.items],
-        keyword=request.keyword, year_min=request.year_min, year_max=request.year_max,
-        journal=request.journal, crystal_structure=request.crystal_structure,
-        review_status=request.review_status,
-        sort_by=request.sort_by or "year", sort_order=request.sort_order or "desc",
-    )
-    papers = query.all()
+    sc_ids = [item.id for item in result.items]
 
     # 筛选参数
     tc_min = getattr(request, 'tc_min', None)
     tc_max = getattr(request, 'tc_max', None)
     pressure_min = getattr(request, 'pressure_min', None)
     pressure_max = getattr(request, 'pressure_max', None)
-    sc_type = getattr(request, 'superconductor_type', None)
-    space_min = getattr(request, 'space_group_min', None)
-    space_max = getattr(request, 'space_group_max', None)
+    sc_type = normalize_sc_type(getattr(request, 'superconductor_type', None))
     chart_only = getattr(request, 'chart_only', None)
 
-    sc_type_map = {'h': '高压氢化物', 'c': '碳基', 'cb': '铜基', 'ot': '其他超导',
-                   'cuprate': '铜基', 'iron_based': '铁基', 'nickel_based': '镍基',
-                   'hydride': '高压氢化物', 'carbon': '碳基', 'organic': '有机', 'others': '其他超导'}
-    status_map = {'pending': 'Pending', 'approved': 'Approved', 'reviewed': 'Approved', 'rejected': 'Rejected'}
+    KP, P = models.KeyProperty, models.Paper
+    query = (
+        db.query(KP, P)
+        .join(P, KP.paper_id == P.id)
+        .filter(KP.superconductor_id.in_(sc_ids))
+        .filter(KP.name == "critical_temperature")
+        .filter(KP.value_max.isnot(None))
+    )
+    if request.keyword:
+        pattern = f"%{request.keyword}%"
+        query = query.filter(or_(
+            P.title.like(pattern), P.doi.like(pattern),
+            P.journal.like(pattern), KP.material.like(pattern),
+        ))
+    if request.year_min is not None:
+        query = query.filter(P.year >= request.year_min)
+    if request.year_max is not None:
+        query = query.filter(P.year <= request.year_max)
+    if request.journal:
+        query = query.filter(P.journal.like(f"%{request.journal}%"))
+    if request.review_status:
+        query = query.filter(P.review_status == request.review_status)
+    # Tc 区间筛选按范围相交语义
+    if tc_min is not None:
+        query = query.filter(KP.value_max >= tc_min)
+    if tc_max is not None:
+        query = query.filter(KP.value_min <= tc_max)
+    if pressure_min is not None:
+        query = query.filter(KP.pressure_gpa >= pressure_min)
+    if pressure_max is not None:
+        query = query.filter(KP.pressure_gpa <= pressure_max)
+    if sc_type:
+        query = query.filter(KP.superconductor_type == sc_type)
+    if chart_only:
+        query = query.filter(KP.is_primary.is_(True))
 
-    records = []
-    for paper in papers:
-        sc_types = (paper.superconductor_types or []) if hasattr(paper, 'superconductor_types') else []
-        sc_type_label = sc_type_map.get(sc_types[0] if sc_types else '', 'Unknown')
-        for rec in paper.records:
-            rec_formula = rec.superconductor.chemical_formula if rec.superconductor else paper.chemical_formula
-            # 只保留 formula 包含全部搜索元素的记录
-            if request.elements and len(request.elements) > 0:
-                if not all(el.lower() in (rec_formula or '').lower() for el in request.elements):
-                    continue
-            # 计算 tc_max
-            tc_vals = [v for v in [rec.mcmillan_tc, rec.allen_dynes_tc, rec.isotropic_eliashberg_tc, rec.anisotropic_eliashberg_tc, rec.experimental_tc] if v is not None]
-            tc_max_val = max(tc_vals) if tc_vals else None
-            if tc_min is not None and (tc_max_val is None or tc_max_val < tc_min): continue
-            if tc_max is not None and (tc_max_val is not None and tc_max_val > tc_max): continue
-            if pressure_min is not None and (rec.pressure_gpa is None or rec.pressure_gpa < pressure_min): continue
-            if pressure_max is not None and (rec.pressure_gpa is not None and rec.pressure_gpa > pressure_max): continue
-            if sc_type and sc_type != 'All':
-                all_types = list({r.superconductor_type for r in paper.records if r.superconductor_type})
-                if sc_type not in [t.lower() for t in all_types]: continue
-            if space_min is not None and (rec.space_group_number is None or rec.space_group_number < space_min): continue
-            if space_max is not None and (rec.space_group_number is not None and rec.space_group_number > space_max): continue
-            if chart_only and not rec.show_in_chart: continue
-            if tc_max_val is None: continue
-            # 类型标签从 paper.records 中收集
-            all_types = list({r.superconductor_type for r in paper.records if r.superconductor_type})
-            type_label = sc_type_map.get(all_types[0] if all_types else '', 'Unknown')
-            records.append({
-                "record_id": rec.id,
-                "paper_id": paper.id,
-                "year": paper.year or 0,
-                "formula": rec_formula or "-",
-                "type": type_label,
-                "pressure": f"{rec.pressure_gpa} GPa" if rec.pressure_gpa is not None else "-",
-                "tc": f"{tc_max_val:.1f} K",
-                "space_group": rec.space_group_symbol or "-",
-                "source": "Local",
-                "status": status_map.get(paper.review_status, "Pending"),
-                "doi": paper.doi or "-",
-            })
+    sort_col = P.created_at if (request.sort_by == "created_at") else P.year
+    query = query.order_by(sort_col.asc() if request.sort_order == "asc" else sort_col.desc(), KP.id.asc())
 
-    total = len(records)
+    total = query.count()
     page_size = request.limit or 50
     offset = request.offset or 0
-    page_items = records[offset:offset + page_size]
-    return {"items": page_items, "total": total}
+    rows = query.offset(offset).limit(page_size).all()
+
+    status_map = {'pending': 'Pending', 'approved': 'Approved', 'reviewed': 'Approved', 'rejected': 'Rejected'}
+
+    def _tc_display(kp: models.KeyProperty) -> str:
+        if kp.value_min is not None and kp.value_max is not None and kp.value_min != kp.value_max:
+            return f"{kp.value_min:.1f}–{kp.value_max:.1f} K"
+        return f"{kp.value_max:.1f} K"
+
+    items = [{
+        "record_id": kp.id,
+        "paper_id": paper.id,
+        "year": paper.year or 0,
+        "formula": kp.material or "-",
+        "type": SC_TYPE_LABELS.get(kp.superconductor_type or "", "Unknown"),
+        "pressure": f"{kp.pressure_gpa:g} GPa" if kp.pressure_gpa is not None else "-",
+        "tc": _tc_display(kp),
+        "space_group": "-",
+        "source": "Local",
+        "status": status_map.get(paper.review_status, "Pending"),
+        "doi": paper.doi or "-",
+    } for kp, paper in rows]
+    return {"items": items, "total": total}
 
 
 @router.get("/crystal-structures")
 def get_crystal_structures(db: Session = Depends(get_db)):
-    rows = (
-        db.query(models.SuperconductorRecord.crystal_structure)
-        .filter(models.SuperconductorRecord.crystal_structure.isnot(None))
-        .distinct()
-        .all()
-    )
-    return sorted(value for (value,) in rows if value)
+    # v2 物性表暂无晶体结构字段
+    return []
 
 
 @router.get("/share-export")
@@ -672,42 +637,56 @@ def export_papers(export_data: schemas.ExportFormat, db: Session = Depends(get_d
 
 @router.get("/stats/tc-pressure")
 def get_tc_pressure_chart_data(db: Session = Depends(get_db)):
-    rows = db.query(models.SuperconductorRecord).join(models.SuperconductorRecord.superconductor).outerjoin(models.SuperconductorRecord.paper).all()
+    KP, P = models.KeyProperty, models.Paper
+    rows = (
+        db.query(KP, P)
+        .outerjoin(P, KP.paper_id == P.id)
+        .filter(KP.name == "critical_temperature")
+        .filter(KP.value_max.isnot(None))
+        .filter(KP.pressure_gpa.isnot(None))
+        .all()
+    )
     return [
         {
-            "x": row.pressure_gpa,
-            "y": representative_tc(row),
-            "type": "experimental" if (row.article_type == "e") else "theoretical",
-            "year": row.paper.year if row.paper else None,
-            "label": row.superconductor.chemical_formula,
-            "sc_type": row.superconductor_type or "others",
-            "formula": row.superconductor.chemical_formula,
-            "space_group": row.space_group_symbol,
-            "source_label": row.source_label,
+            "x": kp.pressure_gpa,
+            "y": kp.value_max,
+            "type": "experimental" if kp.article_type == "e" else "theoretical",
+            "year": paper.year if paper else None,
+            "label": kp.material,
+            "sc_type": kp.superconductor_type or "others",
+            "formula": kp.material,
+            "space_group": None,
+            "source_label": kp.source_label,
         }
-        for row in rows
-        if include_in_tc_pressure_chart(row)
+        for kp, paper in rows
+        if kp.is_primary
     ]
 
 
 @router.get("/stats/tc-year")
 def get_tc_year_chart_data(db: Session = Depends(get_db)):
+    KP, P = models.KeyProperty, models.Paper
     rows = (
-        db.query(models.SuperconductorRecord)
-        .join(models.SuperconductorRecord.paper)
-        .join(models.SuperconductorRecord.superconductor)
+        db.query(KP, P)
+        .join(P, KP.paper_id == P.id)
+        .filter(KP.name == "critical_temperature")
+        .filter(KP.value_max.isnot(None))
+        .filter(P.year.isnot(None))
         .all()
     )
     return [
         {
-            "x": row.paper.year,
-            "y": representative_tc(row),
-            "formula": row.superconductor.chemical_formula,
-            "doi": row.paper.doi,
-            "source_label": row.source_label,
+            "x": paper.year,
+            "y": kp.value_max,
+            "type": "experimental" if kp.article_type == "e" else "theoretical",
+            "sc_type": kp.superconductor_type or "others",
+            "label": kp.material,
+            "formula": kp.material,
+            "doi": paper.doi,
+            "source_label": kp.source_label,
         }
-        for row in rows
-        if row.paper and row.paper.year and include_in_tc_year_chart(row)
+        for kp, paper in rows
+        if kp.is_primary
     ]
 
 
@@ -748,7 +727,7 @@ def _fetch_all_sources(elements: list[str], mode: str) -> list[dict]:
 
     # 2. Alexandria
     try:
-        from backend.alexandria_import import query_by_elements
+        from backend.services.alexandria_mysql import query_by_elements
         alex_mode = {"elements_exact_search": "only", "elements_combination_search": "combination", "elements_contained_search": "contains"}.get(mode, "contains")
         alex_result = query_by_elements(elements=elements, mode=alex_mode, limit=10000, offset=0)
         for m in (alex_result.get("items") or []):
@@ -825,6 +804,11 @@ def search_all(request: schemas.PaperModeSearchRequest, db: Session = Depends(ge
     mode = request.mode or "elements_contained_search"
     page = max(1, request.offset // request.limit + 1)
     page_size = request.limit or 30
+
+    # 全部来源检索必须提供元素（空集合在 contains 模式下会匹配全量外部数据）
+    if not elements:
+        return {"items": [], "total": 0, "page": 1, "page_size": page_size,
+                "total_pages": 0, "has_prev": False, "has_next": False, "cached": False}
 
     cache_key = _build_cache_key(elements, mode)
 

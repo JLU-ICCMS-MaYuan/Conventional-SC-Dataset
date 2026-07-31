@@ -9,7 +9,7 @@ from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-DEFAULT_RAG_DATA_ROOT = (Path(__file__).resolve().parents[3] / "Conventional-SC-Dataset-talk").resolve()
+DEFAULT_RAG_DATA_ROOT = (Path(__file__).resolve().parents[2]).resolve()
 
 
 class RagSettings(BaseSettings):
@@ -71,7 +71,7 @@ class RagSettings(BaseSettings):
         env_path = os.environ.get("RAG_CHROMA_PATH")
         if env_path:
             return Path(env_path).expanduser().resolve()
-        return self.data_root / "chroma_db"
+        return self.data_root / "data" / "chroma_db"
 
     @property
     def database_available(self) -> bool:

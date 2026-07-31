@@ -230,3 +230,32 @@ async def rag_upload_pdf(file: UploadFile = File(...)):
         await file.close()
 
     return {"ok": True, "data": data}
+
+
+@router.post("/upload-text")
+async def rag_upload_text(file: UploadFile = File(...)):
+    """上传 TXT/MD 文本文件，从 extractor 开始走摄入管线"""
+    filename = file.filename or "uploaded.txt"
+    suffix = Path(filename).suffix.lower()
+    if suffix not in (".txt", ".md"):
+        raise HTTPException(status_code=400, detail="只支持 TXT/MD 文件")
+
+    try:
+        content = (await file.read()).decode("utf-8")
+    except UnicodeDecodeError:
+        try:
+            await file.seek(0)
+            content = (await file.read()).decode("gbk")
+        except Exception:
+            raise HTTPException(status_code=400, detail="无法解码文件内容，请使用 UTF-8 编码")
+    finally:
+        await file.close()
+
+    from backend.ingest.extractor import extract_from_markdown
+    from backend.ingest.store_papers import store_extraction
+    from backend.rag.database import async_session_factory
+
+    result = extract_from_markdown(content)
+    async with async_session_factory() as session:
+        paper_id = await store_extraction(result, filename, session)
+        return {"ok": True, "paper_id": paper_id, "title": result.paper.get("title", "")}

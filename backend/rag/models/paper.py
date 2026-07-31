@@ -64,6 +64,7 @@ class Paper(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
     records = relationship("SuperconductorRecord", back_populates="paper")
+    key_properties = relationship("KeyProperty", back_populates="paper")
 
     def __repr__(self) -> str:
         return f"<Paper id={self.id} doi={self.doi}>"

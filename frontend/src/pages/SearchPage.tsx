@@ -1,11 +1,14 @@
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
-  Box, Typography, Card, CardContent, Chip, Button, IconButton,
-  Snackbar, Alert, LinearProgress,
+  Box, Typography, Card, CardContent, Chip, Button,
+  Snackbar, Alert, LinearProgress, Select, MenuItem,
 } from '@mui/material'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import PeriodicTable from '../components/PeriodicTable'
+import AlexandriaDetail from '../components/AlexandriaDetail'
+import HtscDetail from '../components/HtscDetail'
+import StructureViewer3D from '../components/StructureViewer3D'
 import { ELEMENTS } from '../lib/periodicElements'
 import { api } from '../lib/api'
 
@@ -26,11 +29,10 @@ const MOCK_RECORDS: SuperconductorRecord[] = [
   { sourceSystem:'alexandria',sourceRecordId:'mp-demo',formula:'MgB2',year:2001,type:'Conventional',pressureValue:0,pressure:'0 GPa',tcValue:39,tc:'39 K',tcField:'experimental_tc',source:'Alexandria',status:'External',doi:'-',journal:'External dataset',title:'Magnesium diboride benchmark',spaceGroupNumber:191,spaceGroup:'P6/mmm',showInChart:true,lambda:'0.73',omegaLog:'620 K',nef:'0.21',method:'Dataset',software:'Alexandria',note:'External mock benchmark.' },
 ]
 
-/* ── 类型映射（与旧前端 scTypeMap 一致）── */
+/* ── 类型映射（规范全称 → 中文，与 backend/sc_types.py 保持一致）── */
 const SC_TYPE_MAP: {[k:string]:string} = {
-  h:'高压氢化物', c:'碳基', cb:'铜基', ot:'其他超导',
-  cuprate:'铜基', iron_based:'铁基', nickel_based:'镍基',
-  hydride:'高压氢化物', carbon:'碳基', organic:'有机', others:'其他超导',
+  hydride:'高压氢化物', cuprate:'铜氧化物', iron_based:'铁基',
+  nickel_based:'镍基', carbon:'碳基', organic:'有机', others:'其他超导',
 }
 const REVIEW_MAP: {[k:string]:string} = {
   pending:'Pending', approved:'Approved', reviewed:'Approved', rejected:'Rejected',
@@ -42,6 +44,79 @@ const CAT_COLORS: globalThis.Record<string,string> = {
   'post-transition':'#ededab','metalloid':'#9cd5a8','nonmetal':'#a3d7dc',
   'halogen':'#b7a0db','noble-gas':'#cfb5d6','lanthanide':'#cea1ce','actinide':'#c782ab',
 }
+
+/* ── Layer 2 筛选侧栏 ── */
+const FILTER_DEFAULTS = {
+  formula:'', tcMin:0, tcMax:9999, pMin:0, pMax:9999,
+  yMin:1900, yMax:2030, type:'All', spaceMin:0, spaceMax:230,
+  review:'All', chartOnly:false,
+}
+// 各数据源后端实际支持的筛选组（与检索请求的参数裁剪保持一致；v2 本地库暂无空间群数据）
+const SOURCE_FILTER_SUPPORT: {[k:string]:Set<string>} = {
+  'Local': new Set(['formula','tc','pressure','year','type','review','chart']),
+  'Alexandria': new Set(['tc','pressure','space']),
+  'HTSC-2025': new Set(['tc','pressure']),
+  'All': new Set<string>(),
+}
+// 联排输入壳：聚焦时主色描边 + 浅靛光环
+const shellSx = {
+  display:'flex',alignItems:'center',minWidth:0,border:'1px solid',borderColor:'divider',borderRadius:2,
+  bgcolor:'background.paper',overflow:'hidden',transition:'border-color .15s ease, box-shadow .15s ease',
+  '&:focus-within':{ borderColor:'primary.main',boxShadow:'0 0 0 3px rgba(79,70,229,.12)' },
+}
+const bareInputSx = {
+  flex:1,width:'100%',minWidth:0,minHeight:40,border:'none',outline:'none',px:1.25,fontSize:14,fontWeight:650,
+  bgcolor:'transparent',color:'text.primary',fontFamily:'inherit',textAlign:'center' as const,
+  '&:disabled':{ cursor:'not-allowed',color:'text.disabled' },
+}
+// MUI Select：嵌入联排壳的无下划线样式
+const selectSx = {
+  flex:1,minWidth:0,fontSize:14,fontWeight:650,color:'text.primary',
+  '& .MuiSelect-select':{ py:1.1,px:1.5,minHeight:'unset !important',display:'flex',alignItems:'center' },
+  '&.Mui-disabled':{ cursor:'not-allowed' },
+}
+// 下拉弹层：圆角卡片 + 浅靛选中态，与主题一致
+const selectMenuProps = {
+  PaperProps: {
+    sx: {
+      mt:0.5, borderRadius:2, border:'1px solid', borderColor:'divider',
+      boxShadow:'0 8px 24px rgba(15,23,42,.14)',
+      '& .MuiMenuItem-root':{ fontSize:14, fontWeight:600, borderRadius:1.5, mx:0.5, my:0.25, minHeight:36 },
+      '& .MuiMenuItem-root.Mui-selected':{ bgcolor:'#e0e7ff', color:'#312e81' },
+      '& .MuiMenuItem-root.Mui-selected:hover':{ bgcolor:'#e0e7ff' },
+    },
+  },
+}
+
+/* 组标题：该组筛选生效时左侧亮起靛蓝短竖条 */
+const FilterGroupLabel: React.FC<{ text:string; unit?:string; active?:boolean; disabled?:boolean }> =
+  ({ text, unit, active, disabled }) => (
+  <Box sx={{ display:'flex',alignItems:'center',justifyContent:'space-between',mb:0.75 }}>
+    <Box sx={{ display:'flex',alignItems:'center',gap:0.75 }}>
+      {active && <Box sx={{ width:3,height:12,borderRadius:2,bgcolor:'primary.main' }} />}
+      <Typography sx={{ fontSize:11,fontWeight:800,letterSpacing:'.08em',textTransform:'uppercase',
+        color: active ? 'primary.main' : disabled ? 'text.disabled' : 'text.secondary' }}>{text}</Typography>
+    </Box>
+    {unit && <Typography sx={{ fontSize:11,fontWeight:700,color:'text.disabled' }}>{unit}</Typography>}
+  </Box>
+)
+
+/* min – max 联排范围输入 */
+const RangeField: React.FC<{
+  label:string; unit?:string; active?:boolean; disabled?:boolean
+  lo:number; hi:number; onLo:(v:number)=>void; onHi:(v:number)=>void
+}> = ({ label, unit, active, disabled, lo, hi, onLo, onHi }) => (
+  <Box title={disabled ? '当前数据源不支持该筛选' : undefined} sx={{ opacity: disabled ? 0.45 : 1 }}>
+    <FilterGroupLabel text={label} unit={unit} active={active} disabled={disabled} />
+    <Box sx={shellSx}>
+      <Box component="input" type="number" disabled={disabled} value={lo}
+        onChange={(e:any)=>onLo(+e.target.value)} sx={bareInputSx} />
+      <Typography sx={{ color:'text.disabled',px:0.25,userSelect:'none' }}>–</Typography>
+      <Box component="input" type="number" disabled={disabled} value={hi}
+        onChange={(e:any)=>onHi(+e.target.value)} sx={bareInputSx} />
+    </Box>
+  </Box>
+)
 
 /* ── main component ── */
 const SearchPage: React.FC = () => {
@@ -57,137 +132,193 @@ const SearchPage: React.FC = () => {
   const [formula, setFormula] = useState(initElements.join(''))
   const [source, setSource] = useState('Local')
   const [selectedRecord, setSelectedRecord] = useState<SuperconductorRecord>(MOCK_RECORDS[0])
-  const [detailOpen, setDetailOpen] = useState(false)
   const [snackbar, setSnackbar] = useState('')
   const [loading, setLoading] = useState(false)
   const [paperDetail, setPaperDetail] = useState<any>(null)
   const [structureData, setStructureData] = useState<any>(null)
+  const [structureMsg, setStructureMsg] = useState('该记录暂无结构数据')
   const [apiError, setApiError] = useState('')
   const [apiRecords, setApiRecords] = useState<SuperconductorRecord[]>([])
+  const [detailRecord, setDetailRecord] = useState<SuperconductorRecord | null>(null)
+  const [page, setPage] = useState(0)
+  const [total, setTotal] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
+  const [retryTick, setRetryTick] = useState(0)
+  const PAGE_SIZE = 50
 
-  const [filters, setFilters] = useState({
-    formula:'', tcMin:0, tcMax:9999, pMin:0, pMax:9999,
-    yMin:1900, yMax:2030, type:'All', spaceMin:0, spaceMax:230,
-    review:'All', chartOnly:false,
-  })
+  const [filters, setFilters] = useState({ ...FILTER_DEFAULTS })
+
+  const formulaQuery = formula.trim()
+  const elementsKey = [...selected].sort().join(',')
+  const filtersKey = JSON.stringify(filters)
+
+  // 检索条件变化时回到第一页
+  useEffect(() => { setPage(0) }, [source, mode, elementsKey, filtersKey])
 
   useEffect(() => {
     if (stage !== 'results') return
-    setLoading(true)
-    setApiError('')
     const elementList = [...selected].sort()
-    const modeKey = mode === 'elements_exact_search' ? 'only'
-      : mode === 'elements_contained_search' ? 'contains' : 'combination'
-
-    let url: string, body: any
-    // 所有筛选参数传给后端
-    const backendFilters: any = { limit: 50, offset: 0 }
-    if (filters.formula) backendFilters.keyword = filters.formula
-    backendFilters.tc_min = filters.tcMin
-    backendFilters.tc_max = filters.tcMax
-    backendFilters.pressure_min = filters.pMin
-    backendFilters.pressure_max = filters.pMax
-    backendFilters.year_min = filters.yMin
-    backendFilters.year_max = filters.yMax
-    if (filters.type !== 'All') backendFilters.superconductor_type = filters.type.toLowerCase()
-    backendFilters.space_group_min = filters.spaceMin
-    backendFilters.space_group_max = filters.spaceMax
-    if (filters.review !== 'All') backendFilters.review_status = filters.review.toLowerCase()
-    if (filters.chartOnly) backendFilters.chart_only = true
-    if (source === 'Alexandria') {
-      url = '/api/alexandria/search'
-      body = { elements: elementList, mode: modeKey, ...backendFilters }
-    } else if (source === 'HTSC-2025') {
-      url = '/api/htsc2025/search'
-      body = { elements: elementList, mode: modeKey, ...backendFilters }
-    } else if (source === 'All') {
-      url = '/api/papers/search/all'
-      body = { elements: elementList, mode: modeKey, ...backendFilters }
-    } else {
-      url = '/api/papers/search/records'
-      body = { elements: elementList, mode, ...backendFilters }
+    // 未选元素时走化学式检索（仅 Local 支持）
+    const isFormulaSearch = elementList.length === 0 && !!formulaQuery
+    if (elementList.length === 0 && !isFormulaSearch) return
+    if (isFormulaSearch && source !== 'Local') {
+      setApiRecords([]); setTotal(0); setTotalPages(0); setDetailRecord(null)
+      setApiError('化学式检索仅支持 Local 数据源，请选择元素或切回 Local')
+      return
     }
 
-    console.log('fetching:', url, body)
-    api.post(url, body)
-    .then((res: any) => {
-      const items = (res.items || []).filter((r: any) => r._type !== 'section')
-      const rows: SuperconductorRecord[] = []
-      const searchElements = elementList.map((s: string) => s.toLowerCase())
-      const addRow = (rec: any, paper: any, src: string) => {
-        // 后端扁平记录：year/formula/type/pressure/tc/space_group/source/status/doi
-        const isFlat = rec.year !== undefined && rec.type !== undefined
-        rows.push({
-          sourceSystem: src === 'Local' ? 'local' : src === 'Alexandria' ? 'alexandria' : 'htsc2025',
-          sourceRecordId: String(rec.record_id || rec.id || rec.mat_id || ''),
-          record_id: rec.record_id,
-          paper_id: rec.paper_id,
-          formula: isFlat ? rec.formula : (rec.formula || rec.chemical_formula || paper?.chemical_formula || '-'),
-          year: isFlat ? rec.year : (rec.year || paper?.year || 1900),
-          type: isFlat ? rec.type : (SC_TYPE_MAP[paper?.superconductor_types?.[0] || rec.type || ''] || 'Unknown'),
-          pressureValue: isFlat ? parseFloat(rec.pressure) || 0 : (Number(rec.pressure_gpa ?? rec.pressure) || 0),
-          pressure: isFlat ? rec.pressure : ((rec.pressure_gpa ?? rec.pressure) != null ? `${rec.pressure_gpa ?? rec.pressure} GPa` : '-'),
-          tcValue: isFlat ? parseFloat(rec.tc) || 0 : (rec.tc_max ?? rec.tc_allen_dynes ?? rec.tc ?? 0),
-          tc: isFlat ? rec.tc : ((rec.tc_max ?? rec.tc_allen_dynes ?? rec.tc) != null ? `${Number(rec.tc_max ?? rec.tc_allen_dynes ?? rec.tc).toFixed(1)} K` : '-'),
-          tcField: 'tc_max',
-          source: isFlat ? rec.source : src,
-          status: isFlat ? rec.status : (src !== 'Local' ? 'External' : (REVIEW_MAP[paper?.review_status] || 'Pending')),
-          doi: isFlat ? rec.doi : (rec.doi || paper?.doi || '-'),
-          journal: isFlat ? '-' : (rec.journal || paper?.journal || '-'),
-          title: isFlat ? '-' : (rec.title || paper?.title || '-'),
-          spaceGroupNumber: rec.space_group_number ?? rec.spg ?? 0,
-          spaceGroup: isFlat ? rec.space_group : (rec.space_group_symbol || (rec.spg ? `#${rec.spg}` : '-')),
-          showInChart: rec.show_in_chart !== false,
-          lambda: '-', omegaLog: '-', nef: '-', method: '-', software: '-', note: '-',
-        })
+    // 防抖：筛选输入连续变化时只发最后一次请求
+    const timer = setTimeout(() => {
+      setLoading(true)
+      setApiError('')
+      const modeKey = mode === 'elements_exact_search' ? 'only'
+        : mode === 'elements_contained_search' ? 'contains' : 'combination'
+
+      // 仅传用户实际收紧过的筛选，避免默认区间误伤缺失字段的记录
+      const backendFilters: any = {}
+      if (filters.formula) backendFilters.keyword = filters.formula
+      if (filters.tcMin > 0) backendFilters.tc_min = filters.tcMin
+      if (filters.tcMax < 9999) backendFilters.tc_max = filters.tcMax
+      if (filters.pMin > 0) backendFilters.pressure_min = filters.pMin
+      if (filters.pMax < 9999) backendFilters.pressure_max = filters.pMax
+      if (filters.yMin > 1900) backendFilters.year_min = filters.yMin
+      if (filters.yMax < 2030) backendFilters.year_max = filters.yMax
+      if (filters.type !== 'All') backendFilters.superconductor_type = filters.type
+      if (filters.spaceMin > 0) backendFilters.space_group_min = filters.spaceMin
+      if (filters.spaceMax < 230) backendFilters.space_group_max = filters.spaceMax
+      if (filters.review !== 'All') backendFilters.review_status = filters.review.toLowerCase()
+      if (filters.chartOnly) backendFilters.chart_only = true
+      // 各来源只发送其后端支持的筛选字段
+      const pick = (keys: string[]) =>
+        Object.fromEntries(keys.filter(k => backendFilters[k] !== undefined).map(k => [k, backendFilters[k]]))
+      const paging = { limit: PAGE_SIZE, offset: page * PAGE_SIZE }
+
+      let url: string, body: any
+      if (source === 'Alexandria') {
+        url = '/api/alexandria/search'
+        body = { elements: elementList, mode: modeKey, require_tc: true,
+          ...pick(['tc_min','tc_max','pressure_min','pressure_max','space_group_min','space_group_max']), ...paging }
+      } else if (source === 'HTSC-2025') {
+        url = '/api/htsc2025/search'
+        body = { elements: elementList, mode: modeKey,
+          ...pick(['tc_min','tc_max','pressure_min','pressure_max']), ...paging }
+      } else if (source === 'All') {
+        url = '/api/papers/search/all'
+        body = { elements: elementList, mode, ...paging }
+      } else {
+        url = '/api/papers/search/records'
+        body = isFormulaSearch
+          ? { elements: [], mode: 'formula_search', formula: formulaQuery, ...backendFilters, ...paging }
+          : { elements: elementList, mode, ...backendFilters, ...paging }
       }
 
-      if (source === 'Alexandria') {
-        items.forEach((item: any) => {
-          if ((item.tc_max ?? item.tc_allen_dynes) == null) return
-          addRow(item, null, 'Alexandria')
-        })
-      } else if (source === 'HTSC-2025') {
-        items.forEach((item: any) => {
-          if (item.tc == null) return
-          const f = (item.formula || '').toLowerCase()
-          if (!searchElements.every((el: string) => f.includes(el))) return
-          addRow(item, null, 'HTSC-2025')
-        })
-      } else if (source === 'All') {
-        // 混合来源：按 _source 区分
-        items.forEach((item: any) => {
-          const src = item._source === 'alexandria' ? 'Alexandria' : item._source === 'htsc2025' ? 'HTSC-2025' : 'Local'
-          const recs = Array.isArray(item.records) ? item.records : [item]
-          recs.forEach((rec: any) => addRow(rec, item, src))
-        })
-      } else {
-        // Local：后端已返回扁平记录
-        items.forEach((item: any) => addRow(item, null, 'Local'))
-      }
-      setApiRecords(rows)
-    }).catch((err: any) => {
-      setApiError(err.message || '检索失败')
-    }).finally(() => setLoading(false))
-  }, [stage, mode, source, [...selected].join(',')])
+      console.log('fetching:', url, body)
+      api.post(url, body)
+      .then((res: any) => {
+        const items = (res.items || []).filter((r: any) => r._type !== 'section')
+        const rows: SuperconductorRecord[] = []
+        const addRow = (rec: any, paper: any, src: string) => {
+          // 后端扁平记录：year/formula/type/pressure/tc/space_group/source/status/doi
+          const isFlat = rec.year !== undefined && rec.type !== undefined
+          rows.push({
+            sourceSystem: src === 'Local' ? 'local' : src === 'Alexandria' ? 'alexandria' : 'htsc2025',
+            // 标识优先级：本地记录 id → Alexandria mat_id → HTSC name → 数字主键兜底
+            sourceRecordId: String(rec.record_id || rec.mat_id || rec.name || rec.id || ''),
+            record_id: rec.record_id,
+            paper_id: rec.paper_id,
+            formula: isFlat ? rec.formula : (rec.formula || rec.chemical_formula || paper?.chemical_formula || '-'),
+            year: isFlat ? rec.year : (rec.year || paper?.year || 1900),
+            type: isFlat ? rec.type : (SC_TYPE_MAP[paper?.superconductor_types?.[0] || rec.type || ''] || 'Unknown'),
+            pressureValue: isFlat ? parseFloat(rec.pressure) || 0 : (Number(rec.pressure_gpa ?? rec.pressure) || 0),
+            pressure: isFlat ? rec.pressure : ((rec.pressure_gpa ?? rec.pressure) != null ? `${rec.pressure_gpa ?? rec.pressure} GPa` : '-'),
+            tcValue: isFlat ? parseFloat(rec.tc) || 0 : (rec.tc_max ?? rec.tc_allen_dynes ?? rec.tc ?? 0),
+            tc: isFlat ? rec.tc : ((rec.tc_max ?? rec.tc_allen_dynes ?? rec.tc) != null ? `${Number(rec.tc_max ?? rec.tc_allen_dynes ?? rec.tc).toFixed(1)} K` : '-'),
+            tcField: 'tc_max',
+            source: isFlat ? rec.source : src,
+            status: isFlat ? rec.status : (src !== 'Local' ? 'External' : (REVIEW_MAP[paper?.review_status] || 'Pending')),
+            doi: isFlat ? rec.doi : (rec.doi || paper?.doi || '-'),
+            journal: isFlat ? '-' : (rec.journal || paper?.journal || '-'),
+            title: isFlat ? '-' : (rec.title || paper?.title || '-'),
+            spaceGroupNumber: rec.space_group_number ?? rec.spg ?? 0,
+            spaceGroup: isFlat ? rec.space_group : (rec.space_group_symbol || (rec.spg ? `#${rec.spg}` : '-')),
+            showInChart: rec.show_in_chart !== false,
+            lambda: '-', omegaLog: '-', nef: '-', method: '-', software: '-', note: '-',
+          })
+        }
+
+        if (source === 'Alexandria') {
+          items.forEach((item: any) => {
+            if ((item.tc_max ?? item.tc_allen_dynes) == null) return
+            addRow(item, null, 'Alexandria')
+          })
+        } else if (source === 'HTSC-2025') {
+          items.forEach((item: any) => {
+            if (item.tc == null) return
+            addRow(item, null, 'HTSC-2025')
+          })
+        } else if (source === 'All') {
+          // 混合来源：按 _source 区分
+          items.forEach((item: any) => {
+            const src = item._source === 'alexandria' ? 'Alexandria' : item._source === 'htsc2025' ? 'HTSC-2025' : 'Local'
+            if (src === 'Local' && Array.isArray(item.key_properties)) {
+              // Local 论文条目：key_properties 中的临界温度物性展开为行
+              item.key_properties
+                .filter((kp: any) => kp.name === 'critical_temperature' && kp.value_max != null)
+                .forEach((kp: any) => addRow({
+                  record_id: kp.id, paper_id: item.id, year: item.year || 0,
+                  formula: kp.material || '-',
+                  type: SC_TYPE_MAP[kp.superconductor_type] || 'Unknown',
+                  pressure: kp.pressure_gpa != null ? `${kp.pressure_gpa} GPa` : '-',
+                  tc: kp.value_min !== kp.value_max ? `${kp.value_min}–${kp.value_max} K` : `${Number(kp.value_max).toFixed(1)} K`,
+                  space_group: '-', source: 'Local',
+                  status: REVIEW_MAP[item.review_status] || 'Pending',
+                  doi: item.doi || '-',
+                }, item, src))
+            } else {
+              addRow(item, item, src)
+            }
+          })
+        } else {
+          // Local：后端已返回扁平记录
+          items.forEach((item: any) => addRow(item, null, 'Local'))
+        }
+        setApiRecords(rows)
+        setDetailRecord(null)
+        // 后端真分页：total/total_pages 来自服务端
+        const totalCount = res.total ?? rows.length
+        setTotal(totalCount)
+        setTotalPages(source === 'All' ? (res.total_pages ?? (rows.length ? 1 : 0)) : Math.ceil(totalCount / PAGE_SIZE))
+      }).catch((err: any) => {
+        setApiError(err.message || '检索失败')
+      }).finally(() => setLoading(false))
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [stage, mode, source, elementsKey, filtersKey, formulaQuery, page, retryTick])
 
   const toast = (msg: string) => setSnackbar(msg)
 
-  // Stage 3: fetch paper detail + structure
+  // Stage 3: fetch paper detail + 从 key_properties 取结构
   useEffect(() => {
-    if (stage !== 'detail' || !selectedRecord.record_id) return
+    if (stage !== 'detail' || !selectedRecord.paper_id) return
     setPaperDetail(null)
     setStructureData(null)
-    api.get(`/api/papers/${selectedRecord.paper_id || selectedRecord.record_id}`)
-      .then((data: any) => setPaperDetail(data))
+    setStructureMsg('该记录暂无结构数据')
+    api.get(`/api/papers/${selectedRecord.paper_id}`)
+      .then((data: any) => {
+        setPaperDetail(data)
+        // 从 key_properties 中取所有有结构文本的行，依次排列
+        const kps = data?.key_properties || []
+        const structures = kps.filter((kp: any) => kp.structure_text).map((kp: any) => ({
+          structure_text: kp.structure_text,
+          structure_format: kp.structure_format || 'cif',
+          material: kp.material,
+          name_note: kp.name_note,
+          pressure_gpa: kp.pressure_gpa,
+        }))
+        setStructureData(structures.length > 0 ? structures : null)
+      })
       .catch(() => setPaperDetail(null))
-    // 获取结构数据
-    api.get(`/api/structures/by-record/${selectedRecord.record_id}`)
-      .then((data: any) => setStructureData(data))
-      .catch(() => setStructureData(null))
-  }, [stage, selectedRecord.record_id])
-
-  const formulaQuery = formula.trim()
+  }, [stage, selectedRecord.paper_id])
 
   /* ── Stage 1: Explore ── */
   if (stage === 'explore') {
@@ -209,7 +340,7 @@ const SearchPage: React.FC = () => {
               <Box sx={{ minHeight:56,border:'1px solid',borderColor:'divider',borderRadius:1,p:'8px 12px',display:'grid',alignContent:'center',bgcolor:'background.paper' }}>
                 <Box component="label" sx={{ color:'text.secondary',fontSize:12,fontWeight:700 }}>Formula</Box>
                 <Box component="input" value={formula} onChange={e=>setFormula(e.target.value)}
-                  sx={{ border:'none',outline:'none',fontSize:15,fontWeight:600,mt:0.5,width:'100%',bg:'transparent',fontFamily:'inherit' }} />
+                  sx={{ border:'none',outline:'none',fontSize:15,fontWeight:600,mt:0.5,width:'100%',bgcolor:'transparent',fontFamily:'inherit' }} />
               </Box>
               <Button variant="contained" onClick={()=>{setStage('results');toast('已按 Formula 刷新结果')}} disabled={!formulaQuery}>搜索</Button>
             </Box>
@@ -236,7 +367,7 @@ const SearchPage: React.FC = () => {
                     {v:'elements_contained_search',l:'包含所选元素'},
                   ].map(m=>(
                     <Button key={m.v} size="small"
-                      sx={{ borderRadius:'16px',px:3.5,py:1,fontSize:'0.9rem',color:mode===m.v?'#fff':'text.primary',bg:mode===m.v?'primary.main':'transparent',minWidth:0,textTransform:'none','&:hover':{bg:mode===m.v?'primary.main':'action.hover'} }}
+                      sx={{ borderRadius:'16px',px:3.5,py:1,fontSize:'0.9rem',color:mode===m.v?'#fff':'text.primary',bgcolor:mode===m.v?'primary.main':'transparent',minWidth:0,textTransform:'none','&:hover':{bgcolor:mode===m.v?'primary.main':'action.hover'} }}
                       onClick={()=>setMode(m.v)}>{m.l}</Button>
                   ))}
                 </Box>
@@ -257,6 +388,19 @@ const SearchPage: React.FC = () => {
 
   /* ── Stage 2: Results ── */
   if (stage === 'results') {
+    // 各筛选组是否已被收紧（用于生效指示与计数）
+    const groupActive = {
+      formula: !!filters.formula,
+      tc: filters.tcMin > 0 || filters.tcMax < 9999,
+      pressure: filters.pMin > 0 || filters.pMax < 9999,
+      year: filters.yMin > 1900 || filters.yMax < 2030,
+      type: filters.type !== 'All',
+      space: filters.spaceMin > 0 || filters.spaceMax < 230,
+      review: filters.review !== 'All',
+      chart: filters.chartOnly,
+    }
+    const activeCount = Object.values(groupActive).filter(Boolean).length
+    const supported = SOURCE_FILTER_SUPPORT[source] ?? SOURCE_FILTER_SUPPORT['Local']
     return (
       <Box>
         <Box sx={{ display:'flex',alignItems:'center',justifyContent:'space-between',gap:2,mb:3 }}>
@@ -264,116 +408,133 @@ const SearchPage: React.FC = () => {
             <Button size="small" startIcon={<ArrowBackIcon/>} onClick={()=>setStage('explore')} sx={{ mb:1 }}>返回元素搜索</Button>
             <Typography variant="overline">Layer 2 · Data Table</Typography>
             <Typography variant="h1">{selected.size ? [...selected].sort().join('-') : formulaQuery} 体系结果</Typography>
-            <Typography variant="body2" sx={{ mt:1 }}>主视图恢复为固定 9 列 Data Table，点击表格行更新右侧 Side Sheet。</Typography>
+            <Typography variant="body2" sx={{ mt:1 }}>点击表格行展开详情，再次点击收起。</Typography>
           </Box>
         </Box>
 
         {/* Three-column layout */}
-        <Box sx={{ display:'grid',gridTemplateColumns:detailOpen?'280px 1fr 360px':'280px 1fr',gap:3,alignItems:'start',minWidth:0,overflow:'hidden',
+        <Box sx={{ display:'grid',gridTemplateColumns:'280px 1fr',gap:3,alignItems:'start',minWidth:0,overflow:'hidden',
           '@media (max-width:1180px)':{gridTemplateColumns:'1fr'} }}>
-          {/* Filter sidebar — matches demo .filter-stack exactly */}
+          {/* Filter sidebar */}
           <Box component="aside" sx={{ minWidth:0, maxWidth:'100%', overflow:'hidden', p:2.5, bgcolor:'background.paper', borderRadius:4, border:'1px solid', borderColor:'divider', boxShadow:1 }}>
-            <Typography variant="h2" gutterBottom>筛选</Typography>
-            <Box sx={{ display:'grid',gap:1.5 }}>
+            {/* 标题行：生效计数 + 按需出现的重置 */}
+            <Box sx={{ display:'flex',alignItems:'center',justifyContent:'space-between',mb:2 }}>
+              <Box sx={{ display:'flex',alignItems:'center',gap:1 }}>
+                <Typography variant="h2">筛选</Typography>
+                {activeCount > 0 && (
+                  <Box sx={{ minWidth:20,height:20,px:0.5,borderRadius:'999px',bgcolor:'primary.main',color:'#fff',fontSize:12,fontWeight:800,display:'inline-flex',alignItems:'center',justifyContent:'center' }}>
+                    {activeCount}
+                  </Box>
+                )}
+              </Box>
+              {activeCount > 0 && (
+                <Box component="button" onClick={()=>setFilters({ ...FILTER_DEFAULTS })}
+                  sx={{ border:'none',bgcolor:'transparent',color:'primary.main',fontSize:13,fontWeight:700,cursor:'pointer',p:0,'&:hover':{textDecoration:'underline'} }}>
+                  重置
+                </Box>
+              )}
+            </Box>
+            {/* minmax(0,1fr)：切断 number input 内在宽度对单列 grid 的撑破 */}
+            <Box sx={{ display:'grid',gridTemplateColumns:'minmax(0,1fr)',gap:2 }}>
               {/* 数据来源 */}
               <Box>
-                <Box component="label" sx={{ color:'text.secondary',fontSize:12,fontWeight:700 }}>数据来源</Box>
-                <Box sx={{ display:'flex',gap:1,mt:1,flexWrap:'wrap' }}>
+                <FilterGroupLabel text="数据来源" />
+                <Box sx={{ display:'flex',gap:1,mt:0.5,flexWrap:'wrap' }}>
                   {['Local','Alexandria','HTSC-2025','All'].map(s=>(
                     <Box key={s} component="button" onClick={()=>setSource(s)}
-                      sx={{ minHeight:32,px:1.5,borderRadius:'999px',display:'inline-flex',alignItems:'center',gap:0.75,border:'1px solid',borderColor:source===s?'primary.main':'divider',bgcolor:source===s?'#e0e7ff':'grey.50',color:source===s?'#312e81':'text.primary',fontSize:12,fontWeight:700,cursor:'pointer' }}>
-                      {s==='All'?'全部来源':s==='HTSC-2025'?'HTSC-2025':s}
+                      sx={{ minHeight:32,px:1.5,borderRadius:'999px',display:'inline-flex',alignItems:'center',gap:0.75,border:'1px solid',borderColor:source===s?'primary.main':'divider',bgcolor:source===s?'#e0e7ff':'grey.50',color:source===s?'#312e81':'text.primary',fontSize:12,fontWeight:700,cursor:'pointer',transition:'all .15s ease','&:hover':{borderColor:'primary.main'} }}>
+                      {s==='All'?'全部来源':s}
                     </Box>
                   ))}
                 </Box>
+                {source === 'All' && (
+                  <Typography sx={{ fontSize:11,color:'text.disabled',mt:0.75 }}>全部来源模式仅按元素检索，下方筛选不参与</Typography>
+                )}
               </Box>
-              {/* Formula */}
-              <Box sx={{ minHeight:56,border:'1px solid',borderColor:'divider',borderRadius:1,px:1.5,py:1,display:'grid',bgcolor:'background.paper' }}>
-                <Box component="label" sx={{ color:'text.secondary',fontSize:12,fontWeight:700 }}>Formula</Box>
-                <Box component="input" value={filters.formula} onChange={e=>setFilters({...filters,formula:e.target.value})}
-                  sx={{ border:'none',outline:'none',fontSize:15,fontWeight:600,mt:0.5,width:'100%',bg:'transparent',fontFamily:'inherit',color:'text.primary' }} />
-              </Box>
-              {/* Tc */}
-              <Box>
-                <Box component="label" sx={{ color:'text.secondary',fontSize:12,fontWeight:700 }}>代表 Tc / K</Box>
-                <Box sx={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:1,mt:0.5 }}>
-                  <Box component="input" type="number" value={filters.tcMin} onChange={e=>setFilters({...filters,tcMin:+e.target.value})}
-                    sx={{ minHeight:44,border:'1px solid',borderColor:'divider',borderRadius:1,px:1.5,fontSize:14,fontWeight:650,width:'100%',bg:'background.paper',color:'text.primary' }} />
-                  <Box component="input" type="number" value={filters.tcMax} onChange={e=>setFilters({...filters,tcMax:+e.target.value})}
-                    sx={{ minHeight:44,border:'1px solid',borderColor:'divider',borderRadius:1,px:1.5,fontSize:14,fontWeight:650,width:'100%',bg:'background.paper',color:'text.primary' }} />
+              <Box sx={{ height:'1px',bgcolor:'divider' }} />
+              {/* Formula 关键词 */}
+              <Box title={supported.has('formula') ? undefined : '当前数据源不支持该筛选'} sx={{ opacity: supported.has('formula') ? 1 : 0.45 }}>
+                <FilterGroupLabel text="Formula 关键词" active={groupActive.formula} disabled={!supported.has('formula')} />
+                <Box sx={shellSx}>
+                  <Box component="input" placeholder="如 LaH10" disabled={!supported.has('formula')}
+                    value={filters.formula} onChange={e=>setFilters({...filters,formula:e.target.value})}
+                    sx={{ ...bareInputSx, textAlign:'left', px:1.5 }} />
                 </Box>
               </Box>
-              {/* Pressure */}
-              <Box>
-                <Box component="label" sx={{ color:'text.secondary',fontSize:12,fontWeight:700 }}>压强 / GPa</Box>
-                <Box sx={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:1,mt:0.5 }}>
-                  <Box component="input" type="number" value={filters.pMin} onChange={e=>setFilters({...filters,pMin:+e.target.value})}
-                    sx={{ minHeight:44,border:'1px solid',borderColor:'divider',borderRadius:1,px:1.5,fontSize:14,fontWeight:650,width:'100%',bg:'background.paper',color:'text.primary' }} />
-                  <Box component="input" type="number" value={filters.pMax} onChange={e=>setFilters({...filters,pMax:+e.target.value})}
-                    sx={{ minHeight:44,border:'1px solid',borderColor:'divider',borderRadius:1,px:1.5,fontSize:14,fontWeight:650,width:'100%',bg:'background.paper',color:'text.primary' }} />
+              {/* 数值范围 */}
+              <RangeField label="代表 Tc" unit="K" active={groupActive.tc} disabled={!supported.has('tc')}
+                lo={filters.tcMin} hi={filters.tcMax}
+                onLo={v=>setFilters({...filters,tcMin:v})} onHi={v=>setFilters({...filters,tcMax:v})} />
+              <RangeField label="压强" unit="GPa" active={groupActive.pressure} disabled={!supported.has('pressure')}
+                lo={filters.pMin} hi={filters.pMax}
+                onLo={v=>setFilters({...filters,pMin:v})} onHi={v=>setFilters({...filters,pMax:v})} />
+              <RangeField label="年份" active={groupActive.year} disabled={!supported.has('year')}
+                lo={filters.yMin} hi={filters.yMax}
+                onLo={v=>setFilters({...filters,yMin:v})} onHi={v=>setFilters({...filters,yMax:v})} />
+              {/* 空间群编号范围 */}
+              <Box title={supported.has('space') ? undefined : '当前数据源不支持该筛选'} sx={{ opacity: supported.has('space') ? 1 : 0.45 }}>
+                <FilterGroupLabel text="空间群编号" unit="#1–230" active={groupActive.space} disabled={!supported.has('space')} />
+                <Box sx={shellSx}>
+                  <Select variant="standard" disableUnderline disabled={!supported.has('space')} MenuProps={selectMenuProps}
+                    value={filters.spaceMin} onChange={e=>setFilters({...filters,spaceMin:+e.target.value})} sx={selectSx}>
+                    {[0,1,14,62,166,194,225].map(v=><MenuItem key={v} value={v}>{v === 0 ? '不限' : v}</MenuItem>)}
+                  </Select>
+                  <Typography sx={{ color:'text.disabled',px:0.25,userSelect:'none' }}>–</Typography>
+                  <Select variant="standard" disableUnderline disabled={!supported.has('space')} MenuProps={selectMenuProps}
+                    value={filters.spaceMax} onChange={e=>setFilters({...filters,spaceMax:+e.target.value})} sx={selectSx}>
+                    {[14,62,166,194,225,230].map(v=><MenuItem key={v} value={v}>{v === 230 ? '不限' : v}</MenuItem>)}
+                  </Select>
                 </Box>
               </Box>
-              {/* Year */}
-              <Box>
-                <Box component="label" sx={{ color:'text.secondary',fontSize:12,fontWeight:700 }}>年份</Box>
-                <Box sx={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:1,mt:0.5 }}>
-                  <Box component="input" type="number" value={filters.yMin} onChange={e=>setFilters({...filters,yMin:+e.target.value})}
-                    sx={{ minHeight:44,border:'1px solid',borderColor:'divider',borderRadius:1,px:1.5,fontSize:14,fontWeight:650,width:'100%',bg:'background.paper',color:'text.primary' }} />
-                  <Box component="input" type="number" value={filters.yMax} onChange={e=>setFilters({...filters,yMax:+e.target.value})}
-                    sx={{ minHeight:44,border:'1px solid',borderColor:'divider',borderRadius:1,px:1.5,fontSize:14,fontWeight:650,width:'100%',bg:'background.paper',color:'text.primary' }} />
+              <Box sx={{ height:'1px',bgcolor:'divider' }} />
+              {/* 超导类型 */}
+              <Box title={supported.has('type') ? undefined : '当前数据源不支持该筛选'} sx={{ opacity: supported.has('type') ? 1 : 0.45 }}>
+                <FilterGroupLabel text="超导类型" active={groupActive.type} disabled={!supported.has('type')} />
+                <Box sx={shellSx}>
+                  <Select variant="standard" disableUnderline disabled={!supported.has('type')} MenuProps={selectMenuProps}
+                    value={filters.type} onChange={e=>setFilters({...filters,type:e.target.value})} sx={selectSx}>
+                    {/* 规范全称，与 backend/sc_types.py 一致 */}
+                    {[
+                      {v:'All',l:'全部类型'},{v:'hydride',l:'高压氢化物'},{v:'cuprate',l:'铜氧化物'},
+                      {v:'iron_based',l:'铁基'},{v:'nickel_based',l:'镍基'},{v:'carbon',l:'碳基'},
+                      {v:'organic',l:'有机'},{v:'others',l:'其他超导'},
+                    ].map(o=><MenuItem key={o.v} value={o.v}>{o.l}</MenuItem>)}
+                  </Select>
                 </Box>
               </Box>
-              {/* Type */}
-              <Box sx={{ minHeight:56,border:'1px solid',borderColor:'divider',borderRadius:1,px:1.5,py:1,display:'grid',bgcolor:'background.paper' }}>
-                <Box component="label" sx={{ color:'text.secondary',fontSize:12,fontWeight:700 }}>超导类型</Box>
-                <Box component="select" value={filters.type} onChange={e=>setFilters({...filters,type:e.target.value})}
-                  sx={{ width:'100%',minHeight:44,border:'none',bg:'transparent',fontSize:14,fontWeight:650,mt:0.5,fontFamily:'inherit',color:'text.primary' }}>
-                  {['All','Hydride','Cuprate','Iron-based','Conventional'].map(o=><option key={o}>{o}</option>)}
+              {/* 审核状态 */}
+              <Box title={supported.has('review') ? undefined : '当前数据源不支持该筛选'} sx={{ opacity: supported.has('review') ? 1 : 0.45 }}>
+                <FilterGroupLabel text="审核状态" active={groupActive.review} disabled={!supported.has('review')} />
+                <Box sx={shellSx}>
+                  <Select variant="standard" disableUnderline disabled={!supported.has('review')} MenuProps={selectMenuProps}
+                    value={filters.review} onChange={e=>setFilters({...filters,review:e.target.value})} sx={selectSx}>
+                    {[
+                      {v:'All',l:'全部状态'},{v:'Approved',l:'已通过 Approved'},{v:'Pending',l:'待审核 Pending'},
+                      {v:'Rejected',l:'已驳回 Rejected'},{v:'External',l:'外部数据 External'},
+                    ].map(o=><MenuItem key={o.v} value={o.v}>{o.l}</MenuItem>)}
+                  </Select>
                 </Box>
               </Box>
-              {/* Space group */}
-              <Box>
-                <Box component="label" sx={{ color:'text.secondary',fontSize:12,fontWeight:700 }}>空间群编号范围</Box>
-                <Box sx={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:1,mt:0.5 }}>
-                  <Box component="select" value={filters.spaceMin} onChange={e=>setFilters({...filters,spaceMin:+e.target.value})}
-                    sx={{ minHeight:44,border:'1px solid',borderColor:'divider',borderRadius:1,px:1.5,fontSize:14,fontWeight:650,bg:'background.paper',color:'text.primary' }}>
-                    {[1,14,62,166,194,225].map(v=><option key={v} value={v}>{v}</option>)}
-                  </Box>
-                  <Box component="select" value={filters.spaceMax} onChange={e=>setFilters({...filters,spaceMax:+e.target.value})}
-                    sx={{ minHeight:44,border:'1px solid',borderColor:'divider',borderRadius:1,px:1.5,fontSize:14,fontWeight:650,bg:'background.paper',color:'text.primary' }}>
-                    {[14,62,166,194,225,230].map(v=><option key={v} value={v}>{v}</option>)}
-                  </Box>
-                </Box>
-              </Box>
-              {/* Review */}
-              <Box sx={{ minHeight:56,border:'1px solid',borderColor:'divider',borderRadius:1,px:1.5,py:1,display:'grid',bgcolor:'background.paper' }}>
-                <Box component="label" sx={{ color:'text.secondary',fontSize:12,fontWeight:700 }}>审核状态</Box>
-                <Box component="select" value={filters.review} onChange={e=>setFilters({...filters,review:e.target.value})}
-                  sx={{ width:'100%',minHeight:44,border:'none',bg:'transparent',fontSize:14,fontWeight:650,mt:0.5,fontFamily:'inherit',color:'text.primary' }}>
-                  {['All','Approved','Pending','Rejected','External'].map(o=><option key={o}>{o}</option>)}
-                </Box>
-              </Box>
-              {/* Chart toggle */}
-              <Box component="button" onClick={()=>setFilters({...filters,chartOnly:!filters.chartOnly})}
-                sx={{ minHeight:32,px:1.5,borderRadius:'999px',display:'inline-flex',alignItems:'center',gap:0.75,border:'1px solid',borderColor:filters.chartOnly?'primary.main':'divider',bgcolor:filters.chartOnly?'#e0e7ff':'grey.50',color:filters.chartOnly?'#312e81':'text.primary',fontSize:12,fontWeight:700,cursor:'pointer',justifySelf:'start' }}>
-                进入默认图表
-              </Box>
-              <Box component="button" onClick={()=>setFilters({formula:'',tcMin:0,tcMax:9999,pMin:0,pMax:9999,yMin:1900,yMax:2030,type:'All',spaceMin:0,spaceMax:230,review:'All',chartOnly:false})}
-                sx={{ minHeight:40,px:2.5,borderRadius:'999px',display:'inline-flex',alignItems:'center',justifyContent:'center',gap:1,border:'1px solid',borderColor:'divider',bgcolor:'transparent',color:'primary.main',fontSize:14,fontWeight:700,cursor:'pointer' }}>
-                重置筛选
+              {/* 图表记录开关 */}
+              <Box component="button" disabled={!supported.has('chart')}
+                title={supported.has('chart') ? undefined : '当前数据源不支持该筛选'}
+                onClick={()=>setFilters({...filters,chartOnly:!filters.chartOnly})}
+                sx={{ minHeight:32,px:1.5,borderRadius:'999px',display:'inline-flex',alignItems:'center',gap:0.75,border:'1px solid',borderColor:filters.chartOnly?'primary.main':'divider',bgcolor:filters.chartOnly?'#e0e7ff':'grey.50',color:filters.chartOnly?'#312e81':'text.primary',fontSize:12,fontWeight:700,cursor:'pointer',justifySelf:'start',opacity:supported.has('chart')?1:0.45,transition:'all .15s ease' }}>
+                <Box sx={{ width:8,height:8,borderRadius:'50%',bgcolor:filters.chartOnly?'primary.main':'text.disabled' }} />
+                仅看图表记录
               </Box>
             </Box>
           </Box>
 
           {/* Data table */}
-          <Card>
+          <Card sx={{ position:'relative' }}>
             <CardContent>
               <Typography variant="h2" gutterBottom>结果表格</Typography>
               {loading && <LinearProgress sx={{ mb: 2, borderRadius: 999, height: 4 }} />}
               {apiError && (
                 <Box sx={{ display:'flex',alignItems:'center',justifyContent:'space-between',gap:1.5,mb:1.5,p:1.5,border:'1px solid',borderColor:'divider',borderRadius:2,bgcolor:'grey.50' }}>
                   <Typography variant="body2" color="error">{apiError}</Typography>
-                  <Button size="small" variant="text" onClick={() => { setApiError(''); setStage('results') }}>重试</Button>
+                  <Button size="small" variant="text" onClick={() => setRetryTick(t => t + 1)}>重试</Button>
                 </Box>
               )}
               <Box sx={{ overflowX:'auto',border:'1px solid',borderColor:'divider',borderRadius:2,bgcolor:'background.paper' }}>
@@ -388,13 +549,8 @@ const SearchPage: React.FC = () => {
                   <Box component="tbody">
                     {apiRecords.map((r,i)=>(
                       <Box key={i} component="tr"
-                        onClick={()=>{setSelectedRecord(r);setDetailOpen(true);toast('详情面板已更新')}}
-                        sx={{
-                          cursor:'pointer',transition:'background .16s ease',
-                          '&:hover':{bgcolor:'grey.50'},
-                          bgcolor:detailOpen&&selectedRecord===r?'#e0e7ff':'transparent',
-                          boxShadow:detailOpen&&selectedRecord===r?'inset 4px 0 0 #4f46e5':'none',
-                        }}>
+                        onClick={()=>setDetailRecord(detailRecord===r?null:r)}
+                        sx={{ cursor:'pointer','&:hover':{bgcolor:'grey.50'} }}>
                         <Box component="td" sx={{ p:'14px 12px',borderBottom:'1px solid',borderColor:'divider',whiteSpace:'nowrap' }}>{r.year}</Box>
                         <Box component="td" sx={{ p:'14px 12px',borderBottom:'1px solid',borderColor:'divider',whiteSpace:'nowrap' }}>{r.formula}</Box>
                         <Box component="td" sx={{ p:'14px 12px',borderBottom:'1px solid',borderColor:'divider',whiteSpace:'nowrap' }}>{r.type}</Box>
@@ -403,43 +559,58 @@ const SearchPage: React.FC = () => {
                         <Box component="td" sx={{ p:'14px 12px',borderBottom:'1px solid',borderColor:'divider',whiteSpace:'nowrap' }}>{r.spaceGroup}</Box>
                         <Box component="td" sx={{ p:'14px 12px',borderBottom:'1px solid',borderColor:'divider',whiteSpace:'nowrap' }}><Chip label={r.source} size="small" color={r.source==='Local'?'primary':r.source==='Alexandria'?'secondary':'default'} /></Box>
                         <Box component="td" sx={{ p:'14px 12px',borderBottom:'1px solid',borderColor:'divider',whiteSpace:'nowrap' }}><Chip label={r.status} size="small" color={r.status==='Approved'?'success':r.status==='Pending'?'warning':'default'} /></Box>
-                        <Box component="td" sx={{ p:'14px 12px',borderBottom:'1px solid',borderColor:'divider',whiteSpace:'nowrap' }}>{r.doi}</Box>
+                        <Box component="td" sx={{ p:'14px 12px',borderBottom:'1px solid',borderColor:'divider',whiteSpace:'nowrap',position:'relative' }}>
+                          {r.doi}
+                          <Button variant="contained" size="small" sx={{
+                            position:'absolute', right:0, top:'50%',
+                            opacity: detailRecord===r ? 1 : 0,
+                            transform: detailRecord===r ? 'translateY(-50%) translateX(-60px)' : 'translateY(-50%) translateX(120px)',
+                            transition: 'opacity 0.2s ease, transform 0.25s ease',
+                            pointerEvents: detailRecord===r ? 'auto' : 'none',
+                            whiteSpace:'nowrap',
+                          }}
+                            onClick={(e)=>{e.stopPropagation();setSelectedRecord(r);setStage('detail')}}>
+                            查看详情
+                          </Button>
+                        </Box>
                       </Box>
                     ))}
                     {apiRecords.length===0&&(
                       <Box component="tr"><Box component="td" colSpan={9} sx={{ p:4,textAlign:'center',color:'text.secondary' }}>
                         <Typography variant="h3">没有匹配记录</Typography>
                         <Typography variant="body2">可以重置筛选，或扩大 Tc、压强、年份、空间群范围。</Typography>
-                        <Button variant="contained" sx={{ mt:2 }} onClick={()=>setFilters({...filters,tcMin:0,tcMax:999,pMin:0,pMax:999,yMin:1900,yMax:2030,type:'All',spaceMin:1,spaceMax:230,review:'All'})}>重置筛选</Button>
+                        <Button variant="contained" sx={{ mt:2 }} onClick={()=>setFilters({ ...FILTER_DEFAULTS })}>重置筛选</Button>
                       </Box></Box>
                     )}
                   </Box>
                 </Box>
               </Box>
+              {totalPages > 1 && (
+                <Box sx={{ display:'flex',alignItems:'center',justifyContent:'center',gap:2,mt:2 }}>
+                  <Button size="small" variant="outlined" disabled={page===0} onClick={()=>setPage(p=>p-1)}>上一页</Button>
+                  <Typography variant="body2" color="text.secondary">
+                    第 {page+1}/{totalPages} 页，共 {total} 条
+                  </Typography>
+                  <Button size="small" variant="outlined" disabled={page+1>=totalPages} onClick={()=>setPage(p=>p+1)}>下一页</Button>
+                </Box>
+              )}
             </CardContent>
           </Card>
 
           {/* Detail preview side sheet */}
-          {detailOpen && (
-            <Card sx={{ alignSelf:'start',position:'sticky',top:96,boxShadow:'0 6px 16px rgba(15,23,42,.16),0 10px 24px rgba(15,23,42,.10)' }}>
-              <CardContent>
-                <Box sx={{ display:'flex',justifyContent:'space-between',alignItems:'center',mb:2 }}>
-                  <Typography variant="h2">记录详情</Typography>
-                  <IconButton size="small" onClick={()=>setDetailOpen(false)}>✕</IconButton>
-                </Box>
-                <Typography sx={{ fontFamily:'"Roboto Mono",monospace',mb:2 }}>{selectedRecord.formula} · {selectedRecord.pressure} · representative_tc = {selectedRecord.tcField}</Typography>
-                <Box sx={{ display:'flex',gap:1,mb:2 }}><Chip label={selectedRecord.status} size="small" color={selectedRecord.status==='Approved'?'success':'warning'} /><Chip label={selectedRecord.source} size="small" color="primary" /></Box>
-                <Button variant="contained" fullWidth onClick={()=>{setStage('detail');toast('已进入研究记录详情')}}>查看完整详情</Button>
-              </CardContent>
-            </Card>
-          )}
         </Box>
         <Snackbar open={!!snackbar} autoHideDuration={2200} onClose={()=>setSnackbar('')}><Alert severity="success" variant="filled">{snackbar}</Alert></Snackbar>
       </Box>
     )
   }
 
-  /* ── Stage 3: Detail ── */
+  /* ── Stage 3: Detail（按数据源分派不同 Layer 3）── */
+  if (selectedRecord.sourceSystem === 'alexandria') {
+    return <AlexandriaDetail matId={selectedRecord.sourceRecordId} formula={selectedRecord.formula} onBack={()=>setStage('results')} />
+  }
+  if (selectedRecord.sourceSystem === 'htsc2025') {
+    return <HtscDetail name={selectedRecord.sourceRecordId} formula={selectedRecord.formula} onBack={()=>setStage('results')} />
+  }
   const r = selectedRecord
   return (
     <Box>
@@ -470,42 +641,72 @@ const SearchPage: React.FC = () => {
                   <Box><Typography variant="caption">DOI</Typography><Typography fontWeight={600}>{r.doi}</Typography></Box>
                   <Box><Typography variant="caption">期刊</Typography><Typography fontWeight={600}>{paperDetail?.journal || r.journal}</Typography></Box>
                   <Box sx={{ gridColumn:'1/-1' }}><Typography variant="caption">论文标题</Typography><Typography fontWeight={600}>{paperDetail?.title || r.title}</Typography></Box>
+                  {paperDetail?.summary && (
+                    <Box sx={{ gridColumn:'1/-1' }}><Typography variant="caption">论文总结</Typography><Typography variant="body2" sx={{ lineHeight:1.8 }}>{paperDetail.summary}</Typography></Box>
+                  )}
                   <Box><Typography variant="caption">审核状态</Typography><Chip label={r.status} size="small" color={r.status==='Approved'?'success':'warning'} /></Box>
                   <Box><Typography variant="caption">数据来源</Typography><Chip label={r.source} size="small" color="primary" /></Box>
                 </Box>
               </Box>
             </Box>
-            {/* 超导参数 */}
-            <Box component="details" sx={{ border:'1px solid',borderColor:'divider',borderRadius:2,mb:1.5,overflow:'hidden' }}>
-              <Box component="summary" sx={{ cursor:'pointer',p:2,fontSize:18,fontWeight:800 }}>超导参数</Box>
-              <Box sx={{ px:2,pb:2,borderTop:'1px solid',borderColor:'divider' }}>
-                <Box sx={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:1.5 }}>
-                  <Box><Typography variant="caption">代表 Tc</Typography><Typography fontWeight={800} color="primary.main" fontSize={20}>{r.tc} ({r.tcField})</Typography></Box>
-                  <Box><Typography variant="caption">压强</Typography><Typography fontWeight={600}>{r.pressure}</Typography></Box>
-                  <Box><Typography variant="caption">λ</Typography><Typography fontWeight={600}>{paperDetail?.records?.[0]?.lambda_value ?? r.lambda}</Typography></Box>
-                  <Box><Typography variant="caption">ω_log</Typography><Typography fontWeight={600}>{paperDetail?.records?.[0]?.omega_log != null ? `${paperDetail.records[0].omega_log} K` : r.omegaLog}</Typography></Box>
-                  <Box><Typography variant="caption">N(Ef)</Typography><Typography fontWeight={600}>{paperDetail?.records?.[0]?.n_ef_total ?? r.nef}</Typography></Box>
-                </Box>
+            {/* 关键物性（key_properties 全量列表）*/}
+            <Box component="details" open sx={{ border:'1px solid',borderColor:'divider',borderRadius:2,mb:1.5,overflow:'hidden' }}>
+              <Box component="summary" sx={{ cursor:'pointer',p:2,fontSize:18,fontWeight:800 }}>关键物性</Box>
+              <Box sx={{ px:2,pb:2,borderTop:'1px solid',borderColor:'divider',overflowX:'auto' }}>
+                {Array.isArray(paperDetail?.key_properties) && paperDetail.key_properties.length > 0 ? (
+                  <Box component="table" sx={{ width:'100%',borderCollapse:'collapse',fontSize:13,mt:1 }}>
+                    <Box component="thead">
+                      <Box component="tr">
+                        {['材料','物性','数值','条件','备注'].map(h=>(
+                          <Box key={h} component="th" sx={{ p:'6px 10px',borderBottom:'2px solid',borderColor:'divider',textAlign:'left',color:'text.secondary',fontSize:12,whiteSpace:'nowrap' }}>{h}</Box>
+                        ))}
+                      </Box>
+                    </Box>
+                    <Box component="tbody">
+                      {paperDetail.key_properties.map((kp: any) => (
+                        <Box component="tr" key={kp.id} sx={{ bgcolor: kp.is_primary ? '#eef2ff' : 'transparent' }}>
+                          <Box component="td" sx={{ p:'6px 10px',borderBottom:'1px solid',borderColor:'divider',whiteSpace:'nowrap',fontWeight:600 }}>{kp.material}</Box>
+                          <Box component="td" sx={{ p:'6px 10px',borderBottom:'1px solid',borderColor:'divider',whiteSpace:'nowrap' }}>
+                            {kp.label}{kp.is_primary ? ' ★' : ''}
+                          </Box>
+                          <Box component="td" sx={{ p:'6px 10px',borderBottom:'1px solid',borderColor:'divider',whiteSpace:'nowrap',fontWeight:700,color:'primary.main' }}>
+                            {kp.value_min != null
+                              ? (kp.value_min !== kp.value_max ? `${kp.value_min}–${kp.value_max}` : `${kp.value_max}`)
+                              : (kp.value_raw || '-')}{kp.unit ? ` ${kp.unit}` : ''}
+                          </Box>
+                          <Box component="td" sx={{ p:'6px 10px',borderBottom:'1px solid',borderColor:'divider',whiteSpace:'nowrap',color:'text.secondary' }}>
+                            {[kp.pressure_gpa != null ? `${kp.pressure_gpa} GPa` : null,
+                              kp.temperature_k != null ? `${kp.temperature_k} K` : null].filter(Boolean).join(' · ') || '-'}
+                          </Box>
+                          <Box component="td" sx={{ p:'6px 10px',borderBottom:'1px solid',borderColor:'divider',color:'text.secondary',minWidth:180 }}>
+                            {[kp.name_note, kp.condition_note].filter(Boolean).join('；') || '-'}
+                          </Box>
+                        </Box>
+                      ))}
+                    </Box>
+                  </Box>
+                ) : (
+                  <Typography variant="body2" color="text.secondary" sx={{ mt:1 }}>{paperDetail ? '该论文暂无结构化物性数据' : '加载中…'}</Typography>
+                )}
               </Box>
             </Box>
-            {/* 结构信息 */}
+            {/* 研究方法与发现（clean_results 结构化成果）*/}
             <Box component="details" sx={{ border:'1px solid',borderColor:'divider',borderRadius:2,mb:1.5,overflow:'hidden' }}>
-              <Box component="summary" sx={{ cursor:'pointer',p:2,fontSize:18,fontWeight:800 }}>结构信息</Box>
+              <Box component="summary" sx={{ cursor:'pointer',p:2,fontSize:18,fontWeight:800 }}>研究方法与发现</Box>
               <Box sx={{ px:2,pb:2,borderTop:'1px solid',borderColor:'divider' }}>
-                <Box sx={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:1.5 }}>
-                  <Box><Typography variant="caption">空间群</Typography><Typography fontWeight={600}>{r.spaceGroup}{paperDetail?.records?.[0]?.space_group_number ? ` (#${paperDetail.records[0].space_group_number})` : ''}</Typography></Box>
-                  <Box><Typography variant="caption">压强</Typography><Typography fontWeight={600}>{r.pressure}</Typography></Box>
-                </Box>
-              </Box>
-            </Box>
-            {/* 计算与备注 */}
-            <Box component="details" sx={{ border:'1px solid',borderColor:'divider',borderRadius:2,mb:1.5,overflow:'hidden' }}>
-              <Box component="summary" sx={{ cursor:'pointer',p:2,fontSize:18,fontWeight:800 }}>计算与备注</Box>
-              <Box sx={{ px:2,pb:2,borderTop:'1px solid',borderColor:'divider' }}>
-                <Box sx={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:1.5 }}>
-                  <Box><Typography variant="caption">方法</Typography><Typography fontWeight={600}>{paperDetail?.records?.[0]?.method || r.method}</Typography></Box>
-                  <Box><Typography variant="caption">软件</Typography><Typography fontWeight={600}>{paperDetail?.records?.[0]?.calculation_code || r.software}</Typography></Box>
-                  <Box sx={{ gridColumn:'1/-1' }}><Typography variant="caption">备注</Typography><Typography fontWeight={600}>{paperDetail?.records?.[0]?.note || r.note}</Typography></Box>
+                <Box sx={{ display:'grid',gap:1.5,mt:1 }}>
+                  <Box>
+                    <Typography variant="caption">研究方法</Typography>
+                    <Box sx={{ display:'flex',gap:0.75,flexWrap:'wrap',mt:0.5 }}>
+                      {(() => { try { const m = JSON.parse(paperDetail?.methodology || '[]'); return Array.isArray(m) && m.length ? m.map((x: string) => <Chip key={x} label={x} size="small" variant="outlined" />) : <Typography fontWeight={600}>-</Typography> } catch { return <Typography fontWeight={600}>{paperDetail?.methodology || '-'}</Typography> } })()}
+                    </Box>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption">核心发现</Typography>
+                    <Typography fontWeight={600} sx={{ lineHeight:1.8 }}>
+                      {(() => { try { return JSON.parse(paperDetail?.key_finding || '""') || '-' } catch { return paperDetail?.key_finding || '-' } })()}
+                    </Typography>
+                  </Box>
                 </Box>
               </Box>
             </Box>
@@ -516,34 +717,41 @@ const SearchPage: React.FC = () => {
         <Card sx={{ alignSelf:'start',position:'sticky',top:96,boxShadow:'0 6px 16px rgba(15,23,42,.16),0 10px 24px rgba(15,23,42,.10)' }}>
           <CardContent>
             <Typography variant="h2" gutterBottom>结构预览</Typography>
-            {structureData ? (
+            {structureData && Array.isArray(structureData) && structureData.length > 0 ? (
               <Box>
-                <Box sx={{ display:'grid',gap:1 }}>
-                  <Typography variant="body2">格式: {structureData.structure_format || '-'}</Typography>
-                  <Typography variant="body2">空间群: {structureData.space_group_symbol || '-'} (#{structureData.space_group_number || '-'})</Typography>
-                  <Typography variant="body2">原子数: {structureData.atom_count || '-'}</Typography>
-                  {structureData.cell_parameters && (
-                    <Typography variant="body2">晶胞参数: {JSON.stringify(structureData.cell_parameters)}</Typography>
-                  )}
-                  {structureData.volume != null && (
-                    <Typography variant="body2">体积: {structureData.volume}</Typography>
-                  )}
-                </Box>
-                {structureData.structure_text && (
-                  <Box component="pre" sx={{ mt:2,p:2,borderRadius:2,bgcolor:'grey.50',maxHeight:240,overflow:'auto',fontFamily:'"Roboto Mono",monospace',fontSize:12 }}>
-                    {structureData.structure_text.slice(0, 2000)}
+                {structureData.map((s: any, i: number) => (
+                  <Box key={i} sx={{ mb: i < structureData.length - 1 ? 2.5 : 0 }}>
+                    {s.name_note && (
+                      <Typography variant="body2" fontWeight={700} sx={{ mb:0.5 }}>
+                        {s.material} · {s.name_note}{s.pressure_gpa != null ? ` @ ${s.pressure_gpa} GPa` : ''}
+                      </Typography>
+                    )}
+                    <Typography variant="body2" color="text.secondary" sx={{ mb:1 }}>
+                      格式 {s.structure_format || 'cif'} · 拖拽旋转 · 滚轮缩放
+                    </Typography>
+                    <StructureViewer3D
+                      data={s.structure_text}
+                      format={s.structure_format === 'poscar' || s.structure_format === 'vasp' ? 'vasp' : 'cif'}
+                      height={240}
+                    />
+                    <Box component="details" sx={{ mt:1 }}>
+                      <Box component="summary" sx={{ cursor:'pointer',fontSize:12,fontWeight:700,color:'text.secondary' }}>查看结构文本</Box>
+                      <Box component="pre" sx={{ mt:1,p:1.5,borderRadius:2,bgcolor:'grey.50',maxHeight:200,overflow:'auto',fontFamily:'"Roboto Mono",monospace',fontSize:11 }}>
+                        {s.structure_text.slice(0, 1500)}
+                      </Box>
+                    </Box>
                   </Box>
-                )}
+                ))}
               </Box>
             ) : (
               <Box sx={{ minHeight:240,borderRadius:2,border:'1px solid',borderColor:'divider',
                 background:`radial-gradient(circle at 22% 28%, #4f46e5 0 9px, transparent 10px), radial-gradient(circle at 66% 34%, #0891b2 0 9px, transparent 10px), radial-gradient(circle at 42% 70%, #4f46e5 0 9px, transparent 10px), linear-gradient(145deg, #fff, #f1f5f9)`,
                 position:'relative',overflow:'hidden',
-                '&::before,&::after':{content:'""',position:'absolute',left:'25%',right:'25%',top:'34%',height:2,bg:'#cbd5e1',transform:'rotate(18deg)'},
+                '&::before,&::after':{content:'""',position:'absolute',left:'25%',right:'25%',top:'34%',height:2,bgcolor:'#cbd5e1',transform:'rotate(18deg)'},
                 '&::after':{top:'58%',transform:'rotate(-25deg)'},
               }}>
                 <Typography variant="body2" sx={{ position:'absolute',bottom:12,left:12,color:'text.secondary' }}>
-                  该记录暂无结构数据
+                  {structureMsg}
                 </Typography>
               </Box>
             )}

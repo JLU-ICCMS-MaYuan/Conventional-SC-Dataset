@@ -13,6 +13,7 @@ Chroma 是一个本地向量数据库：
 from __future__ import annotations
 
 import chromadb
+import threading
 
 from backend.rag.config import settings as rag_settings
 from chromadb.config import Settings
@@ -22,18 +23,17 @@ CHROMA_DIR = rag_settings.chroma_path
 COLLECTION_NAME = "paper_chunks"
 REVIEW_COLLECTION_NAME = "review_chunks"
 
-_client: chromadb.PersistentClient | None = None
+_thread_local = threading.local()
 
 
 def _get_client() -> chromadb.PersistentClient:
-    """获取 PersistentClient 单例。"""
-    global _client
-    if _client is None:
-        _client = chromadb.PersistentClient(
+    """获取线程安全的 PersistentClient。每个线程独立实例。"""
+    if not hasattr(_thread_local, "client") or _thread_local.client is None:
+        _thread_local.client = chromadb.PersistentClient(
             path=str(CHROMA_DIR),
             settings=Settings(anonymized_telemetry=False),
         )
-    return _client
+    return _thread_local.client
 
 
 def _get_collection(name: str = COLLECTION_NAME):

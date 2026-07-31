@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from backend import models
 from backend.db_helpers import build_system_key, normalize_element_symbols
-from backend.formula_similarity import FormulaExpressionError, parse_formula_expression, sort_formula_matches
+from backend.services.formula_similarity import FormulaExpressionError, parse_formula_expression, sort_formula_matches
 
 
 @dataclass

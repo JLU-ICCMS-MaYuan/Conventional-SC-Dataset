@@ -194,6 +194,11 @@ export function useStreamingChat() {
     setPapers({})
     setTop10([])
     setStatusLog([])
+    if (explore) {
+      setInspiration({ active: true, mode: '', modeLabel: '探索模式', statusMessage: '正在分析问题...', sessionId: '', ideasCount: 0 })
+      setIdeas([])
+      setReviews([])
+    }
 
     setConvs((prev) => prev.map((c) => c.id === cid ? {
       ...c,
@@ -275,9 +280,27 @@ export function useStreamingChat() {
                 // 流式时用纯文本（快），完成后才由 React 渲染 LaTeX
                 streamRef.current.textContent += t
               }
+            } else if (eventType === 'tool_start') {
+              const name = data.name || ''
+              const msg = `🔍 正在查询: ${name}`
+              flushSync(() => { setStatusLog(prev => [...prev, msg]) })
+              setInspiration(prev => prev.active ? { ...prev, statusMessage: msg } : prev)
+            } else if (eventType === 'tool_end') {
+              const name = data.name || ''
+              const msg = `✅ 查询完成: ${name}`
+              flushSync(() => { setStatusLog(prev => [...prev, msg]) })
+              setInspiration(prev => prev.active ? { ...prev, statusMessage: msg } : prev)
             } else if (eventType === 'done') {
               if (data.papers) { receivedPapers = data.papers; setPapers(data.papers) }
               if (data.top10) { receivedTop10 = data.top10; setTop10(data.top10) }
+              if (data.ideas && Array.isArray(data.ideas) && data.ideas.length > 0) {
+                data.ideas.forEach((card: IdeaCard) => { receivedIdeas.push(card) })
+                setIdeas(prev => { const merged = [...prev]; data.ideas.forEach((c: IdeaCard) => { if (!merged.some(x => x.title === c.title)) merged.push(c) }); return merged })
+              }
+              if (!data.papers && !data.top10 && data.source) {
+                const label = data.source.startsWith('inspire_') ? '' : ` (${data.source})`
+                setInspiration(prev => ({ ...prev, statusMessage: `✅ 探索完成${label}` }))
+              }
               // accumulate papers into savedPapers (deduplicated, sequential numbering)
               if (data.papers) {
                 setSavedPapers(prev => {

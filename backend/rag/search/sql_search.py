@@ -11,6 +11,7 @@ sql_search.py — SQL 精确搜索模块。
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from sqlalchemy import select
@@ -19,10 +20,26 @@ from sqlalchemy.sql import func
 
 from backend.rag.models import (
     ChemicalSystem,
+    KeyProperty,
     Paper,
     Superconductor,
-    SuperconductorRecord,
 )
+
+_FORMULA_RE = re.compile(r"([A-Z][a-z]?)(\d*\.?\d*)")
+
+
+def _normalize_formula(formula: str) -> str:
+    """化学式归一化（元素字母排序），如 LaH10 → H10La，与重建脚本一致"""
+    counts: dict[str, float] = {}
+    for m in _FORMULA_RE.finditer(formula or ""):
+        sym, n = m.group(1), m.group(2)
+        counts[sym] = counts.get(sym, 0) + (float(n) if n else 1.0)
+    parts = []
+    for sym in sorted(counts):
+        n = counts[sym]
+        n_str = str(int(n)) if float(n).is_integer() else str(n)
+        parts.append(f"{sym}{n_str if n != 1 else ''}")
+    return "".join(parts)
 
 
 async def search_by_formula(
@@ -31,7 +48,7 @@ async def search_by_formula(
 ) -> list[dict]:
     """按化学式精确搜索超导体。
 
-    返回该超导体的所有数据记录（含 paper 信息）。
+    返回该超导体的所有物性记录（含 paper 信息）。
     """
     from sqlalchemy.orm import joinedload
 
@@ -39,25 +56,26 @@ async def search_by_formula(
     r = await session.execute(
         select(Superconductor)
         .where(Superconductor.chemical_formula.ilike(formula))
-        .options(joinedload(Superconductor.records).joinedload(SuperconductorRecord.paper))
+        .options(joinedload(Superconductor.key_properties).joinedload(KeyProperty.paper))
     )
     superconductors = r.unique().scalars().all()
 
     if not superconductors:
-        # 也试归一化后的化学式
+        # 归一化后按 formula_normalized 匹配（chemical_formula 可能带相/掺杂注记，如 "LaH10 (fcc phase)"）
+        normalized = _normalize_formula(formula)
         r = await session.execute(
             select(Superconductor)
-            .where(Superconductor.formula_normalized.ilike(formula))
-            .options(joinedload(Superconductor.records).joinedload(SuperconductorRecord.paper))
+            .where(Superconductor.formula_normalized.ilike(normalized))
+            .options(joinedload(Superconductor.key_properties).joinedload(KeyProperty.paper))
         )
         superconductors = r.unique().scalars().all()
 
     result = []
     for sc in superconductors:
-        records = []
-        for rec in sc.records:
-            if rec.paper and rec.paper.review_status == "approved":
-                records.append(_format_record(rec))
+        props = []
+        for kp in sc.key_properties:
+            if kp.paper and kp.paper.review_status == "approved":
+                props.append(_format_property(kp))
         result.append({
             "type": "superconductor",
             "id": sc.id,
@@ -66,7 +84,7 @@ async def search_by_formula(
             "display_name": sc.display_name,
             "composition": json.loads(sc.composition) if sc.composition else {},
             "element_ratio": json.loads(sc.element_ratio) if sc.element_ratio else {},
-            "records": records,
+            "properties": props,
         })
 
     return result
@@ -197,18 +215,18 @@ async def get_superconductor_records(
     session: AsyncSession,
     superconductor_id: int,
 ) -> list[dict]:
-    """获取某个超导体的所有数据记录。"""
+    """获取某个超导体的所有物性记录。"""
     from sqlalchemy.orm import joinedload
 
     r = await session.execute(
-        select(SuperconductorRecord)
-        .where(SuperconductorRecord.superconductor_id == superconductor_id)
-        .options(joinedload(SuperconductorRecord.paper))
+        select(KeyProperty)
+        .where(KeyProperty.superconductor_id == superconductor_id)
+        .options(joinedload(KeyProperty.paper))
     )
-    records = r.scalars().all()
+    props = r.scalars().all()
     # 只返回已审核论文的记录
-    records = [rec for rec in records if rec.paper and rec.paper.review_status == "approved"]
-    return [_format_record(rec) for rec in records]
+    props = [kp for kp in props if kp.paper and kp.paper.review_status == "approved"]
+    return [_format_property(kp) for kp in props]
 
 
 async def get_paper_detail(session: AsyncSession, paper_id: int) -> dict | None:
@@ -218,7 +236,7 @@ async def get_paper_detail(session: AsyncSession, paper_id: int) -> dict | None:
     r = await session.execute(
         select(Paper)
         .where(Paper.id == paper_id)
-        .options(joinedload(Paper.records))
+        .options(joinedload(Paper.key_properties))
     )
     paper = r.unique().scalar_one_or_none()
     if not paper:
@@ -236,44 +254,36 @@ async def get_paper_detail(session: AsyncSession, paper_id: int) -> dict | None:
         "keywords_tags": json.loads(paper.keywords_tags) if paper.keywords_tags else [],
         "paper_type": paper.paper_type,
         "source_file_path": paper.source_file_path,
-        "record_count": len(paper.records),
+        "record_count": len(paper.key_properties),
     }
 
 
-def _format_record(rec: SuperconductorRecord) -> dict:
+def _format_property(kp: KeyProperty) -> dict:
+    """物性记录 → 供 LLM 上下文/前端展示的字典（含规范名中文标签与范围值）"""
+    from backend.ingest.prop_names import PROP_LABELS
     return {
-        "id": rec.id,
-        "superconductor_id": rec.superconductor_id,
-        "paper_id": rec.paper_id,
-        "source_label": rec.source_label,
-        "article_type": rec.article_type,
-        "superconductor_type": rec.superconductor_type,
-        "pressure_gpa": rec.pressure_gpa,
-        "space_group_symbol": rec.space_group_symbol,
-        "space_group_number": rec.space_group_number,
-        "crystal_structure": rec.crystal_structure,
-        "thermodynamically_stable": rec.thermodynamically_stable,
-        "dynamically_stable": rec.dynamically_stable,
-        "energy_above_hull": rec.energy_above_hull,
-        "mcmillan_tc": rec.mcmillan_tc,
-        "allen_dynes_tc": rec.allen_dynes_tc,
-        "experimental_tc": rec.experimental_tc,
-        "lambda_value": rec.lambda_value,
-        "omega_log": rec.omega_log,
-        "n_ef_total": rec.n_ef_total,
-        "pseudopotential_type": rec.pseudopotential_type,
-        "exchange_correlation_functional": rec.exchange_correlation_functional,
-        "calculation_code": rec.calculation_code,
-        "k_grid": rec.k_grid,
-        "q_grid": rec.q_grid,
-        "energy_cutoff_value": rec.energy_cutoff_value,
-        "energy_cutoff_unit": rec.energy_cutoff_unit,
-        "method": rec.method,
-        "data_source_note": rec.data_source_note,
-        "show_in_chart": rec.show_in_chart,
-        "paper_doi": rec.paper.doi if rec.paper else None,
-        "paper_title": rec.paper.title if rec.paper else None,
-        "paper_year": rec.paper.year if rec.paper else None,
+        "id": kp.id,
+        "superconductor_id": kp.superconductor_id,
+        "paper_id": kp.paper_id,
+        "material": kp.material,
+        "name": kp.name,
+        "label": PROP_LABELS.get(kp.name, kp.name),
+        "name_raw": kp.name_raw,
+        "name_note": kp.name_note,
+        "value_min": kp.value_min,
+        "value_max": kp.value_max,
+        "value_raw": kp.value_raw,
+        "unit": kp.unit,
+        "pressure_gpa": kp.pressure_gpa,
+        "temperature_k": kp.temperature_k,
+        "condition_note": kp.condition_note,
+        "is_primary": kp.is_primary,
+        "superconductor_type": kp.superconductor_type,
+        "article_type": kp.article_type,
+        "source_label": kp.source_label,
+        "paper_doi": kp.paper.doi if kp.paper else None,
+        "paper_title": kp.paper.title if kp.paper else None,
+        "paper_year": kp.paper.year if kp.paper else None,
     }
 
 
