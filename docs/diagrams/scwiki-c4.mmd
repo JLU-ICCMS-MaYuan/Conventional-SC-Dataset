@@ -1,0 +1,50 @@
+flowchart TB
+  Browser["🖥️ 浏览器 (React SPA / Vite + MUI)"]
+
+  subgraph GoServer["Go 后端 :8080 (Gin)"]
+    direction TB
+    PapersAPI["/api/papers/* — 检索 + 详情 + 上传审批"]
+    StatsAPI["/api/papers/stats/* — Tc-Pressure / Tc-Year 图表数据"]
+    NewsAPI["/api/news — 首页快讯"]
+    ChartGroupsAPI["/api/chart-groups — 图表组合 CRUD"]
+    KGAPI["/api/knowledge-graph/* — 知识图谱"]
+    ExternalAPI["/api/alexandria + /api/htsc2025 — 外部数据源"]
+    AdminAPI["/api/admin/* — 管理员 API (JWT+AdminRequired)"]
+    AuthAPI["/api/auth — 登录注册 (bcrypt)"]
+    GzipMW["Gzip 压缩中间件 (API -87%)"]
+    RedisCache["Redis 永久缓存 (图表数据)"]
+  end
+
+  subgraph PythonBackend["Python 后端 :8000 (反向代理)"]
+    RAGAPI["/api/rag/* — RAG 对话 + 文件上传"]
+    IngestPipeline["上传管线 — 文本提取 → LLM元数据 → 入库 → 向量化 → 富化"]
+  end
+
+  subgraph Storage["🗄️ 数据层"]
+    MySQL[(MySQL — papers / key_properties / users / chart_groups)]
+    Neo4j[(Neo4j — 知识图谱 415节点/5000边)]
+    Qdrant[(Qdrant — 向量数据库)]
+    Redis[(Redis — 图表数据缓存)]
+  end
+
+  subgraph External["☁️ 外部服务"]
+    DeepSeek[DeepSeek API — LLM 对话/提取/富化]
+    OpenAI[OpenAI API — Embedding 向量化]
+    Alexandria[Alexandria — 外部超导数据]
+    HTSC[HTSC-2025 — 外部数据集]
+    CDN[jsDelivr CDN — vis-network/3Dmol]
+  end
+
+  Browser --> GoServer
+  GoServer -- "未匹配路由" --> PythonBackend
+  GoServer --> MySQL
+  GoServer --> Redis
+  GoServer --> Neo4j
+  PythonBackend --> MySQL
+  PythonBackend --> Qdrant
+  PythonBackend --> DeepSeek
+  PythonBackend --> OpenAI
+  ExternalAPI --> Alexandria
+  ExternalAPI --> HTSC
+  StatsAPI --> RedisCache
+  Browser -.-> CDN

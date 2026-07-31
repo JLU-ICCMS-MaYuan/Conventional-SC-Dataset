@@ -1,0 +1,52 @@
+sequenceDiagram
+    actor User as 用户
+    participant Frontend as 浏览器
+    participant Go as Go 后端
+    participant MySQL as MySQL
+    participant Redis as Redis
+
+    rect rgb(240, 248, 255)
+        Note over User,Redis: 加载图表数据
+        User->>Frontend: 访问 /share
+        par 并行请求
+            Frontend->>Go: GET /api/papers/stats/tc-pressure
+            Frontend->>Go: GET /api/papers/stats/tc-year
+            Frontend->>Go: GET /api/chart-groups
+        end
+        Go->>Redis: 检查缓存
+        alt 缓存命中
+            Redis-->>Go: 压缩数据 (gzip ~15kB 合计)
+        else 缓存未命中
+            Go->>MySQL: 查询 key_properties
+            MySQL-->>Go: 579 + 567 条记录
+            Go->>Redis: 写入永久缓存
+        end
+        Go-->>Frontend: 图表数据 (含 paper_id)
+    end
+
+    rect rgb(255, 248, 240)
+        Note over User,Frontend: 图表交互
+        Frontend->>Frontend: ChartScatter 渲染散点图
+        User->>Frontend: 切换超导类型(图例点击)
+        Frontend->>Frontend: 按 sc_type 筛选显隐
+    end
+
+    rect rgb(240, 255, 240)
+        Note over User,MySQL: 点击查看论文详情
+        User->>Frontend: 点击数据点
+        Frontend->>Go: GET /api/papers/:paper_id
+        Go->>MySQL: Preload Paper + KeyProperties
+        MySQL-->>Go: 论文详情
+        Go-->>Frontend: JSON (基础信息/物性/方法)
+        Frontend->>Frontend: PaperDetailDrawer 弹出
+    end
+
+    rect rgb(255, 240, 255)
+        Note over User,MySQL: 图表组合(管理员)
+        User->>Frontend: 新建/编辑组合
+        Frontend->>Go: POST/PUT /api/chart-groups
+        Go->>MySQL: INSERT/UPDATE chart_groups
+        MySQL-->>Go: OK
+        Go-->>Frontend: 更新后的组合列表
+        Frontend->>Frontend: 选择组合高亮显示
+    end

@@ -1,0 +1,90 @@
+erDiagram
+    users {
+        int id PK
+        string email UK
+        string password_hash
+        string real_name
+        string role "user/admin/superadmin"
+        bool is_approved
+    }
+
+    papers {
+        int id PK
+        string doi UK
+        text title
+        string journal
+        int year
+        text abstract
+        text authors
+        text summary "AI生成"
+        text methodology "LLM富化"
+        text key_finding "LLM富化"
+        int uploaded_by_user_id FK
+        int reviewed_by_user_id FK
+        string review_status "pending/approved/rejected"
+        datetime created_at
+    }
+
+    key_properties {
+        int id PK
+        int paper_id FK
+        int superconductor_id FK
+        string material "材料名"
+        string name "规范物性名"
+        float value_min
+        float value_max
+        string unit
+        float pressure_gpa
+        float temperature_k
+        bool is_primary
+        string superconductor_type "hydride/cuprate..."
+        text structure_text "CIF/POSCAR"
+    }
+
+    superconductors {
+        int id PK
+        int chemical_system_id FK
+        string chemical_formula
+        string formula_normalized UK
+        string elements_list
+    }
+
+    chemical_systems {
+        int id PK
+        string system_key UK "La-H"
+        string elements_list
+        int element_count
+    }
+
+    paper_chunks {
+        int id PK
+        int paper_id FK
+        int chunk_index
+        string section_name
+        text content
+    }
+
+    chart_groups {
+        int id PK
+        string name
+        int created_by FK
+        bool is_public
+    }
+
+    chart_group_items {
+        int id PK
+        int group_id FK
+        int key_property_id FK
+        float custom_tc
+        float custom_pressure
+    }
+
+    users ||--o{ papers : "上传"
+    users ||--o{ papers : "审核"
+    papers ||--o{ key_properties : "包含"
+    papers ||--o{ paper_chunks : "分块"
+    superconductors ||--o{ key_properties : "关联"
+    chemical_systems ||--o{ superconductors : "属于"
+    users ||--o{ chart_groups : "创建"
+    chart_groups ||--o{ chart_group_items : "包含"
+    key_properties ||--o{ chart_group_items : "引用"

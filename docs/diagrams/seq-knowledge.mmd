@@ -1,0 +1,31 @@
+sequenceDiagram
+    actor User as 用户
+    participant Frontend as 浏览器 (vis-network)
+    participant Go as Go 后端
+    participant Neo4j as Neo4j
+
+    User->>Frontend: 访问 /knowledge
+    Frontend->>Go: GET /api/knowledge-graph/overview
+    Go->>Neo4j: 查询图谱概览
+    Neo4j-->>Go: 节点/边统计
+    Go-->>Frontend: 图谱概览数据
+
+    Frontend->>Go: GET /api/knowledge-graph/stats
+    Go->>Neo4j: 查询统计信息
+    Neo4j-->>Go: 统计数据
+    Go-->>Frontend: 统计 JSON
+
+    Frontend->>Frontend: vis-network 渲染图谱 (415节点/5000边)
+
+    User->>Frontend: 点击节点
+    Frontend->>Go: GET /api/knowledge-graph/papers/:paper_id
+    Go->>Neo4j: 查询论文关联
+    Neo4j-->>Go: 论文节点信息
+    Go-->>Frontend: 论文详情
+
+    User->>Frontend: 展开邻居
+    Frontend->>Go: GET /api/knowledge-graph/papers/:paper_id/neighbors
+    Go->>Neo4j: 查询邻居节点
+    Neo4j-->>Go: 关联节点列表
+    Go-->>Frontend: 邻居数据
+    Frontend->>Frontend: 动态更新图谱

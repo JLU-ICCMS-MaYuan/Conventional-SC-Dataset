@@ -34,21 +34,15 @@ RAG 子系统还使用 `paper_chunks`、Chroma 向量库和独立配置的数据
 
 | 页面或接口 | 作用 |
 | --- | --- |
-| `/` | 首页、周期表入口、图表与统计展示 |
-| `/elements` | 周期表内容页 |
-| `/compound/{element_symbols}` | 元素体系和化学式检索结果页 |
-| `/api/compounds/search` | 本地超导体结构化检索 |
-| `/api/papers/search-by-mode` | 按检索模式查询本地论文和超导记录 |
-| `/api/papers/search/all` | 本地、Alexandria、HTSC-2025 合并发现 |
-| `/login`、`/register` | 用户登录与注册 |
-| `/admin/register` | 管理员申请注册 |
-| `/admin/dashboard` | 管理员审核面板 |
-| `/admin/superadmin` | 超级管理员审批和权限管理 |
-| `/admin/papers` | 全局文献管理 |
-| `/admin/users` | 用户管理 |
-| `/knowledge` | 知识图谱可视化 |
+| `/` | 首页（重定向到 /news） |
+| `/news` | 首页快讯、诺贝尔奖里程碑、贡献统计展示 |
+| `/search` | 周期表探索、数据检索与论文详情（Layer 3） |
+| `/share` | 社区图表页：Tc-Pressure / Tc-Year 散点图，点击数据点查看论文详情 |
+| `/upload` | 论文与超导记录上传 |
 | `/rag` | AI 文献助手（普通问答 + 探索模式） |
-| `/tc-pre` | Tc 预测实验页 |
+| `/knowledge` | 知识图谱可视化 |
+| `/tc-predict` | Tc 预测实验页 |
+| `/admin` | 管理员后台（文献管理、用户管理、快讯管理） |
 | `/api/knowledge-graph/*` | 知识图谱用户 API |
 | `/api/kg/*` | 知识图谱 RAG API |
 | `/api/alexandria/*` | Alexandria 外部数据库接口 |
@@ -56,11 +50,11 @@ RAG 子系统还使用 `paper_chunks`、Chroma 向量库和独立配置的数据
 
 ## 功能边界
 
-已经落地的能力包括周期表与化学式检索、组合页论文和超导记录浏览、Alexandria/HTSC-2025 外部数据发现、论文与超导记录上传、CIF/POSCAR 结构上传与审核、管理员维护、RAG 问答（Mentor + Inspiration Agent）、知识图谱可视化与 API、Tc 预测实验、首页 Tc-Year/Tc-Pressure 图表和贡献者排行。
+已经落地的能力包括周期表与化学式检索、论文详情（Layer 3 基础信息/关键物性/结构预览）、Alexandria/HTSC-2025 外部数据发现、论文与超导记录上传、CIF/POSCAR 结构上传与审核、管理员维护、RAG 问答（Mentor + Inspiration Agent）、知识图谱可视化与 API、Tc 预测实验、社区图表页（Tc-Year/Tc-Pressure 散点图 + 点击数据点查看论文详情 + 自定义图表组合）、贡献者排行。
 
 部分落地的能力包括去中心化维护、研究者社区和批量导入。它们有数据库字段、后台能力、统计接口或内部查询基础，但还没有形成完整的面向终端用户的闭环。
 
-未落地的能力包括真正的论坛帖子、评论区、弹幕、点赞、浏览量、热度排序、审核者排行的完整前端展示、图表点击联动检索、预测结果持久化和预测结果审核入库。
+未落地的能力包括真正的论坛帖子、评论区、弹幕、点赞、浏览量、热度排序、审核者排行的完整前端展示、预测结果持久化和预测结果审核入库。
 
 ## 文档维护原则
 

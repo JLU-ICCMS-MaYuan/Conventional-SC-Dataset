@@ -34,9 +34,12 @@ Researcher Community Forum 指围绕研究者身份、贡献、审核、讨论�
 - 贡献者排行接口。
 - Tc-Year 图表。
 - Tc-Pressure 图表。
+- 图表数据点点击查看论文详情（右侧抽屉面板，展示基础信息、关键物性表、研究方法与发现）。
+- 图表数据按超导类型分类筛选（氢化物、铜基、铁基、镍基、碳基、有机、其他）。
+- 自定义图表组合（Chart Groups），支持创建、编辑、复制、导出组合数据。
 - 管理员后台和用户管理页面。
 
-贡献者排行接口是 `GET /api/papers/stats/user-ranking`。图表接口包括 `GET /api/papers/stats/tc-pressure`、`GET /api/papers/stats/tc-year` 和兼容旧前端的 `GET /api/papers/stats/chart-data`。
+图表接口包括 `GET /api/papers/stats/tc-pressure`、`GET /api/papers/stats/tc-year` 和兼容旧前端的 `GET /api/papers/stats/chart-data`，均返回 `paper_id` 字段以支持点击联动详情。详情通过 `GET /api/papers/:id` 获取完整论文信息。社区图表页面路由为 `/share`。
 
 ## What Is Not Implemented
 
@@ -71,11 +74,15 @@ Researcher Community Forum 指围绕研究者身份、贡献、审核、讨论�
 社区贡献和图表：
 
 - `GET /api/papers/stats/user-ranking`
-- `GET /api/papers/stats/tc-pressure`
-- `GET /api/papers/stats/tc-year`
-- `GET /api/papers/stats/chart-data`
-- `frontend/static/js/chart.js`
-- 首页 `/`
+- `GET /api/papers/stats/tc-pressure`（返回 `paper_id`，支持点击联动）
+- `GET /api/papers/stats/tc-year`（返回 `paper_id`，支持点击联动）
+- `GET /api/papers/:id`（论文详情，用于图表点击弹出面板）
+- `GET /api/chart-groups`（自定义图表组合 CRUD）
+- `GET /api/news`（首页快讯）
+- 前端：`frontend/src/pages/share.tsx`（社区图表页，ChartScatter + PaperDetailDrawer）
+- 前端：`frontend/src/pages/NewsPage.tsx`（首页快讯）
+- 前端：`frontend/src/components/ChartScatter.tsx`（散点图组件）
+- 路由 `/share`（社区图表）、`/news`（首页）、`/`（重定向到 /news）
 
 ## Boundary
 

@@ -1,0 +1,76 @@
+flowchart TB
+  subgraph Frontend["Frontend (React SPA / Vite)"]
+    App[App.tsx — 路由入口]
+    LazyRoutes[LazyRoutes.tsx — 惰性路由]
+    AppShell[AppShell — 导航 + 布局]
+    AuthDialog[AuthDialog — 登录弹窗]
+    AuthContext[AuthContext — JWT 状态]
+    api_ts[api.ts — 请求封装]
+    ScatterConfig[scatterConfig.ts — 图表类型配置]
+
+    NewsPage[NewsPage — 首页快讯]
+    SearchPage[SearchPage — 探索检索 + 论文详情]
+    SharePage[SharePage — 社区图表]
+    KnowledgeGraphPage[KnowledgeGraphPage — 知识图谱]
+    RagPage[RagPage — AI 文献助手]
+    TcPredictPage[TcPredictPage — Tc 预测]
+    AdminPage[AdminPage — 管理员后台]
+    UploadPage[UploadPage — 上传]
+
+    ChartScatter[ChartScatter — 散点图组件]
+    PaperDetailDrawer[PaperDetailDrawer — 论文详情面板]
+    ChartGroupEditor[ChartGroupEditor — 组合编辑器]
+    StructureViewer3D[StructureViewer3D — 3D 结构预览]
+    PeriodicTable[PeriodicTable — 周期表]
+    MarkdownMessage[MarkdownMessage — AI 回复渲染]
+    EvidenceCard[EvidenceCard — 证据卡片]
+
+    vite_config[vite.config.ts — manualChunks + preload 优化]
+
+    App --> NewsPage
+    App --> LazyRoutes
+    LazyRoutes --> SearchPage & SharePage & KnowledgeGraphPage & RagPage
+    LazyRoutes --> TcPredictPage & AdminPage & UploadPage
+    SharePage --> ChartScatter
+    SharePage --> PaperDetailDrawer
+    SharePage --> ChartGroupEditor
+    SearchPage --> StructureViewer3D
+    SearchPage --> PeriodicTable
+    RagPage --> MarkdownMessage
+    RagPage --> EvidenceCard
+  end
+
+  subgraph GoServer["Go 后端 (:8080)"]
+    main_go[main.go — 路由 + gzip 压缩中间件]
+    papers_go[papers.go — 论文 CRUD + GetPaper 详情]
+    stats_go[stats.go — Tc-Pressure / Tc-Year 图表 API]
+    chart_groups_go[chart_groups.go — 图表组合 CRUD]
+    knowledge_graph_go[knowledge_graph.go — 知识图谱 API]
+    external_go[external.go — Alexandria / HTSC 外部数据]
+    news_go[news.go — 快讯 API]
+    admin_go[admin.go — 管理员 API]
+    cache[cache.go — Redis 永久缓存]
+    database_go[database.go — MySQL 连接]
+    middleware[middleware — JWT + AdminRequired]
+  end
+
+  subgraph PythonBackend["Python 后端 (:8000)"]
+    py_rag[api/rag.py — RAG 对话 + 上传]
+    py_embedder[ingest/embedder.py — 向量化 → Qdrant]
+    py_enrich[ingest/enrich_papers.py — LLM 论文富化]
+  end
+
+  subgraph Storage["数据存储"]
+    MySQL[(MySQL)]
+    Neo4j[(Neo4j — 知识图谱 415节点/5000边)]
+    Qdrant[(Qdrant)]
+    Redis[(Redis — 图表数据缓存)]
+  end
+
+  api_ts --> GoServer
+  GoServer --> PythonBackend
+  GoServer --> MySQL
+  GoServer --> Redis
+  PythonBackend --> Qdrant
+  PythonBackend --> MySQL
+  knowledge_graph_go --> Neo4j

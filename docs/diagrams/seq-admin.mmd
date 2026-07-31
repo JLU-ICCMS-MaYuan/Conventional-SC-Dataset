@@ -1,0 +1,49 @@
+sequenceDiagram
+    actor Admin as 管理员
+    participant Frontend as 浏览器
+    participant Go as Go 后端
+    participant MySQL as MySQL
+
+    Admin->>Frontend: 访问 /admin
+
+    rect rgb(240, 248, 255)
+        Note over Admin,MySQL: 论文管理
+        Frontend->>Go: GET /api/admin/papers/all (JWT+AdminRequired)
+        Go->>MySQL: SELECT papers 列表
+        MySQL-->>Go: 论文列表
+        Go-->>Frontend: 论文数据
+        Admin->>Frontend: 审核/退回/删除论文
+        Frontend->>Go: POST /api/admin/papers/:id/review
+        Go->>MySQL: UPDATE review_status
+        MySQL-->>Go: OK
+        Go-->>Frontend: 审核完成
+    end
+
+    rect rgb(255, 248, 240)
+        Note over Admin,MySQL: 用户管理
+        Frontend->>Go: GET /api/admin/all-users
+        Go->>MySQL: SELECT users
+        MySQL-->>Go: 用户列表
+        Go-->>Frontend: 用户数据
+        Admin->>Frontend: 审批/修改用户权限
+        Frontend->>Go: PUT /api/admin/users/:id
+        Go->>MySQL: UPDATE role/is_approved
+        MySQL-->>Go: OK
+    end
+
+    rect rgb(240, 255, 240)
+        Note over Admin,MySQL: 快讯管理
+        Admin->>Frontend: 新建快讯
+        Frontend->>Go: POST /api/admin/news
+        Go->>MySQL: INSERT news
+        MySQL-->>Go: OK
+        Go-->>Frontend: 快讯已创建
+    end
+
+    rect rgb(255, 240, 255)
+        Note over Admin,MySQL: 图表组合管理
+        Admin->>Frontend: 编辑图表组合
+        Frontend->>Go: PUT /api/chart-groups/:id
+        Go->>MySQL: UPDATE chart_groups
+        MySQL-->>Go: OK
+    end

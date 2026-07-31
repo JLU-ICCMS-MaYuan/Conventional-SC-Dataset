@@ -1,0 +1,76 @@
+sequenceDiagram
+    actor User as 用户
+    participant Frontend as React 前端
+    participant Go as Go 后端 :8080
+    participant Python as Python 后端
+    participant MySQL as MySQL
+    participant Redis as Redis
+    participant Qdrant as Qdrant
+    participant LLM as DeepSeek
+
+    rect rgb(240, 248, 255)
+        Note over User,Go: ━━━ 论文搜索 ━━━
+        User->>Frontend: 选择 La,H 元素, 点击搜索
+        Frontend->>Go: POST /api/papers/search/records
+        Go->>MySQL: SELECT * FROM papers + key_properties
+        MySQL-->>Go: 匹配结果
+        Go-->>Frontend: 结果表格 (Layer 2)
+        User->>Frontend: 点击某行
+        Frontend->>Go: GET /api/papers/:id
+        Go->>MySQL: 查询论文 + key_properties
+        MySQL-->>Go: 完整详情
+        Go-->>Frontend: 详情 JSON (含 key_properties)
+        Frontend->>Frontend: 详情页 (Layer 3) 基础信息/物性/方法/发现
+    end
+
+    rect rgb(255, 248, 240)
+        Note over User,Qdrant: ━━━ 论文上传 ━━━
+        User->>Frontend: 拖拽 PDF
+        Frontend->>Python: POST /api/rag/upload-pdf (进度条)
+        Python-->>Frontend: 保存文件到 data/uploads/
+        Python->>MySQL: INSERT 占位论文(status=pending)
+        Note over Python: 后台异步管线
+        Python->>Python: PDF→文本
+        Python->>LLM: 提取元数据(标题/DOI/年份/摘要)
+        LLM-->>Python: 元数据 JSON
+        Python->>MySQL: UPDATE 论文真实元数据
+        Python->>Python: chunk→embed
+        Python->>Qdrant: 向量化 + 索引
+        Python->>LLM: 深度分析(全文)
+        LLM-->>Python: 物性/方法/发现
+        Python->>MySQL: INSERT key_properties
+        Python->>Frontend: 解析完成
+        User->>Frontend: 查看并提交审核
+        Note over User,MySQL: 管理员审核通过/退回/删除
+    end
+
+    rect rgb(240, 255, 240)
+        Note over User,LLM: ━━━ RAG AI 对话 ━━━
+        User->>Frontend: "LaH10 的最高 Tc 是多少"
+        Frontend->>Python: POST /api/rag/chat/stream (SSE)
+        Python->>Python: 组装 Prompt(上下文+问题)
+        Python->>LLM: bind_tools + messages
+        LLM-->>Python: tool_calls
+        Python->>MySQL: query_properties → SQL 查询 LaH10 物性
+        Python->>Qdrant: search_literature → 向量搜索
+        Python->>LLM: ToolMessage 追加到 messages
+        LLM-->>Python: Tc=250K, P=170GPa + 相关论文片段
+        Python-->>Frontend: 流式回答 token by token (打字机效果)
+        Frontend->>Frontend: MarkdownMessage 渲染
+    end
+
+    rect rgb(255, 240, 255)
+        Note over User,Redis: ━━━ 图表点击详情 ━━━
+        User->>Frontend: 访问 /share
+        Frontend->>Go: GET /api/papers/stats/tc-pressure
+        Go->>Redis: 检查缓存 chart:tc_pressure
+        Redis-->>Go: 缓存数据 (gzip 6.7kB)
+        Go-->>Frontend: 579 条图表数据 (含 paper_id)
+        Frontend->>Frontend: ChartScatter 渲染散点图
+        User->>Frontend: 点击数据点
+        Frontend->>Go: GET /api/papers/4
+        Go->>MySQL: Preload Paper + KeyProperties
+        MySQL-->>Go: 论文 + 物性记录
+        Go-->>Frontend: 详情 JSON
+        Frontend->>Frontend: PaperDetailDrawer 弹出详情面板
+    end
