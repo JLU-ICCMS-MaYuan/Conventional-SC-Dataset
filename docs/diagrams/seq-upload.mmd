@@ -1,0 +1,33 @@
+sequenceDiagram
+    actor User as 用户
+    participant Frontend as 浏览器
+    participant Go as Go 后端
+    participant Python as Python 后端
+    participant MySQL as MySQL
+    participant Qdrant as Qdrant
+    participant LLM as DeepSeek
+
+    User->>Frontend: 访问 /upload
+    User->>Frontend: 填写论文信息 + 拖拽 PDF
+    Frontend->>Python: POST /api/rag/upload-pdf (multipart + metadata)
+    Python->>MySQL: INSERT paper (status=pending)
+    MySQL-->>Python: paper_id
+    Python-->>Frontend: 上传成功, paper_id=xxx
+    Frontend->>Frontend: 显示"解析中"
+
+    Note over Python,LLM: 后台异步解析管线
+    Python->>Python: PDF→纯文本
+    Python->>LLM: 提取元数据 (标题/DOI/年份/摘要)
+    LLM-->>Python: 元数据 JSON
+    Python->>MySQL: UPDATE papers SET title/doi/year/abstract...
+    Python->>Python: 语义分块 (500-1000 tokens)
+    Python->>LLM: Embedding 向量化
+    LLM-->>Python: 向量
+    Python->>Qdrant: 索引向量
+    Python->>LLM: 深度分析全文
+    LLM-->>Python: methodology + key_finding + key_properties
+    Python->>MySQL: INSERT key_properties (多条)
+    Python->>Frontend: SSE 推送"解析完成"
+
+    Frontend->>Frontend: 状态更新为"待审核"
+    Note over User,MySQL: 管理员在 /admin 审核通过/退回

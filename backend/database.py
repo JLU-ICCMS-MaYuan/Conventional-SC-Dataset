@@ -5,11 +5,12 @@ import os
 from pathlib import Path
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 
-DEFAULT_DATABASE_URL = f"sqlite:///{Path(__file__).resolve().parents[1] / 'data' / 'dev.db'}"
-DATABASE_URL = os.environ.get("DATABASE_URL", DEFAULT_DATABASE_URL)
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL 环境变量未设置，拒绝以不安全默认值启动")
 
 engine = create_engine(
     DATABASE_URL,
@@ -24,7 +25,9 @@ SessionLocal = sessionmaker(
     future=True,
 )
 
-Base = declarative_base()
+
+class Base(DeclarativeBase):
+    """统一 ORM 基类。models.py 和 rag 模型继承同一个 Base。"""
 
 
 def get_db():

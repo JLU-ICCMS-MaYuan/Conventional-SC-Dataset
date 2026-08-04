@@ -1,19 +1,20 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
-import { AuthProvider } from './context/AuthContext'
-import { I18nProvider } from './context/I18nContext'
+import { ThemeProvider, CssBaseline } from '@mui/material'
+import theme from './theme'
 import App from './App'
-import './styles/app.css'
+import { AuthProvider } from './context/AuthContext'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <I18nProvider>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <BrowserRouter>
         <AuthProvider>
           <App />
         </AuthProvider>
-      </I18nProvider>
-    </BrowserRouter>
-  </React.StrictMode>
+      </BrowserRouter>
+    </ThemeProvider>
+  </React.StrictMode>,
 )

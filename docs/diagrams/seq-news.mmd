@@ -1,0 +1,16 @@
+sequenceDiagram
+    actor User as 用户
+    participant Browser as 浏览器
+    participant Go as Go 后端
+    participant MySQL as MySQL
+
+    User->>Browser: 访问 /
+    Browser->>Browser: Navigate to /news
+    Browser->>Go: GET /api/news
+    Go->>MySQL: SELECT * FROM news ORDER BY event_date DESC
+    MySQL-->>Go: 快讯列表
+    Go-->>Browser: JSON 响应 (gzip)
+    Browser->>Browser: 渲染快讯卡片
+    Browser->>Browser: 渲染诺贝尔里程碑
+    Browser->>Browser: 渲染功能入口卡片(探索/AI/预测)
+    Note over User,Browser: 首页加载完成

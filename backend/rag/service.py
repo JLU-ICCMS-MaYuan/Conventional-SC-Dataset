@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import concurrent.futures
 import json
 from pathlib import Path
 from typing import Any, AsyncIterator
@@ -40,9 +42,19 @@ def _loads_json(value: str | None, fallback: Any) -> Any:
 def health() -> dict[str, Any]:
     settings = get_rag_settings()
     database_available = settings.database_available
-    chroma_available = settings.chroma_path.exists()
+
+    # 检查 Qdrant 连接
+    qdrant_available = False
+    try:
+        from qdrant_client import QdrantClient
+        client = QdrantClient(host=settings.qdrant_host, port=settings.qdrant_port)
+        client.get_collections()
+        qdrant_available = True
+    except Exception:
+        pass
+
     chat_available = settings.chat_configured
-    available = database_available and chroma_available
+    available = database_available and qdrant_available
 
     if not available:
         message = "AI 文献助手数据不可用"
@@ -54,7 +66,7 @@ def health() -> dict[str, Any]:
     return {
         "available": available,
         "database_available": database_available,
-        "chroma_available": chroma_available,
+        "qdrant_available": qdrant_available,
         "chat_available": chat_available,
         "message": message,
     }
@@ -102,15 +114,23 @@ async def chat(
 ) -> dict[str, Any]:
     _ensure_chat_available()
     try:
-        from backend.rag.rag.engine import ask
+        from backend.rag.agent import run
 
-        return await ask(
-            question,
-            top_k=top_k,
-            rerank_top_k=rerank_top_k,
-            history=history,
-            verbose=True,
-        )
+        from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+        prev_msgs = None
+        if history:
+            prev_msgs = []
+            for h in history[-20:]:
+                role = h.get("role", "user")
+                content = h.get("content", "")
+                if role == "assistant":
+                    prev_msgs.append(AIMessage(content=content))
+                elif role == "system":
+                    prev_msgs.append(SystemMessage(content=content))
+                else:
+                    prev_msgs.append(HumanMessage(content=content))
+
+        return run(question, prev_messages=prev_msgs)
     except (RagDataUnavailableError, RagChatUnavailableError):
         raise
     except Exception as exc:
@@ -122,27 +142,72 @@ async def chat_stream(
     top_k: int = 15,
     rerank_top_k: int = 5,
     history: list[dict[str, str]] | None = None,
-    explore: bool = False,  # 是否启用灵感探索模式
+    explore: bool = False,
 ) -> AsyncIterator[dict[str, Any]]:
     _ensure_chat_available()
-    try:
-        from backend.rag.rag.engine import ask_stream
 
-        kwargs = {
-            "top_k": top_k,
-            "rerank_top_k": rerank_top_k,
-            "history": history,
-            "explore": explore,
-        }
+    if explore:
+        # 探索模式 — Inspiration Agent (多轮，在线程池中运行)
         try:
-            async for event in ask_stream(question, **kwargs):
-                yield event
-        except TypeError as exc:
-            if "unexpected keyword argument 'explore'" not in str(exc):
-                raise
-            kwargs.pop("explore")
-            async for event in ask_stream(question, **kwargs):
-                yield event
+            from backend.rag.agent import run
+            from langchain_core.messages import HumanMessage, AIMessage
+
+            prev_msgs = None
+            if history:
+                prev_msgs = []
+                for h in history[-20:]:
+                    role = h.get("role", "user")
+                    content = h.get("content", "")
+                    if role == "assistant":
+                        prev_msgs.append(AIMessage(content=content))
+                    else:
+                        prev_msgs.append(HumanMessage(content=content))
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                result = await asyncio.get_event_loop().run_in_executor(
+                    pool, run, question, prev_msgs
+                )
+
+            answer = result.get("answer", "")
+            # 流式输出
+            for char in answer:
+                yield {"type": "token", "data": char}
+
+            yield {
+                "type": "done",
+                "data": {
+                    "answer": answer,
+                    "source": f"inspire_{result.get('mode', '')}",
+                    "ideas": result.get("ideas", []),
+                },
+            }
+            return
+        except (RagDataUnavailableError, RagChatUnavailableError):
+            raise
+        except Exception as exc:
+            raise RagInternalError(str(exc)) from exc
+
+    # 普通问答 — Mentor Agent
+    try:
+        from backend.rag.agent.mentor import run_stream
+
+        # history → LangChain 消息格式
+        from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+        prev_msgs = None
+        if history:
+            prev_msgs = []
+            for h in history[-20:]:
+                role = h.get("role", "user")
+                content = h.get("content", "")
+                if role == "assistant":
+                    prev_msgs.append(AIMessage(content=content))
+                elif role == "system":
+                    prev_msgs.append(SystemMessage(content=content))
+                else:
+                    prev_msgs.append(HumanMessage(content=content))
+
+        async for event in run_stream(question, prev_messages=prev_msgs):
+            yield event
     except (RagDataUnavailableError, RagChatUnavailableError):
         raise
     except Exception as exc:
@@ -153,13 +218,13 @@ async def stats() -> dict[str, Any]:
     _ensure_data_available()
     try:
         from backend.rag.database import async_session_factory
-        from backend.rag.models import ChemicalSystem, Paper, PaperChunk, Superconductor, SuperconductorRecord
+        from backend.models import ChemicalSystem, KeyProperty, Paper, PaperChunk, Superconductor
         from backend.rag.vectordb import collection_stats
 
         async with async_session_factory() as session:
             paper_count = (await session.execute(select(func.count()).select_from(Paper))).scalar() or 0
             sc_count = (await session.execute(select(func.count()).select_from(Superconductor))).scalar() or 0
-            record_count = (await session.execute(select(func.count()).select_from(SuperconductorRecord))).scalar() or 0
+            record_count = (await session.execute(select(func.count()).select_from(KeyProperty))).scalar() or 0
             chunk_count = (await session.execute(select(func.count()).select_from(PaperChunk))).scalar() or 0
             sys_count = (await session.execute(select(func.count()).select_from(ChemicalSystem))).scalar() or 0
             paper_type_rows = (await session.execute(
@@ -167,16 +232,16 @@ async def stats() -> dict[str, Any]:
             )).all()
 
         try:
-            chroma_chunks = collection_stats().get("count", 0)
+            qdrant_chunks = collection_stats().get("count", 0)
         except Exception:
-            chroma_chunks = 0
+            qdrant_chunks = 0
 
         return {
             "papers": paper_count,
             "superconductors": sc_count,
             "records": record_count,
             "chunks": chunk_count,
-            "chroma_chunks": chroma_chunks,
+            "qdrant_chunks": qdrant_chunks,
             "chemical_systems": sys_count,
             "paper_types": {row[0] or "unknown": row[1] for row in paper_type_rows},
         }
@@ -188,7 +253,7 @@ async def list_papers(keyword: str | None = None, limit: int = 20) -> list[dict[
     _ensure_data_available()
     try:
         from backend.rag.database import async_session_factory
-        from backend.rag.models import Paper
+        from backend.models import Paper
         from backend.rag.search.sql_search import search_papers
 
         async with async_session_factory() as session:
@@ -244,7 +309,7 @@ async def search_superconductors(
     _ensure_data_available()
     try:
         from backend.rag.database import async_session_factory
-        from backend.rag.models import Superconductor
+        from backend.models import Superconductor
         from backend.rag.search.sql_search import search_by_elements_exact, search_by_formula
 
         async with async_session_factory() as session:
@@ -275,8 +340,8 @@ async def superconductor_detail(superconductor_id: int) -> dict[str, Any]:
     _ensure_data_available()
     try:
         from backend.rag.database import async_session_factory
-        from backend.rag.models import Superconductor, SuperconductorRecord
-        from backend.rag.search.sql_search import _format_record
+        from backend.models import KeyProperty, Superconductor
+        from backend.rag.search.sql_search import _format_property
 
         async with async_session_factory() as session:
             result = await session.execute(
@@ -284,7 +349,7 @@ async def superconductor_detail(superconductor_id: int) -> dict[str, Any]:
                 .where(Superconductor.id == superconductor_id)
                 .options(
                     joinedload(Superconductor.chemical_system),
-                    joinedload(Superconductor.records).joinedload(SuperconductorRecord.paper),
+                    joinedload(Superconductor.key_properties).joinedload(KeyProperty.paper),
                 )
             )
             sc = result.unique().scalar_one_or_none()
@@ -302,10 +367,10 @@ async def superconductor_detail(superconductor_id: int) -> dict[str, Any]:
                 "elements_list": _loads_json(sc.elements_list, []),
                 "composition": _loads_json(sc.composition, {}),
                 "element_ratio": _loads_json(sc.element_ratio, {}),
-                "records": [
-                    _format_record(record)
-                    for record in sc.records
-                    if record.paper is None or record.paper.review_status == "approved"
+                "properties": [
+                    _format_property(kp)
+                    for kp in sc.key_properties
+                    if kp.paper is None or kp.paper.review_status == "approved"
                 ],
             }
     except RagNotFoundError:
@@ -314,14 +379,15 @@ async def superconductor_detail(superconductor_id: int) -> dict[str, Any]:
         raise RagInternalError(str(exc)) from exc
 
 
-async def upload_pdf(file_path: Path, original_filename: str) -> dict[str, Any]:
+async def upload_pdf(file_path: Path, original_filename: str, uploaded_by_user_id: int | None = None) -> dict[str, Any]:
     _ensure_chat_available()
     try:
-        from backend.rag.ingest.pipeline import ingest_pdf
+        from backend.ingest.pipeline import ingest_pdf
     except ModuleNotFoundError as exc:
         raise RagInternalError("PDF 摄入模块尚未接入") from exc
 
     try:
-        return await ingest_pdf(file_path=file_path, original_filename=original_filename)
+        return await ingest_pdf(file_path=file_path, original_filename=original_filename,
+                                uploaded_by_user_id=uploaded_by_user_id)
     except Exception as exc:
         raise RagInternalError(str(exc)) from exc

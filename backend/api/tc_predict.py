@@ -4,10 +4,19 @@ Tc 预测 API
 from typing import Any, List, Tuple, Dict
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from io import BytesIO
-
-from backend import schemas
+from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/api/tc-predict", tags=["tc-predict"])
+
+
+class TcPredictionResponse(BaseModel):
+    """TC 预测结果"""
+    predicted_tc: float = Field(..., description="预测超导临界温度 (K)")
+    f2_value: float = Field(..., description="特征值 f2")
+    dos_h_ratio: float = Field(..., description="H 态密度占比")
+    dos_h_atom_bond: float = Field(..., description="dos_H_atom_bond")
+    bonds_mean: float = Field(..., description="H-H 键长均值")
+    bonds_var: float = Field(..., description="H-H 键长方差")
 
 BOND_THRESHOLD = 1.4
 COUPLING_RANGE = (0.98, 1.28)
@@ -110,7 +119,7 @@ def _calculate_coupling(bond_distribution: Dict[float, float], dos_h_atom_bond: 
     return couple
 
 
-@router.post("/", response_model=schemas.TcPredictionResponse)
+@router.post("/", response_model=TcPredictionResponse)
 async def predict_tc(
     contcar: UploadFile = File(..., description="VASP CONTCAR 文件"),
     pdos_files: List[UploadFile] = File(..., description="包含 PDOS_H 在内的 PDOS 数据文件")
@@ -160,7 +169,7 @@ async def predict_tc(
     f2 = (dos_h_ratio * couple) / denominator if denominator else 0
     predicted_tc = SLOPE1 * f2 + SLOPE2
 
-    return schemas.TcPredictionResponse(
+    return TcPredictionResponse(
         predicted_tc=round(predicted_tc, 3),
         f2_value=round(f2, 6),
         dos_h_ratio=round(dos_h_ratio, 6),

@@ -117,6 +117,18 @@ class Paper(Base):
     review_status = Column(String(50), default="pending", nullable=False, index=True)
     reviewed_at = Column(DateTime(timezone=True))
     review_comment = Column(Text)
+    # LLM 富化列（旧库 alembic 演进列 + clean_results 结构化列）
+    summary = Column(Text)
+    paper_type = Column(String(20))
+    keywords_tags = Column(Text)
+    source_file_path = Column(String(500))
+    methodology = Column(Text)
+    key_finding = Column(Text)
+    rationale = Column(Text)
+    research_materials = Column(JSON)
+    referenced_materials = Column(JSON)
+    material_relations = Column(JSON)
+    builds_on = Column(JSON)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -131,6 +143,82 @@ class Paper(Base):
         foreign_keys=[reviewed_by_user_id],
     )
     records = relationship("SuperconductorRecord", back_populates="paper")
+    key_properties = relationship("KeyProperty", back_populates="paper")
+
+
+class KeyProperty(Base):
+    """通用物性记录（源自 data/clean_results 的 key_properties，v2 库替代 SuperconductorRecord）
+
+    name 为规范物性名（backend/prop_names.py 归一），name_raw 保留 LLM 原始写法；
+    范围值保真存 value_min/value_max（单值时两者相等），condition 原样存 JSON，
+    高频检索条件（压强/温度）提升为独立列。
+    """
+    __tablename__ = "key_properties"
+
+    id = Column(Integer, primary_key=True)
+    paper_id = Column(Integer, ForeignKey("papers.id"), nullable=False, index=True)
+    superconductor_id = Column(Integer, ForeignKey("superconductors.id"), nullable=True, index=True)
+    material = Column(String(255), nullable=False, index=True)   # 原始材料名（含无法解析为化学式者）
+    name = Column(String(100), nullable=False, index=True)       # 规范物性名
+    name_raw = Column(String(255), nullable=False)               # 原始物性名
+    name_note = Column(String(500))
+    value_min = Column(Float, index=True)
+    value_max = Column(Float)
+    value_raw = Column(String(255))                              # 无法解析为数值时的原始值
+    unit = Column(String(50))
+    pressure_gpa = Column(Float, index=True)                     # condition.pressure（GPa）
+    temperature_k = Column(Float)                                # condition.temperature（K）
+    condition_json = Column(JSON)                                # 完整 condition 原样
+    condition_note = Column(Text)
+    is_primary = Column(Boolean, default=False, nullable=False, index=True)
+    superconductor_type = Column(String(20), index=True)
+    article_type = Column(String(10))
+    source_label = Column(String(50), nullable=False, default="clean_results")
+    structure_text = Column(Text)          # CIF/POSCAR 结构文本
+    structure_format = Column(String(20))  # cif / poscar / vasp
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    paper = relationship("Paper", back_populates="key_properties")
+    superconductor = relationship("Superconductor")
+
+
+class ChartGroup(Base):
+    """散点图数据点组合"""
+    __tablename__ = "chart_groups"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text)
+    is_preset = Column(Boolean, default=False, nullable=False, index=True)
+    is_public = Column(Boolean, default=False, nullable=False, index=True)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    creator = relationship("User")
+    items = relationship("ChartGroupItem", back_populates="group", cascade="all, delete-orphan",
+                         order_by="ChartGroupItem.sort_order")
+
+
+class ChartGroupItem(Base):
+    """组合内的数据点（kp 引用或自定义点）"""
+    __tablename__ = "chart_group_items"
+
+    id = Column(Integer, primary_key=True)
+    group_id = Column(Integer, ForeignKey("chart_groups.id"), nullable=False, index=True)
+    key_property_id = Column(Integer, ForeignKey("key_properties.id"), nullable=True, index=True)
+    sort_order = Column(Integer, default=0)
+    # 自定义点字段（key_property_id 为空时生效）
+    custom_label = Column(String(255))
+    custom_tc = Column(Float)
+    custom_pressure = Column(Float)
+    custom_type = Column(String(20))
+    custom_article_type = Column(String(10))
+    custom_year = Column(Integer)
+
+    group = relationship("ChartGroup", back_populates="items")
+    key_property = relationship("KeyProperty")
 
 
 class SuperconductorRecord(Base):
@@ -166,7 +254,7 @@ class SuperconductorRecord(Base):
     energy_cutoff_unit = Column(String(50))
     show_in_chart = Column(Boolean, default=False, nullable=False, index=True)
     article_type = Column(String(10))
-    superconductor_type = Column(String(10))
+    superconductor_type = Column(String(20))
     s_factor = Column(Float)
     method = Column(String(255))
     note = Column(Text)
@@ -215,3 +303,16 @@ class SuperconductorStructure(Base):
         back_populates="created_structures",
         foreign_keys=[created_by_user_id],
     )
+
+
+class PaperChunk(Base):
+    """论文文本块（向量检索用，向量存 Qdrant，文本存 MySQL）"""
+    __tablename__ = "paper_chunks"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    paper_id = Column(Integer, ForeignKey("papers.id"), nullable=False, index=True)
+    chunk_index = Column(Integer, nullable=False, comment="块编号，从 0 开始")
+    section_name = Column(String(500), nullable=True, comment="章节名如 Introduction/Results")
+    heading = Column(String(500), nullable=True, comment="小节标题原文")
+    content = Column(Text, nullable=False, comment="块文本内容")
+    token_count = Column(Integer, nullable=True, comment="近似 token 数")

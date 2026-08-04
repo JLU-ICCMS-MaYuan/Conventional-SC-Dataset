@@ -1,13 +1,13 @@
 """
 vector_search.py — 向量语义搜索模块。
 
-将用户问题 embedding 后，到 Chroma 中搜索语义最相似的 chunks。
+将用户问题 embedding 后，到 Qdrant 中搜索语义最相似的 chunks。
 """
 
 from __future__ import annotations
 
-from backend.rag.ingest.embedder import embed_texts
-from backend.rag.vectordb import search_chunks as chroma_search
+from backend.ingest.embedder import embed_texts
+from backend.rag.vectordb import search_chunks as qdrant_search
 
 
 async def search_by_semantics(
@@ -22,7 +22,7 @@ async def search_by_semantics(
         query: 用户自然语言问题
         top_k: 返回多少条结果
         paper_id: 可限制在某一篇论文内搜索
-        collection: Chroma 集合名，默认 paper_chunks，可传 review_chunks
+        collection: Qdrant 集合名，默认 paper_chunks，可传 review_chunks
 
     Returns:
         [{"id", "paper_id", "chunk_index", "section_name",
@@ -34,11 +34,11 @@ async def search_by_semantics(
     # 1. 将用户问题向量化
     query_vec = embed_texts([query])[0]
 
-    # 2. Chroma 搜索
+    # 2. Qdrant 搜索
     where = {"paper_id": str(paper_id)} if paper_id else None
-    results = chroma_search(query_vec, top_k=top_k, where=where, collection=col)
+    results = qdrant_search(query_vec, top_k=top_k, where=where, collection=col)
 
-    # 3. 格式化：Chroma 返回的距离（cosine distance），越小越相似
+    # 3. Qdrant 返回 cosine distance，越小越相似
     #    转成 0-1 的分数，分数越高越相关
     for r in results:
         # distance 范围一般是 [0, 2]，cosine similarity = 1 - distance
@@ -66,7 +66,7 @@ async def search_by_keywords_in_chunks(
     """
     from sqlalchemy import select
     from backend.rag.database import async_session_factory
-    from backend.rag.models import PaperChunk
+    from backend.models import PaperChunk
 
     pattern = f"%{query}%"
 

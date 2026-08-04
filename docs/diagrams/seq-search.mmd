@@ -1,0 +1,31 @@
+sequenceDiagram
+    actor User as 用户
+    participant Frontend as 浏览器
+    participant Go as Go 后端
+    participant MySQL as MySQL
+
+    rect rgb(240, 248, 255)
+        Note over User,Go: Layer 1 — 探索
+        User->>Frontend: 选择元素 La,H
+        Frontend->>Frontend: PeriodicTable 交互
+        User->>Frontend: 点击搜索
+    end
+
+    rect rgb(255, 248, 240)
+        Note over User,Go: Layer 2 — 结果表格
+        Frontend->>Go: POST /api/papers/search/records
+        Go->>MySQL: 查询 papers JOIN key_properties
+        MySQL-->>Go: 匹配结果列表
+        Go-->>Frontend: 结果数据
+        Frontend->>Frontend: 渲染数据表格
+    end
+
+    rect rgb(240, 255, 240)
+        Note over User,Go: Layer 3 — 论文详情
+        User->>Frontend: 点击某行记录
+        Frontend->>Go: GET /api/papers/:paper_id
+        Go->>MySQL: Preload Paper + KeyProperties
+        MySQL-->>Go: 论文详情 + 物性列表 + 结构数据
+        Go-->>Frontend: 完整详情 JSON
+        Frontend->>Frontend: 基础信息 / 关键物性表 / 研究方法 / 结构预览(3Dmol)
+    end

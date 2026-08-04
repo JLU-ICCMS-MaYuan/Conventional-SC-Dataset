@@ -17,7 +17,7 @@ asyncmy>=0.2           # MySQL (异步，RAG)
 aiosqlite>=0.20        # SQLite (开发)
 
 # ── 向量数据库 ──────────────────────────────────────────────
-chromadb>=0.5
+qdrant-client>=1.12
 
 # ── LLM / Embedding ─────────────────────────────────────────
 openai>=1.0            # DeepSeek + OpenAI 兼容

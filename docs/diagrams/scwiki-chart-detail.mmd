@@ -1,0 +1,29 @@
+sequenceDiagram
+    actor User as 用户
+    participant Browser as 浏览器 (React)
+    participant Go as Go 后端 :8080
+    participant MySQL as MySQL
+    participant Redis as Redis
+
+    User->>Browser: 访问 /share
+    Browser->>Go: GET /api/papers/stats/tc-pressure
+    Go->>Redis: 检查缓存 chart:tc_pressure
+    alt 缓存命中
+        Redis-->>Go: 缓存数据 (gzip 压缩)
+    else 缓存未命中
+        Go->>MySQL: SELECT material, value_max, pressure_gpa, paper_id FROM key_properties
+        MySQL-->>Go: 579 条数据
+        Go->>Redis: 写入永久缓存
+        Go-->>Browser: JSON (gzip 6.7 kB)
+    end
+    Browser->>Browser: ChartScatter 渲染散点图
+
+    User->>Browser: 点击数据点
+    Browser->>Browser: onPointClick → setSelectedPaperId(4)
+    Browser->>Go: GET /api/papers/4
+    Go->>MySQL: Preload Paper + KeyProperties
+    MySQL-->>Go: 论文 + 3 条物性记录
+    Go-->>Browser: JSON (基础信息 + key_properties + methodology)
+    Browser->>Browser: PaperDetailDrawer 弹出详情面板
+    User->>Browser: 关闭 Drawer
+    Browser->>Browser: setSelectedPaperId(null)

@@ -1,5 +1,6 @@
 import React from 'react'
-import { Card, CardContent, CardHeader, Chip, Separator } from '@heroui/react'
+
+/* ========== 类型定义 ========== */
 
 export interface EvidenceFragment {
   paper_id: number
@@ -28,105 +29,267 @@ interface EvidenceCardProps {
   paperSeqMap?: Record<string, number>
 }
 
-const severityColor: Record<string, 'danger' | 'warning' | 'default'> = {
-  high: 'danger',
-  medium: 'warning',
-  low: 'default',
+/* ========== 辅助组件 ========== */
+
+const severityBadge: Record<string, React.CSSProperties> = {
+  high: { backgroundColor: '#dc3545', color: '#fff' },
+  medium: { backgroundColor: '#f59e0b', color: '#fff' },
+  low: { backgroundColor: '#94a3b8', color: '#fff' },
 }
 
 function Stars({ n, max = 5 }: { n: number; max?: number }) {
   return (
-    <span className="text-xs text-amber-500">
+    <span style={{ color: '#f59e0b', letterSpacing: 1 }}>
       {'★'.repeat(n)}
-      <span className="text-default-300">{'★'.repeat(max - n)}</span>
+      <span style={{ color: '#d4d4d4' }}>{'★'.repeat(max - n)}</span>
     </span>
   )
 }
 
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={s.label}>{children}</div>
+  )
+}
+
+/* ========== 主组件 ========== */
+
 const EvidenceCard: React.FC<EvidenceCardProps> = ({ idea, review, paperSeqMap }) => {
   return (
-    <Card   className="my-4 border border-[var(--sc-border)]">
-      <CardHeader className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="font-semibold text-[var(--sc-text)]">{idea.title}</h3>
-          {idea.feasibility && (
-            <p className="text-xs text-[var(--sc-muted)]">可行性 <Stars n={idea.feasibility.overall} /></p>
-          )}
-        </div>
-        <Chip color="accent" variant="soft">灵感</Chip>
-      </CardHeader>
-      <Separator />
-      <CardContent className="stack text-sm">
-        {idea.fragments.length > 0 && (
-          <section className="stack">
-            <h4 className="font-semibold text-[var(--sc-muted)]">灵感来源</h4>
-            {idea.fragments.map((fragment, index) => (
-              <Card key={`${fragment.paper_id}-${index}`}   className="border border-[var(--sc-border)] bg-[var(--sc-bg-soft)]">
-                <CardContent className="gap-2">
-                  <blockquote className="m-0 leading-7 text-[var(--sc-text)]">&ldquo;{fragment.quoted_text}&rdquo;</blockquote>
-                  <div className="flex items-center gap-2 text-xs text-[var(--sc-muted)]">
-                    <Chip size="sm" color="accent" variant="soft">
-                      {paperSeqMap?.[String(fragment.paper_id)] !== undefined
-                        ? `[${paperSeqMap[String(fragment.paper_id)]}]`
-                        : `PID_${fragment.paper_id}`}
-                    </Chip>
-                    <span>{fragment.section}</span>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </section>
+    <div style={s.card}>
+      {/* 标题栏 */}
+      <div style={s.header}>
+        <span style={{ fontSize: 16, lineHeight: 1 }}>💡</span>
+        <span style={{ flex: 1 }}>{idea.title}</span>
+        {idea.feasibility && (
+          <span style={{ fontSize: 12, fontWeight: 400, color: '#94a3b8' }}>
+            可行性 <Stars n={idea.feasibility.overall} />
+          </span>
         )}
+      </div>
 
-        {idea.reasoning_chain && (
-          <section className="stack">
-            <h4 className="font-semibold text-[var(--sc-muted)]">推理链</h4>
-            <p className="whitespace-pre-wrap leading-7">{idea.reasoning_chain}</p>
-          </section>
-        )}
-
-        {idea.assumptions.length > 0 && (
-          <section className="stack">
-            <h4 className="font-semibold text-[var(--sc-muted)]">假设前提</h4>
-            <ul className="m-0 grid gap-1 pl-5 text-[var(--sc-muted)]">
-              {idea.assumptions.map((assumption, index) => (
-                <li key={`${assumption}-${index}`}>{assumption}</li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {review && (
-          <section className="stack rounded-sm border border-amber-200 bg-amber-50 p-3">
-            <div className="flex items-center justify-between gap-3">
-              <h4 className="font-semibold text-amber-700">审稿意见</h4>
-              <span className="text-xs text-amber-700">综合可行性 <Stars n={review.feasibility_score} /></span>
+      {/* 灵感来源 — 引文片段 */}
+      {idea.fragments.length > 0 && (
+        <div style={s.section}>
+          <SectionLabel>📎 灵感来源</SectionLabel>
+          {idea.fragments.map((f, i) => (
+            <div key={i} style={s.fragment}>
+              <div style={s.quote}>
+                &ldquo;{f.quoted_text}&rdquo;
+              </div>
+              <div style={s.fragmentMeta}>
+                <span style={s.pidTag}>
+                  {paperSeqMap?.[String(f.paper_id)] !== undefined
+                    ? `[${paperSeqMap[String(f.paper_id)]}]`
+                    : `PID_${f.paper_id}`}
+                </span>
+                <span style={{ color: '#94a3b8' }}>{f.section}</span>
+              </div>
             </div>
-            {review.flaws.map((flaw, index) => (
-              <div className="flex items-start gap-2" key={`${flaw.severity}-${index}`}>
-                <Chip color={severityColor[flaw.severity] || 'default'} size="sm" variant="soft">
-                  {flaw.severity === 'high' ? '严重' : flaw.severity === 'medium' ? '中等' : '轻微'}
-                </Chip>
-                <span className="leading-6 text-slate-700">{flaw.description}</span>
+          ))}
+        </div>
+      )}
+
+      {/* 推理链 */}
+      {idea.reasoning_chain && (
+        <div style={s.section}>
+          <SectionLabel>🔗 推理链</SectionLabel>
+          <div style={s.textBlock}>{idea.reasoning_chain}</div>
+        </div>
+      )}
+
+      {/* 假设前提 */}
+      {idea.assumptions.length > 0 && (
+        <div style={s.section}>
+          <SectionLabel>⚠️ 假设前提</SectionLabel>
+          <ul style={s.assumptionList}>
+            {idea.assumptions.map((a, i) => (
+              <li key={i} style={s.assumptionItem}>{a}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* 双角色审稿意见 */}
+      {review && (
+        <div style={s.review}>
+          <div style={s.reviewHeader}>
+            <span>🔍 审稿意见</span>
+            <span style={{ fontWeight: 400, fontSize: 12 }}>
+              综合可行性 <Stars n={review.feasibility_score} />
+            </span>
+          </div>
+
+          {/* 缺陷列表 */}
+          {review.flaws.map((f, i) => (
+            <div key={i} style={s.flawItem}>
+              <span style={{ ...s.flawBadge, ...(severityBadge[f.severity] || severityBadge.low) }}>
+                {f.severity === 'high' ? '严重' : f.severity === 'medium' ? '中等' : '轻微'}
+              </span>
+              <span style={{ color: '#475569', lineHeight: 1.55 }}>{f.description}</span>
+            </div>
+          ))}
+
+          {/* 三维评分 */}
+          <div style={s.dimensionBar}>
+            {([
+              { key: 'theory', label: '理论自洽' },
+              { key: 'synthesis', label: '合成可达' },
+              { key: 'measurement', label: '测量可验' },
+            ] as const).map(({ key, label }) => (
+              <div key={key} style={s.dimensionItem}>
+                <span style={{ fontSize: 11, color: '#94a3b8' }}>{label}</span>
+                <Stars n={review.dimensions[key]} max={5} />
               </div>
             ))}
-            <div className="grid-three">
-              {([
-                { key: 'theory', label: '理论自洽' },
-                { key: 'synthesis', label: '合成可达' },
-                { key: 'measurement', label: '测量可验' },
-              ] as const).map(({ key, label }) => (
-                <div className="rounded-sm bg-white p-2 text-center" key={key}>
-                  <div className="text-xs text-[var(--sc-muted)]">{label}</div>
-                  <Stars n={review.dimensions[key]} />
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-      </CardContent>
-    </Card>
+          </div>
+        </div>
+      )}
+    </div>
   )
+}
+
+/* ========== 样式表 ========== */
+
+const s: Record<string, React.CSSProperties> = {
+  card: {
+    margin: '14px 0',
+    border: '1px solid #f0f0f0',
+    borderRadius: 10,
+    backgroundColor: '#fff',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+    overflow: 'hidden',
+    fontSize: 13,
+  },
+
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '10px 14px',
+    fontWeight: 700,
+    fontSize: 14,
+    backgroundColor: '#fff',
+    color: '#1e3a5f',
+    borderLeft: '3px solid #4d6bfe',
+    margin: '-1px',
+  },
+
+  section: {
+    padding: '10px 14px',
+  },
+
+  label: {
+    fontWeight: 700,
+    fontSize: 11,
+    color: '#64748b',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: '0.4px',
+  } as React.CSSProperties,
+
+  fragment: {
+    padding: '8px 10px',
+    marginBottom: 8,
+    backgroundColor: '#f8fafc',
+    borderRadius: 6,
+    borderLeft: '3px solid #4d6bfe',
+  },
+
+  quote: {
+    fontStyle: 'italic',
+    color: '#334155',
+    lineHeight: 1.7,
+    marginBottom: 6,
+  },
+
+  fragmentMeta: {
+    fontSize: 11,
+    color: '#94a3b8',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  pidTag: {
+    display: 'inline-block',
+    padding: '1px 8px',
+    borderRadius: 10,
+    backgroundColor: '#eef1ff',
+    color: '#4d6bfe',
+    fontWeight: 500,
+    fontSize: 10,
+  },
+
+  textBlock: {
+    color: '#334155',
+    lineHeight: 1.7,
+    whiteSpace: 'pre-wrap',
+  } as React.CSSProperties,
+
+  assumptionList: {
+    margin: 0,
+    paddingLeft: 18,
+  },
+
+  assumptionItem: {
+    color: '#64748b',
+    marginBottom: 3,
+    lineHeight: 1.6,
+  },
+
+  review: {
+    borderTop: '2px solid #fed7aa',
+    backgroundColor: '#fffbf5',
+    padding: '10px 14px',
+  },
+
+  reviewHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    fontWeight: 700,
+    fontSize: 12,
+    color: '#c2410c',
+    marginBottom: 10,
+  },
+
+  flawItem: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: 8,
+    padding: '6px 0',
+    borderBottom: '1px solid #fef3c7',
+  },
+
+  flawBadge: {
+    display: 'inline-block',
+    padding: '1px 8px',
+    borderRadius: 3,
+    fontSize: 10,
+    fontWeight: 600,
+    flexShrink: 0,
+    marginTop: 1,
+    textAlign: 'center',
+    minWidth: 36,
+  },
+
+  dimensionBar: {
+    display: 'flex',
+    gap: 24,
+    marginTop: 10,
+    padding: '8px 10px',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 6,
+    fontSize: 12,
+  },
+
+  dimensionItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+    alignItems: 'center',
+  } as React.CSSProperties,
 }
 
 export default EvidenceCard

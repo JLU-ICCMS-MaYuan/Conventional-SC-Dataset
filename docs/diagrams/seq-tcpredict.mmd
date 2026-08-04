@@ -1,0 +1,19 @@
+sequenceDiagram
+    actor User as 用户
+    participant Frontend as 浏览器
+    participant Python as Python 后端
+
+    User->>Frontend: 访问 /tc-predict
+    User->>Frontend: 上传结构文件 (CIF/POSCAR)
+    Frontend->>Python: POST /api/tc-predict/upload
+    Python-->>Frontend: 文件已接收
+
+    User->>Frontend: 上传态密度文件 (可选)
+    Frontend->>Python: POST /api/tc-predict/dos
+    Python-->>Frontend: DOS 已接收
+
+    User->>Frontend: 点击预测
+    Frontend->>Python: POST /api/tc-predict/run
+    Note over Python: 运行 Tc 预测模型
+    Python-->>Frontend: 预测结果 (Tc 估计值 + 置信度)
+    Frontend->>Frontend: 显示预测结果
