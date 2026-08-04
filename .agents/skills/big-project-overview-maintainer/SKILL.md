@@ -1,9 +1,9 @@
 ---
-name: overview-maintainer
-description: Maintains a codebase's current-function overview through read-only analysis and writes only to docs/overview/. Use when initializing or updating project overview documentation, recording an implemented function, syncing overview, or writing back final behavior after a completed feature or debug fix.
+name: big-project-overview-maintainer
+description: Maintains a large codebase's authoritative current-function overview through read-only analysis and writes only to docs/overview/. Use when initializing or updating project overview documentation, recording implemented behavior, syncing overview, or writing back final behavior after a completed feature or bug fix.
 ---
 
-# Overview Maintainer
+# Big Project Overview Maintainer
 
 维护项目当前功能的权威总览。只分析已经落地的事实，只创建或更新
 `docs/overview/`。

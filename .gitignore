@@ -25,9 +25,12 @@ wheels/
 .agents/*
 !.agents/skills/
 .agents/skills/*
-!.agents/skills/overview-maintainer/
-!.agents/skills/overview-maintainer/**
-.specify
+!.agents/skills/big-project-overview-maintainer/
+!.agents/skills/big-project-overview-maintainer/**
+!.agents/skills/big-project-issue-manager/
+!.agents/skills/big-project-issue-manager/**
+!.agents/skills/big-project-spec/
+!.agents/skills/big-project-spec/**
 
 
 
