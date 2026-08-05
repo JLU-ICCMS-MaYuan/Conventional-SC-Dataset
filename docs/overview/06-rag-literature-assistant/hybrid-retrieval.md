@@ -2,13 +2,13 @@
 
 ## 功能说明
 
-根据查询意图选择 SQL 精确检索、Chroma 语义检索或二者融合，并返回排序后的论文与超导体结果。
+根据查询意图选择 SQL 精确检索、Qdrant 语义检索或二者融合，并返回排序后的论文与超导体结果。
 
 ## 当前行为
 
 - 搜索引擎定义多种搜索模式，并可自动识别查询模式。
 - SQL 路径处理结构化论文、材料和属性条件。
-- 语义路径查询 Chroma 向量集合。
+- 语义路径查询 Qdrant 向量集合。
 - 混合路径合并、去重和排序结果，服务层提供统一门面。
 
 ## 工作流程
@@ -17,15 +17,17 @@
 
 ## 约束
 
-- SQL 检索依赖 RAG 异步数据库，语义检索依赖 Chroma。
+- SQL 检索依赖 RAG 异步数据库，语义检索依赖 Qdrant。
 - 自动模式识别是规则和实现驱动的路由，不保证覆盖所有自然语言表达。
 - 真实数据集条件测试可能因本地数据缺失而跳过。
 
 ## 代码与测试
 
-- `backend/rag/search/engine.py`
+- `backend/rag/search/sql_search.py`
+- `backend/rag/search/vector_search.py`
+- `backend/rag/vectordb.py`
 - `backend/rag/service.py`
-- `backend/rag/db/`
+- `backend/rag/database.py`
 - `tests/05_rag_question_answering/`
 
 ## 相关变更记录

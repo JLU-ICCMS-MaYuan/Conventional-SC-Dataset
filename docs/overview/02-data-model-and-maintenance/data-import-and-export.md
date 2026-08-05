@@ -6,7 +6,7 @@
 
 ## 当前行为
 
-- 导入器按用户、论文、超导记录和结构的依赖顺序写入数据。
+- 导入器脚本已迁移到 `backend/scripts/`，按用户、论文、超导记录和结构的依赖顺序写入数据。
 - `--clear` 参数允许导入前清理现有业务数据。
 - 结构导入会填充来源类型等兼容默认值。
 - 测试文件覆盖新 schema round-trip 和旧载荷兼容路径。
@@ -23,8 +23,8 @@
 
 ## 代码与测试
 
-- `backend/import_data.py`
-- `backend/export_data.py`
+- `backend/scripts/import_data.py`
+- `backend/scripts/export_data.py`
 - `backend/crud.py`
 - `tests/02_maintenance_and_verification/`
 

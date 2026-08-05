@@ -6,26 +6,28 @@
 
 ## 当前行为
 
-- 统一仓储支持 `formula_search`、`elements_exact_search`、`elements_combination_search` 和 `elements_contained_search` 四种模式。
-- 化学式检索会执行解析、规范化和相似度排序；元素检索按精确、组合或包含关系匹配材料体系。
-- React 元素页生成元素或化学式查询，化合物页调用 `/api/papers/search-by-mode` 展示结果。
+- Go API `POST /api/papers/search/records` 支持 `formula_search`、`elements_exact_search`、`elements_combination_search` 和 `elements_contained_search` 四种模式。
+- 化学式检索通过化学式提取元素并构建 `system_key`；元素检索在 `chemical_systems` 内按精确、组合或包含关系匹配材料体系。
+- 当前本地检索以 `key_properties.name = critical_temperature` 且存在数值的物性记录为主结果，再关联 `papers` 生成扁平展示行。
+- `/search` 页面支持来源选择、分页、Formula/关键词、Tc 范围、压强范围、年份范围、超导类型、审核状态和图表可见性筛选；默认每页 50 条。
+- Go 层对本地搜索结果使用请求参数生成缓存键；当前缓存键只包含元素、模式和化学式，筛选参数不完整纳入缓存键，属于需要核验的行为风险。
 
 ## 工作流程
 
-用户选择元素或输入化学式，前端构造搜索模式和参数；论文 API 调用超导体仓储；仓储查询 `ChemicalSystem`、`Superconductor` 等模型；API 再组织论文和超导记录作为结果。
+用户选择元素或输入化学式，前端构造搜索模式、来源和筛选参数；Go API 查询 `ChemicalSystem` 与 `Superconductor` 取得候选材料 ID；再 JOIN `key_properties` 与 `papers`，返回年份、体系名称、类型、压强、代表 Tc、空间群占位、数据来源、审核状态和 DOI 等字段。
 
 ## 约束
 
-- 查询语义依赖当前化学式解析与元素规范化规则。
-- 分页和排序已在代码与测试文件中覆盖，但没有本次运行结果或大数据性能结论。
-- 当前 React 源码引用缺失的 `frontend/src/lib` 模块，源码构建状态待核验。
+- 查询语义依赖 Go 侧简化的化学式元素提取规则，不等同于完整化学式解析器。
+- 当前 Go 侧本地检索按 `papers.year DESC, key_properties.id ASC` 排序；前端演示中对“代表 Tc 降序”的产品期望不等同于当前已实现后端排序。
+- 本地结果的 `space_group` 当前由 Go API 固定返回 `-`，不是可搜索的结构空间群字段。
 
 ## 代码与测试
 
-- 入口：`frontend/src/pages/ElementsPage.tsx`、`frontend/src/pages/CompoundPage.tsx`
-- API：`backend/api/papers.py`、`backend/api/compounds.py`
-- 仓储：`backend/repositories/superconductors.py`
-- 模型：`backend/models.py`
+- 入口：`frontend/src/pages/SearchPage.tsx`
+- API：`goserver/handlers/papers.go`
+- 路由：`goserver/main.go`
+- 模型：`goserver/models/models.go`、`backend/models.py`
 - 测试：`tests/03_data_search_and_database_discovery/`
 
 ## 相关变更记录
@@ -34,4 +36,4 @@
 
 ## 已知问题
 
-- 当前前端与后端的部分请求路径存在一致性风险，部署产物行为需单独核验。
+- `space_group_min` 和 `space_group_max` 会从前端发送，但当前 Go 本地检索未实际应用空间群筛选。

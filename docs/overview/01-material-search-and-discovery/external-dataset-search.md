@@ -6,26 +6,28 @@
 
 ## 当前行为
 
-- Alexandria 模块从 JSON 数据构建内存索引，支持按元素查询、材料详情、统计和 CIF 相关接口。
-- HTSC-2025 模块读取独立 JSON 数据，支持分页搜索、材料详情和统计。
-- 化合物页分别加载两类外部结果；论文 API 还提供本地、Alexandria、HTSC-2025 三源聚合接口。
+- Go API `POST /api/alexandria/search` 查询 `alexandria_entries` 和元素索引表，支持元素匹配、Tc 范围和空间群编号范围筛选。
+- Go API `POST /api/htsc2025/search` 查询 `htsc2025_materials`，支持元素匹配和 Tc 范围筛选。
+- `/search` 页面可以在 Local、Alexandria、HTSC-2025、All 四种来源之间切换，并根据数据源裁剪不支持的筛选项。
+- Go API `POST /api/papers/search/all` 会聚合本地、Alexandria 和 HTSC-2025 结果，按来源和 Tc 进行分组排序，并在结果中插入 section 行。
 
 ## 工作流程
 
-元素集合进入对应 API；数据访问层读取或查询外部数据文件；API 返回分页候选材料；前端与本地论文结果分区展示。三源聚合接口会进一步执行分组和排序。
+元素集合进入对应 Go API；Go 服务查询 MySQL 中的外部数据表或索引表；API 返回分页候选材料；前端将 Alexandria、HTSC-2025 字段适配为统一结果行。All 来源会先聚合三源结果，再按组展平给前端。
 
 ## 约束
 
-- 外部数据文件不属于主业务数据库，缺失或格式不匹配时相应能力不可用。
-- `/api/papers/search/all` 已注册，但当前 React 页面未发现直接调用。
-- 文档只说明本地接口行为，不保证外部数据集的完整性、时效性或许可状态。
+- 外部数据表不使用本地论文审核状态，前端以 `External` 或外部来源标识呈现。
+- Alexandria 目前要求 `imag = false` 且存在 `tc_max` 或 `tc_allen_dynes`；HTSC-2025 要求 `tc IS NOT NULL`。
+- HTSC-2025 请求体包含压强范围字段，但当前 Go 查询未使用压强筛选。
+- 文档只说明当前接口行为，不保证外部数据集的完整性、时效性或许可状态。
 
 ## 代码与测试
 
-- Alexandria：`backend/api/alexandria.py`、`backend/alexandria_db.py`
-- HTSC-2025：`backend/api/htsc2025.py`
-- 聚合：`backend/api/papers.py`
-- 页面：`frontend/src/pages/CompoundPage.tsx`
+- Alexandria 与 HTSC-2025：`goserver/handlers/external.go`
+- 三源聚合：`goserver/handlers/papers.go`
+- 页面：`frontend/src/pages/SearchPage.tsx`
+- 模型：`goserver/models/models.go`
 
 ## 相关变更记录
 
@@ -33,4 +35,4 @@
 
 ## 已知问题
 
-- 外部数据文件的部署位置和更新流程待核验。
+- 外部数据导入和刷新流程未在本次 Overview 扫描中完整核验。

@@ -23,11 +23,11 @@
 
 ## 代码与测试
 
-- `backend/rag/rag/inspiration/`
-- `backend/rag/rag/engine.py`
+- `backend/rag/inspiration/`
+- `backend/rag/core/engine.py`
 - `backend/api/rag.py`
 - `frontend/src/pages/RagPage.tsx`
-- `frontend/src/hooks/useStreamingChat.ts`
+- `frontend/src/lib/useStreamingChat.ts`
 - `tests/05_rag_question_answering/`
 
 ## 相关变更记录

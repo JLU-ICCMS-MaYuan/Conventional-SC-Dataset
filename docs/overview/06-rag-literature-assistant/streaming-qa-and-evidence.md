@@ -9,7 +9,7 @@
 - `/api/rag/chat/stream` 使用 `text/event-stream` 返回流式事件。
 - 问答引擎先检索上下文，再调用 OpenAI 兼容的 LLM 接口生成回答。
 - 事件包含回答增量、引文、证据、Top 结果及灵感模式相关数据。
-- React hook 消费 SSE，并在浏览器本地保存多个会话及元数据。
+- React hook `useStreamingChat` 消费 SSE，并在浏览器本地保存多个会话、证据、想法和评审元数据。
 
 ## 工作流程
 
@@ -25,9 +25,9 @@
 
 - `backend/api/rag.py`
 - `backend/rag/service.py`
-- `backend/rag/rag/engine.py`
+- `backend/rag/core/engine.py`
 - `frontend/src/pages/RagPage.tsx`
-- `frontend/src/hooks/useStreamingChat.ts`
+- `frontend/src/lib/useStreamingChat.ts`
 - `tests/05_rag_question_answering/`
 
 ## 相关变更记录

@@ -2,29 +2,33 @@
 
 ## 功能说明
 
-把已批准的结构化超导记录映射为材料属性三元组，并提供属性、主体、三元组和统计查询。
+展示超导文献知识图谱快照，并提供论文节点展开、关系筛选、上下文详情和 Neo4j 工具查询入口。
 
 ## 当前行为
 
-- 从关系型记录生成材料到属性值的三元组。
-- 查询会过滤未知谓词和非法数值。
-- API 支持材料属性列表以及 subjects/triples 统计。
+- Go 服务启动时从 `SC_WIKI_DATA_DIR/graph.json` 加载图谱快照，公开 `/api/knowledge-graph/overview`、`/papers/:paper_id`、`/papers/:paper_id/neighbors` 和 `/stats`。
+- 前端 `/knowledge` 使用 `vis-network` 渲染图谱，按关系类型着色，支持点击节点、边、展开邻居和按关系类型筛选。
+- 点击论文节点后，前端会调用 `/api/papers/:id` 加载论文详情并在侧栏展示。
+- Python 侧另有 `/api/kg/*` 接口，委托 `backend.rag.tools.neo4j` 查询 Neo4j，支持论文搜索、论文上下文、材料上下文、多跳遍历和最短路径。
 
 ## 工作流程
 
-请求进入 RAG API 的知识图谱端点；查询层使用异步数据库读取已批准记录；映射逻辑生成可查询的主体、谓词和值；结果以结构化 JSON 返回。
+公开页面优先请求 Go 知识图谱快照接口；Go 服务从内存中的 `graph.json` 节点和边生成概览或邻居数据。需要图数据库上下文时，Python KG 接口通过 Neo4j driver 执行 Cypher 查询并返回论文、材料、属性或路径信息。
 
 ## 约束
 
-- 当前证据支持“关系型数据上的知识图谱查询接口”，不支持独立图数据库的结论。
-- 能力依赖 RAG 异步数据库可用。
-- 只应将通过状态筛选的记录视为公开图谱事实。
+- Go 页面图谱依赖 `graph.json` 是否存在和格式是否正确。
+- Python Neo4j 工具依赖 `NEO4J_URI`、`NEO4J_USER`、`NEO4J_PASSWORD` 和图数据库数据。
+- Go 快照图谱和 Python Neo4j 图谱是两条不同数据路径，二者同步关系需单独核验。
 
 ## 代码与测试
 
-- API：`backend/api/rag.py`
-- RAG 数据访问：`backend/rag/`
-- 测试：`tests/04_superconductivity_knowledge_graph/test_knowledge_graph.py`
+- Go API：`goserver/handlers/knowledge_graph.go`
+- Go 路由：`goserver/main.go`
+- Python API：`backend/api/kg.py`
+- Neo4j 工具：`backend/rag/tools/neo4j.py`
+- 页面：`frontend/src/pages/KnowledgeGraphPage.tsx`
+- 测试：`tests/04_superconductivity_knowledge_graph/`
 
 ## 相关变更记录
 
@@ -32,4 +36,4 @@
 
 ## 已知问题
 
-- 主业务数据库与 RAG 独立数据库之间的同步机制待核验。
+- `graph.json`、MySQL 和 Neo4j 三者之间的数据同步时机待核验。

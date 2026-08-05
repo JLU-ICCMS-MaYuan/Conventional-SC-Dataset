@@ -2,32 +2,34 @@
 
 ## 功能说明
 
-通过邮箱验证码完成用户注册，验证密码后签发 JWT，并为受保护 API 提供当前用户身份。
+通过邮箱和密码创建用户，验证密码后签发 JWT，并为受保护 API 提供当前用户身份。
 
 ## 当前行为
 
-- 注册分为提交用户资料并发送验证码、提交验证码完成验证两个步骤。
-- 普通用户验证后可直接成为已批准用户；管理员申请仍需审批。
-- 登录校验邮箱、密码、邮箱验证和管理员审批状态，成功后签发访问令牌。
-- 安全依赖可以解析当前用户、管理员和超级管理员。
+- Go API `POST /api/auth/register` 接收邮箱、密码、姓名和是否申请管理员，使用 bcrypt 保存密码哈希，新用户默认 `is_approved=false`。
+- Go API `POST /api/auth/login` 校验邮箱、密码和审批状态，成功后返回 JWT 与用户角色信息。
+- 前端 `AuthContext` 将 token 和用户信息保存到 `localStorage`，通用 API 客户端自动附加 `Authorization: Bearer`。
+- Go 中间件保护 `/api` 登录路由组和 `/api/admin` 管理员路由组；Python 结构接口也通过安全模块解析当前用户或管理员。
 
 ## 工作流程
 
-客户端提交注册资料；后端创建或更新待验证用户并发送验证码；客户端调用 `/api/auth/verify-email`；登录成功后获得 JWT；后续请求通过 Bearer Token 解析用户。
+用户提交注册表单；服务创建待审批用户；用户获批后登录；前端保存 JWT；后续上传记录、管理后台、图表组合等请求携带 token；Go 或 Python 认证逻辑按接口所在服务执行权限检查。
 
 ## 约束
 
-- 邮件发送能力依赖邮件服务配置。
-- 未验证邮箱不能完成正常登录。
-- 管理员申请即使验证邮箱，也必须等待超级管理员批准。
-- 当前 React 注册页未发现验证码第二步页面，与后端流程不一致。
+- JWT 使用 HS256，Go 服务要求 `JWT_SECRET_KEY` 存在。
+- 未审批用户不能登录 Go API。
+- 前端仍保留邮箱验证码步骤并调用 `/api/auth/verify-email`；当前 Go 主路由未注册该端点，Python `auth_routes` 也未在 `backend/main.py` 中 include，邮箱验证闭环需继续核验。
 
 ## 代码与测试
 
-- `backend/api/auth_routes.py`
+- `goserver/handlers/admin.go`
+- `goserver/middleware/auth.go`
+- `frontend/src/context/AuthContext.tsx`
+- `frontend/src/components/AuthDialog.tsx`
+- `backend/api/auth_routes.py`（存在但当前 Python 主应用未 include）
 - `backend/security.py`
 - `backend/email_service.py`
-- `frontend/src/pages/AuthPages.tsx`
 
 ## 相关变更记录
 
@@ -35,4 +37,4 @@
 
 ## 已知问题
 
-- 当前前端无法确认完整覆盖两阶段注册流程。
+- 邮箱验证前端流程与当前后端注册路由不完全一致。

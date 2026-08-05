@@ -6,28 +6,30 @@
 
 ## 当前行为
 
-- `start.sh` 在未设置 `DATABASE_URL` 时使用 `data/local_dev.db`，执行 `alembic upgrade head` 和 `python -m backend.init_db` 后启动 Uvicorn。
-- `backend.init_db` 调用 `Base.metadata.create_all` 并填充元素数据。
-- FastAPI startup 事件也会调用 SQLite 初始化逻辑。
+- Docker Compose 定义 `frontend`、`goserver`、`python`、`mysql`、`redis`、`neo4j`、`qdrant` 七类服务，Go 服务依赖 MySQL 与 Redis 健康检查，Python 服务依赖 MySQL 与 Qdrant 健康检查。
+- Go 服务从 `DATABASE_URL` 解析 MySQL DSN，缺少 `DATABASE_URL` 或 `JWT_SECRET_KEY` 会直接拒绝启动。
+- Python 服务仍通过 `backend/database.py` 与 Alembic 使用 `DATABASE_URL`，并保留 `Base.metadata.create_all` 和周期表元素初始化脚本。
 - Alembic 环境允许 `DATABASE_URL` 覆盖配置文件连接串。
 
 ## 工作流程
 
-完整脚本启动时先解析数据库地址并创建数据目录，然后应用迁移、执行初始化、启动应用。其他入口可能直接启动 Uvicorn，由应用 startup 执行部分初始化。
+Docker 部署时先启动数据库、缓存、图数据库和向量数据库，再启动 Go 与 Python 服务；Nginx 前端将 `/api/` 和 `/health` 代理到 Go 服务，Go 服务将未匹配路由转发到 Python 服务。离线迁移仍通过 Alembic 和初始化脚本维护关系数据库结构。
 
 ## 约束
 
-- 直接导入后端且未设置环境变量时默认使用 `data/dev.db`，与 `start.sh` 的 `data/local_dev.db` 不同。
-- `Procfile` 直接启动 Uvicorn，不显式运行 Alembic。
+- Go 服务没有 SQLite fallback，生产或 Docker 环境必须提供 MySQL 格式 `DATABASE_URL`。
+- Docker 部署文档要求手动导入 MySQL dump、Neo4j dump 和数据文件；本文不声明这些导入已经在当前环境执行。
 - 自动 `create_all` 不等同于完整迁移流程，部署入口必须明确选择。
 
 ## 代码与测试
 
-- `start.sh`
-- `Procfile`
+- `docker/compose.yaml`
+- `docker/deploy/README.md`
+- `docker/nginx.conf`
 - `backend/main.py`
-- `backend/init_db.py`
+- `backend/scripts/init_db.py`
 - `backend/database.py`
+- `goserver/main.go`
 - `alembic/env.py`、`alembic/versions/`
 - `tests/02_maintenance_and_verification/`
 

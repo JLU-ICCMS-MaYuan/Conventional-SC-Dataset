@@ -14,7 +14,7 @@
 
 ## 工作流程
 
-前端 `/tc-pre` 上传 CONTCAR 和 PDOS 文件；后端解析结构；识别氢和金属 PDOS；计算耦合、频率及 Tc；将数值和解释特征返回页面。
+前端 `/tc-predict` 上传 CONTCAR 和 PDOS 文件；后端解析结构；识别氢和金属 PDOS；计算耦合、频率及 Tc；将数值和解释特征返回页面。
 
 ## 约束
 
@@ -26,7 +26,7 @@
 ## 代码与测试
 
 - API：`backend/api/tc_predict.py`
-- 页面：`frontend/src/pages/TcPredictionPage.tsx`
+- 页面：`frontend/src/pages/TcPredictPage.tsx`
 - 依赖：`requirements.txt`
 - 测试：`tests/06_ai_assisted_tc_estimation/test_tc_predict.py`
 

@@ -6,28 +6,28 @@
 
 ## 当前行为
 
-- 安全层将 admin 和 superadmin 视为管理员，并要求管理员身份已批准。
-- 超级管理员可以查看待审批管理员、批准申请、修改用户角色和管理其他管理员。
-- 兼容逻辑仍可把旧 `is_admin`、`is_superadmin` 字段映射为角色。
-- 防护逻辑限制超级管理员降低自身权限等危险操作。
+- Go 登录接口只允许 `is_approved=true` 的用户登录。
+- Go 管理员中间件将 `admin` 和 `superadmin` 视为管理员；管理路由要求登录且具备管理员角色。
+- 超级管理员状态主要由前端 `isSuper` 控制用户管理页可见性；后端用户更新接口挂在管理员路由组下。
+- 用户记录保存 `role`、`is_approved`、`is_email_verified`、`approved_at` 等字段。
 
 ## 工作流程
 
-用户注册时申请管理员；账户进入待审批状态；超级管理员查看申请并批准；后续请求由角色依赖决定可访问的管理端点。
+用户注册时可以申请管理员角色；账户进入未审批状态；管理员或超级管理员在后台调整角色与审批状态；用户获批后可登录；后续请求由 Go 中间件和前端角色判断共同限制可访问页面与端点。
 
 ## 约束
 
 - 角色值限制为 `user`、`admin`、`superadmin`。
-- 用户管理和管理员审批中的部分操作只允许 superadmin。
-- 旧布尔角色字段仍在兼容路径中，不能假设迁移已完全结束。
+- 用户管理页面只对前端识别出的 superadmin 展示，但后端 `PUT /api/admin/users/:id/permissions` 当前位于管理员路由组，细粒度 superadmin 限制需继续核验。
 
 ## 代码与测试
 
-- `backend/api/admin.py`
-- `backend/api/auth_routes.py`
+- `goserver/handlers/admin.go`
+- `goserver/middleware/auth.go`
+- `goserver/models/models.go`
 - `backend/security.py`
 - `backend/models.py`
-- `frontend/src/pages/AdminPages.tsx`
+- `frontend/src/pages/AdminPage.tsx`
 
 ## 相关变更记录
 
