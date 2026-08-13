@@ -8,6 +8,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pathlib import Path
 
+from backend.api import kg, rag, structures, tc_predict
+
 
 app = FastAPI(
     title="超导文献数据库 API",
