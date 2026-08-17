@@ -82,6 +82,7 @@ def paper_path(from_id: int, to_id: int) -> str:
              "title": n.get("title", "")[:80] if n.get("title") else str(n.get("_label"))}
             for n in result["path"]
         ],
+        "edges": result.get("edges", []),
     }
     return json.dumps(path_summary, ensure_ascii=False, indent=2, default=str)
 
@@ -134,11 +135,7 @@ def query_properties(predicate: str, condition: str = ">0") -> str:
 
     if not results:
         return "未找到匹配的数据。"
-    top = results[:20]
-    items = [{"subject": r["subject"], "predicate": r["predicate"],
-              "value": r["object"], "paper_id": r.get("paper_id")}
-             for r in top]
-    return json.dumps(items, ensure_ascii=False, indent=2)
+    return json.dumps(results[:20], ensure_ascii=False, indent=2, default=str)
 
 
 # 所有可用 tool 列表

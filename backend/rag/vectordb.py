@@ -4,7 +4,7 @@
 通过 Qdrant gRPC/HTTP API 提供高并发向量搜索能力：
 - 默认连接本地 Qdrant 服务 (http://127.0.0.1:6333)
 - 每个集合对应一个 Qdrant collection
-- 搜索返回 cosine distance，越小越相似
+- 搜索返回 Qdrant cosine score，越大越相似
 
 搜索流程：
   用户问题 → embedding API → 向量 → Qdrant search → 返回相关文档
@@ -107,7 +107,7 @@ def search_chunks(
 
     Returns:
         [{"id": str, "paper_id": int, "chunk_index": int,
-          "section_name": str, "content": str, "distance": float}, ...]
+          "section_name": str, "content": str, "score": float}, ...]
     """
     client = _get_client()
 
@@ -140,7 +140,7 @@ def search_chunks(
             "chunk_index": payload.get("chunk_index", 0),
             "section_name": payload.get("section_name", ""),
             "content": payload.get("document", ""),
-            "distance": r.score if r.score is not None else 0.0,
+            "score": r.score if r.score is not None else 0.0,
         })
 
     return out

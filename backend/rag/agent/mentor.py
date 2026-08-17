@@ -61,9 +61,12 @@ def _build_llm() -> ChatOpenAI:
 # 节点
 # ═══════════════════════════════════════════════
 
-def mentor_node(state: AgentState) -> dict:
+def mentor_node(state: AgentState, tools: list | None = None) -> dict:
     """助理节点：看完整对话 + tool 能查到什么 → 决定做什么"""
-    llm = _build_llm().bind_tools(ALL_TOOLS)
+    selected_tools = ALL_TOOLS if tools is None else list(tools)
+    llm = _build_llm()
+    if selected_tools:
+        llm = llm.bind_tools(selected_tools)
     response = llm.invoke(state["messages"])
     return {"messages": [response]}
 
@@ -105,23 +108,31 @@ def _after_tools(state: AgentState) -> dict:
 # 构建图
 # ═══════════════════════════════════════════════
 
-def build_graph():
+def build_graph(tools: list | None = None):
+    """构建 Mentor graph；传空列表可物理禁用全部工具。"""
+    selected_tools = ALL_TOOLS if tools is None else list(tools)
     workflow = StateGraph(AgentState)
 
-    workflow.add_node("mentor", mentor_node)
-    workflow.add_node("tools", ToolNode(ALL_TOOLS))
+    workflow.add_node("mentor", lambda state: mentor_node(state, selected_tools))
     workflow.add_node("wait_user", lambda s: {})
 
     workflow.set_entry_point("mentor")
 
-    workflow.add_conditional_edges(
-        "mentor", router,
-        {"tools": "tools", "wait_user": "wait_user", "__end__": END},
-    )
-    # tools → _after_tools(计数+1) → mentor
-    workflow.add_node("after_tools", _after_tools)
-    workflow.add_edge("tools", "after_tools")
-    workflow.add_edge("after_tools", "mentor")
+    if selected_tools:
+        workflow.add_node("tools", ToolNode(selected_tools))
+        workflow.add_conditional_edges(
+            "mentor", router,
+            {"tools": "tools", "wait_user": "wait_user", "__end__": END},
+        )
+        # tools → _after_tools(计数+1) → mentor
+        workflow.add_node("after_tools", _after_tools)
+        workflow.add_edge("tools", "after_tools")
+        workflow.add_edge("after_tools", "mentor")
+    else:
+        workflow.add_conditional_edges(
+            "mentor", router,
+            {"tools": END, "wait_user": "wait_user", "__end__": END},
+        )
     workflow.add_edge("wait_user", END)    # 问题提出 → 暂停
 
     return workflow.compile()

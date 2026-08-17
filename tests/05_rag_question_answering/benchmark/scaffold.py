@@ -14,11 +14,11 @@ EXPECTED_ABLATION_TOOLS = {
     "qdrant_mysql_neo4j": [
         "search_literature",
         "query_properties",
-        "find_materials_by_researcher",
-        "find_material_properties",
-        "find_related_materials",
-        "find_research_path",
-        "find_shortest_paper_path",
+        "search_papers",
+        "paper_context",
+        "material_info",
+        "explore_graph",
+        "paper_path",
     ],
 }
 
