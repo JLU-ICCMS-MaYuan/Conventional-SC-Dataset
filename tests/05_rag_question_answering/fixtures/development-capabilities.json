@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0.0",
-  "snapshot_id": "local-docker-2026-08-17",
+  "snapshot_id": "local-docker-2026-08-17-embedding-live",
   "tools": {
-    "search_literature": {"available": false, "reason": "embedding_api_key_missing"},
+    "search_literature": {"available": true, "reason": null},
     "query_properties": {"available": true, "reason": null},
     "search_papers": {"available": true, "reason": null},
     "paper_context": {"available": true, "reason": null},

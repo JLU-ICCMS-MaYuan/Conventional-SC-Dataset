@@ -39,8 +39,8 @@ def inspect_question(
         status = "needs_revision"
     elif unavailable:
         status = "blocked_tool"
-    elif temporary_gold["status"] == "pending_tool_run":
-        status = "pending_tool_run"
+    elif temporary_gold["status"] not in {"provisional", "expected_refusal"}:
+        status = "pending_temporary_gold"
     else:
         status = "ready_for_development"
 
@@ -88,7 +88,7 @@ def run_pilot(
     summary_path = output_dir / "summary.csv"
     counts = Counter(record["status"] for record in records)
     with summary_path.open("x", encoding="utf-8", newline="") as stream:
-        writer = csv.writer(stream)
+        writer = csv.writer(stream, lineterminator="\n")
         writer.writerow(["status", "count"])
         for status, count in sorted(counts.items()):
             writer.writerow([status, count])
