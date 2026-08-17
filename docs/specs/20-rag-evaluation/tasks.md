@@ -10,27 +10,27 @@
 
 ## 阶段 2：基础能力
 
-- [ ] T004 在 `tests/05_rag_question_answering/unit/` 先写 Qdrant score 语义回归测试，再修复 `backend/rag/vectordb.py` 与 `backend/rag/search/vector_search.py`。
-- [ ] T005 在 `tests/05_rag_question_answering/unit/` 先写四组工具隔离测试，再将 `backend/rag/agent/mentor.py` 改为参数化 graph 构建。
-- [ ] T006 [P] 在 `tests/05_rag_question_answering/unit/` 先写属性结果测试，再让 `backend/rag/tools/mysql.py` 与 Agent wrapper 保留范围、单位和条件。
-- [ ] T007 [P] 在 `tests/05_rag_question_answering/unit/` 先写方向契约测试，再修复 `backend/rag/tools/neo4j.py` 和 Agent wrapper 的有向路径输出。
+- [x] T004 在 `tests/05_rag_question_answering/unit/` 先写 Qdrant score 语义回归测试，再修复 `backend/rag/vectordb.py` 与 `backend/rag/search/vector_search.py`。
+- [x] T005 在 `tests/05_rag_question_answering/unit/` 先写四组工具隔离测试，再将 `backend/rag/agent/mentor.py` 改为参数化 graph 构建。
+- [x] T006 [P] 在 `tests/05_rag_question_answering/unit/` 先写属性结果测试，再让 `backend/rag/tools/mysql.py` 与 Agent wrapper 保留范围、单位和条件。
+- [x] T007 [P] 在 `tests/05_rag_question_answering/unit/` 先写方向契约测试，再修复 `backend/rag/tools/neo4j.py` 和 Agent wrapper 的有向路径输出。
 - [ ] T008 在 `tests/05_rag_question_answering/benchmark/runners/` 实现不可覆盖 Experiment writer、配置哈希、错误分类和 usage ledger。
 
 ## 阶段 3：用户故事 1——本机验证评测骨架（P1，MVP）
 
 **独立验收**：无外部服务时运行 quickstart，schema、fixture、指标和隔离测试全部通过。
 
-- [ ] T009 [P] [US1] 在 `tests/05_rag_question_answering/benchmark/metrics/` 实现 Recall@k、MRR、nDCG@k 与多证据覆盖率测试。
+- [x] T009 [P] [US1] 在 `tests/05_rag_question_answering/benchmark/metrics/` 实现 Recall@k、MRR、nDCG@k 与多证据覆盖率测试。
 - [ ] T010 [P] [US1] 在同一目录实现 S2 类型化数值/单位/条件指标测试。
 - [ ] T011 [P] [US1] 在同一目录实现 S3 节点、边、路径、方向和证据覆盖指标测试。
-- [ ] T012 [US1] 验证 `python -m pytest tests/05_rag_question_answering -q` 不依赖外部服务且不泄露 `.env`。
+- [x] T012 [US1] 验证 `python3 -m pytest tests/05_rag_question_answering -q` 不依赖外部服务且不泄露 `.env`。
 
 ## 阶段 4：用户故事 2——开发性 S1–S5（P2）
 
 **独立验收**：本机四组运行产生唯一 provisional experiment 和完整派生产物。
 
 - [ ] T013 [US2] 在 `tests/05_rag_question_answering/benchmark/runners/mentor.py` 实现四组 MentorBenchmarkRunner。
-- [ ] T014 [P] [US2] 在 `tests/05_rag_question_answering/benchmark/runners/sse.py` 实现 8000/8080 SSE 解析、文本 TTFT、错误和一次重试。
+- [ ] T014 [P] [US2] 在 `tests/05_rag_question_answering/benchmark/runners/sse.py` 实现 8000/8080 SSE 解析、文本 TTFT、错误和一次重试；当前已完成单次冒烟与结构化错误，尚缺自动重试。
 - [ ] T015 [P] [US2] 在 `tests/05_rag_question_answering/benchmark/metrics/statistics.py` 实现问题级配对 bootstrap 与 Holm 校正。
 - [ ] T016 [US2] 在 `tests/05_rag_question_answering/integration/` 运行本机 development 测试并保存不可覆盖 JSONL、CSV 和错误样例。
 
