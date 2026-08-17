@@ -1,0 +1,3 @@
+{"schema_version":"1.0.0","question_id":"dev-numeric-001","split":"development","question_type":"numeric_fact","question":"合成材料 A 的属性 X 是多少？","answerability":"answerable","gold_evidence":[]}
+{"schema_version":"1.0.0","question_id":"dev-graph-001","split":"development","question_type":"graph_single_hop","question":"合成节点 A 通过哪种关系连接节点 B？","answerability":"answerable","gold_evidence":[]}
+{"schema_version":"1.0.0","question_id":"dev-unanswerable-001","split":"development","question_type":"unanswerable","question":"未提供证据的问题应如何回答？","answerability":"unanswerable","gold_evidence":[]}

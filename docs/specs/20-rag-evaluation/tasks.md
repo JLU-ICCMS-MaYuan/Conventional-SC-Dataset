@@ -4,9 +4,9 @@
 
 ## 阶段 1：准备
 
-- [ ] T001 在 `tests/05_rag_question_answering/README.md` 建立评测入口、状态声明和本机命令。
-- [ ] T002 [P] 在 `tests/05_rag_question_answering/benchmark/schemas/` 建立版本化配置、问题、gold evidence 与 run record schema。
-- [ ] T003 [P] 在 `tests/05_rag_question_answering/fixtures/` 建立不含真实论文内容的确定性小型 fixture。
+- [x] T001 在 `tests/05_rag_question_answering/README.md` 建立评测入口、状态声明和本机命令。
+- [x] T002 [P] 在 `tests/05_rag_question_answering/benchmark/schemas/` 建立版本化配置、问题与 run record schema 骨架；完整 gold evidence schema 随 PDF Gate 实施。
+- [x] T003 [P] 在 `tests/05_rag_question_answering/fixtures/` 建立不含真实论文内容的确定性小型 fixture。
 
 ## 阶段 2：基础能力
 
