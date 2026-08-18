@@ -57,11 +57,13 @@ async def _process_upload_background(
         else:
             await ingest_pdf(file_path, filename, uploaded_by_user_id=user_id)
 
-        # 清理上传文件
-        await anyio.Path(file_path).unlink(missing_ok=True)
         print(f"  [上传] {filename} 后台处理完成")
     except Exception as exc:
         print(f"  [上传] {filename} 后台处理失败: {exc}")
+        raise
+    finally:
+        # 无论解析成功或失败，都清理临时上传文件。
+        await anyio.Path(file_path).unlink(missing_ok=True)
 
 
 async def _background_enrich_text(text: str, paper_id: int) -> None:
@@ -324,7 +326,10 @@ async def rag_upload_pdf(
         raise HTTPException(status_code=503, detail="上传文件已保存，但论文记录创建失败") from exc
 
     # 3. 后台处理
-    background_tasks.add_task(_process_upload_background, dest, filename, user_id, is_text=False)
+    try:
+        await _process_upload_background(dest, filename, user_id, is_text=False)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"论文解析失败：{exc}") from exc
 
     return {"ok": True, "paper_id": paper_id, "status": "parsing", "filename": filename}
 
@@ -364,6 +369,9 @@ async def rag_upload_text(
         raise HTTPException(status_code=503, detail="上传文件已保存，但论文记录创建失败") from exc
 
     # 3. 后台处理
-    background_tasks.add_task(_process_upload_background, dest, filename, user_id, is_text=True)
+    try:
+        await _process_upload_background(dest, filename, user_id, is_text=True)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"论文解析失败：{exc}") from exc
 
     return {"ok": True, "paper_id": paper_id, "status": "parsing", "filename": filename}
