@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sc-wiki.local/schemas/rag-run-record-1.0.0.json",
+  "title": "RAG immutable run record",
+  "type": "object",
+  "required": ["schema_version", "experiment_id", "question_id", "ablation_group", "repetition", "status", "git_commit", "config_hash", "snapshot_id"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "experiment_id": {"type": "string", "minLength": 1},
+    "question_id": {"type": "string", "minLength": 1},
+    "ablation_group": {"enum": ["llm_only", "qdrant_only", "qdrant_mysql", "qdrant_mysql_neo4j"]},
+    "repetition": {"type": "integer", "minimum": 0},
+    "status": {"enum": ["development", "provisional", "formal"]},
+    "git_commit": {"type": "string", "minLength": 7},
+    "config_hash": {"type": "string", "minLength": 1},
+    "snapshot_id": {"type": "string", "minLength": 1}
+  },
+  "additionalProperties": true
+}

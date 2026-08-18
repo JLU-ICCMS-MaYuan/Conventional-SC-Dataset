@@ -5,10 +5,12 @@ knowledge_graph.py — 知识图谱查询模块。
 支持 MySQL 和 SQLite，由 RAG_DATABASE_URL 配置决定。
 
 v2 起数据源为通用物性表 key_properties（每行一条物性），
-谓词映射到规范物性名（backend/prop_names.py），数值取 value_max（范围值上限）。
+谓词映射到规范物性名（backend/prop_names.py），并保留数值范围、单位与条件。
 """
 
 from __future__ import annotations
+
+import json
 
 from sqlalchemy import delete, select
 from sqlalchemy.sql import func
@@ -38,12 +40,12 @@ async def query(
     """查询知识图谱。
 
     predicate 映射到 key_properties 的规范物性名：
-      "超导温度(AD)" → name='critical_temperature' 的 value_max
-      "电声耦合lambda"   → name='electron_phonon_coupling' 的 value_max
+      "超导温度(AD)" → name='critical_temperature'
+      "电声耦合lambda"   → name='electron_phonon_coupling'
       "压力"         → key_properties.pressure_gpa（条件列，特判）
 
     Returns:
-        [{"subject": "LaH10", "predicate": 谓词, "object": "250"}, ...]
+        类型化物性记录，包含数值范围、单位、压力、温度和完整条件。
     """
     if predicate == "压力":
         # 压力是物性的条件列而非独立物性行
@@ -60,7 +62,15 @@ async def query(
         stmt = (
             select(
                 KeyProperty.material,
-                field,
+                KeyProperty.name,
+                KeyProperty.value_min,
+                KeyProperty.value_max,
+                KeyProperty.value_raw,
+                KeyProperty.unit,
+                KeyProperty.pressure_gpa,
+                KeyProperty.temperature_k,
+                KeyProperty.condition_json,
+                KeyProperty.condition_note,
                 Paper.id,
                 Paper.title,
             )
@@ -97,16 +107,30 @@ async def query(
         result = await session.execute(stmt)
         rows = result.all()
 
-    return [
-        {
+    records = []
+    for row in rows:
+        condition = row.condition_json
+        if isinstance(condition, str):
+            try:
+                condition = json.loads(condition)
+            except json.JSONDecodeError:
+                pass
+        records.append({
             "subject": row.material,
             "predicate": predicate,
-            "object": str(row[1]),
-            "paper_id": row[2],
-            "paper_title": row[3],
-        }
-        for row in rows
-    ]
+            "property_name": row.name,
+            "value_min": row.value_min,
+            "value_max": row.value_max,
+            "value_raw": row.value_raw,
+            "unit": row.unit,
+            "pressure_gpa": row.pressure_gpa,
+            "temperature_k": row.temperature_k,
+            "condition": condition,
+            "condition_note": row.condition_note,
+            "paper_id": row.id,
+            "paper_title": row.title,
+        })
+    return records
 
 
 async def get_all_properties(subject: str) -> list[dict]:

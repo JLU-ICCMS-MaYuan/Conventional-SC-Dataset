@@ -24,7 +24,13 @@ if not re.search(r"sqlite", settings.database_url, re.I):
     _engine_kw["pool_pre_ping"] = True
     _engine_kw["pool_recycle"] = 3600
 
-engine = create_async_engine(settings.database_url, **_engine_kw)
+database_url = settings.database_url
+if database_url.startswith("mysql+pymysql://"):
+    database_url = database_url.replace("mysql+pymysql://", "mysql+asyncmy://", 1)
+elif database_url.startswith("mysql://"):
+    database_url = database_url.replace("mysql://", "mysql+asyncmy://", 1)
+
+engine = create_async_engine(database_url, **_engine_kw)
 
 # ── Session 工厂 ───────────────────────────────────────────────────────
 async_session_factory = async_sessionmaker(

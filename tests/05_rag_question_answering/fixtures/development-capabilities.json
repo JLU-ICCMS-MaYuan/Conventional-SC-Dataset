@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0.0",
+  "snapshot_id": "local-docker-2026-08-17-embedding-live",
+  "tools": {
+    "search_literature": {"available": true, "reason": null},
+    "query_properties": {"available": true, "reason": null},
+    "search_papers": {"available": true, "reason": null},
+    "paper_context": {"available": true, "reason": null},
+    "material_info": {"available": false, "reason": "neo4j_material_schema_missing"},
+    "explore_graph": {"available": true, "reason": null},
+    "paper_path": {"available": true, "reason": null}
+  },
+  "services": {
+    "fastapi_sse": {"available": true, "http_status": 200},
+    "go_proxy_sse": {"available": true, "http_status": 200}
+  }
+}

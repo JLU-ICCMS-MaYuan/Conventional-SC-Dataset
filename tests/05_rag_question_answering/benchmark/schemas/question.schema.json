@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sc-wiki.local/schemas/rag-question-1.0.0.json",
+  "title": "RAG evaluation question",
+  "type": "object",
+  "required": ["schema_version", "question_id", "split", "question_type", "question", "answerability", "gold_evidence"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "question_id": {"type": "string", "minLength": 1},
+    "split": {"enum": ["development", "pilot", "formal"]},
+    "question_type": {"enum": ["numeric_fact", "mechanism", "literature_metadata", "graph_single_hop", "graph_multi_hop", "hybrid", "unanswerable"]},
+    "question": {"type": "string", "minLength": 1},
+    "answerability": {"enum": ["answerable", "unanswerable"]},
+    "gold_evidence": {"type": "array"}
+  },
+  "additionalProperties": true
+}

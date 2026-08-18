@@ -6,6 +6,7 @@ KG Graph Tools — Neo4j 图查询函数，供 RAG Agent 调用。
 from __future__ import annotations
 
 import os
+import re
 from typing import Any
 
 from neo4j import GraphDatabase
@@ -31,6 +32,31 @@ def _pick(d: dict, *keys: str) -> dict:
     return {k: d.get(k) for k in keys if d.get(k)}
 
 
+def _node_ref(node: Any) -> dict[str, Any]:
+    """返回不依赖 Neo4j element_id 的业务节点引用。"""
+    labels = list(node.labels)
+    identifier = (
+        node.get("paper_id")
+        or node.get("formula")
+        or node.get("name")
+        or node.get("id")
+    )
+    return {"labels": labels, "id": identifier}
+
+
+def _edge_record(relation: Any, traversal_from: Any, traversal_to: Any) -> dict[str, Any]:
+    """同时记录图中真实方向与本次路径遍历方向。"""
+    relation_type = relation.type
+    return {
+        "source": _node_ref(relation.start_node),
+        "target": _node_ref(relation.end_node),
+        "type": relation_type,
+        "directed": relation_type != "SHARES_STRUCTURE",
+        "traversal_source": _node_ref(traversal_from),
+        "traversal_target": _node_ref(traversal_to),
+    }
+
+
 # ═══════════════════════════════════════════════
 # Tool 1: 搜索论文
 # ═══════════════════════════════════════════════
@@ -39,8 +65,8 @@ def search_papers(query: str, limit: int = 10) -> list[dict[str, Any]]:
     """按标题模糊搜索论文"""
     with _driver().session() as s:
         result = s.run(
-            "MATCH (p:Paper) WHERE p.title CONTAINS $q "
-            "RETURN p.paper_id AS id, p.title AS title, p.year AS year "
+            "MATCH (p:Paper) WHERE coalesce(p.title, p.import_label, '') CONTAINS $q "
+            "RETURN p.paper_id AS id, coalesce(p.title, p.import_label) AS title, p.year AS year "
             "ORDER BY p.year DESC LIMIT $limit",
             q=query, limit=limit,
         )
@@ -64,7 +90,7 @@ def get_paper_context(paper_id: int) -> dict[str, Any]:
         node = row["p"]
         paper = {
             "paper_id": node.get("paper_id"),
-            "title": node.get("title", ""),
+            "title": node.get("title") or node.get("import_label", ""),
             "year": node.get("year", ""),
             "journal": node.get("journal", ""),
             "summary": node.get("summary", "")[:300],
@@ -84,7 +110,7 @@ def get_paper_context(paper_id: int) -> dict[str, Any]:
         # 关联论文
         related = s.run(
             "MATCH (p:Paper {paper_id: $pid})-[r:RELATES_TO]-(q:Paper) "
-            "RETURN q.paper_id AS id, q.title AS title, type(r) AS relation, "
+            "RETURN q.paper_id AS id, coalesce(q.title, q.import_label) AS title, type(r) AS relation, "
             "r.label AS label, r.importance AS importance "
             "ORDER BY r.importance DESC LIMIT 10",
             pid=paper_id,
@@ -152,7 +178,9 @@ def traverse_graph(
     """从论文出发多跳遍历关联节点"""
     rel_filter = ""
     if relations:
-        types = [f"'{t.strip()}'" for t in relations.split(",")]
+        types = [t.strip() for t in relations.split(",") if t.strip()]
+        if not types or any(not re.fullmatch(r"[A-Z][A-Z0-9_]*", item) for item in types):
+            raise ValueError("关系类型只能包含大写字母、数字和下划线")
         rel_filter = ":" + "|".join(types)
 
     with _driver().session() as s:
@@ -183,7 +211,7 @@ def traverse_graph(
         paper_ids = [n.get("paper_id") for n in nodes if n.get("paper_id")]
         if len(paper_ids) >= 2:
             edge_rows = s.run(
-                "MATCH (a:Paper)-[r:RELATES_TO|STUDIES|BUILDS_ON]->(b) "
+                "MATCH (a:Paper)-[r:RELATES_TO|DEVELOPS_TO|STUDIES|BUILDS_ON]->(b) "
                 "WHERE a.paper_id IN $ids AND b.paper_id IN $ids "
                 "RETURN a.paper_id AS source, b.paper_id AS target, type(r) AS type "
                 "LIMIT 50",
@@ -220,12 +248,8 @@ def find_path(from_id: int, to_id: int, max_depth: int = 4) -> dict[str, Any]:
             nodes.append(d)
 
         edges = []
-        for r in row["rs"]:
-            edges.append({
-                "source": r.start_node.get("paper_id", ""),
-                "target": r.end_node.get("paper_id", ""),
-                "type": type(r).__name__,
-            })
+        for index, relation in enumerate(row["rs"]):
+            edges.append(_edge_record(relation, row["ns"][index], row["ns"][index + 1]))
 
     return {"path": nodes, "edges": edges, "length": len(edges)}
 

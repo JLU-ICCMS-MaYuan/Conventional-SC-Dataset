@@ -26,7 +26,7 @@ async def search_by_semantics(
 
     Returns:
         [{"id", "paper_id", "chunk_index", "section_name",
-          "content", "distance", "score"}, ...]
+          "content", "score"}, ...]
     """
     from backend.rag.vectordb import COLLECTION_NAME, REVIEW_COLLECTION_NAME
 
@@ -38,12 +38,9 @@ async def search_by_semantics(
     where = {"paper_id": str(paper_id)} if paper_id else None
     results = qdrant_search(query_vec, top_k=top_k, where=where, collection=col)
 
-    # 3. Qdrant 返回 cosine distance，越小越相似
-    #    转成 0-1 的分数，分数越高越相关
-    for r in results:
-        # distance 范围一般是 [0, 2]，cosine similarity = 1 - distance
-        similarity = 1.0 - r["distance"]
-        r["score"] = max(0.0, similarity)
+    # 3. Qdrant cosine score 越大越相似，保持原始语义与排序。
+    for result in results:
+        result["score"] = round(result["score"], 4)
 
     return results
 

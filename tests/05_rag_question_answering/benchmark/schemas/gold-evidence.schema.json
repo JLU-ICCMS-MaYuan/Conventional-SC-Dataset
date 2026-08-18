@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sc-wiki.local/schemas/rag-gold-evidence-1.0.0.json",
+  "title": "RAG gold or provisional evidence",
+  "type": "object",
+  "required": ["evidence_id", "source_kind", "source_id", "pdf_verified"],
+  "properties": {
+    "evidence_id": {"type": "string", "minLength": 1},
+    "source_kind": {"enum": ["qdrant_chunk", "mysql_row", "neo4j_path", "pdf"]},
+    "source_id": {"type": "string", "minLength": 1},
+    "pdf_verified": {"type": "boolean"},
+    "doi": {"type": ["string", "null"]},
+    "pdf_sha256": {"type": ["string", "null"]},
+    "pdf_page": {"type": ["integer", "null"], "minimum": 1},
+    "locator": {"type": ["string", "null"]},
+    "content_sha256": {"type": ["string", "null"]},
+    "snapshot_id": {"type": ["string", "null"]}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"pdf_verified": {"const": true}}},
+      "then": {"required": ["doi", "pdf_sha256", "pdf_page", "locator", "content_sha256"]}
+    }
+  ],
+  "additionalProperties": true
+}

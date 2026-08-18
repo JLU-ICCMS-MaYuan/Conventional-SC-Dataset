@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0.0",
+  "groups": {
+    "llm_only": [],
+    "qdrant_only": ["search_literature"],
+    "qdrant_mysql": ["search_literature", "query_properties"],
+    "qdrant_mysql_neo4j": [
+      "search_literature",
+      "query_properties",
+      "search_papers",
+      "paper_context",
+      "material_info",
+      "explore_graph",
+      "paper_path"
+    ]
+  }
+}
