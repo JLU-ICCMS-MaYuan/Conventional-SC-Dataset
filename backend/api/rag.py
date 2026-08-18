@@ -26,6 +26,8 @@ UPLOAD_DIR = Path(__file__).resolve().parents[2] / "data" / "uploads"
 def _save_upload(file: UploadFile, filename: str) -> Path:
     """保存上传文件到持久目录"""
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    # 浏览器可提交带路径的 filename；只保留文件名，避免覆盖 uploads 外部文件。
+    filename = Path(filename).name
     dest = UPLOAD_DIR / filename
     with open(dest, "wb") as f:
         f.write(file.file.read())
@@ -317,8 +319,9 @@ async def rag_upload_pdf(
             session.add(paper)
             await session.commit()
             paper_id = paper.id
-    except Exception:
-        paper_id = None
+    except Exception as exc:
+        # 不能把数据库故障伪装成“上传成功”；文件仍会由后台任务清理。
+        raise HTTPException(status_code=503, detail="上传文件已保存，但论文记录创建失败") from exc
 
     # 3. 后台处理
     background_tasks.add_task(_process_upload_background, dest, filename, user_id, is_text=False)
@@ -357,8 +360,8 @@ async def rag_upload_text(
             session.add(paper)
             await session.commit()
             paper_id = paper.id
-    except Exception:
-        paper_id = None
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="上传文件已保存，但论文记录创建失败") from exc
 
     # 3. 后台处理
     background_tasks.add_task(_process_upload_background, dest, filename, user_id, is_text=True)
