@@ -1,10 +1,10 @@
-# IV. Superconductivity Development Knowledge Graph
+# IV. 超导发展知识图谱
 
-## Definition
+## 功能定义
 
 Superconductivity Development Knowledge Graph 是 SC-Wiki 围绕论文、材料、物性、研究者和论文间学术关系构建的图数据库系统。它包含 Neo4j 图数据库（639 篇论文、1459 种材料、1481 位研究者、6753 条关系）、前端可视化页面（`/knowledge`）和两套 API（用户可视化 API + RAG Agent API）。
 
-## Current Status
+## 当前状态
 
 当前状态已落地。Neo4j 图数据库包含 Paper、Material、Property、Researcher 四种节点和 STUDIES、RELATES_TO、BUILDS_ON、AUTHORED、HAS_PROPERTY 五种关系。前端 `/knowledge` 页面提供 vis-network 力导向图可视化。API 层分为用户面向的 `/api/knowledge-graph/*`（读 graph.json）和 RAG Agent 面向的 `/api/kg/*`（读 Neo4j）。
 

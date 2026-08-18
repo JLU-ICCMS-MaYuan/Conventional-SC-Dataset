@@ -1,10 +1,10 @@
-# VI. AI-Assisted Estimation of Superconducting Transition Temperatures
+# VI. AI 辅助超导转变温度估计
 
-## Definition
+## 功能定义
 
 AI-Assisted Estimation of Superconducting Transition Temperatures 指 SC-Wiki 中面向含氢体系的 Tc 预测实验工具。它接收结构文件和 PDOS 文件，抽取 H 子晶格几何特征和费米能附近态密度特征，使用经验公式估算超导临界温度。
 
-## Current Status
+## 当前状态
 
 当前状态是已落地但实验性。页面 `/tc-pre` 和接口 `POST /api/tc-predict/` 已存在。该模块不写入数据库，不进入论文审核，不进入首页图表，不保存预测历史，也不与用户账户形成持久记录。
 

@@ -1,10 +1,10 @@
-# I. Decentralized Uploading of Superconductivity Data
+# I. 超导数据去中心化上传
 
-## Definition
+## 功能定义
 
 Decentralized Uploading of Superconductivity Data 指研究者或注册用户把超导相关数据提交到 SC-Wiki 的入口能力。这里的 decentralized 不是区块链意义的完全去中心化，而是相对于单一维护者手工录入而言：平台允许多个用户提交论文、超导物理记录和晶体结构，由后续维护与审核流程决定可信状态。
 
-## Current Status
+## 当前状态
 
 当前状态是已部分落地。代码已经支持用户注册登录、论文和超导记录提交、CIF/POSCAR 晶体结构提交、DOI 元数据解析和结构文本校验。尚未完成的是新 MySQL 结构下的批量上传闭环，以及用户提交后的细粒度修改、撤回和协作修订体验。
 

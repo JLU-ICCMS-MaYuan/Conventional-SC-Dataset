@@ -1,10 +1,10 @@
-# II. Decentralized Maintenance and Verification
+# II. 超导数据去中心化维护与验证
 
-## Definition
+## 功能定义
 
 Decentralized Maintenance and Verification 指 SC-Wiki 对用户提交和系统导入的数据进行维护、审核、权限管理、迁移和恢复的能力。这里的 decentralized 表示维护权不只集中在代码作者手里，而是通过普通用户、管理员和超级管理员的角色分工来完成数据治理。
 
-## Current Status
+## 当前状态
 
 当前状态是已部分落地。用户注册、邮箱验证、管理员申请、超级管理员审批、论文审核、结构审核、全局文献管理、用户权限管理、图表显示控制、JSON 导入导出、Alembic 迁移和备份建议都已经有代码或文档依据。尚未落地的是复杂工作流引擎、细粒度 RBAC、逐条超导记录的完整编辑体验、审核者排行和社区式争议解决机制。
 

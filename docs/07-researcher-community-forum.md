@@ -1,10 +1,10 @@
-# VII. Researcher Community Forum
+# VII. 研究者社区论坛
 
-## Definition
+## 功能定义
 
 Researcher Community Forum 指围绕研究者身份、贡献、审核、讨论和数据展示建立的社区功能。当前代码中已经有社区基础，但没有完整论坛。因此这个功能的准确状态是：社区基础部分落地，论坛互动未落地。
 
-## Current Status
+## 当前状态
 
 已经落地的社区基础包括用户注册、邮箱验证、真实姓名、单位、上传者身份、审核者身份、贡献者排行、管理员审批、用户管理、Tc-Year/Tc-Pressure 实时图表展示。这些能力使平台具有“研究者社区雏形”。
 

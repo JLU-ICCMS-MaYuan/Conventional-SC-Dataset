@@ -1,10 +1,10 @@
-# V. Retrieval-Augmented AI Question Answering
+# V. 检索增强 AI 问答
 
-## Definition
+## 功能定义
 
 Retrieval-Augmented AI Question Answering 是 SC-Wiki 的 AI 文献助手能力。它集成了 Neo4j 知识图谱、Chroma 向量检索、MySQL 物性查询和大语言模型，支持两种模式：普通问答（Mentor Agent）和灵感探索（Inspiration Agent）。
 
-## Current Status
+## 当前状态
 
 当前状态已落地。`/rag` 页面提供完整的对话交互，支持流式输出、对话历史、多轮对话和探索模式。后端已从硬编码意图路由升级为 LangGraph Agent 架构。
 

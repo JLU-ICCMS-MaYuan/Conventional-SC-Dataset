@@ -1,10 +1,10 @@
-# III. Superconductivity Data Search and Database Discovery
+# III. 超导数据检索与数据库发现
 
-## Definition
+## 功能定义
 
 Superconductivity Data Search and Database Discovery 是 SC-Wiki 的发现入口。它把本地结构化超导数据检索和外部数据库发现放在同一个大功能下：用户可以先通过周期表、化学式或元素体系查找本地论文和超导记录，也可以进一步把 Alexandria、HTSC-2025 等外部来源纳入同一发现视野。
 
-## Current Status
+## 当前状态
 
 当前状态是已落地。代码已经支持首页周期表选择、化学式搜索、四种检索模式、组合页文献浏览、关键词/年份/审核状态筛选、分页、引用导出、Alexandria 电声耦合数据库接口、HTSC-2025 常压高温超导体基准数据集接口，以及把本地、Alexandria 和 HTSC-2025 结果合并排序的搜索接口。
 
