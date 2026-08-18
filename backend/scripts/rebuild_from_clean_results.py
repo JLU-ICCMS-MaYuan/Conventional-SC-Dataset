@@ -22,7 +22,7 @@ def normalize_formula(elements: dict[str, float]) -> str:
 
 def parse_range(value: Any) -> tuple[float | None, float | None, str | None]:
     raw = str(value).strip() if value is not None else ""
-    nums = re.findall(r"[-+]?\d+(?:\.\d+)?", raw)
+    nums = re.findall(r"\d+(?:\.\d+)?", raw)
     if not nums:
         return None, None, raw or None
     values = [float(n) for n in nums]
