@@ -33,6 +33,10 @@ interface UploadRecord {
   created_at: string
   key_properties: any[] | null
   record_count?: number
+  processing_status?: string | null
+  processing_error?: string | null
+  paper_type?: string | null
+  classification_reason?: string | null
 }
 
 /* ── Constants ────────────────────────────────── */
@@ -42,6 +46,9 @@ const ACCEPTED_STR = ACCEPTED_TYPES.join(',')
 
 const STATUS_CONFIG: Record<string, { label: string; color: 'warning' | 'info' | 'success' | 'error' }> = {
   parsing:   { label: '解析中',   color: 'warning' },
+  processing: { label: '处理中', color: 'warning' },
+  succeeded: { label: '解析完成', color: 'success' },
+  failed: { label: '解析失败', color: 'error' },
   pending:   { label: '待审核',   color: 'info' },
   approved:  { label: '审核完成', color: 'success' },
   rejected:  { label: '已拒绝',   color: 'error' },
@@ -49,6 +56,9 @@ const STATUS_CONFIG: Record<string, { label: string; color: 'warning' | 'info' |
 }
 
 function getDisplayStatus(record: UploadRecord): string {
+  if (record.processing_status === 'failed') return 'failed'
+  if (record.processing_status === 'processing') return 'processing'
+  if (record.processing_status === 'succeeded') return 'succeeded'
   if (record.review_status === 'pending' &&
       (!record.key_properties || record.key_properties.length === 0)) {
     return 'parsing'
@@ -196,7 +206,9 @@ const UploadPage: React.FC = () => {
       } else {
         try {
           const err = JSON.parse(xhr.responseText)
-          setError(err.detail || '上传失败')
+          const detail = err.detail
+          const message = typeof detail === 'string' ? detail : (detail?.message || detail?.detail || err.message)
+          setError(message || '上传失败')
         } catch { setError('上传失败') }
       }
     }
