@@ -1,9 +1,14 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
+	"math"
 	"net/http"
+	"os"
 	"strconv"
+	"strings"
+	"time"
 
 	"scwiki/server/cache"
 	"scwiki/server/database"
@@ -12,6 +17,32 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
+)
+
+const (
+	reviewStatusPending  = "pending"
+	reviewStatusApproved = "approved"
+	reviewStatusRejected = "rejected"
+)
+
+var (
+	validReviewStatuses = map[string]struct{}{
+		reviewStatusPending: {}, reviewStatusApproved: {}, reviewStatusRejected: {},
+	}
+	paperUpdateFields = []string{
+		"doi", "title", "authors", "journal", "volume", "pages", "year", "abstract",
+		"summary", "paper_type", "theoretical_subtype", "keywords_tags", "source_file_path",
+		"methodology", "key_finding", "rationale", "research_materials", "referenced_materials",
+		"material_relations", "builds_on",
+	}
+	keyPropertyUpdateFields = []string{
+		"material", "name", "name_raw", "name_note", "value_min", "value_max", "value_raw", "unit",
+		"pressure_gpa", "temperature_k", "is_primary", "superconductor_type", "article_type",
+		"condition_json", "condition_note", "structure_text", "structure_format",
+	}
+	errKeyPropertyNotFound = errors.New("物性记录不存在或不属于当前论文")
+	pythonBackendClient    = &http.Client{Timeout: 2 * time.Minute}
 )
 
 // ═══════════════════════════════════════════════
@@ -90,177 +121,193 @@ func UpdatePaper(c *gin.Context) {
 		return
 	}
 
-	var paper models.Paper
-	if err := database.DB.First(&paper, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "论文不存在"})
+	kps, err := parseAndValidateKeyProperties(body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// 更新论文级字段
-	allowed := []string{"doi", "title", "authors", "journal", "volume", "pages",
-		"year", "abstract", "review_comment", "review_status",
-		"summary", "paper_type", "keywords_tags", "source_file_path",
-		"methodology", "key_finding", "rationale"}
+	// 审核状态只能通过 ReviewPaper 修改，避免普通编辑绕过审核动作。
 	updates := make(map[string]interface{})
-	for _, k := range allowed {
+	for _, k := range paperUpdateFields {
 		if v, ok := body[k]; ok {
 			updates[k] = v
 		}
 	}
-	database.DB.Model(&paper).Updates(updates)
 
-	// 处理 key_properties 增删改
-	kpsRaw, ok := body["key_properties"]
-	if ok {
-		if kps, isArray := kpsRaw.([]interface{}); isArray {
-			kpFields := []string{"material", "name", "name_raw", "name_note",
-				"value_min", "value_max", "value_raw", "unit",
-				"pressure_gpa", "temperature_k", "is_primary",
-				"superconductor_type", "article_type", "condition_note",
-				"structure_text", "structure_format"}
-
-			// 收集提交中的 KP ID 列表（排除新增和标记删除的）
-			keepIds := make(map[uint]bool)
-
-			for _, kpRaw := range kps {
-				kpMap, isMap := kpRaw.(map[string]interface{})
-				if !isMap {
-					continue
-				}
-
-				// 处理删除标记
-				if deleted, _ := kpMap["_deleted"].(bool); deleted {
-					if kpId, ok := getFloatAsUint(kpMap["id"]); ok && kpId > 0 {
-						database.DB.Where("id = ? AND paper_id = ?", kpId, paper.ID).
-							Delete(&models.KeyProperty{})
-					}
-					continue
-				}
-
-				kpId, hasId := getFloatAsUint(kpMap["id"])
-
-				// ── 审查验证 ──────────────────────────────
-				material, _ := kpMap["material"].(string)
-				name, _ := kpMap["name"].(string)
-				if material == "" {
-					c.JSON(http.StatusBadRequest, gin.H{"error": "物性 material 不能为空"})
-					return
-				}
-				if name == "" {
-					c.JSON(http.StatusBadRequest, gin.H{"error": "物性 name 不能为空"})
-					return
-				}
-				// 数值范围校验：value_min <= value_max
-				vmin, hasMin := kpMap["value_min"].(float64)
-				vmax, hasMax := kpMap["value_max"].(float64)
-				if hasMin && hasMax && vmin > vmax {
-					c.JSON(http.StatusBadRequest, gin.H{
-						"error": fmt.Sprintf("物性 %s: value_min(%.4f) 不能大于 value_max(%.4f)", material, vmin, vmax),
-					})
-					return
-				}
-				// 压强/温度非负校验
-				if pg, ok := kpMap["pressure_gpa"].(float64); ok && pg < 0 {
-					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("物性 %s: pressure_gpa 不能为负", material)})
-					return
-				}
-				if tk, ok := kpMap["temperature_k"].(float64); ok && tk < 0 {
-					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("物性 %s: temperature_k 不能为负", material)})
-					return
-				}
-				// ──────────────────────────────────────────
-
-				if hasId && kpId > 0 {
-					// 更新已有 KP
-					keepIds[kpId] = true
-					var kp models.KeyProperty
-					if err := database.DB.Where("id = ? AND paper_id = ?", kpId, paper.ID).First(&kp).Error; err == nil {
-						kpUpdates := make(map[string]interface{})
-						for _, f := range kpFields {
-							if v, exists := kpMap[f]; exists {
-								kpUpdates[f] = v
-							}
-						}
-						if isPrimary, exists := kpMap["is_primary"]; exists {
-							if b, ok := isPrimary.(bool); ok {
-								kpUpdates["is_primary"] = b
-							}
-						}
-						database.DB.Model(&kp).Updates(kpUpdates)
-					}
-				} else {
-					// 新增 KP
-					newKp := models.KeyProperty{
-						PaperID: paper.ID,
-					}
-					if v, ok := kpMap["material"].(string); ok {
-						newKp.Material = v
-					}
-					if v, ok := kpMap["name"].(string); ok {
-						newKp.Name = v
-					}
-					if v, ok := kpMap["name_raw"].(string); ok {
-						newKp.NameRaw = v
-					}
-					if v, ok := kpMap["name_note"].(string); ok {
-						newKp.NameNote = &v
-					}
-					if v, ok := kpMap["value_min"].(float64); ok {
-						newKp.ValueMin = &v
-					}
-					if v, ok := kpMap["value_max"].(float64); ok {
-						newKp.ValueMax = &v
-					}
-					if v, ok := kpMap["value_raw"].(string); ok {
-						newKp.ValueRaw = &v
-					}
-					if v, ok := kpMap["unit"].(string); ok {
-						newKp.Unit = &v
-					}
-					if v, ok := kpMap["pressure_gpa"].(float64); ok {
-						newKp.PressureGpa = &v
-					}
-					if v, ok := kpMap["temperature_k"].(float64); ok {
-						newKp.TemperatureK = &v
-					}
-					if v, ok := kpMap["condition_note"].(string); ok {
-						newKp.ConditionNote = &v
-					}
-					if v, ok := kpMap["superconductor_type"].(string); ok {
-						newKp.SuperconductorType = &v
-					}
-					if v, ok := kpMap["article_type"].(string); ok {
-						newKp.ArticleType = &v
-					}
-					if v, ok := kpMap["is_primary"].(bool); ok {
-						newKp.IsPrimary = v
-					}
-					if v, ok := kpMap["structure_text"].(string); ok {
-						newKp.StructureText = &v
-					}
-					if v, ok := kpMap["structure_format"].(string); ok {
-						newKp.StructureFormat = &v
-					}
-					newKp.SourceLabel = "manual"
-					database.DB.Create(&newKp)
-				}
+	var paper models.Paper
+	err = database.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.First(&paper, id).Error; err != nil {
+			return err
+		}
+		if len(updates) > 0 {
+			if err := tx.Model(&paper).Updates(updates).Error; err != nil {
+				return err
 			}
 		}
+		return updateKeyProperties(tx, paper.ID, kps)
+	})
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "论文不存在"})
+		return
+	}
+	if errors.Is(err, errKeyPropertyNotFound) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "保存论文失败"})
+		return
 	}
 
 	// 重新加载 paper（含更新后的 key_properties）
-	database.DB.Preload("KeyProperties").First(&paper, id)
+	if err := database.DB.Preload("KeyProperties").First(&paper, id).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "论文已保存，但读取结果失败"})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "已更新", "paper": paper})
+}
+
+func parseAndValidateKeyProperties(body map[string]interface{}) ([]map[string]interface{}, error) {
+	raw, exists := body["key_properties"]
+	if !exists {
+		return nil, nil
+	}
+	items, ok := raw.([]interface{})
+	if !ok {
+		return nil, errors.New("key_properties 必须是数组")
+	}
+	kps := make([]map[string]interface{}, 0, len(items))
+	for _, item := range items {
+		kp, ok := item.(map[string]interface{})
+		if !ok {
+			return nil, errors.New("key_properties 包含无效项目")
+		}
+		if deleted, _ := kp["_deleted"].(bool); deleted {
+			if id, ok := getFloatAsUint(kp["id"]); !ok || id == 0 {
+				return nil, errors.New("删除物性时必须提供有效 id")
+			}
+			kps = append(kps, kp)
+			continue
+		}
+		material, _ := kp["material"].(string)
+		name, _ := kp["name"].(string)
+		if material == "" {
+			return nil, errors.New("物性 material 不能为空")
+		}
+		if name == "" {
+			return nil, errors.New("物性 name 不能为空")
+		}
+		vmin, hasMin := kp["value_min"].(float64)
+		vmax, hasMax := kp["value_max"].(float64)
+		if hasMin && hasMax && vmin > vmax {
+			return nil, fmt.Errorf("物性 %s: value_min(%.4f) 不能大于 value_max(%.4f)", material, vmin, vmax)
+		}
+		if pg, ok := kp["pressure_gpa"].(float64); ok && pg < 0 {
+			return nil, fmt.Errorf("物性 %s: pressure_gpa 不能为负", material)
+		}
+		if tk, ok := kp["temperature_k"].(float64); ok && tk < 0 {
+			return nil, fmt.Errorf("物性 %s: temperature_k 不能为负", material)
+		}
+		kps = append(kps, kp)
+	}
+	return kps, nil
+}
+
+func updateKeyProperties(tx *gorm.DB, paperID uint, kps []map[string]interface{}) error {
+	for _, values := range kps {
+		kpID, hasID := getFloatAsUint(values["id"])
+		if deleted, _ := values["_deleted"].(bool); deleted {
+			result := tx.Where("id = ? AND paper_id = ?", kpID, paperID).Delete(&models.KeyProperty{})
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected != 1 {
+				return errKeyPropertyNotFound
+			}
+			continue
+		}
+		if hasID && kpID > 0 {
+			var kp models.KeyProperty
+			if err := tx.Where("id = ? AND paper_id = ?", kpID, paperID).First(&kp).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return errKeyPropertyNotFound
+				}
+				return err
+			}
+			kpUpdates := make(map[string]interface{})
+			for _, field := range keyPropertyUpdateFields {
+				if value, exists := values[field]; exists {
+					kpUpdates[field] = value
+				}
+			}
+			if len(kpUpdates) > 0 {
+				if err := tx.Model(&kp).Updates(kpUpdates).Error; err != nil {
+					return err
+				}
+			}
+			continue
+		}
+
+		newKP := newKeyProperty(paperID, values)
+		if err := tx.Create(&newKP).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func newKeyProperty(paperID uint, values map[string]interface{}) models.KeyProperty {
+	kp := models.KeyProperty{PaperID: paperID, SourceLabel: "manual"}
+	kp.Material, _ = values["material"].(string)
+	kp.Name, _ = values["name"].(string)
+	kp.NameRaw, _ = values["name_raw"].(string)
+	assignStringPointer(values, "name_note", &kp.NameNote)
+	assignFloatPointer(values, "value_min", &kp.ValueMin)
+	assignFloatPointer(values, "value_max", &kp.ValueMax)
+	assignStringPointer(values, "value_raw", &kp.ValueRaw)
+	assignStringPointer(values, "unit", &kp.Unit)
+	assignFloatPointer(values, "pressure_gpa", &kp.PressureGpa)
+	assignFloatPointer(values, "temperature_k", &kp.TemperatureK)
+	assignStringPointer(values, "condition_json", &kp.ConditionJSON)
+	assignStringPointer(values, "condition_note", &kp.ConditionNote)
+	assignStringPointer(values, "superconductor_type", &kp.SuperconductorType)
+	assignStringPointer(values, "article_type", &kp.ArticleType)
+	assignStringPointer(values, "structure_text", &kp.StructureText)
+	assignStringPointer(values, "structure_format", &kp.StructureFormat)
+	kp.IsPrimary, _ = values["is_primary"].(bool)
+	return kp
+}
+
+func assignStringPointer(values map[string]interface{}, key string, target **string) {
+	if value, ok := values[key].(string); ok {
+		*target = &value
+	}
+}
+
+func assignFloatPointer(values map[string]interface{}, key string, target **float64) {
+	if value, ok := values[key].(float64); ok {
+		*target = &value
+	}
 }
 
 // getFloatAsUint 将 JSON number (float64) 安全转为 uint
 func getFloatAsUint(v interface{}) (uint, bool) {
 	switch n := v.(type) {
 	case float64:
+		if n < 0 || math.Trunc(n) != n {
+			return 0, false
+		}
 		return uint(n), true
 	case int:
+		if n < 0 {
+			return 0, false
+		}
 		return uint(n), true
 	case int64:
+		if n < 0 {
+			return 0, false
+		}
 		return uint(n), true
 	}
 	return 0, false
@@ -278,6 +325,10 @@ func ReviewPaper(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
 		return
 	}
+	if !isValidReviewStatus(body.Status) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的审核状态"})
+		return
+	}
 
 	var paper models.Paper
 	if err := database.DB.First(&paper, id).Error; err != nil {
@@ -286,20 +337,107 @@ func ReviewPaper(c *gin.Context) {
 	}
 
 	// 获取当前用户 email（从 JWT 中间件存入）
-	email, _ := c.Get("user_email")
+	email, exists := c.Get("user_email")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+		return
+	}
 	// 查用户 ID
 	var user models.User
-	database.DB.Where("email = ?", email).First(&user)
+	if err := database.DB.Where("email = ?", email).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "用户不存在"})
+		return
+	}
+	if paper.UploadedBy != nil && *paper.UploadedBy == user.ID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "不能审核自己提交的论文"})
+		return
+	}
 
-	database.DB.Model(&paper).Updates(map[string]interface{}{
-		"review_status":        body.Status,
-		"review_comment":       body.Comment,
-		"reviewed_by_user_id":  user.ID,
-	})
+	now := time.Now()
+	if err := database.DB.Model(&paper).Updates(map[string]interface{}{
+		"review_status":       body.Status,
+		"review_comment":      body.Comment,
+		"reviewed_by_user_id": user.ID,
+		"reviewed_at":         now,
+	}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "审核操作失败"})
+		return
+	}
+	if err := database.DB.First(&paper, id).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "审核已保存，但读取结果失败"})
+		return
+	}
 
-		cache.FlushPattern("chart:*")
+	cache.FlushPattern("chart:*")
 	cache.FlushPattern("search:*")
+	if err := finalizeReviewArtifacts(body.Status, id, c.GetHeader("Authorization")); err != nil {
+		message := "审核已保存，但临时证据清理失败，请重新审核以重试"
+		if body.Status == reviewStatusApproved {
+			message = "审核已保存，但向量发布失败，请重新审核以重试"
+		}
+		c.JSON(http.StatusBadGateway, gin.H{"error": message, "detail": err.Error()})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "审核完成", "paper": paper})
+}
+
+func isValidReviewStatus(status string) bool {
+	_, ok := validReviewStatuses[status]
+	return ok
+}
+
+func shouldCleanupReviewArtifact(status string) bool {
+	return status == reviewStatusApproved || status == reviewStatusRejected
+}
+
+func pythonBackendURL() string {
+	baseURL := os.Getenv("PYTHON_BACKEND_URL")
+	if baseURL == "" {
+		baseURL = "http://127.0.0.1:8000"
+	}
+	return baseURL
+}
+
+func finalizeReviewArtifacts(status, paperID, authorization string) error {
+	baseURL := pythonBackendURL()
+	if status == reviewStatusApproved {
+		if err := publishApprovedPaperAt(baseURL, paperID, authorization); err != nil {
+			return err
+		}
+	}
+	if shouldCleanupReviewArtifact(status) {
+		return cleanupReviewArtifactAt(baseURL, paperID, authorization)
+	}
+	return nil
+}
+
+func publishApprovedPaperAt(baseURL, paperID, authorization string) error {
+	url := strings.TrimRight(baseURL, "/") + "/api/rag/papers/" + paperID + "/publish"
+	return callPythonPaperEndpoint(http.MethodPost, url, authorization, false)
+}
+
+func cleanupReviewArtifactAt(baseURL, paperID, authorization string) error {
+	url := strings.TrimRight(baseURL, "/") + "/api/rag/papers/" + paperID + "/review-artifact"
+	return callPythonPaperEndpoint(http.MethodDelete, url, authorization, true)
+}
+
+func callPythonPaperEndpoint(method, url, authorization string, missingIsSuccess bool) error {
+	req, err := http.NewRequest(method, url, nil)
+	if err != nil {
+		return err
+	}
+	if authorization != "" {
+		req.Header.Set("Authorization", authorization)
+	}
+	resp, err := pythonBackendClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if (resp.StatusCode >= 200 && resp.StatusCode < 300) || (missingIsSuccess && resp.StatusCode == http.StatusNotFound) {
+		return nil
+	}
+	return fmt.Errorf("Python 返回 HTTP %d", resp.StatusCode)
 }
 
 // DeletePaper 删除论文
@@ -309,7 +447,7 @@ func DeletePaper(c *gin.Context) {
 	// 先删 key_properties
 	database.DB.Where("paper_id = ?", id).Delete(&models.KeyProperty{})
 	database.DB.Delete(&models.Paper{}, id)
-		cache.FlushPattern("chart:*")
+	cache.FlushPattern("chart:*")
 	cache.FlushPattern("search:*")
 	c.JSON(http.StatusOK, gin.H{"message": "已删除"})
 }
@@ -351,6 +489,28 @@ func GetMyUploads(c *gin.Context) {
 		"total":     total,
 		"page_size": limit,
 	})
+}
+
+// GetMyUploadDetail 返回当前用户自己的草稿或待审论文详情。
+func GetMyUploadDetail(c *gin.Context) {
+	email, exists := c.Get("user_email")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+		return
+	}
+	var user models.User
+	if err := database.DB.Where("email = ?", email).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "用户不存在"})
+		return
+	}
+	var paper models.Paper
+	if err := database.DB.Preload("KeyProperties").
+		Where("id = ? AND uploaded_by_user_id = ?", c.Param("id"), user.ID).
+		First(&paper).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "论文不存在"})
+		return
+	}
+	c.JSON(http.StatusOK, paper)
 }
 
 // ═══════════════════════════════════════════════
@@ -396,7 +556,7 @@ func UpdateUser(c *gin.Context) {
 func DeleteUser(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
 	database.DB.Delete(&models.User{}, uint(id))
-		cache.FlushPattern("chart:*")
+	cache.FlushPattern("chart:*")
 	cache.FlushPattern("search:*")
 	c.JSON(http.StatusOK, gin.H{"message": "已删除"})
 }
@@ -522,10 +682,10 @@ func Register(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "注册成功，等待管理员审核",
 		"user": gin.H{
-			"id":       user.ID,
-			"email":    user.Email,
+			"id":        user.ID,
+			"email":     user.Email,
 			"real_name": user.RealName,
-			"role":     user.Role,
+			"role":      user.Role,
 		},
 	})
 }

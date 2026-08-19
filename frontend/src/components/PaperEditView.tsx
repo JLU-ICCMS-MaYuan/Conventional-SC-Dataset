@@ -1,14 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import {
   Box, Typography, Card, CardContent, Button, TextField,
-  Chip, Snackbar, Alert, CircularProgress,
-  Dialog, DialogTitle, DialogContent, DialogActions,
+  Chip, Alert, CircularProgress,
   FormControl, InputLabel, Select, MenuItem,
   IconButton, Tooltip, Checkbox, FormControlLabel,
 } from '@mui/material'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
-import SaveIcon from '@mui/icons-material/Save'
-import SendIcon from '@mui/icons-material/Send'
 import DeleteIcon from '@mui/icons-material/Delete'
 import AddIcon from '@mui/icons-material/Add'
 import { api } from '../lib/api'
@@ -17,11 +14,10 @@ import StructureViewer3D from './StructureViewer3D'
 interface PaperEditViewProps {
   paperId: number
   onBack: () => void
-  onDeleted?: () => void
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  pending: '待审核', approved: '审核完成', rejected: '已拒绝', needs_revision: '需修改',
+  pending: '待审核', approved: '审核完成', rejected: '已拒绝', needs_revision: '待审核（旧状态）',
 }
 const STATUS_COLORS: Record<string, 'warning' | 'success' | 'error' | 'info'> = {
   pending: 'warning', approved: 'success', rejected: 'error', needs_revision: 'info',
@@ -48,10 +44,8 @@ const PROP_NAME_OPTIONS = [
   { value: 'hydrogen_storage_capacity', label: '储氢容量' },
 ]
 
-const PaperEditView: React.FC<PaperEditViewProps> = ({ paperId, onBack, onDeleted }) => {
+const PaperEditView: React.FC<PaperEditViewProps> = ({ paperId, onBack }) => {
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [snackbar, setSnackbar] = useState('')
   const [error, setError] = useState('')
   const [paper, setPaper] = useState<any>(null)
 
@@ -70,14 +64,6 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paperId, onBack, onDelete
   // Editable key_properties
   const [editKps, setEditKps] = useState<any[]>([])
 
-  // Review dialog
-  const [reviewDlg, setReviewDlg] = useState(false)
-  const [reviewStatus, setReviewStatus] = useState('pending')
-  const [reviewComment, setReviewComment] = useState('')
-
-  // Delete dialog
-  const [deleteDlg, setDeleteDlg] = useState(false)
-
   // Chem formula (read-only, derived from key_properties)
   const formula = paper?.key_properties?.[0]?.material || (paper?.materials?.[0]) || '-'
 
@@ -85,8 +71,7 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paperId, onBack, onDelete
     setLoading(true)
     setError('')
     try {
-      // Use Python backend endpoint (public, no admin required)
-      const data = await api.get<any>(`/api/papers/${paperId}`)
+      const data = await api.get<any>(`/api/papers/my-uploads/${paperId}`)
       setPaper(data)
       setEditTitle(data.title || '')
       setEditDoi(data.doi || '')
@@ -137,72 +122,6 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paperId, onBack, onDelete
     })
   }
 
-  const handleSave = async () => {
-    setSaving(true)
-    try {
-      // 清理 kps 数据：移除临时字段 _new、只发送有意义的字段
-      const kpsPayload = editKps.map(({ _new, _deleted, label, ...kp }: any) => {
-        const clean: any = {}
-        if (kp.id) clean.id = kp.id
-        if (_deleted) { clean._deleted = true; return clean }
-        const fields = ['material', 'name', 'name_raw', 'name_note',
-          'value_min', 'value_max', 'value_raw', 'unit',
-          'pressure_gpa', 'temperature_k', 'is_primary',
-          'superconductor_type', 'article_type', 'condition_note',
-          'structure_text', 'structure_format']
-        for (const f of fields) {
-          if (kp[f] !== undefined && kp[f] !== '') clean[f] = kp[f]
-        }
-        return clean
-      })
-
-      const payload: Record<string, any> = {
-        title: editTitle || null,
-        doi: editDoi || null,
-        journal: editJournal || null,
-        year: editYear ? Number(editYear) : null,
-        authors: editAuthors || null,
-        abstract: editAbstract || null,
-        summary: editSummary || null,
-        methodology: editMethodology || null,
-        key_finding: editKeyFinding || null,
-        rationale: editRationale || null,
-        key_properties: kpsPayload,
-      }
-      await api.put(`/api/admin/papers/${paperId}`, payload)
-      setSnackbar('保存成功')
-      loadPaper() // Refresh
-    } catch (e: any) {
-      setSnackbar(`保存失败: ${e.message}`)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleSubmitReview = async () => {
-    try {
-      await api.post(`/api/admin/papers/${paperId}/review`, {
-        status: 'pending',
-        comment: reviewComment || undefined,
-      })
-      setSnackbar('已提交审核')
-      setReviewDlg(false)
-      loadPaper()
-    } catch (e: any) {
-      setSnackbar(`提交失败: ${e.message}`)
-    }
-  }
-
-  const handleDelete = async () => {
-    try {
-      await api.del(`/api/admin/papers/${paperId}`)
-      setSnackbar('已删除')
-      onDeleted?.()
-    } catch (e: any) {
-      setSnackbar(`删除失败: ${e.message}`)
-    }
-  }
-
   // Structure data from key_properties
   const structures = (paper?.key_properties || [])
     .filter((kp: any) => kp.structure_text)
@@ -239,21 +158,18 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paperId, onBack, onDelete
           <Button size="small" startIcon={<ArrowBackIcon />} onClick={onBack} sx={{ mb: 1 }}>
             返回上传列表
           </Button>
-          <Typography variant="overline" color="text.secondary">编辑模式</Typography>
+          <Typography variant="overline" color="text.secondary">只读模式</Typography>
           <Typography variant="h4" fontWeight={800}>论文详情</Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button variant="outlined" color="error" startIcon={<DeleteIcon />}
-            onClick={() => setDeleteDlg(true)}>删除</Button>
-          <Button variant="contained" startIcon={saving ? <CircularProgress size={18} /> : <SaveIcon />}
-            onClick={handleSave} disabled={saving}>保存修改</Button>
-          <Button variant="contained" color="secondary" startIcon={<SendIcon />}
-            onClick={() => setReviewDlg(true)}>提交审核</Button>
         </Box>
       </Box>
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 3, alignItems: 'start',
-        '@media (max-width:1180px)': { gridTemplateColumns: '1fr' } }}>
+      <Alert severity="info" sx={{ mb: 2 }}>论文已提交审核。普通用户不能在这里直接修改正式记录。</Alert>
+
+      <Box component="fieldset" disabled sx={{
+        border: 0, p: 0, m: 0, minWidth: 0,
+        display: 'grid', gridTemplateColumns: '1fr 360px', gap: 3, alignItems: 'start',
+        '@media (max-width:1180px)': { gridTemplateColumns: '1fr' },
+      }}>
         {/* Main content */}
         <Card sx={{ boxShadow: 3 }}>
           <CardContent>
@@ -502,41 +418,6 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paperId, onBack, onDelete
         </Card>
       </Box>
 
-      {/* Review Dialog */}
-      <Dialog open={reviewDlg} onClose={() => setReviewDlg(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>提交审核</DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-          <Typography variant="body2" color="text.secondary">
-            将论文提交给管理员审核。审核通过后将对外可见。
-          </Typography>
-          <TextField label="审核备注（可选）" size="small" fullWidth multiline rows={3}
-            value={reviewComment} onChange={e => setReviewComment(e.target.value)}
-            placeholder="可填写需要管理员注意的事项" />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setReviewDlg(false)}>取消</Button>
-          <Button variant="contained" onClick={handleSubmitReview}>确认提交</Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Delete Dialog */}
-      <Dialog open={deleteDlg} onClose={() => setDeleteDlg(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>确认删除</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary">
-            删除后将无法恢复，包括所有关联的物性数据。确认删除？
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDlg(false)}>取消</Button>
-          <Button variant="contained" color="error" onClick={handleDelete}>确认删除</Button>
-        </DialogActions>
-      </Dialog>
-
-      <Snackbar open={!!snackbar} autoHideDuration={3000} onClose={() => setSnackbar('')}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
-        <Alert severity="info" variant="filled" onClose={() => setSnackbar('')}>{snackbar}</Alert>
-      </Snackbar>
     </Box>
   )
 }

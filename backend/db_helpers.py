@@ -3,7 +3,7 @@ from decimal import Decimal, localcontext
 from typing import Iterable
 
 
-REVIEW_STATUSES = {"pending", "approved", "rejected", "needs_revision"}
+REVIEW_STATUSES = {"pending", "approved", "rejected"}
 USER_ROLES = {"user", "admin", "superadmin"}
 SEARCH_MODES = {
     "formula_search",

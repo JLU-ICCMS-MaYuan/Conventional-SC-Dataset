@@ -16,6 +16,9 @@ class RagSettings(BaseSettings):
     rag_data_root: Path = DEFAULT_RAG_DATA_ROOT
     rag_database_url: str | None = None
     rag_chroma_path: Path | None = None
+    sc_wiki_data_dir: Path = Path("/data")
+    redis_url: str = "redis://127.0.0.1:6379/0"
+    upload_task_ttl_seconds: int = 24 * 60 * 60
 
     # Qdrant 配置
     qdrant_host: str = "127.0.0.1"
@@ -25,6 +28,10 @@ class RagSettings(BaseSettings):
     deepseek_api_key: str = ""
     deepseek_base_url: str = "https://api.deepseek.com"
     deepseek_model: str = "deepseek-chat"
+
+    llm_api_key: str = ""
+    llm_base_url: str = ""
+    llm_model: str = ""
 
     openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"
@@ -66,6 +73,9 @@ class RagSettings(BaseSettings):
         env_url = os.environ.get("RAG_DATABASE_URL")
         if env_url:
             return env_url
+        env_url = os.environ.get("DATABASE_URL")
+        if env_url:
+            return env_url
         db_path = self.data_root / "dev.db"
         return f"sqlite+aiosqlite:///{db_path}"
 
@@ -103,7 +113,19 @@ class RagSettings(BaseSettings):
 
     @property
     def chat_configured(self) -> bool:
-        return bool(self.deepseek_api_key)
+        return bool(self.llm_api_key or self.deepseek_api_key)
+
+    @property
+    def completion_api_key(self) -> str:
+        return self.llm_api_key or self.deepseek_api_key
+
+    @property
+    def completion_base_url(self) -> str:
+        return self.llm_base_url or self.deepseek_base_url
+
+    @property
+    def completion_model(self) -> str:
+        return self.llm_model or self.deepseek_model
 
 
 @lru_cache(maxsize=1)

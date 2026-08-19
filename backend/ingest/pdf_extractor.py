@@ -26,6 +26,7 @@ def extract_text_from_pdf(pdf_path: str | Path) -> str:
     md_parts = []
 
     for page_num, page in enumerate(doc):
+        md_parts.append(f"\n<!-- page: {page_num + 1} -->\n")
         # 提取文本块（按位置排序）
         blocks = page.get_text("dict")["blocks"]
 

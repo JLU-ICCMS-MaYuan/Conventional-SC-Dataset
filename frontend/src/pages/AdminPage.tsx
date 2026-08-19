@@ -15,9 +15,11 @@ import {
   Shield as AdminIcon,
   Person as UserIcon,
   Gavel as ReviewIcon,
+  Download as DownloadIcon,
 } from '@mui/icons-material'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
+import { SourceEvidence, UploadDraft, normalizeUploadDraft, unwrapData } from '../lib/paperProcessing'
 import ChartGroupEditor from '../components/ChartGroupEditor'
 import NewsManager from '../components/NewsManager'
 
@@ -37,6 +39,25 @@ interface PaperRecord {
   record_count: number; show_in_chart: boolean
   compound_symbols: string | null; article_types: string[]
   superconductor_types: string[]
+  key_properties?: Array<{ superconductor_type?: string | null }>
+}
+
+interface ReviewArtifact {
+  ai: UploadDraft
+  user: UploadDraft
+  evidence: {
+    classification?: SourceEvidence[]
+    key_properties?: Array<SourceEvidence | SourceEvidence[] | null>
+  }
+}
+
+interface CandidateAttachment {
+  id: string
+  filename: string
+  file_sha256: string | null
+  file_size: number
+  uploaded_by_user_id: number | null
+  created_at: number | null
 }
 
 /* ── Helpers ──────────────────────────────────── */
@@ -50,8 +71,14 @@ const STATUS_COLORS: Record<string, 'warning'|'success'|'error'|'info'> = {
   pending: 'warning', approved: 'success', rejected: 'error', needs_revision: 'info',
 }
 const STATUS_LABELS: Record<string, string> = {
-  pending: '待审核', approved: '已通过', rejected: '已拒绝', needs_revision: '需修改',
+  pending: '待审核', approved: '已通过', rejected: '已拒绝', needs_revision: '待审核（旧状态）',
 }
+const paperRecordCount = (paper?: PaperRecord | null) =>
+  paper?.record_count ?? paper?.key_properties?.length ?? 0
+const paperSuperconductorTypes = (paper: PaperRecord) =>
+  paper.superconductor_types?.length
+    ? paper.superconductor_types
+    : [...new Set((paper.key_properties || []).map(item => item.superconductor_type).filter(Boolean) as string[])]
 
 /* ═══════════════════════════════════════════════ */
 const AdminPage: React.FC = () => {
@@ -78,6 +105,10 @@ const AdminPage: React.FC = () => {
   const [reviewDlg, setReviewDlg] = useState<{paper:PaperRecord,open:boolean}>({paper:null!,open:false})
   const [reviewStatus, setReviewStatus] = useState('')
   const [reviewComment, setReviewComment] = useState('')
+  const [reviewDetail, setReviewDetail] = useState<Record<string, any> | null>(null)
+  const [reviewArtifact, setReviewArtifact] = useState<ReviewArtifact | null>(null)
+  const [candidateAttachments, setCandidateAttachments] = useState<CandidateAttachment[]>([])
+  const [reviewArtifactLoading, setReviewArtifactLoading] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
 
   /* ── Edit Paper ──────────────────────────────── */
@@ -152,14 +183,74 @@ const AdminPage: React.FC = () => {
   useEffect(() => { loadChartGroups() }, [loadChartGroups])
 
   /* ── Review actions ──────────────────────────── */
+  const openReview = async (paper: PaperRecord) => {
+    setReviewDlg({ paper, open: true })
+    setReviewStatus(paper.review_status || 'pending')
+    setReviewComment(paper.review_comment || '')
+    setReviewDetail(null)
+    setReviewArtifact(null)
+    setCandidateAttachments([])
+    setReviewArtifactLoading(true)
+    try {
+      const [detail, artifactResponse, attachmentResponse] = await Promise.all([
+        api.get<Record<string, any>>(`/api/admin/papers/${paper.id}`),
+        api.get<any>(`/api/rag/papers/${paper.id}/review-artifact`).catch(() => null),
+        api.get<any>(`/api/rag/papers/${paper.id}/candidate-attachments`).catch(() => null),
+      ])
+      setReviewDetail(detail)
+      if (artifactResponse) {
+        const artifactData = unwrapData<any>(artifactResponse)
+        setReviewArtifact({
+          ai: normalizeUploadDraft(artifactData?.ai_values),
+          user: normalizeUploadDraft(artifactData?.user_values),
+          evidence: artifactData?.evidence || {},
+        })
+      }
+      setCandidateAttachments(attachmentResponse ? unwrapData<CandidateAttachment[]>(attachmentResponse) : [])
+    } catch (reason) {
+      setSnackbar(`审核资料加载失败: ${(reason as Error).message}`)
+    } finally {
+      setReviewArtifactLoading(false)
+    }
+  }
+
+  const downloadCandidateAttachment = async (attachment: CandidateAttachment) => {
+    if (!reviewDlg.paper) return
+    try {
+      const blob = await api.download(
+        `/api/rag/papers/${reviewDlg.paper.id}/candidate-attachments/${attachment.id}`,
+      )
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = attachment.filename
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (reason) {
+      setSnackbar(`附件下载失败: ${(reason as Error).message}`)
+    }
+  }
+
   const handleReview = async () => {
     if (!reviewDlg.paper) return
     try {
+      if (Array.isArray(reviewDetail?.key_properties)) {
+        await api.put(`/api/admin/papers/${reviewDlg.paper.id}`, {
+          key_properties: reviewDetail.key_properties.map((property: any) => ({
+            id: property.id,
+            material: property.material,
+            name: property.name,
+            superconductor_type: property.superconductor_type || null,
+          })),
+        })
+      }
       await api.post(`/api/admin/papers/${reviewDlg.paper.id}/review`, {
         status: reviewStatus, comment: reviewComment,
       })
       setSnackbar('审核完成')
       setReviewDlg({paper:null!,open:false})
+      setReviewDetail(null)
+      setReviewArtifact(null)
       loadPapers()
     } catch (e: unknown) { setSnackbar(`失败: ${(e as Error).message}`) }
   }
@@ -362,7 +453,6 @@ const AdminPage: React.FC = () => {
                 <MenuItem value="pending">待审核</MenuItem>
                 <MenuItem value="approved">已通过</MenuItem>
                 <MenuItem value="rejected">已拒绝</MenuItem>
-                <MenuItem value="needs_revision">需修改</MenuItem>
               </Select>
             </FormControl>
             <Button variant="contained" size="small" sx={{ minWidth: 80 }}
@@ -420,7 +510,7 @@ const AdminPage: React.FC = () => {
                     </TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', gap: 0.25, flexWrap: 'wrap' }}>
-                        {p.superconductor_types?.slice(0,2).map(t=>(
+                        {paperSuperconductorTypes(p).slice(0,2).map(t=>(
                           <Chip key={t} label={t} size="small" variant="outlined" sx={{fontSize:10,height:18}} />
                         ))}
                       </Box>
@@ -431,7 +521,7 @@ const AdminPage: React.FC = () => {
                           onClick={()=>handleEditOpen(p)}>
                           <EditIcon fontSize="small" /></IconButton></Tooltip>
                         <Tooltip title="审核"><IconButton size="small" color="primary"
-                          onClick={()=>{setReviewDlg({paper:p,open:true});setReviewStatus(p.review_status||'approved');setReviewComment(p.review_comment||'')}}>
+                          onClick={() => void openReview(p)}>
                           <ReviewIcon fontSize="small" /></IconButton></Tooltip>
                         {isSuper && (
                           <Tooltip title="删除"><IconButton size="small" color="error"
@@ -618,7 +708,7 @@ const AdminPage: React.FC = () => {
       {/* ═══════════════════════════════════════════ */}
       {/* Review Dialog */}
       {/* ═══════════════════════════════════════════ */}
-      <Dialog open={reviewDlg.open} onClose={()=>setReviewDlg({paper:null!,open:false})} maxWidth="sm" fullWidth>
+      <Dialog open={reviewDlg.open} onClose={()=>setReviewDlg({paper:null!,open:false})} maxWidth="md" fullWidth>
         <DialogTitle>审核论文</DialogTitle>
         <DialogContent sx={{ display:'flex',flexDirection:'column',gap:2,mt:1 }}>
           <Typography variant="body2" fontWeight={600} noWrap>
@@ -627,15 +717,103 @@ const AdminPage: React.FC = () => {
           <Box sx={{ display:'flex',gap:1,flexWrap:'wrap' }}>
             <Chip size="small" label={`DOI: ${reviewDlg.paper?.doi || '-'}`} variant="outlined" />
             <Chip size="small" label={`年份: ${reviewDlg.paper?.year || '-'}`} variant="outlined" />
-            <Chip size="small" label={`记录: ${reviewDlg.paper?.record_count || 0}`} variant="outlined" />
+            <Chip size="small" label={`记录: ${paperRecordCount(reviewDlg.paper)}`} variant="outlined" />
           </Box>
+          <Box sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 2 }}>
+            <Typography variant="subtitle2" fontWeight={700} gutterBottom>AI 建议、用户提交与原文证据</Typography>
+            {reviewArtifactLoading ? (
+              <LinearProgress />
+            ) : !reviewArtifact ? (
+              <Alert severity="info">临时证据已清理或当前记录没有可用证据，不阻断审核。</Alert>
+            ) : (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+                {[
+                  ['论文类型', reviewArtifact.ai.paper.paper_type, reviewDetail?.paper_type || reviewArtifact.user.paper.paper_type],
+                  ['理论二级类型', reviewArtifact.ai.paper.theoretical_subtype, reviewDetail?.theoretical_subtype || reviewArtifact.user.paper.theoretical_subtype],
+                  ['超导材料类型', reviewArtifact.ai.sc_type, reviewArtifact.user.sc_type],
+                  ['分类理由', reviewArtifact.ai.classification_reason, reviewArtifact.user.classification_reason],
+                ].map(([label, aiValue, userValue]) => (
+                  <Box key={String(label)} sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '120px 1fr 1fr' }, gap: 1 }}>
+                    <Typography variant="caption" fontWeight={700}>{String(label)}</Typography>
+                    <Typography variant="caption" color="text.secondary">AI：{aiValue == null || aiValue === '' ? '未提供' : String(aiValue)}</Typography>
+                    <Typography variant="caption">提交：{userValue == null || userValue === '' ? '未提供' : String(userValue)}</Typography>
+                  </Box>
+                ))}
+                {(reviewArtifact.evidence.classification || reviewArtifact.user.classification_evidence || []).map((item, index) => (
+                  <Box key={index} sx={{ pl: 1.25, borderLeft: '3px solid', borderColor: 'info.light' }}>
+                    <Typography variant="caption" color="text.secondary">
+                      {[item.section, item.page ? `第 ${item.page} 页` : ''].filter(Boolean).join(' · ') || '原文'}
+                      {item.quote ? `：“${item.quote}”` : ''}
+                    </Typography>
+                  </Box>
+                ))}
+                {reviewArtifact.user.key_properties.map((property, index) => (
+                  <Box key={index} sx={{ p: 1.25, bgcolor: 'action.hover', borderRadius: 1 }}>
+                    <Typography variant="caption" fontWeight={700} display="block">
+                      物性 #{index + 1}：{property.material || '-'} · {property.name || property.name_raw || '-'} · {property.value_raw || property.value_max || property.value_min || '-'} {property.unit || ''}
+                    </Typography>
+                    {(Array.isArray(reviewArtifact.evidence.key_properties?.[index])
+                      ? reviewArtifact.evidence.key_properties?.[index] as SourceEvidence[]
+                      : reviewArtifact.evidence.key_properties?.[index]
+                        ? [reviewArtifact.evidence.key_properties[index] as SourceEvidence]
+                        : Array.isArray(property.evidence) ? property.evidence : property.evidence ? [property.evidence] : []
+                    ).map((item, itemIndex) => (
+                      <Typography key={itemIndex} variant="caption" color="text.secondary" display="block">
+                        {[item.section, item.page ? `第 ${item.page} 页` : ''].filter(Boolean).join(' · ') || '原文'}
+                        {item.quote ? `：“${item.quote}”` : ''}
+                      </Typography>
+                    ))}
+                  </Box>
+                ))}
+              </Box>
+            )}
+          </Box>
+          {(reviewDetail?.key_properties || []).length > 0 && (
+            <Box sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 2 }}>
+              <Typography variant="subtitle2" fontWeight={700} gutterBottom>确认最终材料类型</Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                {(reviewDetail?.key_properties || []).map((property: any, index: number) => (
+                  <TextField key={property.id || index} size="small" fullWidth
+                    label={property.material || `物性 #${index + 1}`}
+                    value={property.superconductor_type || ''}
+                    onChange={event => setReviewDetail(current => {
+                      if (!current) return current
+                      const properties = [...(current.key_properties || [])]
+                      properties[index] = { ...properties[index], superconductor_type: event.target.value }
+                      return { ...current, key_properties: properties }
+                    })} />
+                ))}
+              </Box>
+            </Box>
+          )}
+          {candidateAttachments.length > 0 && (
+            <Box sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 2 }}>
+              <Typography variant="subtitle2" fontWeight={700} gutterBottom>同 DOI 候选附件</Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                {candidateAttachments.map(attachment => (
+                  <Box key={attachment.id} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="body2" noWrap>{attachment.filename}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {(attachment.file_size / 1024 / 1024).toFixed(2)} MB · SHA-256 {attachment.file_sha256?.slice(0, 12) || '-'}
+                      </Typography>
+                    </Box>
+                    <Tooltip title="下载候选附件">
+                      <IconButton size="small" onClick={() => void downloadCandidateAttachment(attachment)}>
+                        <DownloadIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+          )}
           <FormControl fullWidth size="small">
             <InputLabel>审核结果</InputLabel>
             <Select value={reviewStatus} label="审核结果" onChange={e=>setReviewStatus(e.target.value)}>
               <MenuItem value="approved">✅ 通过</MenuItem>
               <MenuItem value="rejected">❌ 拒绝</MenuItem>
-              <MenuItem value="needs_revision">📝 需修改</MenuItem>
-              <MenuItem value="pending">⏳ 重置为待审核</MenuItem>
+              <MenuItem value="pending">退回待审核</MenuItem>
             </Select>
           </FormControl>
           <TextField label="审核意见" multiline rows={3} size="small" fullWidth
@@ -697,21 +875,6 @@ const AdminPage: React.FC = () => {
             value={editForm.key_finding || ''} onChange={e=>setEditForm({...editForm,key_finding:e.target.value})} />
           <TextField label="研究理由 (rationale)" size="small" fullWidth multiline rows={2}
             value={editForm.rationale || ''} onChange={e=>setEditForm({...editForm,rationale:e.target.value})} />
-          <Box sx={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:1.5 }}>
-            <FormControl size="small">
-              <InputLabel>审核状态</InputLabel>
-              <Select value={editForm.review_status || 'pending'} label="审核状态"
-                onChange={e=>setEditForm({...editForm,review_status:e.target.value})}>
-                <MenuItem value="pending">待审核</MenuItem>
-                <MenuItem value="approved">已通过</MenuItem>
-                <MenuItem value="rejected">已拒绝</MenuItem>
-                <MenuItem value="needs_revision">需修改</MenuItem>
-              </Select>
-            </FormControl>
-            <TextField label="审核意见" size="small" value={editForm.review_comment || ''}
-              onChange={e=>setEditForm({...editForm,review_comment:e.target.value})} />
-          </Box>
-
           {/* Non-editable metadata */}
           <Box sx={{ display:'flex',gap:1,flexWrap:'wrap',mt:0.5 }}>
             <Chip size="small" label={`ID: ${editForm.id || '-'}`} variant="outlined" />

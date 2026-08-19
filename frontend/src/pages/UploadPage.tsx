@@ -8,11 +8,16 @@ import {
 import {
   CloudUpload, Check, PictureAsPdf, Description, Code,
   Refresh as RefreshIcon, ChevronRight as ChevronRightIcon,
+  Replay as ReplayIcon, EditNote as EditNoteIcon,
 } from '@mui/icons-material'
 import { useAuth } from '../context/AuthContext'
 import AuthDialog from '../components/AuthDialog'
 import PaperEditView from '../components/PaperEditView'
+import UploadTaskEditor from '../components/UploadTaskEditor'
 import { api } from '../lib/api'
+import {
+  PROCESSING_STAGES, UploadAcceptedResponse, UploadTaskState, unwrapData,
+} from '../lib/paperProcessing'
 
 /* ── Types ────────────────────────────────────── */
 
@@ -52,7 +57,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: 'warning' | 'info' |
   pending:   { label: '待审核',   color: 'info' },
   approved:  { label: '审核完成', color: 'success' },
   rejected:  { label: '已拒绝',   color: 'error' },
-  needs_revision: { label: '需修改', color: 'warning' },
+  needs_revision: { label: '待审核（旧状态）', color: 'warning' },
 }
 
 function getDisplayStatus(record: UploadRecord): string {
@@ -71,6 +76,7 @@ const UploadPage: React.FC = () => {
   const { user } = useAuth()
   const navigate = useNavigate()
   const fileInput = useRef<HTMLInputElement>(null)
+  const uploadXhr = useRef<XMLHttpRequest | null>(null)
 
   /* ── Stage ─────────────────────────────────── */
   const [stage, setStage] = useState<'list' | 'detail'>('list')
@@ -88,6 +94,10 @@ const UploadPage: React.FC = () => {
   const [fileType, setFileType] = useState<'json' | 'paper' | ''>('')
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null)
+  const [taskState, setTaskState] = useState<UploadTaskState | null>(null)
+  const [taskLoading, setTaskLoading] = useState(false)
+  const [taskPollTick, setTaskPollTick] = useState(0)
 
   /* ── JSON import state ─────────────────────── */
   const [parsed, setParsed] = useState<ParsedGroup | null>(null)
@@ -104,9 +114,10 @@ const UploadPage: React.FC = () => {
   const [error, setError] = useState('')
 
   /* ── Helpers ───────────────────────────────── */
+  const fileSuffix = (f: File) => f.name.toLowerCase()
   const isPaperFile = (f: File) =>
-    f.name.endsWith('.pdf') || f.name.endsWith('.txt') || f.name.endsWith('.md')
-  const isJsonFile = (f: File) => f.name.endsWith('.json')
+    fileSuffix(f).endsWith('.pdf') || fileSuffix(f).endsWith('.txt') || fileSuffix(f).endsWith('.md')
+  const isJsonFile = (f: File) => fileSuffix(f).endsWith('.json')
   const formatSize = (s: number) =>
     s > 1024 * 1024 ? `${(s / 1024 / 1024).toFixed(1)} MB` : `${(s / 1024).toFixed(1)} KB`
 
@@ -125,6 +136,56 @@ const UploadPage: React.FC = () => {
   }, [user])
 
   useEffect(() => { loadHistory() }, [loadHistory])
+
+  const taskStorageKey = user ? `scwiki_active_upload_task:${user.id}` : null
+
+  useEffect(() => {
+    if (!taskStorageKey) { setActiveTaskId(null); setTaskState(null); return }
+    setActiveTaskId(localStorage.getItem(taskStorageKey))
+  }, [taskStorageKey])
+
+  useEffect(() => {
+    if (!activeTaskId || !taskStorageKey) return
+    let timer: number | undefined
+    let stopped = false
+    const controller = new AbortController()
+
+    const poll = async () => {
+      setTaskLoading(true)
+      try {
+        const response = await api.get<{ ok: boolean; data: UploadTaskState }>(
+          `/api/rag/upload-tasks/${activeTaskId}`,
+          { signal: controller.signal },
+        )
+        if (stopped) return
+        const state = unwrapData(response)
+        setTaskState(state)
+        setError('')
+        if (state.processing_status === 'processing') timer = window.setTimeout(poll, 2000)
+      } catch (reason: any) {
+        if (stopped || reason.name === 'AbortError') return
+        if (reason.status === 401 || reason.status === 403 || reason.status === 404) {
+          localStorage.removeItem(taskStorageKey)
+          setActiveTaskId(null)
+          setTaskState(null)
+        } else {
+          setError(reason.message || '处理进度查询失败，稍后将自动重试')
+          timer = window.setTimeout(poll, 2000)
+        }
+      } finally {
+        if (!stopped) setTaskLoading(false)
+      }
+    }
+
+    void poll()
+    return () => {
+      stopped = true
+      controller.abort()
+      if (timer) window.clearTimeout(timer)
+    }
+  }, [activeTaskId, taskStorageKey, taskPollTick])
+
+  useEffect(() => () => uploadXhr.current?.abort(), [])
 
   /* ── JSON parsing ──────────────────────────── */
   const parseJson = (f: File) => {
@@ -179,10 +240,12 @@ const UploadPage: React.FC = () => {
     const formData = new FormData()
     formData.append('file', file)
     const token = localStorage.getItem('auth_token')
-    const isText = file.name.endsWith('.txt') || file.name.endsWith('.md')
+    const lowerName = file.name.toLowerCase()
+    const isText = lowerName.endsWith('.txt') || lowerName.endsWith('.md')
     const url = isText ? '/api/rag/upload-text' : '/api/rag/upload-pdf'
 
     const xhr = new XMLHttpRequest()
+    uploadXhr.current = xhr
     xhr.open('POST', url)
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
 
@@ -194,12 +257,26 @@ const UploadPage: React.FC = () => {
 
     xhr.onload = () => {
       setUploading(false)
+      uploadXhr.current = null
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
-          const data = JSON.parse(xhr.responseText)
-          setSnackbar('上传成功')
+          const data = JSON.parse(xhr.responseText) as UploadAcceptedResponse
+          if (!data.task_id) throw new Error('上传响应缺少任务编号')
+          setActiveTaskId(data.task_id)
+          setTaskState({
+            task_id: data.task_id,
+            filename: data.filename || file.name,
+            stage: data.stage || 'saving_file',
+            stage_index: data.stage_index || 1,
+            stage_total: data.stage_total || 5,
+            processing_status: data.processing_status || 'processing',
+            processing_error: data.processing_error || null,
+            completed_chunks: data.completed_chunks || 0,
+            total_chunks: data.total_chunks || 0,
+          })
+          if (taskStorageKey) localStorage.setItem(taskStorageKey, data.task_id)
+          setSnackbar('文件已保存，正在解析论文')
           setFile(null); setFileType('')
-          loadHistory()
         } catch {
           setError('响应解析失败')
         }
@@ -215,10 +292,66 @@ const UploadPage: React.FC = () => {
 
     xhr.onerror = () => {
       setUploading(false)
+      uploadXhr.current = null
       setError('网络错误，上传失败')
     }
 
+    xhr.onabort = () => {
+      setUploading(false)
+      uploadXhr.current = null
+    }
+
     xhr.send(formData)
+  }
+
+  const retryTask = async () => {
+    if (!activeTaskId) return
+    setTaskLoading(true)
+    try {
+      await api.post(`/api/rag/upload-tasks/${activeTaskId}/retry`)
+      setTaskState(current => current ? {
+        ...current, processing_status: 'processing', processing_error: null,
+      } : current)
+      setTaskPollTick(value => value + 1)
+      setSnackbar('已重新开始解析失败或未完成的段落')
+    } catch (reason: any) {
+      setError(reason.message || '重新解析失败')
+    } finally {
+      setTaskLoading(false)
+    }
+  }
+
+  const openManualDraft = async () => {
+    if (!activeTaskId) return
+    setTaskLoading(true)
+    try {
+      await api.post(`/api/rag/upload-tasks/${activeTaskId}/manual`)
+      setTaskState(current => current ? {
+        ...current, stage: 'ready', stage_index: 5, processing_status: 'succeeded', processing_error: null,
+      } : current)
+      setSnackbar('已打开手动填写草稿')
+    } catch (reason: any) {
+      setError(reason.message || '无法打开手动草稿')
+    } finally {
+      setTaskLoading(false)
+    }
+  }
+
+  const handleTaskSubmitted = (paperId: number) => {
+    if (taskStorageKey) localStorage.removeItem(taskStorageKey)
+    setActiveTaskId(null)
+    setTaskState(null)
+    setSnackbar('已提交管理员审核')
+    void loadHistory()
+    setDetailPaperId(paperId)
+    setStage('detail')
+  }
+
+  const openExistingPaper = (paperId: number) => {
+    if (taskStorageKey) localStorage.removeItem(taskStorageKey)
+    setActiveTaskId(null)
+    setTaskState(null)
+    handleDetailOpen(paperId)
   }
 
   /* ── JSON group save ───────────────────────── */
@@ -270,7 +403,6 @@ const UploadPage: React.FC = () => {
       <PaperEditView
         paperId={detailPaperId}
         onBack={handleDetailBack}
-        onDeleted={() => { handleDetailBack() }}
       />
     )
   }
@@ -320,8 +452,91 @@ const UploadPage: React.FC = () => {
       {/* ── TAB 0: Paper upload ── */}
       {tab === 0 && !parsed && (
         <>
+          {activeTaskId && (
+            <Box sx={{ mb: 3 }}>
+              <Card variant="outlined">
+                <CardContent>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2, mb: 2 }}>
+                    <Box>
+                      <Typography variant="h6" fontWeight={700}>{taskState?.filename || '正在读取上传任务'}</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {taskState
+                          ? `第 ${taskState.stage_index}/${taskState.stage_total} 步：${PROCESSING_STAGES.find(item => item.key === taskState.stage)?.label || taskState.stage}`
+                          : '正在恢复处理进度…'}
+                      </Typography>
+                    </Box>
+                    {taskLoading && <CircularProgress size={22} />}
+                  </Box>
+
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(5, minmax(0, 1fr))' }, gap: 1 }}>
+                    {PROCESSING_STAGES.map((item, index) => {
+                      const current = Math.max(0, (taskState?.stage_index || 1) - 1)
+                      const complete = index < current || taskState?.processing_status === 'succeeded'
+                      const active = index === current && taskState?.processing_status !== 'succeeded'
+                      return (
+                        <Box key={item.key} sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
+                          <Box sx={{
+                            width: 24, height: 24, flexShrink: 0, borderRadius: '50%',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700,
+                            color: complete || active ? 'primary.contrastText' : 'text.secondary',
+                            bgcolor: complete || active ? 'primary.main' : 'action.disabledBackground',
+                          }}>{complete ? '✓' : index + 1}</Box>
+                          <Typography variant="caption" color={active ? 'text.primary' : 'text.secondary'}
+                            sx={{ fontWeight: active ? 700 : 400, overflowWrap: 'anywhere' }}>{item.label}</Typography>
+                        </Box>
+                      )
+                    })}
+                  </Box>
+
+                  {taskState?.stage === 'reading' && taskState.total_chunks > 0 && (
+                    <Box sx={{ mt: 2 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                        <Typography variant="caption" color="text.secondary">全文分段阅读进度</Typography>
+                        <Typography variant="caption" fontWeight={700}>
+                          {taskState.completed_chunks}/{taskState.total_chunks}
+                        </Typography>
+                      </Box>
+                      <LinearProgress variant="determinate"
+                        value={Math.min(100, taskState.completed_chunks / taskState.total_chunks * 100)} />
+                    </Box>
+                  )}
+
+                  {taskState?.processing_status === 'processing' && (
+                    <Alert severity="info" sx={{ mt: 2 }}>
+                      当前进度来自服务器。关闭或刷新页面不会中断处理，再次打开本页会继续显示。
+                    </Alert>
+                  )}
+                  {taskState?.processing_status === 'failed' && (
+                    <Alert severity="error" sx={{ mt: 2 }}>
+                      <Typography variant="body2" fontWeight={700}>
+                        第 {taskState.stage_index}/{taskState.stage_total} 步失败
+                      </Typography>
+                      <Typography variant="body2">{taskState.processing_error || '服务器没有返回具体失败原因'}</Typography>
+                      <Box sx={{ display: 'flex', gap: 1, mt: 1.5, flexWrap: 'wrap' }}>
+                        <Button size="small" variant="contained" startIcon={<ReplayIcon />}
+                          disabled={taskLoading} onClick={() => void retryTask()}>重新解析</Button>
+                        <Button size="small" variant="outlined" startIcon={<EditNoteIcon />}
+                          disabled={taskLoading} onClick={() => void openManualDraft()}>手动填写</Button>
+                      </Box>
+                    </Alert>
+                  )}
+                  {taskState?.duplicate && taskState.existing_paper_id && (
+                    <Alert severity="warning" sx={{ mt: 2 }}
+                      action={<Button color="inherit" size="small" onClick={() => openExistingPaper(taskState.existing_paper_id!)}>打开已有论文</Button>}>
+                      数据库中已有相同 DOI，未创建重复论文。
+                    </Alert>
+                  )}
+                </CardContent>
+              </Card>
+
+              {taskState?.stage === 'ready' && taskState.processing_status === 'succeeded' && !taskState.duplicate && (
+                <UploadTaskEditor taskId={activeTaskId} onSubmitted={handleTaskSubmitted} />
+              )}
+            </Box>
+          )}
+
           {/* Upload drop zone */}
-          <Card variant="outlined"
+          {!activeTaskId && <Card variant="outlined"
             onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
             onDragLeave={() => setDragOver(false)} onDrop={handleDrop}
             onClick={() => fileInput.current?.click()}
@@ -371,7 +586,7 @@ const UploadPage: React.FC = () => {
                 选择文件
               </Button>
             </CardContent>
-          </Card>
+          </Card>}
 
           {error && <Alert severity="error" sx={{ mt: 2 }} onClose={() => setError('')}>{error}</Alert>}
 

@@ -235,7 +235,7 @@ async def get_paper_detail(session: AsyncSession, paper_id: int) -> dict | None:
 
     r = await session.execute(
         select(Paper)
-        .where(Paper.id == paper_id)
+        .where(Paper.id == paper_id, Paper.review_status == "approved")
         .options(joinedload(Paper.key_properties))
     )
     paper = r.unique().scalar_one_or_none()
@@ -253,7 +253,6 @@ async def get_paper_detail(session: AsyncSession, paper_id: int) -> dict | None:
         "summary": paper.summary,
         "keywords_tags": json.loads(paper.keywords_tags) if paper.keywords_tags else [],
         "paper_type": paper.paper_type,
-        "source_file_path": paper.source_file_path,
         "record_count": len(paper.key_properties),
     }
 

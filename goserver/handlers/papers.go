@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"sort"
@@ -13,6 +14,7 @@ import (
 	"scwiki/server/models"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // ═══════════════════════════════════════════════
@@ -29,7 +31,7 @@ func GetPaper(c *gin.Context) {
 	}
 
 	var paper models.Paper
-	if err := database.DB.Preload("KeyProperties").First(&paper, uint(id)).Error; err != nil {
+	if err := approvedPaperDetailQuery(database.DB).First(&paper, uint(id)).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "论文不存在"})
 		return
 	}
@@ -41,23 +43,23 @@ func GetPaper(c *gin.Context) {
 // 基于 key_properties 的 critical_temperature 物性，支持元素/化学式搜索 + 多维度筛选
 func SearchRecords(c *gin.Context) {
 	var body struct {
-		Elements            []string `json:"elements"`
-		Mode                string   `json:"mode"`
-		Formula             string   `json:"formula"`
-		Keyword             string   `json:"keyword"`
-		YearMin             *int     `json:"year_min"`
-		YearMax             *int     `json:"year_max"`
-		TcMin               *float64 `json:"tc_min"`
-		TcMax               *float64 `json:"tc_max"`
-		PressureMin         *float64 `json:"pressure_min"`
-		PressureMax         *float64 `json:"pressure_max"`
-		SuperconductorType  string   `json:"superconductor_type"`
-		ReviewStatus        string   `json:"review_status"`
-		SpaceGroupMin       *int     `json:"space_group_min"`
-		SpaceGroupMax       *int     `json:"space_group_max"`
-		ChartOnly           bool     `json:"chart_only"`
-		Limit               int      `json:"limit"`
-		Offset              int      `json:"offset"`
+		Elements           []string `json:"elements"`
+		Mode               string   `json:"mode"`
+		Formula            string   `json:"formula"`
+		Keyword            string   `json:"keyword"`
+		YearMin            *int     `json:"year_min"`
+		YearMax            *int     `json:"year_max"`
+		TcMin              *float64 `json:"tc_min"`
+		TcMax              *float64 `json:"tc_max"`
+		PressureMin        *float64 `json:"pressure_min"`
+		PressureMax        *float64 `json:"pressure_max"`
+		SuperconductorType string   `json:"superconductor_type"`
+		ReviewStatus       string   `json:"review_status"`
+		SpaceGroupMin      *int     `json:"space_group_min"`
+		SpaceGroupMax      *int     `json:"space_group_max"`
+		ChartOnly          bool     `json:"chart_only"`
+		Limit              int      `json:"limit"`
+		Offset             int      `json:"offset"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
@@ -68,9 +70,9 @@ func SearchRecords(c *gin.Context) {
 		body.Limit = 50
 	}
 
-	// 缓存：以请求参数组合为 key
-	rawKey := fmt.Sprintf("search:%s|%s|%s", strings.Join(body.Elements, ","), body.Mode, body.Formula)
-	cacheKey := fmt.Sprintf("search:%x", sha256.Sum256([]byte(rawKey)))
+	// 缓存包含完整筛选条件，并使用新前缀隔离历史上可能含待审数据的缓存。
+	rawKey, _ := json.Marshal(body)
+	cacheKey := fmt.Sprintf("search:approved:%x", sha256.Sum256(rawKey))
 
 	var cached gin.H
 	if cache.Get(cacheKey, &cached) {
@@ -87,11 +89,7 @@ func SearchRecords(c *gin.Context) {
 	}
 
 	// JOIN key_properties + papers
-	query := database.DB.Table("key_properties").
-		Select("key_properties.*, papers.*").
-		Joins("JOIN papers ON key_properties.paper_id = papers.id").
-		Where("key_properties.name = ?", "critical_temperature").
-		Where("key_properties.value_max IS NOT NULL")
+	query := approvedRecordSearchQuery(database.DB)
 
 	if len(scIDs) > 0 {
 		query = query.Where("key_properties.superconductor_id IN ?", scIDs)
@@ -125,9 +123,6 @@ func SearchRecords(c *gin.Context) {
 	if body.SuperconductorType != "" {
 		query = query.Where("key_properties.superconductor_type = ?", body.SuperconductorType)
 	}
-	if body.ReviewStatus != "" {
-		query = query.Where("papers.review_status = ?", body.ReviewStatus)
-	}
 	if body.ChartOnly {
 		query = query.Where("key_properties.is_primary = true")
 	}
@@ -155,6 +150,19 @@ func SearchRecords(c *gin.Context) {
 	result := gin.H{"items": items, "total": total}
 	cache.Set(cacheKey, result, 0) // 永久缓存
 	c.JSON(http.StatusOK, result)
+}
+
+func approvedPaperDetailQuery(db *gorm.DB) *gorm.DB {
+	return db.Preload("KeyProperties").Where("review_status = ?", reviewStatusApproved)
+}
+
+func approvedRecordSearchQuery(db *gorm.DB) *gorm.DB {
+	return db.Table("key_properties").
+		Select("key_properties.*, papers.*").
+		Joins("JOIN papers ON key_properties.paper_id = papers.id").
+		Where("key_properties.name = ?", "critical_temperature").
+		Where("key_properties.value_max IS NOT NULL").
+		Where("papers.review_status = ?", reviewStatusApproved)
 }
 
 // ── helpers ────────────────────────────────────
@@ -317,29 +325,30 @@ func paperToDict(p models.Paper) gin.H {
 	}
 
 	return gin.H{
-		"id":                   p.ID,
-		"doi":                  p.DOI,
-		"title":                p.Title,
-		"authors":              p.Authors,
-		"journal":              p.Journal,
-		"volume":               p.Volume,
-		"pages":                p.Pages,
-		"year":                 p.Year,
-		"abstract":             p.Abstract,
-		"summary":              p.Summary,
-		"paper_type":           p.PaperType,
-		"keywords_tags":        p.KeywordsTags,
-		"methodology":          p.Methodology,
-		"key_finding":          p.KeyFinding,
-		"rationale":            p.Rationale,
-		"review_status":        p.ReviewStatus,
-		"review_comment":       p.ReviewComment,
-		"reviewed_by_user_id":  p.ReviewedBy,
-		"uploaded_by_user_id":  p.UploadedBy,
-		"created_at":           p.CreatedAt,
-		"updated_at":           p.UpdatedAt,
-		"tc_max":               tcMax,
-		"key_properties":       keyPropertiesToDict(p.KeyProperties),
+		"id":                  p.ID,
+		"doi":                 p.DOI,
+		"title":               p.Title,
+		"authors":             p.Authors,
+		"journal":             p.Journal,
+		"volume":              p.Volume,
+		"pages":               p.Pages,
+		"year":                p.Year,
+		"abstract":            p.Abstract,
+		"summary":             p.Summary,
+		"paper_type":          p.PaperType,
+		"theoretical_subtype": p.TheoreticalSubtype,
+		"keywords_tags":       p.KeywordsTags,
+		"methodology":         p.Methodology,
+		"key_finding":         p.KeyFinding,
+		"rationale":           p.Rationale,
+		"review_status":       p.ReviewStatus,
+		"review_comment":      p.ReviewComment,
+		"reviewed_by_user_id": p.ReviewedBy,
+		"uploaded_by_user_id": p.UploadedBy,
+		"created_at":          p.CreatedAt,
+		"updated_at":          p.UpdatedAt,
+		"tc_max":              tcMax,
+		"key_properties":      keyPropertiesToDict(p.KeyProperties),
 	}
 }
 
@@ -384,7 +393,9 @@ func SearchAll(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"items": []any{}, "total": 0})
 		return
 	}
-	if body.Limit <= 0 { body.Limit = 30 }
+	if body.Limit <= 0 {
+		body.Limit = 30
+	}
 
 	// 1. Local
 	items := searchLocalAll(body.Elements, body.Mode)
@@ -403,15 +414,23 @@ func SearchAll(c *gin.Context) {
 	for _, item := range items {
 		key := ""
 		if src, _ := item["_source"].(string); src == "local" {
-			if f, ok := item["compound_symbols"].(string); ok && f != "" { key = f }
+			if f, ok := item["compound_symbols"].(string); ok && f != "" {
+				key = f
+			}
 		}
 		if key == "" {
 			src, _ := item["_source"].(string)
-			if src == "" { src = "unknown" }
+			if src == "" {
+				src = "unknown"
+			}
 			f := ""
 			switch v := item["formula"].(type) {
-			case string: f = v
-			case *string: if v != nil { f = *v }
+			case string:
+				f = v
+			case *string:
+				if v != nil {
+					f = *v
+				}
 			}
 			key = f + "-" + src
 		}
@@ -432,8 +451,11 @@ func SearchAll(c *gin.Context) {
 	// 6. 组间：本地优先，然后按 Tc 降序
 	sort.SliceStable(order, func(i, j int) bool {
 		a, b := groups[order[i]], groups[order[j]]
-		aLocal := countLocal(a.items); bLocal := countLocal(b.items)
-		if aLocal != bLocal { return aLocal > bLocal }
+		aLocal := countLocal(a.items)
+		bLocal := countLocal(b.items)
+		if aLocal != bLocal {
+			return aLocal > bLocal
+		}
 		return tcFromItem(a.items[0]) > tcFromItem(b.items[0])
 	})
 
@@ -452,9 +474,13 @@ func SearchAll(c *gin.Context) {
 	}
 
 	start := body.Offset
-	if start > len(flat) { start = len(flat) }
+	if start > len(flat) {
+		start = len(flat)
+	}
 	end := start + body.Limit
-	if end > len(flat) { end = len(flat) }
+	if end > len(flat) {
+		end = len(flat)
+	}
 
 	total := 0
 	for _, it := range flat {
@@ -472,10 +498,13 @@ func SearchAll(c *gin.Context) {
 
 func searchLocalAll(elements []string, mode string) []gin.H {
 	scIDs := getSuperconductorIDs(elements, mode, "")
-	if len(scIDs) == 0 { return nil }
+	if len(scIDs) == 0 {
+		return nil
+	}
 
 	var papers []models.Paper
 	database.DB.Preload("KeyProperties").
+		Where("review_status = ?", reviewStatusApproved).
 		Where("id IN (SELECT DISTINCT paper_id FROM key_properties WHERE superconductor_id IN ?)", scIDs).
 		Find(&papers)
 
@@ -499,7 +528,9 @@ func searchLocalAll(elements []string, mode string) []gin.H {
 
 func searchAlexandriaAll(elements []string, mode string) []gin.H {
 	entryIDs := alexEntryIDs(elements, mode)
-	if len(entryIDs) == 0 { return nil }
+	if len(entryIDs) == 0 {
+		return nil
+	}
 
 	var entries []models.AlexandriaEntry
 	database.DB.Where("id IN ? AND imag = ?", entryIDs, false).
@@ -508,10 +539,14 @@ func searchAlexandriaAll(elements []string, mode string) []gin.H {
 	result := make([]gin.H, 0)
 	for _, e := range entries {
 		tc := e.TcMax
-		if tc == nil { tc = e.TcAllenDynes }
+		if tc == nil {
+			tc = e.TcAllenDynes
+		}
 		elems := parseElementsList(*e.Elements)
 		elemSlice := make([]string, 0, len(elems))
-		for k := range elems { elemSlice = append(elemSlice, k) }
+		for k := range elems {
+			elemSlice = append(elemSlice, k)
+		}
 		sort.Strings(elemSlice)
 
 		result = append(result, gin.H{
@@ -535,10 +570,14 @@ func searchHTSCAll(elements []string, mode string) []gin.H {
 	result := make([]gin.H, 0)
 	for _, m := range mats {
 		matElems := parseElementsList(m.Elements)
-		if len(matElems) == 0 || !matchesElements(matElems, selected, mode) { continue }
+		if len(matElems) == 0 || !matchesElements(matElems, selected, mode) {
+			continue
+		}
 
 		elemSlice := make([]string, 0, len(matElems))
-		for k := range matElems { elemSlice = append(elemSlice, k) }
+		for k := range matElems {
+			elemSlice = append(elemSlice, k)
+		}
 		sort.Strings(elemSlice)
 
 		result = append(result, gin.H{
@@ -555,24 +594,36 @@ func searchHTSCAll(elements []string, mode string) []gin.H {
 
 func tcFromItem(item gin.H) float64 {
 	if src, _ := item["_source"].(string); src == "htsc2025" {
-		if v, ok := item["tc"].(float64); ok { return v }
+		if v, ok := item["tc"].(float64); ok {
+			return v
+		}
 	}
-	if v, ok := item["tc_allen_dynes"].(*float64); ok && v != nil { return *v }
-	if v, ok := item["tc_max"].(*float64); ok && v != nil { return *v }
-	if v, ok := item["tc_max"].(float64); ok { return v }
+	if v, ok := item["tc_allen_dynes"].(*float64); ok && v != nil {
+		return *v
+	}
+	if v, ok := item["tc_max"].(*float64); ok && v != nil {
+		return *v
+	}
+	if v, ok := item["tc_max"].(float64); ok {
+		return v
+	}
 	return 0
 }
 
 func countLocal(items []gin.H) int {
 	n := 0
 	for _, it := range items {
-		if src, _ := it["_source"].(string); src == "local" { n++ }
+		if src, _ := it["_source"].(string); src == "local" {
+			n++
+		}
 	}
 	return n
 }
 
 func max(a, b int) int {
-	if a > b { return a }
+	if a > b {
+		return a
+	}
 	return b
 }
 
@@ -605,16 +656,16 @@ func flatRecordToDict(kp models.KeyProperty, paper models.Paper) gin.H {
 	}
 
 	return gin.H{
-		"record_id":  kp.ID,
-		"paper_id":   paper.ID,
-		"year":       year,
-		"formula":    kp.Material,
-		"type":       kp.SuperconductorType,
-		"pressure":   pressure,
-		"tc":         tc,
+		"record_id":   kp.ID,
+		"paper_id":    paper.ID,
+		"year":        year,
+		"formula":     kp.Material,
+		"type":        kp.SuperconductorType,
+		"pressure":    pressure,
+		"tc":          tc,
 		"space_group": "-",
-		"source":     "Local",
-		"status":     status,
-		"doi":        paper.DOI,
+		"source":      "Local",
+		"status":      status,
+		"doi":         paper.DOI,
 	}
 }

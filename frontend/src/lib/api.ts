@@ -1,5 +1,12 @@
 import { getStoredToken } from '../context/AuthContext'
 
+export interface ApiError extends Error {
+  status?: number
+  code?: string
+  detail?: unknown
+  existingPaperId?: number
+}
+
 function authHeaders(): HeadersInit {
   const token = getStoredToken()
   if (token) {
@@ -17,11 +24,21 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     },
   })
   if (!response.ok) {
-    const message = await response.text()
-    const error = new Error(message || `HTTP ${response.status}`) as Error & { status?: number }
+    const text = await response.text()
+    let body: any = null
+    try { body = text ? JSON.parse(text) : null } catch { /* plain text response */ }
+    const detail = body?.detail ?? body
+    const message = typeof detail === 'string'
+      ? detail
+      : detail?.message || detail?.detail || body?.message || text || `HTTP ${response.status}`
+    const error = new Error(message) as ApiError
     error.status = response.status
+    error.code = detail?.code || body?.code
+    error.detail = detail
+    error.existingPaperId = detail?.existing_paper_id || body?.existing_paper_id
     throw error
   }
+  if (response.status === 204) return undefined as T
   return response.json() as Promise<T>
 }
 
@@ -37,7 +54,7 @@ function buildHeaders(data?: unknown): HeadersInit | undefined {
 }
 
 export const api = {
-  get: <T>(url: string) => request<T>(url),
+  get: <T>(url: string, init?: RequestInit) => request<T>(url, init),
 
   post: <T>(url: string, data?: unknown) =>
     request<T>(url, {
@@ -62,6 +79,15 @@ export const api = {
 
   del: <T>(url: string) =>
     request<T>(url, { method: 'DELETE' }),
+
+  download: async (url: string) => {
+    const response = await fetch(url, { headers: authHeaders() })
+    if (!response.ok) {
+      const text = await response.text()
+      throw new Error(text || `HTTP ${response.status}`)
+    }
+    return response.blob()
+  },
 
   postStream: (url: string, data?: unknown) =>
     fetch(url, {

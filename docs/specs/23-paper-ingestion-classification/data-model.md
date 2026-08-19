@@ -3,15 +3,12 @@
 ## 论文分类结果
 
 - `paper_type`：`theoretical`、`experimental`、`review`、必要时 `unknown`。
-- `theoretical_subtype`：`calculation`、`method`、`theory`，仅理论文章使用。
-- `classification_reason`：面向用户的中文理由。
-- `classification_evidence`：分段来源、页码/章节或原文片段。
-- `classification_source`：`user` 或 `llm`。
-- `classification_review_status`：新材料类型使用 `pending`，管理员处理后为 accepted/modified/merged/rejected。
+- `theoretical_subtype`：`calculation`、`method`、`theory`，作为唯一新增的正式业务列。
+- 分类理由、AI 原值和证据在审核期间保存在临时产物，审核完成后不进入正式数据库。
 
 ## 材料类型
 
-类型名称是可扩展字符串，不由固定枚举限制。现有 hydride、cuprate、iron_based、nickel_based、carbon、organic、others 作为建议项；用户或 LLM 可提交新名称。新名称在管理员确认前可用于论文提交，但标记待审核。
+类型名称是可扩展字符串。现有常用类型作为建议项；用户或 LLM 可提交自由文本，管理员在论文审核时确认最终文本。本 Feature 不建设全局类型表。
 
 ## 物性数据
 
@@ -19,4 +16,6 @@
 
 ## 状态转换
 
-上传中 → 解析中 → 分类中 → 成功；任一步 → 失败并返回原因。材料类型建议 → 待审核 → 接受/修改/合并/拒绝。失败状态不创建历史失败记录。
+Redis 处理状态为 `saving_file → extracting → reading → summarizing → ready`，任一步可进入 `failed`。MySQL 新审核状态只使用 `pending/approved/rejected`；历史 `needs_revision` 只兼容读取。处理状态不写 MySQL。
+
+未提交任务以最后活动时间为基准保留 24 小时。`pending` 保留 AI 临时产物供审核，`approved` 或 `rejected` 后删除；已提交论文的 PDF 与 Markdown 保留但不公开。

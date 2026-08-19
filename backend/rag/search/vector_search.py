@@ -10,6 +10,22 @@ from backend.ingest.embedder import embed_texts
 from backend.rag.vectordb import search_chunks as qdrant_search
 
 
+async def _approved_results(results: list[dict]) -> list[dict]:
+    if not results:
+        return []
+    from sqlalchemy import select
+    from backend.models import Paper
+    from backend.rag.database import async_session_factory
+
+    paper_ids = {int(item.get("paper_id") or 0) for item in results}
+    async with async_session_factory() as session:
+        rows = await session.execute(
+            select(Paper.id).where(Paper.id.in_(paper_ids), Paper.review_status == "approved")
+        )
+        approved_ids = set(rows.scalars())
+    return [item for item in results if int(item.get("paper_id") or 0) in approved_ids]
+
+
 async def search_by_semantics(
     query: str,
     top_k: int = 10,
@@ -36,7 +52,9 @@ async def search_by_semantics(
 
     # 2. Qdrant 搜索
     where = {"paper_id": str(paper_id)} if paper_id else None
-    results = qdrant_search(query_vec, top_k=top_k, where=where, collection=col)
+    results = await _approved_results(
+        qdrant_search(query_vec, top_k=top_k, where=where, collection=col)
+    )
 
     # 3. Qdrant cosine score 越大越相似，保持原始语义与排序。
     for result in results:
@@ -63,14 +81,16 @@ async def search_by_keywords_in_chunks(
     """
     from sqlalchemy import select
     from backend.rag.database import async_session_factory
-    from backend.models import PaperChunk
+    from backend.models import Paper, PaperChunk
 
     pattern = f"%{query}%"
 
     async with async_session_factory() as session:
         r = await session.execute(
             select(PaperChunk)
+            .join(Paper, Paper.id == PaperChunk.paper_id)
             .where(PaperChunk.content.ilike(pattern))
+            .where(Paper.review_status == "approved")
             .limit(top_k * 2)
         )
         chunks = r.scalars().all()

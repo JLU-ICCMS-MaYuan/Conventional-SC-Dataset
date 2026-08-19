@@ -29,6 +29,8 @@ if database_url.startswith("mysql+pymysql://"):
     database_url = database_url.replace("mysql+pymysql://", "mysql+asyncmy://", 1)
 elif database_url.startswith("mysql://"):
     database_url = database_url.replace("mysql://", "mysql+asyncmy://", 1)
+elif database_url.startswith("sqlite://"):
+    database_url = database_url.replace("sqlite://", "sqlite+aiosqlite://", 1)
 
 engine = create_async_engine(database_url, **_engine_kw)
 

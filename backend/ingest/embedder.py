@@ -64,6 +64,13 @@ def index_chunks(
     return ids
 
 
+def embed_and_index_chunks(chunk_data: list[dict]) -> int:
+    if not chunk_data:
+        return 0
+    embeddings = embed_texts([item["content"] for item in chunk_data])
+    return len(index_chunks(chunk_data, embeddings))
+
+
 def chunk_and_embed(markdown_text: str, paper_id: int) -> int:
     """论文全文 → 语义分块 → 向量化 → Chroma。返回索引的 chunk 数。"""
     from backend.ingest.chunker import chunk_paper

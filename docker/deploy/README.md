@@ -4,7 +4,7 @@
 
 | 文件 | 大小 | 说明 |
 |------|------|------|
-| `compose.yaml` | 3.5 KB | Docker Compose 编排（7 个服务，全部从 Docker Hub 拉镜像） |
+| `compose.yaml` | - | Docker Compose 编排（含迁移任务、上传 Worker 和 Redis） |
 | `.env.example` | - | 环境变量模板，复制为 `.env` 填入密钥 |
 | `mysql-export.sql` | 91 MB | MySQL 全量导出 |
 | `neo4j-dump/` | 908 KB | Neo4j 知识图谱导出 |
@@ -108,6 +108,9 @@ curl http://localhost:8080/health  # Go API
 │   ├── qdrant_storage/
 │   ├── graph.json
 │   ├── uploads/
+│   ├── upload_PDFs/
+│   ├── parsed_markdown/
+│   ├── review_artifacts/
 │   ├── clean_results/
 │   └── property_name_mapping.json
 ├── mysql-export.sql
@@ -120,5 +123,20 @@ curl http://localhost:8080/health  # Go API
 
 ```bash
 docker compose pull          # 拉取新镜像
-docker compose up -d         # 滚动重启（零停机）
+docker compose up -d
+```
+
+## 论文上传配置
+
+- Nginx 与应用上传上限均为 50 MB。
+- `python`、`worker` 共用 `data/upload_PDFs`、`data/parsed_markdown` 和 `data/review_artifacts`。
+- Redis 使用 AOF 保存 24 小时任务和草稿；`migrate` 在 Python/Go 启动前执行 Alembic。
+- `RAG_DATABASE_URL` 应指向与 `DATABASE_URL` 相同的 MySQL 数据库，并使用异步驱动；缺省时 Python 会使用 `DATABASE_URL` 并自动转换驱动。
+- 通用 OpenAI 兼容 LLM 使用 `LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL`；留空时回退到 DeepSeek 配置。
+
+更新上传链路后至少重建或拉取 `python`、`worker`、`goserver`、`frontend` 四个服务，并执行：
+
+```bash
+docker compose up -d --force-recreate migrate python worker goserver frontend
+docker compose logs --tail=100 migrate python worker goserver frontend
 ```

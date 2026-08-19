@@ -6,16 +6,16 @@
 
 ## 摘要
 
-在现有上传、抽取、富化和审核链路上补齐明确状态与错误契约；将论文全文分段汇总交给 LLM 判断论文类型和材料类型；保留用户/AI 新类型并交管理员审核。优先修复已知导入问题，再实现分类和页面展示。
+FastAPI 只负责鉴权、持久化原文件、创建 Redis 状态并入 RQ 队列；独立 Worker 提取 Markdown、全文分段调用统一 LLM 客户端并生成临时草稿。前端轮询五阶段并自动保存草稿，用户提交时才原子写 MySQL。Go 继续承载正式论文编辑和管理员审核。
 
 ## 技术上下文
 
 - **语言与版本**：Python/FastAPI、Go 代理、React/TypeScript、Docker Compose。
-- **主要依赖**：现有 PDF 抽取、异步数据库驱动、LLM 客户端和 SQLAlchemy 模型。
-- **数据存储**：现有论文、物性和审核模型；新材料类型建议使用可审核的名称与状态，不把失败历史写入数据库。
+- **主要依赖**：现有 PDF 抽取、SQLAlchemy、OpenAI 兼容客户端、Redis/RQ。
+- **数据存储**：MySQL 保存正式候选/审核数据；Redis 保存 24 小时任务与草稿；挂载目录保存 PDF、Markdown 和临时审核产物。
 - **测试体系**：`pytest`、前端现有测试和 Docker 临时源码环境。
 - **目标平台**：Nginx → Go → Python，生产容器及本地 Neo4j 环境。
-- **约束**：兼容现有 API；不增加实验论文二级分类和刷新重试按钮。
+- **约束**：旧类型只读兼容；不公开 PDF/Markdown；不实现 OCR、全局类型目录和成本限制。
 
 ## 质量门
 
@@ -32,8 +32,11 @@
 - `backend/ingest/store_papers.py`：论文及物性写入。
 - `backend/scripts/rebuild_from_clean_results.py`：重建工具契约。
 - `backend/models.py`：论文、物性、审核数据模型。
+- `backend/ingest/upload_jobs.py`：RQ Worker 五阶段任务、分段产物与恢复。
+- `backend/rag/llm.py`：统一 LLM 供应商配置与 JSON 调用。
 - `frontend/src/components/PaperEditView.tsx`、`frontend/src/pages/AdminPage.tsx`：上传结果与管理员审核。
-- `docker/nginx.conf`：上传体积限制。
+- `frontend/src/pages/UploadPage.tsx`：任务轮询、五阶段和草稿入口。
+- `docker/*.yaml`、`compose.dev.yaml`：Worker、Redis AOF和持久目录。
 
 ## 需求到设计的映射
 
@@ -44,13 +47,17 @@
 | FR-007/008/009 | 类型建议与管理员审核契约 | API/UI 审核测试 |
 | FR-010 | 论文分类与物性 article_type 分离 | 数据回归测试 |
 | FR-011 | 工具导入和统一参数契约 | 导入/重建测试 |
+| FR-012–016 | Redis/RQ、持久目录、任务和草稿 API | API、Worker、Compose 测试 |
+| FR-017/018/021 | 原子提交、审核状态和公开边界 | Go/Python 集成测试 |
+| FR-019/020 | 统一 LLM 客户端和新类型格式 | 单元与 fixture 测试 |
 
 ## 阶段与依赖
 
-1. 修复上传错误契约、异步驱动和缺失工具。
-2. 建立全文分段读取与 LLM 分类输出契约。
-3. 接入论文/物性/材料类型审核和前端展示。
-4. 回归测试、Docker 验证和 Overview 更新。
+1. 完成迁移、目录配置、Redis/RQ 和任务 API。
+2. 完成全文分段 LLM 草稿及断点恢复。
+3. 完成用户自动保存、原子提交和管理员审核。
+4. 完成前端五阶段、草稿表单和证据对比。
+5. 完成回归测试、Docker 验证和 Overview 更新。
 
 ## 复杂度说明
 

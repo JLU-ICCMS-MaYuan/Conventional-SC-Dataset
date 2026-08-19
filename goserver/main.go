@@ -40,7 +40,13 @@ type gzipWriter struct {
 }
 
 func (w *gzipWriter) Write(data []byte) (int, error) {
+	w.Header().Del("Content-Length")
 	return w.Writer.Write(data)
+}
+
+func (w *gzipWriter) WriteHeader(code int) {
+	w.Header().Del("Content-Length")
+	w.ResponseWriter.WriteHeader(code)
 }
 
 func main() {
@@ -78,14 +84,14 @@ func main() {
 
 	// 公开路由（不需要 JWT）
 	r.POST("/api/auth/login", handlers.Login)
-		r.POST("/api/auth/register", handlers.Register)
+	r.POST("/api/auth/register", handlers.Register)
 
 	// 论文公开 API（替代 Python /api/papers/*）
 	papers := r.Group("/api/papers")
 	{
 		papers.GET("/:id", handlers.GetPaper)
 		papers.POST("/search/records", handlers.SearchRecords)
-			papers.POST("/search/all", handlers.SearchAll)
+		papers.POST("/search/all", handlers.SearchAll)
 	}
 
 	// 知识图谱 API（替代 Python /api/knowledge-graph/*）
@@ -112,13 +118,14 @@ func main() {
 		cg.PATCH("/:id/public", handlers.ToggleChartGroupPublic)
 	}
 
-		// 快讯 API
-		r.GET("/api/news", handlers.ListNews)
+	// 快讯 API
+	r.GET("/api/news", handlers.ListNews)
 	// 认证路由组（普通用户可访问，仅需登录）
 	auth := r.Group("/api")
 	auth.Use(middleware.AuthRequired)
 	{
 		auth.GET("/papers/my-uploads", handlers.GetMyUploads)
+		auth.GET("/papers/my-uploads/:id", handlers.GetMyUploadDetail)
 	}
 
 	// 管理员路由组
@@ -130,8 +137,8 @@ func main() {
 		admin.PUT("/papers/:id", handlers.UpdatePaper)
 		admin.POST("/papers/:id/review", handlers.ReviewPaper)
 		admin.DELETE("/papers/:id", handlers.DeletePaper)
-			admin.POST("/papers/batch-review", handlers.BatchReview)
-			admin.POST("/papers/batch-delete", handlers.BatchDelete)
+		admin.POST("/papers/batch-review", handlers.BatchReview)
+		admin.POST("/papers/batch-delete", handlers.BatchDelete)
 		admin.GET("/users", handlers.GetUsers)
 		admin.PUT("/users/:id", handlers.UpdateUser)
 		admin.PUT("/users/:id/permissions", handlers.UpdateUser)

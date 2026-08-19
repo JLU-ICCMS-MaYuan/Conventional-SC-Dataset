@@ -120,6 +120,7 @@ class Paper(Base):
     # LLM 富化列（旧库 alembic 演进列 + clean_results 结构化列）
     summary = Column(Text)
     paper_type = Column(String(20))
+    theoretical_subtype = Column(String(20), nullable=True)
     keywords_tags = Column(Text)
     source_file_path = Column(String(500))
     methodology = Column(Text)
