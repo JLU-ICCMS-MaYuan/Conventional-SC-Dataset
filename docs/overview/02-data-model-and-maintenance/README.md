@@ -11,6 +11,7 @@
 | [领域模型与数据库结构](domain-model-and-schema.md) | 定义元素、材料、论文、关键物性、记录、结构、图表组合和用户关系 | GORM、SQLAlchemy |
 | [数据库初始化与迁移](database-initialization-and-migrations.md) | 建表、填充周期表并执行版本迁移 | Alembic、Docker Compose、启动脚本 |
 | [数据导入与导出](data-import-and-export.md) | 离线交换用户、论文、记录和结构数据 | JSON、主业务数据库 |
+| [部署与运行时](deployment-and-runtime.md) | Docker 服务编排、配置和运行时边界 | Docker Compose、Nginx、Go、Python |
 
 ## 功能组成
 
@@ -18,7 +19,8 @@
 数据模型与维护
 ├── 领域模型与数据库结构
 ├── 数据库初始化与迁移
-└── 数据导入与导出
+├── 数据导入与导出
+└── 部署与运行时
 ```
 
 ## 关联关系
