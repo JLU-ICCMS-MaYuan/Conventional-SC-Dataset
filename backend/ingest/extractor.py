@@ -83,11 +83,15 @@ def extract_from_markdown(markdown_text: str, model: str | None = None) -> Extra
 
     usage = resp.usage
     if usage is not None:
+        # 不同 OpenAI/兼容 API 的 CompletionUsage 字段不完全一致。
+        # 缓存 token 字段缺失时不能阻断论文解析。
+        prompt_tokens = getattr(usage, "prompt_tokens", "?")
+        completion_tokens = getattr(usage, "completion_tokens", "?")
+        cache_hit = getattr(usage, "prompt_cache_hit_tokens", "?")
+        cache_miss = getattr(usage, "prompt_cache_miss_tokens", "?")
         print(
-            f"    Tokens — prompt: {usage.prompt_tokens}, "
-            f"completion: {usage.completion_tokens}, "
-            f"cache hit: {usage.prompt_cache_hit_tokens}, "
-            f"cache miss: {usage.prompt_cache_miss_tokens}"
+            f"    Tokens — prompt: {prompt_tokens}, "
+            f"completion: {completion_tokens}, cache hit: {cache_hit}, cache miss: {cache_miss}"
         )
 
     raw = json.loads(resp.choices[0].message.content)
