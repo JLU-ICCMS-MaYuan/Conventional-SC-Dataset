@@ -42,7 +42,7 @@ const NewsPage: React.FC = () => {
   const [news, setNews] = useState<any[]>([])
 
   useEffect(() => {
-    api.get<any[]>('/api/news').then(setNews).catch(() => {})
+    api.get<any>('/api/news').then(data => setNews(Array.isArray(data) ? data : [])).catch(() => setNews([]))
   }, [])
 
   return (

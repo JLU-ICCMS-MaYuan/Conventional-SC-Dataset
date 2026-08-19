@@ -88,8 +88,8 @@ const SharePage: React.FC = () => {
 
   useEffect(() => {
     loadAllGroups()
-    api.get<any[]>('/api/papers/stats/tc-pressure').then(setPressureData).catch(() => {})
-    api.get<any[]>('/api/papers/stats/tc-year').then(setYearData).catch(() => {})
+    api.get<any>('/api/papers/stats/tc-pressure').then(data => setPressureData(Array.isArray(data) ? data : [])).catch(() => setPressureData([]))
+    api.get<any>('/api/papers/stats/tc-year').then(data => setYearData(Array.isArray(data) ? data : [])).catch(() => setYearData([]))
   }, [])
 
   // ── Fetch paper detail when paperId changes ──
@@ -123,7 +123,7 @@ const SharePage: React.FC = () => {
     _xKey: 'x',
     _chartKpIds: Set<number>,
   ): DataPoint[] => {
-    return data
+    return (Array.isArray(data) ? data : [])
       .filter(d => {
         const st = d.sc_type || 'others'
         return visibleTypes.has(st)

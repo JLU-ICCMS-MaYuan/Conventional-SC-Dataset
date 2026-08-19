@@ -13,8 +13,13 @@ import (
 // ListNews 快讯列表
 // GET /api/news
 func ListNews(c *gin.Context) {
-	var items []models.NewsItem
-	database.DB.Order("event_date DESC").Find(&items)
+	items := make([]models.NewsItem, 0)
+
+	result := database.DB.Order("event_date DESC").Find(&items)
+	if result.Error != nil {
+		c.JSON(http.StatusOK, items)
+		return
+	}
 	c.JSON(http.StatusOK, items)
 }
 
