@@ -68,8 +68,8 @@ def extract_from_markdown(markdown_text: str, model: str | None = None) -> Extra
     model_name = model or settings.deepseek_model
     client = _openai_client()
 
-    max_input_chars = 18000
-    truncated = markdown_text[:max_input_chars]
+    # 分类必须基于全文；不再固定截断输入。
+    truncated = markdown_text
 
     resp = client.chat.completions.create(
         model=model_name,

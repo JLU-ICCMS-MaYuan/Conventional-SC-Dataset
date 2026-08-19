@@ -8,8 +8,8 @@
 
 ## 阶段 2：基础能力
 
-- [ ] T002 [P] 修复 `backend/scripts/rebuild_from_clean_results.py` 的缺失导出和参数契约
-- [ ] T003 [P] 修复 `backend/ingest/extractor.py`、`backend/ingest/enrich_papers.py` 中 `paper_is_experimental` 与 `infer_sc_type` 的导入和兼容映射
+- [x] T002 [P] 修复 `backend/scripts/rebuild_from_clean_results.py` 的缺失导出和参数契约
+- [x] T003 [P] 修复 `backend/ingest/extractor.py`、`backend/ingest/enrich_papers.py` 中 `paper_is_experimental` 与 `infer_sc_type` 的导入和兼容映射
 - [ ] T004 [P] 在 `docker/nginx.conf` 与上传 API 统一体积限制和 413 错误响应
 - [ ] T005 统一 `backend/ingest/store_papers.py` 的异常传播，禁止解析/数据库失败返回假成功
 

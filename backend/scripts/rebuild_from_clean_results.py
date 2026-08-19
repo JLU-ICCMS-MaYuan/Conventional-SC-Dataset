@@ -39,7 +39,20 @@ def extract_cond_number(condition: Any, key: str) -> float | None:
     return float(values[0]) if values else None
 
 
-def infer_sc_type(paper_type: str | None, pressure: float | None) -> str:
-    if str(paper_type or "").lower() == "experimental":
-        return "experimental"
-    return "theoretical"
+
+def paper_is_experimental(paper_type: Any) -> bool:
+    labels = paper_type if isinstance(paper_type, (list, tuple, set)) else [paper_type]
+    normalized = {str(label or "").strip().lower() for label in labels}
+    return bool(normalized & {"experimental", "experiment", "e"})
+
+
+def infer_sc_type(elements: dict[str, float] | str | None, pressure: float | None = None) -> str:
+    if isinstance(elements, str):
+        elements = parse_formula(elements)
+    symbols = {str(symbol).capitalize() for symbol in (elements or {})}
+    if "H" in symbols and len(symbols) <= 3: return "hydride"
+    if "Cu" in symbols: return "cuprate"
+    if "Fe" in symbols: return "iron_based"
+    if "Ni" in symbols: return "nickel_based"
+    if symbols <= {"C"} or ("C" in symbols and len(symbols) <= 3): return "carbon"
+    return "others"
