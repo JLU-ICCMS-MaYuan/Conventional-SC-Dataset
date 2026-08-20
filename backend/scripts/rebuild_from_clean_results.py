@@ -50,6 +50,7 @@ def infer_sc_type(elements: dict[str, float] | str | None, pressure: float | Non
     if isinstance(elements, str):
         elements = parse_formula(elements)
     symbols = {str(symbol).capitalize() for symbol in (elements or {})}
+    if not symbols: return "others"
     if "H" in symbols and len(symbols) <= 3: return "hydride"
     if "Cu" in symbols: return "cuprate"
     if "Fe" in symbols: return "iron_based"

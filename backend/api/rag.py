@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from backend.models import KeyProperty, Paper, PaperChunk, User
 from backend.rag import service
@@ -177,9 +177,26 @@ def _property_values(item: dict[str, Any]) -> tuple[float | None, float | None, 
 
 
 def _artifact_by_paper_id(paper_id: int) -> tuple[str, Path, dict[str, Any]] | None:
+    from backend.database import SessionLocal
     from backend.ingest.upload_tasks import data_path
 
     root = data_path("review_artifacts")
+    try:
+        with SessionLocal() as session:
+            source_file_path = session.scalar(
+                select(Paper.source_file_path).where(Paper.id == paper_id)
+            )
+        match = re.match(r"^upload_PDFs/([0-9a-f]{32})/", source_file_path or "")
+        if match:
+            result_path = root / match.group(1) / "result.json"
+            if result_path.is_file():
+                payload = json.loads(result_path.read_text(encoding="utf-8"))
+                payload["paper_id"] = paper_id
+                return match.group(1), result_path, payload
+    except (OSError, json.JSONDecodeError, SQLAlchemyError):
+        pass
+
+    # 兼容 source_file_path 缺失或旧版审核证据。
     for result_path in root.glob("*/result.json"):
         try:
             payload = json.loads(result_path.read_text(encoding="utf-8"))
@@ -719,11 +736,51 @@ async def _create_pending_paper(
         raise _upload_error(409, "duplicate_doi", "该论文已经存在") from exc
 
 
+async def _paper_id_for_source_path(source_file_path: str | None) -> int | None:
+    if not source_file_path:
+        return None
+    from backend.rag.database import async_session_factory
+
+    async with async_session_factory() as session:
+        return await session.scalar(
+            select(Paper.id).where(Paper.source_file_path == source_file_path)
+        )
+
+
+def _record_submitted_upload(task_id: str, paper_id: int, draft: dict[str, Any]) -> None:
+    from backend.ingest.upload_tasks import artifact_path, update_state
+
+    result_path = artifact_path(task_id)
+    artifact = json.loads(result_path.read_text(encoding="utf-8")) if result_path.exists() else {}
+    artifact.update(
+        {
+            "task_id": task_id,
+            "paper_id": paper_id,
+            "ai_values": artifact.get("ai_values") or draft.get("ai_original") or {},
+            "user_values": {key: value for key, value in draft.items() if key != "ai_original"},
+        }
+    )
+    result_path.write_text(json.dumps(artifact, ensure_ascii=False, indent=2), encoding="utf-8")
+    update_state(
+        task_id, paper_id=paper_id, review_status="pending", submission_status="submitted",
+    )
+
+
 @router.post("/upload-tasks/{task_id}/submit")
 async def submit_upload_draft(
     task_id: str,
     current_user: User = Depends(get_current_user),
 ):
+    try:
+        from backend.ingest.upload_tasks import upload_task_lock
+
+        with upload_task_lock(task_id):
+            return await _submit_upload_draft_locked(task_id, current_user)
+    except TimeoutError as exc:
+        raise _upload_error(409, "submission_in_progress", "该上传任务正在提交，请稍后重试") from exc
+
+
+async def _submit_upload_draft_locked(task_id: str, current_user: User) -> dict[str, Any]:
     from backend.ingest.upload_tasks import artifact_path, get_draft, update_state
 
     state = _task_for_user(task_id, current_user)
@@ -733,9 +790,7 @@ async def submit_upload_draft(
         return {"ok": True, "paper_id": state["paper_id"], "review_status": "pending"}
     if state.get("duplicate"):
         raise _upload_error(
-            409,
-            "duplicate_doi",
-            "该论文已经存在",
+            409, "duplicate_doi", "该论文已经存在",
             existing_paper_id=state.get("existing_paper_id"),
         )
     if state.get("stage") != "ready" or state.get("processing_status") != "succeeded":
@@ -744,33 +799,33 @@ async def submit_upload_draft(
     if draft is None:
         raise _upload_error(409, "draft_not_found", "草稿不存在或已过期")
 
-    existing_artifact = artifact_path(task_id)
-    if existing_artifact.exists():
+    paper_id = await _paper_id_for_source_path(state.get("source_file_path"))
+    if paper_id is None:
+        existing_artifact = artifact_path(task_id)
+        if existing_artifact.exists():
+            try:
+                existing_payload = json.loads(existing_artifact.read_text(encoding="utf-8"))
+                paper_id = existing_payload.get("paper_id")
+            except (OSError, json.JSONDecodeError):
+                pass
+    if paper_id is not None:
         try:
-            existing_payload = json.loads(existing_artifact.read_text(encoding="utf-8"))
-            if existing_payload.get("paper_id"):
-                return {
-                    "ok": True,
-                    "paper_id": existing_payload["paper_id"],
-                    "review_status": "pending",
-                }
-        except (OSError, json.JSONDecodeError):
-            pass
+            _record_submitted_upload(task_id, int(paper_id), draft)
+        except Exception as exc:
+            print(f"  [上传] paper_id={paper_id} 已存在，但临时审核证据恢复失败: {exc}")
+        return {"ok": True, "paper_id": int(paper_id), "review_status": "pending"}
 
-    paper_id = await _create_pending_paper(task_id, state, draft)
+    update_state(task_id, submission_status="submitting")
     try:
-        result_path = artifact_path(task_id)
-        artifact = json.loads(result_path.read_text(encoding="utf-8")) if result_path.exists() else {}
-        artifact.update(
-            {
-                "task_id": task_id,
-                "paper_id": paper_id,
-                "ai_values": artifact.get("ai_values") or draft.get("ai_original") or {},
-                "user_values": {key: value for key, value in draft.items() if key != "ai_original"},
-            }
-        )
-        result_path.write_text(json.dumps(artifact, ensure_ascii=False, indent=2), encoding="utf-8")
-        update_state(task_id, paper_id=paper_id, review_status="pending")
+        paper_id = await _create_pending_paper(task_id, state, draft)
+    except Exception:
+        try:
+            update_state(task_id, submission_status="failed")
+        except Exception:
+            pass
+        raise
+    try:
+        _record_submitted_upload(task_id, paper_id, draft)
     except Exception as exc:
         print(f"  [上传] paper_id={paper_id} 已提交，但临时审核证据更新失败: {exc}")
     return {"ok": True, "paper_id": paper_id, "review_status": "pending"}

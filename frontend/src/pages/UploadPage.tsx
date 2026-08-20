@@ -48,6 +48,8 @@ interface UploadRecord {
 
 const ACCEPTED_TYPES = ['.json', '.pdf', '.txt', '.md']
 const ACCEPTED_STR = ACCEPTED_TYPES.join(',')
+const MAX_PAPER_UPLOAD_BYTES = 50 * 1024 * 1024
+const FILE_TOO_LARGE_MESSAGE = '文件超过 50 MB 限制'
 
 const STATUS_CONFIG: Record<string, { label: string; color: 'warning' | 'info' | 'success' | 'error' }> = {
   parsing:   { label: '解析中',   color: 'warning' },
@@ -214,10 +216,17 @@ const UploadPage: React.FC = () => {
   const handleFile = (f: File) => {
     setError('')
     setParsed(null)
-    setFile(f)
-    if (isJsonFile(f)) { setFileType('json'); parseJson(f) }
-    else if (isPaperFile(f)) { setFileType('paper') }
-    else { setError(`不支持的文件类型。支持: ${ACCEPTED_STR}`); setFileType('') }
+    if (isJsonFile(f)) {
+      setFile(f); setFileType('json'); parseJson(f)
+    } else if (isPaperFile(f)) {
+      if (f.size > MAX_PAPER_UPLOAD_BYTES) {
+        setFile(null); setFileType(''); setError(FILE_TOO_LARGE_MESSAGE)
+        return
+      }
+      setFile(f); setFileType('paper')
+    } else {
+      setFile(null); setFileType(''); setError(`不支持的文件类型。支持: ${ACCEPTED_STR}`)
+    }
   }
 
   const handleDrop = (e: React.DragEvent) => {
@@ -234,6 +243,10 @@ const UploadPage: React.FC = () => {
   /* ── Paper upload with progress ────────────── */
   const handleUploadPaper = () => {
     if (!file) return
+    if (file.size > MAX_PAPER_UPLOAD_BYTES) {
+      setError(FILE_TOO_LARGE_MESSAGE)
+      return
+    }
     setUploading(true)
     setUploadProgress(0)
 
@@ -281,12 +294,19 @@ const UploadPage: React.FC = () => {
           setError('响应解析失败')
         }
       } else {
+        if (xhr.status === 413) {
+          setError(FILE_TOO_LARGE_MESSAGE)
+          return
+        }
         try {
           const err = JSON.parse(xhr.responseText)
           const detail = err.detail
           const message = typeof detail === 'string' ? detail : (detail?.message || detail?.detail || err.message)
           setError(message || '上传失败')
-        } catch { setError('上传失败') }
+        } catch {
+          const plainText = xhr.responseText.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+          setError(plainText || `上传失败（HTTP ${xhr.status}）`)
+        }
       }
     }
 
@@ -577,7 +597,7 @@ const UploadPage: React.FC = () => {
                 <>
                   <Typography variant="h6" gutterBottom>拖拽文件到此处</Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    支持 PDF · TXT · MD (超导论文)
+                    支持 PDF · TXT · MD（超导论文，最大 50 MB）
                   </Typography>
                 </>
               )}

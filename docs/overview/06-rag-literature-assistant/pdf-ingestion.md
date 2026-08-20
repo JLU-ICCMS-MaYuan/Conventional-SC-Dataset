@@ -6,7 +6,7 @@
 
 ## 工作流程
 
-1. Nginx 和 Python API 统一接受不超过 50 MB 的论文文件。
+1. 页面允许选择不超过 50 MB（50 MiB）的 PDF、TXT 或 Markdown；Python API 执行精确文件大小校验。Nginx 上传路由允许 51 MB 请求体，以容纳 50 MB 文件之外的 multipart 表单边界。
 2. Python 将原文件保存到 `/data/upload_PDFs`，在 Redis 创建 24 小时任务并返回 `202 + task_id`。
 3. RQ Worker 依次执行保存原文件、提取正文、LLM 分段阅读、LLM 全文汇总和等待用户校对五个阶段。
 4. Markdown 保存到 `/data/parsed_markdown`；AI 原值、证据和用户草稿分别保存在临时 JSON 与 Redis，不写入正式业务表。
@@ -25,7 +25,7 @@
 
 - Redis：任务阶段、错误、进度和未提交草稿，按最后操作时间滑动保留 24 小时。
 - MySQL：用户提交后的最终候选值和 `pending/approved/rejected` 审核状态；不保存处理进度、失败历史或 AI 原始判断。
-- 文件目录：原文件、Markdown 和审核期 AI 产物由 Python API 与 Worker 共享挂载。
+- 文件目录：未提交任务的原文件、Markdown 和 AI 产物在任务过期后删除；已提交论文的原文件和 Markdown 永久保留，审核期 AI 产物保留到管理员通过或拒绝。
 - 公开 API、统计和 RAG 只返回 `approved` 论文；原 PDF、Markdown、待审数据和内部文件路径不公开。
 
 ## 重复文件
@@ -37,6 +37,7 @@
 ## 失败语义
 
 - 上传、抽取、LLM 和数据库错误必须返回或记录明确原因，前端不得显示假成功。
+- 超过 50 MB 的文件会在选择或上传阶段明确提示；即使 Nginx 返回非 JSON 的 HTTP 413，页面也显示相同的大小限制信息。
 - 扫描版或正文过短的 PDF 明确提示需要可搜索文本；本功能不包含 OCR。
 - 审核通过后若向量发布失败，Go API 返回 `502`，保留临时证据；管理员重复审核即可幂等重试。
 
