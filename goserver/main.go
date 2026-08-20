@@ -151,6 +151,7 @@ func main() {
 	}
 
 	// 统计 API
+	r.GET("/api/community/contributions", middleware.OptionalAuth, handlers.CommunityContributions)
 	r.GET("/api/papers/stats/tc-pressure", handlers.TcPressureChart)
 	r.GET("/api/papers/stats/tc-year", handlers.TcYearChart)
 	r.GET("/api/papers/stats/chart-data", handlers.TcPressureChart)

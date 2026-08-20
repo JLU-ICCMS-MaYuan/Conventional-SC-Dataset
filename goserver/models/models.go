@@ -37,6 +37,7 @@ type Paper struct {
 	ReviewComment *string   `json:"review_comment"`
 	ReviewedBy    *uint     `json:"reviewed_by_user_id"`
 	UploadedBy    *uint     `json:"uploaded_by_user_id"`
+	ReviewedAt    *time.Time `json:"reviewed_at"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 	// LLM 富化字段
@@ -57,6 +58,18 @@ type Paper struct {
 	Reviewer      *User         `gorm:"foreignKey:ReviewedBy" json:"-"`
 	Uploader      *User         `gorm:"foreignKey:UploadedBy" json:"-"`
 	KeyProperties []KeyProperty `gorm:"foreignKey:PaperID" json:"key_properties,omitempty"`
+}
+
+// PaperReviewEvent 一次不可变的论文审核动作。
+type PaperReviewEvent struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	PaperID        uint      `gorm:"index:ix_paper_review_events_paper_time,priority:1" json:"paper_id"`
+	ReviewerUserID uint      `gorm:"index:ix_paper_review_events_reviewer_time,priority:1" json:"reviewer_user_id"`
+	Status         string    `gorm:"size:50" json:"status"`
+	ReviewComment  *string   `json:"review_comment"`
+	ReviewedAt     time.Time `gorm:"index:ix_paper_review_events_reviewer_time,priority:2;index:ix_paper_review_events_paper_time,priority:2" json:"reviewed_at"`
+	RequestID      *string   `gorm:"size:64;uniqueIndex" json:"request_id"`
+	Source         string    `gorm:"size:20" json:"source"`
 }
 
 // KeyProperty 物性记录

@@ -93,6 +93,7 @@ class User(Base):
         back_populates="reviewed_by_user",
         foreign_keys="Paper.reviewed_by_user_id",
     )
+    review_events = relationship("PaperReviewEvent", back_populates="reviewer")
     created_structures = relationship(
         "SuperconductorStructure",
         back_populates="created_by_user",
@@ -145,6 +146,23 @@ class Paper(Base):
     )
     records = relationship("SuperconductorRecord", back_populates="paper")
     key_properties = relationship("KeyProperty", back_populates="paper")
+
+
+class PaperReviewEvent(Base):
+    """一次不可变的论文审核动作，用于审计与贡献统计。"""
+
+    __tablename__ = "paper_review_events"
+
+    id = Column(Integer, primary_key=True)
+    paper_id = Column(Integer, nullable=False, index=True)
+    reviewer_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    status = Column(String(50), nullable=False)
+    review_comment = Column(Text)
+    reviewed_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    request_id = Column(String(64), unique=True, nullable=True)
+    source = Column(String(20), nullable=False, default="single")
+
+    reviewer = relationship("User", back_populates="review_events")
 
 
 class KeyProperty(Base):

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
+	"sync"
 	"time"
 
 	"scwiki/server/cache"
@@ -11,7 +13,168 @@ import (
 	"scwiki/server/models"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
+
+const contributionCacheKey = "community:contributions:v1"
+
+var contributionRefreshMu sync.Mutex
+var contributionSnapshotLoader = loadContributionSnapshot
+
+type contributionRow struct {
+	UserID            uint      `gorm:"column:user_id"`
+	DisplayName       string    `gorm:"column:display_name"`
+	ContributionCount int64     `gorm:"column:contribution_count"`
+	ReachedAt         time.Time `gorm:"column:reached_at"`
+}
+
+type contributionRank struct {
+	Rank              int    `json:"rank"`
+	UserID            uint   `json:"user_id"`
+	DisplayName       string `json:"display_name"`
+	AvatarText        string `json:"avatar_text"`
+	ContributionCount int64  `json:"contribution_count"`
+}
+
+type contributionSnapshot struct {
+	ParticipantCount int                `json:"participant_count"`
+	UploadRanks      []contributionRank `json:"upload_ranks"`
+	ReviewRanks      []contributionRank `json:"review_ranks"`
+	GeneratedAt      time.Time          `json:"generated_at"`
+}
+
+func avatarText(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "贡"
+	}
+	return string([]rune(name)[0])
+}
+
+func rankContributionRows(rows []contributionRow) []contributionRank {
+	ranks := make([]contributionRank, 0, len(rows))
+	for i, row := range rows {
+		name := strings.TrimSpace(row.DisplayName)
+		if name == "" {
+			name = "匿名贡献者"
+		}
+		ranks = append(ranks, contributionRank{
+			Rank: i + 1, UserID: row.UserID, DisplayName: name,
+			AvatarText: avatarText(name), ContributionCount: row.ContributionCount,
+		})
+	}
+	return ranks
+}
+
+func loadContributionSnapshot() (contributionSnapshot, error) {
+	var uploadRows, reviewRows []contributionRow
+	if err := database.DB.Raw(`
+		SELECT u.id AS user_id, u.real_name AS display_name,
+		       COUNT(p.id) AS contribution_count,
+		       MAX(COALESCE(p.reviewed_at, p.updated_at, p.created_at)) AS reached_at
+		FROM users u JOIN papers p ON p.uploaded_by_user_id = u.id
+		WHERE p.review_status = 'approved'
+		GROUP BY u.id, u.real_name
+		ORDER BY contribution_count DESC, reached_at ASC, user_id ASC
+	`).Scan(&uploadRows).Error; err != nil {
+		return contributionSnapshot{}, err
+	}
+	if err := database.DB.Raw(`
+		SELECT u.id AS user_id, u.real_name AS display_name,
+		       COUNT(e.id) AS contribution_count, MAX(e.reviewed_at) AS reached_at
+		FROM users u JOIN paper_review_events e ON e.reviewer_user_id = u.id
+		GROUP BY u.id, u.real_name
+		ORDER BY contribution_count DESC, reached_at ASC, user_id ASC
+	`).Scan(&reviewRows).Error; err != nil {
+		return contributionSnapshot{}, err
+	}
+	participants := make(map[uint]struct{}, len(uploadRows)+len(reviewRows))
+	for _, row := range uploadRows {
+		participants[row.UserID] = struct{}{}
+	}
+	for _, row := range reviewRows {
+		participants[row.UserID] = struct{}{}
+	}
+	return contributionSnapshot{
+		ParticipantCount: len(participants), UploadRanks: rankContributionRows(uploadRows),
+		ReviewRanks: rankContributionRows(reviewRows), GeneratedAt: time.Now(),
+	}, nil
+}
+
+func contributionRankForUser(ranks []contributionRank, userID uint) *contributionRank {
+	for i := range ranks {
+		if ranks[i].UserID == userID {
+			item := ranks[i]
+			return &item
+		}
+	}
+	return nil
+}
+
+func topContributionRanks(ranks []contributionRank, limit int) []contributionRank {
+	if len(ranks) <= limit {
+		return ranks
+	}
+	return ranks[:limit]
+}
+
+func parseContributionRefresh(value string) (bool, bool) {
+	switch value {
+	case "", "false":
+		return false, true
+	case "true":
+		return true, true
+	default:
+		return false, false
+	}
+}
+
+// CommunityContributions 返回公开 Top 20，并为登录用户附加全量个人排名。
+func CommunityContributions(c *gin.Context) {
+	refresh, valid := parseContributionRefresh(c.Query("refresh"))
+	if !valid {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "refresh 必须是 true 或 false"})
+		return
+	}
+	var snapshot contributionSnapshot
+	if !refresh && cache.Get(contributionCacheKey, &snapshot) {
+		// 命中共享快照。
+	} else {
+		contributionRefreshMu.Lock()
+		defer contributionRefreshMu.Unlock()
+		if !refresh && cache.Get(contributionCacheKey, &snapshot) {
+			// 等待其他请求重建后复用。
+		} else {
+			var err error
+			snapshot, err = contributionSnapshotLoader()
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "贡献榜单加载失败"})
+				return
+			}
+			cache.Set(contributionCacheKey, snapshot, time.Hour)
+		}
+	}
+	uploadTop := topContributionRanks(snapshot.UploadRanks, 20)
+	reviewTop := topContributionRanks(snapshot.ReviewRanks, 20)
+	response := gin.H{
+		"participant_count":  snapshot.ParticipantCount,
+		"upload_leaderboard": uploadTop,
+		"review_leaderboard": reviewTop,
+		"generated_at":       snapshot.GeneratedAt,
+	}
+	if email, ok := c.Get("user_email"); ok {
+		var user models.User
+		if err := database.DB.Where("email = ?", email).First(&user).Error; err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "用户不存在"})
+			return
+		}
+		response["current_user"] = gin.H{
+			"upload": contributionRankForUser(snapshot.UploadRanks, user.ID),
+			"review": contributionRankForUser(snapshot.ReviewRanks, user.ID),
+		}
+	}
+	c.JSON(http.StatusOK, response)
+}
 
 // ═══════════════════════════════════════════════
 // 统计 API（替代 Python papers stats + admin users）
@@ -143,8 +306,9 @@ func AllUsers(c *gin.Context) {
 // POST /api/admin/papers/batch-review
 func BatchReview(c *gin.Context) {
 	var body struct {
-		PaperIDs []uint `json:"paper_ids"`
-		Status   string `json:"status"`
+		PaperIDs        []uint `json:"paper_ids"`
+		Status          string `json:"status"`
+		ReviewRequestID string `json:"review_request_id"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
@@ -185,17 +349,29 @@ func BatchReview(c *gin.Context) {
 		}
 	}
 
+	if len(body.ReviewRequestID) > 48 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "review_request_id 过长"})
+		return
+	}
 	now := time.Now()
-	if err := database.DB.Model(&models.Paper{}).Where("id IN ?", body.PaperIDs).Updates(map[string]interface{}{
-		"review_status":       body.Status,
-		"reviewed_by_user_id": user.ID,
-		"reviewed_at":         now,
-	}).Error; err != nil {
+	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		for i := range papers {
+			requestID := body.ReviewRequestID
+			if requestID != "" {
+				requestID = fmt.Sprintf("%s:%d", requestID, papers[i].ID)
+			}
+			if _, err := applyPaperReview(tx, &papers[i], user.ID, body.Status, "", requestID, "batch", now); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "批量审核失败"})
 		return
 	}
 	cache.FlushPattern("chart:*")
 	cache.FlushPattern("search:*")
+	cache.FlushPattern("community:contributions:*")
 	failedIDs := make([]uint, 0)
 	authorization := c.GetHeader("Authorization")
 	for _, id := range body.PaperIDs {

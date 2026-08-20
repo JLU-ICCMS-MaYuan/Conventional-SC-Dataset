@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import {
   Box, Typography, Card, CardContent, Button,
   Select, MenuItem, FormControl, InputLabel, IconButton, Tooltip,
-  Drawer, CircularProgress, Chip, Alert, Snackbar,
+  Drawer, CircularProgress, Chip, Alert, Snackbar, Avatar, Divider,
 } from '@mui/material'
 import {
-  Edit, ContentCopy, FileDownload, Close, OpenInNew,
+  Edit, ContentCopy, FileDownload, Close, OpenInNew, Refresh, EmojiEvents,
 } from '@mui/icons-material'
 import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
@@ -26,6 +26,22 @@ interface DataPoint {
   isCustom: boolean
   label: string
   paperId?: number
+}
+
+interface ContributionRank {
+  rank: number
+  user_id: number
+  display_name: string
+  avatar_text: string
+  contribution_count: number
+}
+
+interface ContributionSnapshot {
+  participant_count: number
+  upload_leaderboard: ContributionRank[]
+  review_leaderboard: ContributionRank[]
+  current_user?: { upload: ContributionRank | null; review: ContributionRank | null }
+  generated_at: string
 }
 
 // ── Constants ──
@@ -55,6 +71,9 @@ const SharePage: React.FC = () => {
 
   // ── Chart groups ──
   const [groups, setGroups] = useState<any[]>([])
+  const [contributions, setContributions] = useState<ContributionSnapshot | null>(null)
+  const [contributionsLoading, setContributionsLoading] = useState(true)
+  const [contributionsError, setContributionsError] = useState('')
 
   // ── Each chart has independent group selection ──
   const [chart1, setChart1] = useState<{
@@ -91,6 +110,26 @@ const SharePage: React.FC = () => {
     api.get<any>('/api/papers/stats/tc-pressure').then(data => setPressureData(Array.isArray(data) ? data : [])).catch(() => setPressureData([]))
     api.get<any>('/api/papers/stats/tc-year').then(data => setYearData(Array.isArray(data) ? data : [])).catch(() => setYearData([]))
   }, [])
+
+
+  const loadContributions = useCallback(async (force = false) => {
+    setContributionsLoading(true)
+    try {
+      const suffix = force ? '?refresh=true' : ''
+      setContributions(await api.get<ContributionSnapshot>(`/api/community/contributions${suffix}`))
+      setContributionsError('')
+    } catch {
+      setContributionsError('贡献榜单刷新失败，请稍后重试')
+    } finally {
+      setContributionsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadContributions()
+    const timer = window.setInterval(() => { void loadContributions() }, 60 * 60 * 1000)
+    return () => window.clearInterval(timer)
+  }, [user?.id, loadContributions])
 
   // ── Fetch paper detail when paperId changes ──
   useEffect(() => {
@@ -257,11 +296,64 @@ const SharePage: React.FC = () => {
     </Box>
   )
 
+
+  const renderLeaderboard = (title: string, rows: ContributionRank[], unit: string) => (
+    <Card variant="outlined" sx={{ flex: 1, minWidth: 280 }}>
+      <CardContent>
+        <Typography variant="h6" sx={{ mb: 1.5 }}>{title}</Typography>
+        {rows.length === 0 ? <Typography color="text.secondary">暂无贡献记录</Typography> : rows.map((row, index) => (
+          <React.Fragment key={row.user_id}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 1 }}>
+              <Typography sx={{ width: 28, fontWeight: 800, color: row.rank <= 3 ? 'primary.main' : 'text.secondary' }}>{row.rank}</Typography>
+              <Avatar sx={{ width: 34, height: 34, fontSize: 15 }}>{row.avatar_text}</Avatar>
+              <Typography sx={{ flex: 1, fontWeight: 650 }}>{row.display_name}</Typography>
+              <Typography fontWeight={800}>{row.contribution_count} {unit}</Typography>
+            </Box>
+            {index < rows.length - 1 && <Divider />}
+          </React.Fragment>
+        ))}
+      </CardContent>
+    </Card>
+  )
+
   // ═══════════════════════════════════════════════════════
   return (
     <Box>
       <Typography variant="overline">Community</Typography>
       <Typography variant="h1">社区</Typography>
+
+
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+            <Box>
+              <Typography variant="h5" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><EmojiEvents color="primary" />贡献排行榜</Typography>
+              <Typography color="text.secondary">已有 {contributions?.participant_count ?? '—'} 位研究者参与数据库建设</Typography>
+              {contributions?.generated_at && <Typography variant="caption" color="text.secondary">最后更新：{new Date(contributions.generated_at).toLocaleString()}</Typography>}
+            </Box>
+            <Button variant="outlined" startIcon={contributionsLoading ? <CircularProgress size={16} /> : <Refresh />}
+              disabled={contributionsLoading} onClick={() => void loadContributions(true)}>刷新榜单</Button>
+          </Box>
+          {contributionsError && <Alert severity="warning" sx={{ mb: 2 }}>{contributionsError}</Alert>}
+          {contributionsLoading && !contributions ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box>
+          ) : contributions && (
+            <>
+              {user && (
+                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', p: 2, mb: 2, bgcolor: 'action.hover', borderRadius: 2 }}>
+                  <Typography fontWeight={800} sx={{ width: '100%' }}>我的排名</Typography>
+                  <Chip label={`上传榜：${contributions.current_user?.upload ? `第 ${contributions.current_user.upload.rank} 名 · ${contributions.current_user.upload.contribution_count} 篇` : '暂无排名 · 0 篇'}`} />
+                  <Chip label={`审核榜：${contributions.current_user?.review ? `第 ${contributions.current_user.review.rank} 名 · ${contributions.current_user.review.contribution_count} 次` : '暂无排名 · 0 次'}`} />
+                </Box>
+              )}
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                {renderLeaderboard('贡献上传榜 Top 20', contributions.upload_leaderboard, '篇')}
+                {renderLeaderboard('贡献审核榜 Top 20', contributions.review_leaderboard, '次')}
+              </Box>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       {/* ═══ Tc-Pressure Scatter ═══ */}
       <Card sx={{ mb: 3 }}>

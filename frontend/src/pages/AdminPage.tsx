@@ -245,7 +245,7 @@ const AdminPage: React.FC = () => {
         })
       }
       await api.post(`/api/admin/papers/${reviewDlg.paper.id}/review`, {
-        status: reviewStatus, comment: reviewComment,
+        status: reviewStatus, comment: reviewComment, review_request_id: crypto.randomUUID(),
       })
       setSnackbar('审核完成')
       setReviewDlg({paper:null!,open:false})
@@ -292,7 +292,7 @@ const AdminPage: React.FC = () => {
     if (selectedIds.size === 0) { setSnackbar('请先选择论文'); return }
     try {
       await api.post('/api/admin/papers/batch-review', {
-        paper_ids: [...selectedIds], status,
+        paper_ids: [...selectedIds], status, review_request_id: crypto.randomUUID(),
       })
       setSnackbar(`批量${STATUS_LABELS[status] || status}完成`)
       setSelectedIds(new Set())

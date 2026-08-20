@@ -64,6 +64,29 @@ func AuthRequired(c *gin.Context) {
 	c.Next() // ← 放行到下一个 handler
 }
 
+// OptionalAuth 允许匿名访问；若携带 Token，则必须验证成功。
+func OptionalAuth(c *gin.Context) {
+	header := c.GetHeader("Authorization")
+	if header == "" {
+		c.Next()
+		return
+	}
+	if !strings.HasPrefix(header, "Bearer ") {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "token 无效"})
+		return
+	}
+	claims := &Claims{}
+	token, err := jwt.ParseWithClaims(strings.TrimPrefix(header, "Bearer "), claims, func(t *jwt.Token) (interface{}, error) {
+		return jwtSecret, nil
+	})
+	if err != nil || !token.Valid {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "token 无效"})
+		return
+	}
+	c.Set("user_email", claims.Email)
+	c.Next()
+}
+
 // AdminRequired 管理员权限检查（需在 AuthRequired 之后）
 func AdminRequired(c *gin.Context) {
 	email, exists := c.Get("user_email")

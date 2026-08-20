@@ -315,11 +315,55 @@ func getFloatAsUint(v interface{}) (uint, bool) {
 
 // ReviewPaper 审核论文
 // POST /api/admin/papers/:id/review
+func applyPaperReview(tx *gorm.DB, paper *models.Paper, reviewerID uint, status, comment, requestID, source string, reviewedAt time.Time) (bool, error) {
+	if requestID != "" {
+		var count int64
+		if err := tx.Model(&models.PaperReviewEvent{}).Where("request_id = ?", requestID).Count(&count).Error; err != nil {
+			return false, err
+		}
+		if count > 0 {
+			return false, nil
+		}
+	}
+	previousComment := ""
+	if paper.ReviewComment != nil {
+		previousComment = *paper.ReviewComment
+	}
+	if paper.ReviewStatus == status && previousComment == comment {
+		return false, nil
+	}
+	if err := tx.Model(paper).Updates(map[string]interface{}{
+		"review_status": status, "review_comment": comment,
+		"reviewed_by_user_id": reviewerID, "reviewed_at": reviewedAt,
+	}).Error; err != nil {
+		return false, err
+	}
+	var requestIDPtr *string
+	if requestID != "" {
+		requestIDPtr = &requestID
+	}
+	commentCopy := comment
+	event := models.PaperReviewEvent{
+		PaperID: paper.ID, ReviewerUserID: reviewerID, Status: status,
+		ReviewComment: &commentCopy, ReviewedAt: reviewedAt,
+		RequestID: requestIDPtr, Source: source,
+	}
+	if err := tx.Create(&event).Error; err != nil {
+		return false, err
+	}
+	paper.ReviewStatus = status
+	paper.ReviewComment = &commentCopy
+	paper.ReviewedBy = &reviewerID
+	paper.ReviewedAt = &reviewedAt
+	return true, nil
+}
+
 func ReviewPaper(c *gin.Context) {
 	id := c.Param("id")
 	var body struct {
 		Status  string `json:"status"`
 		Comment string `json:"comment"`
+		ReviewRequestID string `json:"review_request_id"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
@@ -327,6 +371,10 @@ func ReviewPaper(c *gin.Context) {
 	}
 	if !isValidReviewStatus(body.Status) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的审核状态"})
+		return
+	}
+	if len(body.ReviewRequestID) > 64 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "review_request_id 过长"})
 		return
 	}
 
@@ -354,12 +402,10 @@ func ReviewPaper(c *gin.Context) {
 	}
 
 	now := time.Now()
-	if err := database.DB.Model(&paper).Updates(map[string]interface{}{
-		"review_status":       body.Status,
-		"review_comment":      body.Comment,
-		"reviewed_by_user_id": user.ID,
-		"reviewed_at":         now,
-	}).Error; err != nil {
+	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		_, err := applyPaperReview(tx, &paper, user.ID, body.Status, body.Comment, body.ReviewRequestID, "single", now)
+		return err
+	}); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "审核操作失败"})
 		return
 	}
@@ -370,6 +416,7 @@ func ReviewPaper(c *gin.Context) {
 
 	cache.FlushPattern("chart:*")
 	cache.FlushPattern("search:*")
+	cache.FlushPattern("community:contributions:*")
 	if err := finalizeReviewArtifacts(body.Status, id, c.GetHeader("Authorization")); err != nil {
 		message := "审核已保存，但临时证据清理失败，请重新审核以重试"
 		if body.Status == reviewStatusApproved {
