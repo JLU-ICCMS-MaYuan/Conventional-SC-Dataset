@@ -1,0 +1,4 @@
+interface:
+  display_name: "Big Project Translator"
+  short_description: "用大白话和贴近生活的例子讲清复杂技术内容"
+  default_prompt: "使用 $big-project-translator 用大白话解释这件事，并给出贴近生活且能映射回当前项目的例子。"

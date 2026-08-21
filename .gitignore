@@ -31,6 +31,14 @@ wheels/
 !.agents/skills/big-project-issue-manager/**
 !.agents/skills/big-project-spec/
 !.agents/skills/big-project-spec/**
+!.agents/skills/big-project-spec-runner/
+!.agents/skills/big-project-spec-runner/**
+!.agents/skills/big-project-planer/
+!.agents/skills/big-project-planer/**
+!.agents/skills/big-project-contractor/
+!.agents/skills/big-project-contractor/**
+!.agents/skills/big-project-translator/
+!.agents/skills/big-project-translator/**
 
 
 

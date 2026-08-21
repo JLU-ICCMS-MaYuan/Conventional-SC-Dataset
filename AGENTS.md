@@ -103,9 +103,13 @@ description: 专业的软件工程师，严格遵循SOLID、KISS、DRY、YAGNI�
 - 创建、分类、拆分、更新或关闭 Issue 时，必须使用项目 Skill
   `big-project-issue-manager`，应用其中规定的 `type:*` 标签、父子关系、Spec 关联和
   `Documentation Impact` 关闭门槛。
-- 已采纳的 Feature 必须使用项目 Skill `big-project-spec`，并在
+- 已采纳的 Feature 必须使用项目 Skill `big-project-spec-runner`，并在
   `docs/specs/<issue-number>-<feature-slug>/` 保存 Spec、Plan、Tasks 及相关设计产物；
   Issue 负责协作状态，`tasks.md` 只负责技术拆解。
+- 尚未形成 Feature 的大型项目构想使用 `big-project-planer` 写入 `docs/plan/`；需要从
+  总体规划完整拆分、文档化并连续交付时使用 `big-project-contractor`。
+- 需要把代码、架构、方案或报错解释成大白话并给出具体例子时，使用
+  `big-project-translator`，但不得改变原始技术结论。
 
 ### 6. 当前功能总览
 
