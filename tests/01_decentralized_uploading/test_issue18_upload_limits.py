@@ -9,11 +9,11 @@ from fastapi import HTTPException, UploadFile
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_upload_page_displays_limit_and_handles_plain_text_413():
-    source = (ROOT / "frontend/src/pages/UploadPage.tsx").read_text(encoding="utf-8")
+def test_current_upload_panel_displays_limit_and_handles_plain_text_413():
+    source = (ROOT / "frontend/src/components/MultiFileUploadPanel.tsx").read_text(encoding="utf-8")
 
     assert "最大 50 MB" in source
-    assert "MAX_PAPER_UPLOAD_BYTES" in source
+    assert "MAX_BYTES" in source
     assert "xhr.status === 413" in source
 
 

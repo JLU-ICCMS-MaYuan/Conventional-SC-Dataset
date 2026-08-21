@@ -1,5 +1,7 @@
 import React, { useRef, useState } from 'react'
-import { Alert, Box, Button, Card, CardContent, LinearProgress, MenuItem, Select, Typography } from '@mui/material'
+import { Alert, Box, Button, Card, CardContent, IconButton, LinearProgress, MenuItem, Select, Tooltip, Typography } from '@mui/material'
+import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined'
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
 import { getStoredToken } from '../context/AuthContext'
 import { api } from '../lib/api'
 import { UploadTaskState, unwrapData } from '../lib/paperProcessing'
@@ -35,22 +37,43 @@ const MultiFileUploadPanel: React.FC<Props> = ({ onCreated }) => {
   const input = useRef<HTMLInputElement>(null)
   const [items, setItems] = useState<Selected[]>([])
   const [busy, setBusy] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
   const [error, setError] = useState('')
 
-  const choose = (files: FileList | null) => {
+  const choose = (files: FileList | File[] | null) => {
     if (!files) return
-    const additions = Array.from(files).map((file, index): Selected => ({
+    const signatures = new Set(items.map(item => `${item.file.name}:${item.file.size}:${item.file.lastModified}`))
+    const rejected: string[] = []
+    const accepted: File[] = []
+    for (const file of Array.from(files)) {
+      const signature = `${file.name}:${file.size}:${file.lastModified}`
+      if (!/\.(pdf|txt|md)$/i.test(file.name)) rejected.push(`${file.name}：仅支持 PDF、TXT、MD`)
+      else if (file.size > MAX_BYTES) rejected.push(`${file.name}：超过 50 MB`)
+      else if (signatures.has(signature)) rejected.push(`${file.name}：已在当前列表中`)
+      else { accepted.push(file); signatures.add(signature) }
+    }
+    const hasMain = items.some(item => item.role === 'main')
+    const additions = accepted.map((file, index): Selected => ({
       clientId: crypto.randomUUID().replaceAll('-', ''), file,
-      role: items.length === 0 && index === 0 ? 'main' : 'attachment', progress: 0, status: '等待上传',
+      role: !hasMain && index === 0 ? 'main' : 'attachment', progress: 0, status: '等待上传',
     }))
-    const invalid = additions.find(item => !/\.(pdf|txt|md)$/i.test(item.file.name) || item.file.size > MAX_BYTES)
-    if (invalid) { setError(`${invalid.file.name} 类型不支持或超过 50 MB`); return }
-    setItems(current => [...current, ...additions])
-    setError('')
+    if (additions.length) setItems(current => [...current, ...additions])
+    setError(rejected.join('；'))
   }
 
   const setRole = (clientId: string, role: Role) => {
     setItems(current => current.map(item => item.clientId === clientId ? { ...item, role } : item))
+  }
+
+  const remove = (clientId: string) => {
+    setItems(current => current.filter(item => item.clientId !== clientId))
+  }
+
+  const clear = () => {
+    if (!items.length || !window.confirm('清空尚未上传的本地文件列表？后台任务不会受到影响。')) return
+    setItems([])
+    setError('')
+    if (input.current) input.current.value = ''
   }
 
   const start = async () => {
@@ -91,19 +114,45 @@ const MultiFileUploadPanel: React.FC<Props> = ({ onCreated }) => {
     <Card variant="outlined" sx={{ mb: 3 }}>
       <CardContent>
         <Typography variant="h6" fontWeight={700}>新建论文上传任务</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>一个正文，可添加补充材料或附件；PDF/TXT/MD，每个最大 50 MB，同时上传最多 3 个。</Typography>
-        {items.map(item => <Box key={item.clientId} sx={{ display: 'grid', gridTemplateColumns: '1fr 150px', gap: 1, mb: 1 }}>
-          <Box><Typography noWrap>{item.file.name}</Typography><LinearProgress variant="determinate" value={item.progress} /></Box>
+        <Typography variant="body2" color="text.secondary">一个正文，可添加补充材料或附件；每组文件共同填写一张论文表单。</Typography>
+        <Box
+          aria-label="拖拽或选择论文文件"
+          onClick={() => !busy && input.current?.click()}
+          onDragOver={event => { event.preventDefault(); if (!busy) setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={event => {
+            event.preventDefault()
+            setDragOver(false)
+            if (!busy) choose(event.dataTransfer.files)
+          }}
+          sx={{
+            mt: 2, mb: items.length ? 2 : 0, minHeight: items.length ? 88 : 116,
+            border: '2px dashed', borderColor: dragOver ? 'primary.main' : 'divider', borderRadius: 2,
+            bgcolor: dragOver ? 'primary.50' : 'background.default', cursor: busy ? 'default' : 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5,
+            transition: 'border-color 160ms ease-out, background-color 160ms ease-out',
+          }}
+        >
+          <CloudUploadOutlinedIcon color="primary" />
+          <Box>
+            <Typography fontWeight={700}>拖拽文件到这里，或点击选择</Typography>
+            <Typography variant="caption" color="text.secondary">PDF、TXT、MD · 每个最大 50 MB · 同时上传最多 3 个</Typography>
+          </Box>
+        </Box>
+        {items.map(item => <Box key={item.clientId} sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr) 112px 40px', sm: 'minmax(0, 1fr) 150px 40px' }, gap: 1, mb: 1, alignItems: 'center' }}>
+          <Box sx={{ minWidth: 0 }}><Typography noWrap>{item.file.name}</Typography><LinearProgress variant="determinate" value={item.progress} /></Box>
           <Select size="small" value={item.role} disabled={busy} onChange={event => setRole(item.clientId, event.target.value as Role)}>
             <MenuItem value="main">正文</MenuItem><MenuItem value="supplementary">补充材料</MenuItem><MenuItem value="attachment">附件</MenuItem>
           </Select>
+          <Tooltip title="移除文件"><span><IconButton aria-label={`移除 ${item.file.name}`} size="small" disabled={busy} onClick={() => remove(item.clientId)}><DeleteOutlineIcon fontSize="small" /></IconButton></span></Tooltip>
         </Box>)}
         {error && <Alert severity="error" sx={{ my: 1 }}>{error}</Alert>}
-        <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
+        <Box sx={{ display: 'flex', gap: 1, mt: 2, flexWrap: 'wrap' }}>
           <Button variant="outlined" onClick={() => input.current?.click()} disabled={busy}>选择文件</Button>
           <Button variant="contained" onClick={() => void start()} disabled={busy || items.length === 0}>{busy ? '上传中…' : '开始上传并解析'}</Button>
+          {items.length > 0 && <Button color="inherit" onClick={clear} disabled={busy}>清空</Button>}
         </Box>
-        <input ref={input} type="file" hidden multiple accept=".pdf,.txt,.md" onChange={event => choose(event.target.files)} />
+        <input ref={input} type="file" hidden multiple accept=".pdf,.txt,.md" onChange={event => { choose(event.target.files); event.target.value = '' }} />
       </CardContent>
     </Card>
   )

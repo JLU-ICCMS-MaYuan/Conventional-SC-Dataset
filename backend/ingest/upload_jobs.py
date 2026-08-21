@@ -53,6 +53,32 @@ PUBLIC_CHUNK_RESULT_FIELDS = {
     "sc_type_candidates", "_source",
 }
 
+FORM_PREVIEW_GROUPS = (
+    ("bibliography", "基本信息", (
+        ("paper.title", "标题"), ("paper.doi", "DOI"), ("paper.authors", "作者"),
+        ("paper.journal", "期刊"), ("paper.volume", "卷"), ("paper.pages", "页码"),
+        ("paper.year", "年份"), ("paper.abstract", "摘要"),
+    )),
+    ("classification", "分类判断", (
+        ("paper.paper_type", "论文类型"), ("paper.theoretical_subtype", "理论二级类型"),
+        ("sc_type", "超导材料类型"), ("classification_reason", "分类理由"),
+    )),
+    ("content", "研究内容", (
+        ("paper.summary", "全文摘要"), ("paper.keywords_tags", "关键词"),
+        ("paper.methodology", "研究方法"), ("paper.key_finding", "主要结论"),
+        ("paper.rationale", "判断依据"), ("paper.research_materials", "研究材料"),
+        ("paper.referenced_materials", "引用材料"), ("paper.material_relations", "材料关系"),
+        ("paper.builds_on", "工作脉络"),
+    )),
+    ("properties", "关键物性", (("key_properties", "物性数据"),)),
+)
+
+FORM_PREVIEW_MULTI_FIELDS = {
+    "paper.authors", "paper.keywords_tags", "paper.methodology", "paper.key_finding",
+    "paper.research_materials", "paper.referenced_materials", "paper.material_relations",
+    "paper.builds_on", "key_properties",
+}
+
 
 SUMMARY_SYSTEM_PROMPT = """你是超导材料论文分类与结构化提取专家。汇总整篇论文各分段候选事实，去重并返回 JSON 草稿。
 
@@ -250,6 +276,105 @@ def _save_chunk_manifest(task_id: str, items: list[dict[str, Any]]) -> None:
     _atomic_write_json(_chunk_manifest_path(task_id), {"items": items})
 
 
+def _preview_source(chunk: dict[str, Any], evidence: Any = None) -> dict[str, Any]:
+    source = {
+        key: chunk.get(key) for key in (
+            "file_id", "filename", "file_role", "section", "page_start", "page_end",
+        )
+    }
+    if isinstance(evidence, dict):
+        page = evidence.get("page")
+        if page not in (None, ""):
+            source["page_start"] = page
+            source["page_end"] = page
+        quote = str(evidence.get("quote") or "").strip()
+        if quote:
+            source["quote"] = quote
+    return source
+
+
+def _preview_item_value(item: Any, *keys: str) -> Any:
+    if not isinstance(item, dict):
+        return item
+    for key in keys:
+        if item.get(key) not in (None, ""):
+            return item[key]
+    return None
+
+
+def _build_form_preview(chunks: list[dict[str, Any]], state: dict[str, Any]) -> dict[str, Any]:
+    buckets: dict[str, dict[str, dict[str, Any]]] = {
+        path: {} for _, _, fields in FORM_PREVIEW_GROUPS for path, _ in fields
+    }
+
+    def add(path: str, value: Any, chunk: dict[str, Any], evidence: Any = None) -> None:
+        if value in (None, "", [], {}):
+            return
+        if path == "key_properties" and isinstance(value, dict):
+            value = {
+                key: item for key, item in value.items()
+                if key not in {"page", "quote", "evidence", "_source"}
+            }
+        key = json.dumps(value, ensure_ascii=False, sort_keys=True)
+        candidate = buckets[path].setdefault(key, {"value": value, "sources": []})
+        source = _preview_source(chunk, evidence)
+        source_key = json.dumps(source, ensure_ascii=False, sort_keys=True)
+        if all(json.dumps(item, ensure_ascii=False, sort_keys=True) != source_key for item in candidate["sources"]):
+            candidate["sources"].append(source)
+
+    for chunk in chunks:
+        result = chunk.get("result")
+        if not isinstance(result, dict):
+            continue
+        metadata = result.get("metadata") if isinstance(result.get("metadata"), dict) else {}
+        for key in ("title", "doi", "journal", "year", "abstract"):
+            add(f"paper.{key}", metadata.get(key), chunk)
+        for author in metadata.get("authors") or []:
+            add("paper.authors", author, chunk)
+        for item in result.get("paper_type_evidence") or []:
+            add("paper.paper_type", _preview_item_value(item, "candidate", "value"), chunk, item)
+        for item in result.get("sc_type_candidates") or []:
+            add("sc_type", _preview_item_value(item, "value", "candidate"), chunk, item)
+        for result_key, path, keys in (
+            ("research_materials", "paper.research_materials", ("value", "material", "name")),
+            ("referenced_materials", "paper.referenced_materials", ("value", "material", "name")),
+            ("methodology", "paper.methodology", ("value", "method", "name")),
+            ("key_findings", "paper.key_finding", ("value", "finding", "text")),
+            ("material_relations", "paper.material_relations", ()),
+        ):
+            for item in result.get(result_key) or []:
+                add(path, _preview_item_value(item, *keys) if keys else item, chunk, item)
+        for item in result.get("key_properties") or []:
+            add("key_properties", item, chunk, item)
+
+    groups: list[dict[str, Any]] = []
+    for group_id, label, field_specs in FORM_PREVIEW_GROUPS:
+        fields: list[dict[str, Any]] = []
+        for path, field_label in field_specs:
+            candidates = list(buckets[path].values())
+            conflict = path not in FORM_PREVIEW_MULTI_FIELDS and len(candidates) > 1
+            fields.append({
+                "path": path,
+                "label": field_label,
+                "state": "conflict" if conflict else "filled" if candidates else "waiting",
+                "candidates": candidates,
+            })
+        groups.append({"id": group_id, "label": label, "fields": fields})
+
+    task_status = state.get("status")
+    preview_status = (
+        "ready" if task_status == "ready"
+        else "summarizing" if task_status == "summarizing"
+        else "updating" if any(buckets[path] for path in buckets)
+        else "waiting"
+    )
+    return {
+        "status": preview_status,
+        "read_only": task_status != "ready",
+        "groups": groups,
+    }
+
+
 def public_parsing_detail(task_id: str) -> dict[str, Any]:
     """返回安全的文件/分段/汇总快照。"""
     state = get_state(task_id)
@@ -293,6 +418,7 @@ def public_parsing_detail(task_id: str) -> dict[str, Any]:
             for file in state.get("files") or []
         ],
         "chunks": chunks,
+        "form_preview": _build_form_preview(chunks, state),
         "summary": {
             "status": "completed" if state.get("status") == "ready" else state.get("stage"),
             "completed": state.get("completed_chunks", 0),

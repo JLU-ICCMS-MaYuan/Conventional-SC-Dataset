@@ -13,7 +13,6 @@ import {
 import { useAuth } from '../context/AuthContext'
 import AuthDialog from '../components/AuthDialog'
 import PaperEditView from '../components/PaperEditView'
-import UploadTaskEditor from '../components/UploadTaskEditor'
 import UploadTaskCenter from '../components/UploadTaskCenter'
 import MultiFileUploadPanel from '../components/MultiFileUploadPanel'
 import UploadParsingDetail from '../components/UploadParsingDetail'
@@ -476,21 +475,24 @@ const UploadPage: React.FC = () => {
       {/* ── TAB 0: Paper upload ── */}
       {tab === 0 && !parsed && (
         <>
-          <UploadTaskCenter refreshKey={taskCenterTick} onOpen={task => {
+          <MultiFileUploadPanel onCreated={task => {
+            setActiveTaskId(task.task_id)
+            setTaskState(task)
+            setTaskCenterTick(value => value + 1)
+            if (taskStorageKey) localStorage.setItem(taskStorageKey, task.task_id)
+          }} />
+          <UploadTaskCenter refreshKey={taskCenterTick} activeTaskId={activeTaskId} onToggle={task => {
+            if (task.task_id === activeTaskId) {
+              setActiveTaskId(null)
+              setTaskState(null)
+              if (taskStorageKey) localStorage.removeItem(taskStorageKey)
+              return
+            }
             setActiveTaskId(task.task_id)
             setTaskState(task)
             if (taskStorageKey) localStorage.setItem(taskStorageKey, task.task_id)
             void api.post(`/api/upload-tasks/${task.task_id}/activity`)
           }} />
-          {!activeTaskId && <MultiFileUploadPanel onCreated={task => {
-            setActiveTaskId(task.task_id)
-            setTaskState(task)
-            setTaskCenterTick(value => value + 1)
-            if (taskStorageKey) localStorage.setItem(taskStorageKey, task.task_id)
-          }} />}
-          {!activeTaskId && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: -2, mb: 2 }}>
-            支持 PDF · TXT · MD，每个文件最大 50 MB
-          </Typography>}
           {activeTaskId && (
             <Box sx={{ mb: 3 }}>
               <Card variant="outlined">
@@ -567,13 +569,9 @@ const UploadPage: React.FC = () => {
                       {taskState.duplicate_reason || '数据库中已有相同 DOI，未创建重复论文。'}
                     </Alert>
                   )}
-                  {activeTaskId && <UploadParsingDetail taskId={activeTaskId} />}
+                  {activeTaskId && <UploadParsingDetail taskId={activeTaskId} onSubmitted={handleTaskSubmitted} />}
                 </CardContent>
               </Card>
-
-              {taskState?.stage === 'ready' && taskState.processing_status === 'succeeded' && !taskState.duplicate && (
-                <UploadTaskEditor taskId={activeTaskId} onSubmitted={handleTaskSubmitted} />
-              )}
             </Box>
           )}
 

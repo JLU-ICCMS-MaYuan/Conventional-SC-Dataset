@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Typography } from '@mui/material'
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
 import { api } from '../lib/api'
 import { UploadTaskState, unwrapData } from '../lib/paperProcessing'
 
@@ -22,10 +24,11 @@ const statusLabel: Record<string, string> = {
 
 interface Props {
   refreshKey?: number
-  onOpen: (task: UploadTaskState) => void
+  activeTaskId?: string | null
+  onToggle: (task: UploadTaskState) => void
 }
 
-const UploadTaskCenter: React.FC<Props> = ({ refreshKey, onOpen }) => {
+const UploadTaskCenter: React.FC<Props> = ({ refreshKey, activeTaskId, onToggle }) => {
   const [tasks, setTasks] = useState<UploadTaskState[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -77,11 +80,12 @@ const UploadTaskCenter: React.FC<Props> = ({ refreshKey, onOpen }) => {
       <Box sx={{ display: 'grid', gap: 1 }}>
         {tasks.map(task => {
           const remaining = countdown(task.cleanup_at, now)
+          const selected = task.task_id === activeTaskId
           const running = ['uploading', 'queued', 'extracting', 'reading', 'summarizing', 'submitting', 'cancelling']
             .includes(task.status || '')
           return (
-            <Card key={task.task_id} variant="outlined" onClick={() => onOpen(task)} sx={{ cursor: 'pointer' }}>
-              <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 }, display: 'flex', gap: 2, alignItems: 'center' }}>
+            <Card key={task.task_id} variant="outlined" sx={{ borderColor: selected ? 'primary.main' : 'divider', bgcolor: selected ? 'action.selected' : 'background.paper' }}>
+              <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 }, display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
                 <Box sx={{ minWidth: 0, flex: 1 }}>
                   <Typography fontWeight={700} noWrap>{task.filename || task.files?.[0]?.original_filename || task.task_id}</Typography>
                   <Typography variant="caption" color="text.secondary">
@@ -90,6 +94,13 @@ const UploadTaskCenter: React.FC<Props> = ({ refreshKey, onOpen }) => {
                   </Typography>
                   {remaining && <Typography variant="caption" color={remaining === '等待清理' ? 'error' : 'warning.main'} sx={{ ml: 1 }}>{remaining}</Typography>}
                 </Box>
+                <Button
+                  size="small"
+                  variant={selected ? 'contained' : 'text'}
+                  startIcon={selected ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+                  aria-label={`${selected ? '收起' : '查看'} ${task.filename || task.files?.[0]?.original_filename || task.task_id} 的解析详情`}
+                  onClick={() => onToggle(task)}
+                >{selected ? '收起解析' : '查看解析'}</Button>
                 {running
                   ? <Button size="small" color="warning" onClick={event => void cancel(event, task.task_id)}>取消</Button>
                   : ['failed', 'duplicate', 'cancelled'].includes(task.status || '')
