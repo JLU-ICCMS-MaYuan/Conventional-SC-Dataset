@@ -176,6 +176,32 @@ func CommunityContributions(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+const defaultTcField = "experimental_tc"
+
+var chartTcColumns = map[string]string{
+	"experimental_tc":           "sr.experimental_tc",
+	"anisotropic_eliashberg_tc": "sr.anisotropic_eliashberg_tc",
+	"isotropic_eliashberg_tc":   "sr.isotropic_eliashberg_tc",
+	"allen_dynes_tc":            "sr.allen_dynes_tc",
+	"mcmillan_tc":               "sr.mcmillan_tc",
+}
+
+func resolveChartTcField(value string) (string, string, bool) {
+	field := strings.TrimSpace(value)
+	if field == "" {
+		field = defaultTcField
+	}
+	column, ok := chartTcColumns[field]
+	if !ok {
+		return "", "", false
+	}
+	return field, column, true
+}
+
+func chartCacheKey(chart, field string) string {
+	return fmt.Sprintf("chart:approved:%s:%s", chart, field)
+}
+
 // ═══════════════════════════════════════════════
 // 统计 API（替代 Python papers stats + admin users）
 // ═══════════════════════════════════════════════
@@ -183,7 +209,12 @@ func CommunityContributions(c *gin.Context) {
 // TcPressureChart Tc-P 散点图数据
 // GET /api/papers/stats/tc-pressure
 func TcPressureChart(c *gin.Context) {
-	const cacheKey = "chart:approved:tc_pressure"
+	tcField, tcColumn, ok := resolveChartTcField(c.Query("tc_field"))
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "不支持的 Tc 字段"})
+		return
+	}
+	cacheKey := chartCacheKey("tc_pressure", tcField)
 	var result []gin.H
 	if cache.Get(cacheKey, &result) {
 		c.JSON(http.StatusOK, result)
@@ -197,19 +228,24 @@ func TcPressureChart(c *gin.Context) {
 		SCType   string  `gorm:"column:sc_type"`
 		Type     string  `gorm:"column:type"`
 		PaperID  uint    `gorm:"column:paper_id"`
+		DOI      string  `gorm:"column:doi"`
+		Year     int     `gorm:"column:year"`
 	}
 	var rows []row
-	database.DB.Raw(`
-		SELECT material, value_max AS y, COALESCE(pressure_gpa,0) AS x,
-			COALESCE(superconductor_type,'others') AS sc_type,
-			CASE WHEN article_type='e' THEN 'experimental' ELSE 'theoretical' END AS type,
-			paper_id
-			FROM key_properties kp JOIN papers p ON kp.paper_id = p.id
-			WHERE kp.name = 'critical_temperature' AND kp.value_max IS NOT NULL
-			AND kp.pressure_gpa IS NOT NULL AND kp.is_primary = true
-			AND p.review_status = 'approved'
-	`).Scan(&rows)
+	query := fmt.Sprintf(`
+		SELECT sc.chemical_formula AS material, %s AS y, sr.pressure_gpa AS x,
+			COALESCE(sr.superconductor_type,'others') AS sc_type,
+			CASE WHEN sr.article_type='e' THEN 'experimental' ELSE 'theoretical' END AS type,
+			sr.paper_id, COALESCE(p.doi,'') AS doi, COALESCE(p.year,0) AS year
+		FROM superconductor_records sr
+		JOIN superconductors sc ON sc.id = sr.superconductor_id
+		JOIN papers p ON p.id = sr.paper_id AND p.review_status = 'approved'
+		WHERE sr.show_in_chart = true AND %s IS NOT NULL
+			AND sr.pressure_gpa IS NOT NULL
+	`, tcColumn, tcColumn)
+	database.DB.Raw(query).Scan(&rows)
 
+	result = make([]gin.H, 0, len(rows))
 	for _, r := range rows {
 		t := r.Type
 		if t == "" {
@@ -218,7 +254,8 @@ func TcPressureChart(c *gin.Context) {
 		item := gin.H{
 			"formula": r.Material,
 			"y":       r.Tc, "x": r.Pressure,
-			"sc_type": r.SCType, "type": t,
+			"sc_type": r.SCType, "type": t, "tc_field": tcField,
+			"doi": r.DOI, "year": r.Year,
 		}
 		if r.PaperID > 0 {
 			item["paper_id"] = r.PaperID
@@ -232,7 +269,12 @@ func TcPressureChart(c *gin.Context) {
 // TcYearChart Tc-Year 散点图数据
 // GET /api/papers/stats/tc-year
 func TcYearChart(c *gin.Context) {
-	const cacheKey = "chart:approved:tc_year"
+	tcField, tcColumn, ok := resolveChartTcField(c.Query("tc_field"))
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "不支持的 Tc 字段"})
+		return
+	}
+	cacheKey := chartCacheKey("tc_year", tcField)
 	var result []gin.H
 	if cache.Get(cacheKey, &result) {
 		c.JSON(http.StatusOK, result)
@@ -247,19 +289,21 @@ func TcYearChart(c *gin.Context) {
 		Material string  `gorm:"column:formula"`
 		DOI      string  `gorm:"column:doi"`
 		PaperID  uint    `gorm:"column:paper_id"`
+		Pressure float64 `gorm:"column:pressure_gpa"`
 	}
 	var rows []row
-	database.DB.Raw(`
-		SELECT p.year AS x, kp.value_max AS y,
-			CASE WHEN kp.article_type='e' THEN 'experimental' ELSE 'theoretical' END AS type,
-			COALESCE(kp.superconductor_type,'others') AS sc_type,
-			kp.material AS formula, COALESCE(p.doi,'') AS doi,
-			kp.paper_id AS paper_id
-		FROM key_properties kp JOIN papers p ON kp.paper_id = p.id
-			WHERE kp.name = 'critical_temperature' AND kp.value_max IS NOT NULL
-			AND p.year IS NOT NULL AND kp.is_primary = true
-			AND p.review_status = 'approved'
-	`).Scan(&rows)
+	query := fmt.Sprintf(`
+		SELECT p.year AS x, %s AS y,
+			CASE WHEN sr.article_type='e' THEN 'experimental' ELSE 'theoretical' END AS type,
+			COALESCE(sr.superconductor_type,'others') AS sc_type,
+			sc.chemical_formula AS formula, COALESCE(p.doi,'') AS doi,
+			sr.paper_id AS paper_id, sr.pressure_gpa
+		FROM superconductor_records sr
+		JOIN superconductors sc ON sc.id = sr.superconductor_id
+		JOIN papers p ON p.id = sr.paper_id AND p.review_status = 'approved'
+		WHERE sr.show_in_chart = true AND %s IS NOT NULL AND p.year IS NOT NULL
+	`, tcColumn, tcColumn)
+	database.DB.Raw(query).Scan(&rows)
 
 	result = make([]gin.H, 0, len(rows))
 	for _, r := range rows {
@@ -270,6 +314,7 @@ func TcYearChart(c *gin.Context) {
 		item := gin.H{
 			"x": r.Year, "y": r.Tc, "type": t,
 			"sc_type": r.SCType, "formula": r.Material, "doi": r.DOI,
+			"year": r.Year, "pressure_gpa": r.Pressure, "tc_field": tcField,
 		}
 		if r.PaperID > 0 {
 			item["paper_id"] = r.PaperID

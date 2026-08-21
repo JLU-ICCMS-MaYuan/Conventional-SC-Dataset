@@ -12,6 +12,10 @@ import { useAuth } from '../context/AuthContext'
 import { SC_TYPE_CONFIG } from '../lib/scatterConfig'
 import ChartScatter from '../components/ChartScatter'
 import ChartGroupEditor from '../components/ChartGroupEditor'
+import {
+  clearChartPreferences, DEFAULT_CHART_PREFERENCES, readChartPreferences,
+  TC_FIELDS, TC_FIELD_LABELS, TcField, writeChartPreferences,
+} from '../lib/chartPreferences'
 
 // ── DataPoint interface (matches ChartScatter) ──
 interface DataPoint {
@@ -68,6 +72,12 @@ const SharePage: React.FC = () => {
   // ── Raw data from APIs ──
   const [pressureData, setPressureData] = useState<any[]>([])
   const [yearData, setYearData] = useState<any[]>([])
+  const [pressureTcField, setPressureTcField] = useState<TcField>(DEFAULT_CHART_PREFERENCES.pressureTcField)
+  const [yearTcField, setYearTcField] = useState<TcField>(DEFAULT_CHART_PREFERENCES.yearTcField)
+  const [pressureLoading, setPressureLoading] = useState(false)
+  const [yearLoading, setYearLoading] = useState(false)
+  const [pressureError, setPressureError] = useState('')
+  const [yearError, setYearError] = useState('')
 
   // ── Chart groups ──
   const [groups, setGroups] = useState<any[]>([])
@@ -107,10 +117,7 @@ const SharePage: React.FC = () => {
 
   useEffect(() => {
     loadAllGroups()
-    api.get<any>('/api/papers/stats/tc-pressure').then(data => setPressureData(Array.isArray(data) ? data : [])).catch(() => setPressureData([]))
-    api.get<any>('/api/papers/stats/tc-year').then(data => setYearData(Array.isArray(data) ? data : [])).catch(() => setYearData([]))
   }, [])
-
 
   const loadContributions = useCallback(async (force = false) => {
     setContributionsLoading(true)
@@ -130,6 +137,30 @@ const SharePage: React.FC = () => {
     const timer = window.setInterval(() => { void loadContributions() }, 60 * 60 * 1000)
     return () => window.clearInterval(timer)
   }, [user?.id, loadContributions])
+
+  useEffect(() => {
+    const preferences = user ? readChartPreferences(user.id) : DEFAULT_CHART_PREFERENCES
+    setPressureTcField(preferences.pressureTcField)
+    setYearTcField(preferences.yearTcField)
+  }, [user?.id])
+
+  useEffect(() => {
+    setPressureLoading(true)
+    setPressureError('')
+    api.get<any>(`/api/papers/stats/tc-pressure?tc_field=${encodeURIComponent(pressureTcField)}`)
+      .then(data => setPressureData(Array.isArray(data) ? data : []))
+      .catch(() => { setPressureData([]); setPressureError('Tc–Pressure 数据加载失败') })
+      .finally(() => setPressureLoading(false))
+  }, [pressureTcField])
+
+  useEffect(() => {
+    setYearLoading(true)
+    setYearError('')
+    api.get<any>(`/api/papers/stats/tc-year?tc_field=${encodeURIComponent(yearTcField)}`)
+      .then(data => setYearData(Array.isArray(data) ? data : []))
+      .catch(() => { setYearData([]); setYearError('Tc–Year 数据加载失败') })
+      .finally(() => setYearLoading(false))
+  }, [yearTcField])
 
   // ── Fetch paper detail when paperId changes ──
   useEffect(() => {
@@ -296,6 +327,32 @@ const SharePage: React.FC = () => {
     </Box>
   )
 
+  const renderTcFieldSelector = (value: TcField, onChange: (field: TcField) => void) => (
+    <FormControl size="small" sx={{ minWidth: 220 }}>
+      <InputLabel>Tc 字段</InputLabel>
+      <Select value={value} label="Tc 字段" onChange={event => onChange(event.target.value as TcField)}>
+        {TC_FIELDS.map(field => (
+          <MenuItem key={field} value={field}>{TC_FIELD_LABELS[field]}</MenuItem>
+        ))}
+      </Select>
+    </FormControl>
+  )
+
+  const changePressureTcField = (field: TcField) => {
+    setPressureTcField(field)
+    if (user) writeChartPreferences(user.id, { version: 1, pressureTcField: field, yearTcField })
+  }
+
+  const changeYearTcField = (field: TcField) => {
+    setYearTcField(field)
+    if (user) writeChartPreferences(user.id, { version: 1, pressureTcField, yearTcField: field })
+  }
+
+  const restoreDefaults = () => {
+    if (user) clearChartPreferences(user.id)
+    setPressureTcField(DEFAULT_CHART_PREFERENCES.pressureTcField)
+    setYearTcField(DEFAULT_CHART_PREFERENCES.yearTcField)
+  }
 
   const renderLeaderboard = (title: string, rows: ContributionRank[], unit: string) => (
     <Card variant="outlined" sx={{ flex: 1, minWidth: 280 }}>
@@ -320,8 +377,13 @@ const SharePage: React.FC = () => {
   return (
     <Box>
       <Typography variant="overline">Community</Typography>
-      <Typography variant="h1">社区</Typography>
-
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, gap: 2, mb: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+        <Box>
+          <Typography variant="h1">社区</Typography>
+          <Typography color="text.secondary">公共数据，个人图表偏好仅保存在当前浏览器。</Typography>
+        </Box>
+        <Button variant="outlined" onClick={restoreDefaults}>恢复默认</Button>
+      </Box>
 
       <Card sx={{ mb: 3 }}>
         <CardContent>
@@ -355,50 +417,70 @@ const SharePage: React.FC = () => {
         </CardContent>
       </Card>
 
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'repeat(2, minmax(0, 1fr))' }, gap: 2.5, alignItems: 'start' }}>
+
       {/* ═══ Tc-Pressure Scatter ═══ */}
-      <Card sx={{ mb: 3 }}>
+      <Card sx={{ minWidth: 0 }}>
         <CardContent>
           <Typography variant="h6" gutterBottom>
             Tc-Pressure 分布
           </Typography>
-          {renderGroupSelector(chart1, setChart1)}
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            {renderTcFieldSelector(pressureTcField, changePressureTcField)}
+            {renderGroupSelector(chart1, setChart1)}
+          </Box>
           <Box sx={{ mt: 1 }}>
-            <ChartScatter
+            {pressureLoading ? <Box sx={{ display: 'grid', placeItems: 'center', minHeight: 360 }}><CircularProgress /></Box>
+            : pressureError ? <Alert severity="error">{pressureError}</Alert>
+            : pressureData.length === 0 && !chart1.groupId ? <Alert severity="info">当前 Tc 字段暂无可公开数据，请切换字段。</Alert>
+            : <ChartScatter
               title="Tc-Pressure 分布"
               data={chart1Data}
               xLabel="Pressure (GPa)"
               yLabel="Tc (K)"
+              tcFieldLabel={TC_FIELD_LABELS[pressureTcField]}
+              qualityFactorContours
+              minHeight={390}
               visibleTypes={visibleTypes}
               showBackground={!chart1.groupId}
               onToggleType={toggleType}
               onPointClick={(p) => { if (p.paperId) setSelectedPaperId(p.paperId) }}
-            />
+            />}
           </Box>
         </CardContent>
       </Card>
 
       {/* ═══ Tc-Year Scatter ═══ */}
-      <Card sx={{ mb: 3 }}>
+      <Card sx={{ minWidth: 0 }}>
         <CardContent>
           <Typography variant="h6" gutterBottom>
             Tc-Year 演变
           </Typography>
-          {renderGroupSelector(chart2, setChart2)}
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            {renderTcFieldSelector(yearTcField, changeYearTcField)}
+            {renderGroupSelector(chart2, setChart2)}
+          </Box>
           <Box sx={{ mt: 1 }}>
-            <ChartScatter
+            {yearLoading ? <Box sx={{ display: 'grid', placeItems: 'center', minHeight: 360 }}><CircularProgress /></Box>
+            : yearError ? <Alert severity="error">{yearError}</Alert>
+            : yearData.length === 0 && !chart2.groupId ? <Alert severity="info">当前 Tc 字段暂无可公开数据，请切换字段。</Alert>
+            : <ChartScatter
               title="Tc-Year 演变"
               data={chart2Data}
               xLabel="Year"
               yLabel="Tc (K)"
+              tcFieldLabel={TC_FIELD_LABELS[yearTcField]}
+              minHeight={390}
               xDomain={[1900, 'auto']}
               visibleTypes={visibleTypes}
               showBackground={!chart2.groupId}
               onToggleType={toggleType}
               onPointClick={(p) => { if (p.paperId) setSelectedPaperId(p.paperId) }}
-            />
+            />}
           </Box>
         </CardContent>
       </Card>
+      </Box>
 
       {/* ═══ Paper Detail Drawer ═══ */}
       <Drawer
