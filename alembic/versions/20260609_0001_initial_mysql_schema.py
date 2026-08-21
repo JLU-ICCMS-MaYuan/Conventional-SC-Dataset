@@ -112,6 +112,25 @@ def upgrade():
     op.create_index("ix_papers_uploaded_by_user_id", "papers", ["uploaded_by_user_id"])
     op.create_index("ix_papers_year", "papers", ["year"])
 
+    # 0005 extends this table; the fresh chain must create it first.
+    op.create_table(
+        "paper_chunks",
+        sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
+        sa.Column("paper_id", sa.Integer(), sa.ForeignKey("papers.id"), nullable=False),
+        sa.Column("chunk_index", sa.Integer(), nullable=False),
+        sa.Column("section_name", sa.String(length=500)),
+        sa.Column("heading", sa.String(length=500)),
+        sa.Column("content", sa.Text(), nullable=False),
+        sa.Column("token_count", sa.Integer()),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+    )
+    op.create_index("ix_paper_chunks_paper_id", "paper_chunks", ["paper_id"])
+
     op.create_table(
         "superconductor_records",
         sa.Column("id", sa.Integer(), primary_key=True),
@@ -162,6 +181,9 @@ def downgrade():
     op.drop_index("ix_superconductor_records_pressure_gpa", table_name="superconductor_records")
     op.drop_index("ix_superconductor_records_paper_id", table_name="superconductor_records")
     op.drop_table("superconductor_records")
+
+    op.drop_index("ix_paper_chunks_paper_id", table_name="paper_chunks")
+    op.drop_table("paper_chunks")
 
     op.drop_index("ix_papers_year", table_name="papers")
     op.drop_index("ix_papers_uploaded_by_user_id", table_name="papers")

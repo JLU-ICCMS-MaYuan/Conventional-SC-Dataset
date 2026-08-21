@@ -30,19 +30,19 @@ func reviewEventTestDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock) {
 
 func TestApplyPaperReviewWritesOneImmutableEvent(t *testing.T) {
 	db, mock := reviewEventTestDB(t)
-	paper := models.Paper{ID: 11, ReviewStatus: reviewStatusPending}
+	paper := models.Paper{ID: 11, ContentRevision: 3, ReviewStatus: reviewStatusPending}
 	reviewedAt := time.Date(2026, 8, 20, 10, 0, 0, 0, time.UTC)
 
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT count(*) FROM `paper_review_events` WHERE request_id = ?")).
 		WithArgs("request-1").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 	mock.ExpectBegin()
 	mock.ExpectExec("UPDATE `papers` SET .* WHERE `id` = \\?").
-		WithArgs("证据充分", "approved", reviewedAt, uint(7), sqlmock.AnyArg(), uint(11)).
+		WithArgs(uint(3), "证据充分", "approved", reviewedAt, uint(7), sqlmock.AnyArg(), uint(11)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 	mock.ExpectBegin()
 	mock.ExpectExec("INSERT INTO `paper_review_events`").
-		WithArgs(uint(11), uint(7), "approved", "证据充分", reviewedAt, "request-1", "single").
+		WithArgs(uint(11), uint(3), uint(7), "approved", "证据充分", reviewedAt, "request-1", "single").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 
@@ -52,6 +52,9 @@ func TestApplyPaperReviewWritesOneImmutableEvent(t *testing.T) {
 	}
 	if !written || paper.ReviewStatus != "approved" || paper.ReviewedBy == nil || *paper.ReviewedBy != 7 {
 		t.Fatalf("审核事件未正确应用: written=%v paper=%#v", written, paper)
+	}
+	if paper.ApprovedRevision == nil || *paper.ApprovedRevision != 3 {
+		t.Fatalf("approved_revision = %#v, want 3", paper.ApprovedRevision)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
@@ -79,17 +82,17 @@ func TestApplyPaperReviewIgnoresRetriedRequest(t *testing.T) {
 func TestApplyPaperReviewCountsUnchangedReviewAsNewParticipation(t *testing.T) {
 	db, mock := reviewEventTestDB(t)
 	comment := "证据充分"
-	paper := models.Paper{ID: 11, ReviewStatus: "approved", ReviewComment: &comment}
+	paper := models.Paper{ID: 11, ContentRevision: 3, ReviewStatus: "approved", ReviewComment: &comment}
 	reviewedAt := time.Date(2026, 8, 20, 11, 0, 0, 0, time.UTC)
 
 	mock.ExpectBegin()
 	mock.ExpectExec("UPDATE `papers` SET .* WHERE `id` = \\?").
-		WithArgs(comment, "approved", reviewedAt, uint(7), sqlmock.AnyArg(), uint(11)).
+		WithArgs(uint(3), comment, "approved", reviewedAt, uint(7), sqlmock.AnyArg(), uint(11)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 	mock.ExpectBegin()
 	mock.ExpectExec("INSERT INTO `paper_review_events`").
-		WithArgs(uint(11), uint(7), "approved", comment, reviewedAt, nil, "single").
+		WithArgs(uint(11), uint(3), uint(7), "approved", comment, reviewedAt, nil, "single").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 

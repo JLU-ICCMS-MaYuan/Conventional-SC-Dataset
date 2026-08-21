@@ -32,7 +32,7 @@ var (
 	}
 	paperUpdateFields = []string{
 		"doi", "title", "authors", "journal", "volume", "pages", "year", "abstract",
-		"summary", "paper_type", "theoretical_subtype", "keywords_tags", "source_file_path",
+		"summary", "paper_type", "theoretical_subtype", "keywords_tags",
 		"methodology", "key_finding", "rationale", "research_materials", "referenced_materials",
 		"material_relations", "builds_on",
 	}
@@ -325,8 +325,17 @@ func applyPaperReview(tx *gorm.DB, paper *models.Paper, reviewerID uint, status,
 			return false, nil
 		}
 	}
+	revision := paper.ContentRevision
+	if revision == 0 {
+		revision = 1
+	}
+	var approvedRevision interface{}
+	if status == reviewStatusApproved {
+		approvedRevision = revision
+	}
 	if err := tx.Model(paper).Updates(map[string]interface{}{
-		"review_status": status, "review_comment": comment,
+		"approved_revision": approvedRevision,
+		"review_status":     status, "review_comment": comment,
 		"reviewed_by_user_id": reviewerID, "reviewed_at": reviewedAt,
 	}).Error; err != nil {
 		return false, err
@@ -337,7 +346,8 @@ func applyPaperReview(tx *gorm.DB, paper *models.Paper, reviewerID uint, status,
 	}
 	commentCopy := comment
 	event := models.PaperReviewEvent{
-		PaperID: paper.ID, ReviewerUserID: reviewerID, Status: status,
+		PaperID: paper.ID, PaperRevision: revision,
+		ReviewerUserID: reviewerID, Status: status,
 		ReviewComment: &commentCopy, ReviewedAt: reviewedAt,
 		RequestID: requestIDPtr, Source: source,
 	}
@@ -348,6 +358,11 @@ func applyPaperReview(tx *gorm.DB, paper *models.Paper, reviewerID uint, status,
 	paper.ReviewComment = &commentCopy
 	paper.ReviewedBy = &reviewerID
 	paper.ReviewedAt = &reviewedAt
+	if status == reviewStatusApproved {
+		paper.ApprovedRevision = &revision
+	} else {
+		paper.ApprovedRevision = nil
+	}
 	return true, nil
 }
 
