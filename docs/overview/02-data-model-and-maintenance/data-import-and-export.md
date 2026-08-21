@@ -9,6 +9,7 @@
 - 导入器脚本已迁移到 `backend/scripts/`，按用户、论文、超导记录和结构的依赖顺序写入数据。
 - `--clear` 参数允许导入前清理现有业务数据。
 - 结构导入会填充来源类型等兼容默认值。
+- 用户导出保留 `username` 和一次更名资格；可信导入可原样恢复合法公开用户名和精确匹配 `^sc_[a-z0-9]{12}$` 的系统历史用户名，旧载荷缺少用户名时生成新的随机历史用户名。
 - 测试文件覆盖新 schema round-trip 和旧载荷兼容路径。
 
 ## 工作流程
@@ -27,10 +28,11 @@
 - `backend/scripts/export_data.py`
 - `backend/crud.py`
 - `tests/02_maintenance_and_verification/`
+- `tests/test_import_export.py`
 
 ## 相关变更记录
 
-当前未发现可链接的已完成 Feature 或 Debug 记录。
+- [Feature #31：唯一公开用户名与贡献榜身份](../../specs/31-community-ranking-visuals/spec.md)
 
 ## 已知问题
 

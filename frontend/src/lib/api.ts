@@ -30,7 +30,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     const detail = body?.detail ?? body
     const message = typeof detail === 'string'
       ? detail
-      : detail?.message || detail?.detail || body?.message || text || `HTTP ${response.status}`
+      : detail?.message || detail?.detail || body?.error || body?.message || text || `HTTP ${response.status}`
     const error = new Error(message) as ApiError
     error.status = response.status
     error.code = detail?.code || body?.code

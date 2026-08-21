@@ -2,6 +2,7 @@
 管理员认证 API
 """
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 from datetime import datetime, timedelta
@@ -17,6 +18,7 @@ from backend.security import (
     get_current_superadmin
 )
 from backend.email_service import email_service
+from backend.username_policy import validate_username
 
 router = APIRouter(prefix="/api/auth", tags=["认证"])
 
@@ -33,7 +35,8 @@ def _user_payload(user: User) -> dict:
     return {
         "id": user.id,
         "email": user.email,
-        "real_name": user.real_name,
+        "username": user.username,
+        "username_change_allowed": user.username_change_allowed,
         "role": user.role,
         "is_admin": _is_admin(user),
         "is_superadmin": _is_superadmin(user),
@@ -47,7 +50,8 @@ def _user_payload(user: User) -> dict:
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
-    real_name: str
+    username: str
+    real_name: str | None = None
     is_admin: bool = False  # 是否申请成为管理员
 
 
@@ -67,6 +71,18 @@ class TokenResponse(BaseModel):
     user: dict
 
 
+@router.get("/username-availability", summary="检查公开用户名是否可用")
+async def username_availability(username: str, db: Session = Depends(get_db)):
+    reason = validate_username(username)
+    if reason:
+        return {"available": False, "reason": reason}
+    exists = db.query(User.id).filter(User.username == username).first()
+    return {
+        "available": exists is None,
+        **({"reason": "用户名已被占用"} if exists else {}),
+    }
+
+
 @router.post("/register", summary="用户/管理员注册（第一步：发送验证码）")
 async def register_step1(request: RegisterRequest, db: Session = Depends(get_db)):
     """
@@ -78,12 +94,27 @@ async def register_step1(request: RegisterRequest, db: Session = Depends(get_db)
     3. 发送验证码到邮箱
     4. 创建待验证的用户记录
     """
-    # 检查邮箱是否已存在
+    username_error = validate_username(request.username)
+    if username_error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=username_error)
+
+    # 检查邮箱和大小写敏感用户名是否已存在
     existing_user = db.query(User).filter(User.email == request.email).first()
     if existing_user and existing_user.is_email_verified:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="该邮箱已注册"
+        )
+    if existing_user and existing_user.username != request.username:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="该邮箱已占用其他用户名",
+        )
+    username_owner = db.query(User.id).filter(User.username == request.username).first()
+    if username_owner and (not existing_user or username_owner[0] != existing_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="用户名已被占用",
         )
 
     # 生成验证码
@@ -94,7 +125,7 @@ async def register_step1(request: RegisterRequest, db: Session = Depends(get_db)
     success = email_service.send_verification_code(
         to_email=request.email,
         code=code,
-        real_name=request.real_name
+        username=request.username,
     )
 
     if not success:
@@ -106,7 +137,7 @@ async def register_step1(request: RegisterRequest, db: Session = Depends(get_db)
     # 如果用户已存在但未验证，更新信息
     if existing_user:
         existing_user.password_hash = hash_password(request.password)
-        existing_user.real_name = request.real_name
+        existing_user.real_name = request.real_name or ""
         existing_user.role = "admin" if request.is_admin else "user"
         existing_user.verification_code = code
         existing_user.verification_expires = expires
@@ -115,8 +146,10 @@ async def register_step1(request: RegisterRequest, db: Session = Depends(get_db)
         # 创建新用户（待验证状态）
         new_user = User(
             email=request.email,
+            username=request.username,
+            username_change_allowed=False,
             password_hash=hash_password(request.password),
-            real_name=request.real_name,
+            real_name=request.real_name or "",
             role="admin" if request.is_admin else "user",
             is_email_verified=False,
             is_approved=not request.is_admin,  # 普通用户直接标记为已批准，只有管理员需要审核
@@ -125,11 +158,19 @@ async def register_step1(request: RegisterRequest, db: Session = Depends(get_db)
         )
         db.add(new_user)
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="邮箱或用户名已被占用",
+        ) from exc
 
     return {
         "message": "验证码已发送到您的邮箱，请在5分钟内完成验证",
-        "email": request.email
+        "email": request.email,
+        "requires_email_verification": True,
     }
 
 
@@ -186,7 +227,7 @@ async def register_step2(request: VerifyEmailRequest, db: Session = Depends(get_
     return {
         "message": message,
         "email": user.email,
-        "real_name": user.real_name,
+        "username": user.username,
         "status": status_val
     }
 

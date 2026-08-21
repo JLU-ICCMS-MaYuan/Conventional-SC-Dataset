@@ -8,6 +8,7 @@ from backend.scripts.import_data import import_payload
 def test_build_export_payload_uses_redesigned_schema(db_session):
     user = models.User(
         email="u@example.com",
+        username="Uploader_1",
         password_hash="!",
         real_name="Uploader",
         role="user",
@@ -45,6 +46,7 @@ def test_build_export_payload_uses_redesigned_schema(db_session):
     assert payload["schema_version"] == SCHEMA_VERSION
     assert payload["papers"][0]["doi"] == "10.1000/example"
     assert payload["papers"][0]["uploaded_by_email"] == "u@example.com"
+    assert payload["users"][0]["username"] == "Uploader_1"
     assert payload["superconductor_records"][0]["chemical_formula"] == "LaH10"
     assert payload["superconductor_records"][0]["paper_doi"] == "10.1000/example"
     assert "paper_images" not in payload
@@ -175,6 +177,29 @@ def test_import_payload_without_structures_is_backward_compatible(db_session):
 
     assert result["superconductors_structures"] == 0
     assert build_export_payload(db_session)["superconductors_structures"] == []
+
+
+def test_import_export_preserves_historical_username(db_session):
+    historical_username = "sc_0123456789ab"
+    payload = {
+        "schema_version": SCHEMA_VERSION,
+        "users": [
+            {
+                "email": "legacy@example.com",
+                "username": historical_username,
+                "username_change_allowed": True,
+                "role": "user",
+            }
+        ],
+        "papers": [],
+        "superconductor_records": [],
+    }
+
+    import_payload(db_session, payload, clear_existing=True)
+    exported = build_export_payload(db_session)
+
+    assert exported["users"][0]["username"] == historical_username
+    assert exported["users"][0]["username_change_allowed"] is True
 
 
 def test_import_payload_rejects_structure_missing_chemical_formula(db_session):

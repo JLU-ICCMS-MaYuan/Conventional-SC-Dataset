@@ -85,6 +85,7 @@ func main() {
 	// 公开路由（不需要 JWT）
 	r.POST("/api/auth/login", handlers.Login)
 	r.POST("/api/auth/register", handlers.Register)
+	r.GET("/api/auth/username-availability", handlers.UsernameAvailability)
 
 	// 论文公开 API（替代 Python /api/papers/*）
 	papers := r.Group("/api/papers")
@@ -129,6 +130,7 @@ func main() {
 	{
 		auth.GET("/papers/my-uploads", handlers.GetMyUploads)
 		auth.GET("/papers/my-uploads/:id", handlers.GetMyUploadDetail)
+		auth.PATCH("/auth/username", handlers.UpdateOwnUsername)
 	}
 
 	// 管理员路由组
@@ -146,6 +148,8 @@ func main() {
 		admin.PUT("/users/:id", handlers.UpdateUser)
 		admin.PUT("/users/:id/permissions", handlers.UpdateUser)
 		admin.DELETE("/users/:id", handlers.DeleteUser)
+		admin.PUT("/users/:id/username", middleware.SuperAdminRequired, handlers.AdminUpdateUsername)
+		admin.GET("/username-audit-events", middleware.SuperAdminRequired, handlers.GetUsernameAuditEvents)
 		admin.GET("/all-users", handlers.AllUsers)
 		admin.GET("/stats", handlers.GetStats)
 		admin.POST("/news", handlers.CreateNews)

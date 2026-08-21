@@ -9,6 +9,11 @@ from sqlalchemy.orm import Session
 
 from backend import crud, models
 from backend.database import SessionLocal
+from backend.username_policy import (
+    generate_historical_username,
+    is_historical_username,
+    validate_username,
+)
 
 
 def _clear_business_data(db: Session) -> None:
@@ -33,6 +38,18 @@ def _paper_by_doi(db: Session, doi: str | None) -> models.Paper | None:
     return db.query(models.Paper).filter_by(doi=doi).first()
 
 
+def _available_import_username(db: Session, requested: str | None) -> tuple[str, bool]:
+    if requested and (
+        validate_username(requested) is None or is_historical_username(requested)
+    ):
+        if db.query(models.User.id).filter(models.User.username == requested).first() is None:
+            return requested, False
+    while True:
+        generated = generate_historical_username()
+        if db.query(models.User.id).filter(models.User.username == generated).first() is None:
+            return generated, True
+
+
 def _import_users(db: Session, users: list[dict[str, Any]]) -> int:
     count = 0
     for item in users:
@@ -41,7 +58,15 @@ def _import_users(db: Session, users: list[dict[str, Any]]) -> int:
             continue
         user = _user_by_email(db, email)
         if user is None:
-            user = models.User(email=email, password_hash=item.get("password_hash") or "!")
+            username, generated = _available_import_username(db, item.get("username"))
+            user = models.User(
+                email=email,
+                username=username,
+                username_change_allowed=bool(
+                    item.get("username_change_allowed", generated)
+                ),
+                password_hash=item.get("password_hash") or "!",
+            )
             db.add(user)
             count += 1
         user.real_name = item.get("real_name") or email

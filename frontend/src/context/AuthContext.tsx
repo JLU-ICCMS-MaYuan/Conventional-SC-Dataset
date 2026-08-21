@@ -3,7 +3,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 export interface User {
   id: number
   email: string
-  real_name: string
+  username: string
+  username_change_allowed: boolean
   role: 'user' | 'admin' | 'superadmin'
   is_admin: boolean
   is_superadmin: boolean
@@ -17,7 +18,9 @@ export interface AuthState {
   token: string | null
   loading: boolean
   login: (email: string, password: string) => Promise<{ needApproval?: boolean }>
-  register: (email: string, password: string, realName: string, isAdmin: boolean) => Promise<void>
+  register: (email: string, password: string, username: string, realName: string, isAdmin: boolean) => Promise<{ requiresEmailVerification: boolean }>
+  updateUsername: (username: string) => Promise<void>
+  replaceUser: (user: User) => void
   verifyEmail: (email: string, code: string) => Promise<void>
   logout: () => void
 }
@@ -27,7 +30,9 @@ const AuthContext = createContext<AuthState>({
   token: null,
   loading: true,
   login: async () => ({}),
-  register: async () => {},
+  register: async () => ({ requiresEmailVerification: false }),
+  updateUsername: async () => {},
+  replaceUser: () => {},
   verifyEmail: async () => {},
   logout: () => {},
 })
@@ -47,6 +52,11 @@ function clearAuth() {
   localStorage.removeItem(USER_KEY)
 }
 
+async function responseError(res: Response, fallback: string): Promise<Error> {
+  const data = await res.json().catch(() => ({}))
+  return new Error(data.error || data.detail || fallback)
+}
+
 export function getStoredToken(): string | null {
   return localStorage.getItem(TOKEN_KEY)
 }
@@ -62,8 +72,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (savedToken && savedUser) {
       try {
         const parsed = JSON.parse(savedUser) as User
-        setToken(savedToken)
-        setUser(parsed)
+        if (!parsed.username) {
+          clearAuth()
+        } else {
+          setToken(savedToken)
+          setUser(parsed)
+        }
       } catch {
         clearAuth()
       }
@@ -78,8 +92,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       body: JSON.stringify({ email, password }),
     })
     if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: '登录失败' }))
-      throw new Error(err.detail || '登录失败')
+      throw await responseError(res, '登录失败')
     }
     const data = await res.json()
     const loggedUser: User = data.user
@@ -89,17 +102,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return {}
   }, [])
 
-  const register = useCallback(async (email: string, password: string, realName: string, isAdmin: boolean) => {
+  const register = useCallback(async (email: string, password: string, username: string, realName: string, isAdmin: boolean) => {
     const res = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, real_name: realName, is_admin: isAdmin }),
+      body: JSON.stringify({ email, password, username, real_name: realName || undefined, is_admin: isAdmin }),
     })
     if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: '注册失败' }))
-      throw new Error(err.detail || '注册失败')
+      throw await responseError(res, '注册失败')
     }
+    const data = await res.json()
+    return { requiresEmailVerification: Boolean(data.requires_email_verification) }
   }, [])
+
+  const replaceUser = useCallback((nextUser: User) => {
+    const authToken = token || getStoredToken()
+    if (authToken) saveAuth(authToken, nextUser)
+    setUser(nextUser)
+  }, [token])
+
+  const updateUsername = useCallback(async (username: string) => {
+    const authToken = token || getStoredToken()
+    const res = await fetch('/api/auth/username', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+      body: JSON.stringify({ username }),
+    })
+    if (!res.ok) throw await responseError(res, '用户名修改失败')
+    const data = await res.json()
+    const updatedUser: User = data.user
+    replaceUser(updatedUser)
+  }, [replaceUser, token])
 
   const verifyEmail = useCallback(async (email: string, code: string) => {
     const res = await fetch('/api/auth/verify-email', {
@@ -108,8 +141,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       body: JSON.stringify({ email, code }),
     })
     if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: '验证失败' }))
-      throw new Error(err.detail || '验证失败')
+      throw await responseError(res, '验证失败')
     }
   }, [])
 
@@ -120,7 +152,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, verifyEmail, logout }}>
+    <AuthContext.Provider value={{ user, token, loading, login, register, updateUsername, replaceUser, verifyEmail, logout }}>
       {children}
     </AuthContext.Provider>
   )

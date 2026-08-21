@@ -325,13 +325,6 @@ func applyPaperReview(tx *gorm.DB, paper *models.Paper, reviewerID uint, status,
 			return false, nil
 		}
 	}
-	previousComment := ""
-	if paper.ReviewComment != nil {
-		previousComment = *paper.ReviewComment
-	}
-	if paper.ReviewStatus == status && previousComment == comment {
-		return false, nil
-	}
 	if err := tx.Model(paper).Updates(map[string]interface{}{
 		"review_status": status, "review_comment": comment,
 		"reviewed_by_user_id": reviewerID, "reviewed_at": reviewedAt,
@@ -681,15 +674,7 @@ func Login(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"access_token": token,
 		"token_type":   "bearer",
-		"user": gin.H{
-			"id":            user.ID,
-			"email":         user.Email,
-			"real_name":     user.RealName,
-			"role":          user.Role,
-			"is_admin":      user.Role == "admin" || user.Role == "superadmin",
-			"is_superadmin": user.Role == "superadmin",
-			"is_approved":   user.IsApproved,
-		},
+		"user":         clientUserPayload(user),
 	})
 }
 
@@ -699,17 +684,31 @@ func Register(c *gin.Context) {
 	var body struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
+		Username string `json:"username"`
 		RealName string `json:"real_name"`
 		IsAdmin  bool   `json:"is_admin"`
 	}
-	if err := c.ShouldBindJSON(&body); err != nil || body.Email == "" || body.Password == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "邮箱和密码不能为空"})
+	if err := c.ShouldBindJSON(&body); err != nil || body.Email == "" || body.Password == "" || body.Username == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "邮箱、密码和用户名不能为空"})
+		return
+	}
+	if err := validatePublicUsername(body.Username); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	var existing models.User
 	if database.DB.Where("email = ?", body.Email).First(&existing).Error == nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "该邮箱已注册"})
+		return
+	}
+	available, err := usernameAvailable(database.DB, body.Username, 0)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "用户名检查失败"})
+		return
+	}
+	if !available {
+		c.JSON(http.StatusConflict, gin.H{"error": errUsernameTaken.Error()})
 		return
 	}
 
@@ -725,21 +724,25 @@ func Register(c *gin.Context) {
 	}
 
 	user := models.User{
-		Email:        body.Email,
-		PasswordHash: string(hash),
-		RealName:     body.RealName,
-		Role:         role,
-		IsApproved:   false,
+		Email: body.Email, Username: body.Username,
+		UsernameChangeAllowed: false,
+		PasswordHash:          string(hash),
+		RealName:              body.RealName,
+		Role:                  role,
+		IsApproved:            false,
 	}
-	database.DB.Create(&user)
+	if err := database.DB.Create(&user).Error; err != nil {
+		if isDuplicateUsernameError(err) {
+			c.JSON(http.StatusConflict, gin.H{"error": "邮箱或用户名已被占用"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "注册失败"})
+		}
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "注册成功，等待管理员审核",
-		"user": gin.H{
-			"id":        user.ID,
-			"email":     user.Email,
-			"real_name": user.RealName,
-			"role":      user.Role,
-		},
+		"message":                     "注册成功，等待管理员审核",
+		"requires_email_verification": false,
+		"user":                        clientUserPayload(user),
 	})
 }

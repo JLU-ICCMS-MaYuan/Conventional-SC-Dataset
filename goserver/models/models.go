@@ -11,15 +11,29 @@ import "time"
 
 // User 用户
 type User struct {
-	ID              uint       `gorm:"primaryKey" json:"id"`
-	Email           string     `gorm:"uniqueIndex;size:255" json:"email"`
-	PasswordHash    string     `gorm:"size:255" json:"-"`
-	RealName        string     `gorm:"size:100" json:"real_name"`
-	Role            string     `gorm:"size:50;default:user" json:"role"`
-	IsApproved      bool       `json:"is_approved"`
-	IsEmailVerified bool       `json:"is_email_verified"`
-	CreatedAt       time.Time  `json:"created_at"`
-	ApprovedAt      *time.Time `json:"approved_at"` // *time.Time = 可为 nil
+	ID                    uint       `gorm:"primaryKey" json:"id"`
+	Email                 string     `gorm:"uniqueIndex;size:255" json:"email"`
+	Username              string     `gorm:"uniqueIndex;size:32;not null;collate:ascii_bin" json:"username"`
+	UsernameChangeAllowed bool       `gorm:"not null;default:false" json:"username_change_allowed"`
+	PasswordHash          string     `gorm:"size:255" json:"-"`
+	RealName              string     `gorm:"size:100" json:"-"`
+	Role                  string     `gorm:"size:50;default:user" json:"role"`
+	IsApproved            bool       `json:"is_approved"`
+	IsEmailVerified       bool       `json:"is_email_verified"`
+	CreatedAt             time.Time  `json:"created_at"`
+	UpdatedAt             time.Time  `json:"updated_at"`
+	ApprovedAt            *time.Time `json:"approved_at"` // *time.Time = 可为 nil
+}
+
+// UsernameChangeAuditEvent 超级管理员更名的只追加审计事件。
+type UsernameChangeAuditEvent struct {
+	ID              uint      `gorm:"primaryKey" json:"id"`
+	TargetUserID    uint      `gorm:"index:ix_username_audit_target_time,priority:1" json:"target_user_id"`
+	ChangedByUserID uint      `gorm:"index:ix_username_audit_actor_time,priority:1" json:"changed_by_user_id"`
+	OldUsername     string    `gorm:"size:32;not null;collate:ascii_bin" json:"old_username"`
+	NewUsername     string    `gorm:"size:32;not null;collate:ascii_bin" json:"new_username"`
+	Reason          string    `gorm:"size:500;not null" json:"reason"`
+	CreatedAt       time.Time `gorm:"index:ix_username_audit_target_time,priority:2;index:ix_username_audit_actor_time,priority:2" json:"created_at"`
 }
 
 // Paper 论文

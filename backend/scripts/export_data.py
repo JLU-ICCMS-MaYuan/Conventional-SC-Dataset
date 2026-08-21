@@ -32,6 +32,8 @@ def build_export_payload(db: Session) -> dict[str, Any]:
         "users": [
             {
                 "email": user.email,
+                "username": user.username,
+                "username_change_allowed": user.username_change_allowed,
                 "real_name": user.real_name,
                 "role": user.role,
                 "is_approved": user.is_approved,

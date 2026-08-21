@@ -8,6 +8,7 @@ import {
   Visibility, VisibilityOff, Close, Login as LoginIcon,
 } from '@mui/icons-material'
 import { useAuth } from '../context/AuthContext'
+import UsernameField from './UsernameField'
 
 type Step = 'form' | 'verify' | 'done'
 
@@ -30,7 +31,8 @@ const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
   // register
   const [regEmail, setRegEmail] = useState('')
   const [regPassword, setRegPassword] = useState('')
-  const [regName, setRegName] = useState('')
+  const [regUsername, setRegUsername] = useState('')
+  const [regRealName, setRegRealName] = useState('')
   const [regIsAdmin, setRegIsAdmin] = useState(false)
   const [showRegPw, setShowRegPw] = useState(false)
 
@@ -47,7 +49,7 @@ const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
     setStep('form')
     setTab(0)
     setLoginEmail(''); setLoginPassword(''); setShowLoginPw(false)
-    setRegEmail(''); setRegPassword(''); setRegName(''); setRegIsAdmin(false); setShowRegPw(false)
+    setRegEmail(''); setRegPassword(''); setRegUsername(''); setRegRealName(''); setRegIsAdmin(false); setShowRegPw(false)
     setVerifyCode('')
     setError('')
     setDoneMessage('')
@@ -81,12 +83,17 @@ const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
   // ── Register → verify ─────────────────────────────
   const handleRegister = async () => {
     setError('')
-    if (!regEmail || !regPassword || !regName) { setError('请填写所有必填项'); return }
+    if (!regEmail || !regPassword || !regUsername) { setError('请填写邮箱、密码和用户名'); return }
     if (regPassword.length < 6) { setError('密码至少 6 位'); return }
     setLoading(true)
     try {
-      await register(regEmail, regPassword, regName, regIsAdmin)
-      setStep('verify')
+      const result = await register(regEmail, regPassword, regUsername, regRealName, regIsAdmin)
+      if (result.requiresEmailVerification) {
+        setStep('verify')
+      } else {
+        setDoneMessage('注册成功！账号审批通过后即可使用邮箱登录')
+        setStep('done')
+      }
     } catch (e: unknown) {
       setError((e as Error).message || '注册失败')
     } finally {
@@ -147,9 +154,10 @@ const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
   const registerForm = (
     <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}
          onSubmit={e => { e.preventDefault(); handleRegister() }}>
+      <UsernameField value={regUsername} onChange={setRegUsername} autoFocus />
       <TextField
-        label="姓名" fullWidth size="small" autoFocus
-        value={regName} onChange={e => setRegName(e.target.value)}
+        label="实名（选填，不公开展示）" fullWidth size="small"
+        value={regRealName} onChange={e => setRegRealName(e.target.value)}
       />
       <TextField
         label="邮箱" type="email" fullWidth size="small"

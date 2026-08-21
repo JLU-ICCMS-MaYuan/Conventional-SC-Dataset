@@ -48,6 +48,7 @@ Direct
 def _user(db_session):
     user = models.User(
         email="structure@example.com",
+        username="StructureAdmin",
         password_hash="!",
         real_name="Structure User",
         role="admin",

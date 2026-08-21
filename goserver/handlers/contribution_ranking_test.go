@@ -11,23 +11,50 @@ import (
 	"time"
 
 	"scwiki/server/cache"
+	"scwiki/server/database"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"
 )
 
+func TestLoadContributionSnapshotUsesUniqueUsername(t *testing.T) {
+	db, mock := reviewEventTestDB(t)
+	previousDB := database.DB
+	database.DB = db
+	t.Cleanup(func() { database.DB = previousDB })
+
+	mock.ExpectQuery(`(?s)SELECT u\.id AS user_id, u\.username AS username,.*FROM users u JOIN papers`).
+		WillReturnRows(sqlmock.NewRows([]string{"user_id", "username", "contribution_count", "reached_at"}).
+			AddRow(7, "张三", 3, time.Now()))
+	mock.ExpectQuery(`(?s)SELECT u\.id AS user_id, u\.username AS username,.*FROM users u JOIN paper_review_events`).
+		WillReturnRows(sqlmock.NewRows([]string{"user_id", "username", "contribution_count", "reached_at"}).
+			AddRow(7, "张三", 1, time.Now()))
+
+	snapshot, err := loadContributionSnapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.UploadRanks[0].Username != "张三" || snapshot.UploadRanks[0].DisplayName != "张三" || snapshot.ReviewRanks[0].Username != "张三" {
+		t.Fatalf("榜单没有使用注册姓名: %#v", snapshot)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRankContributionRowsUsesStableOrderAndPublicFields(t *testing.T) {
 	now := time.Now()
 	rows := []contributionRow{
-		{UserID: 2, DisplayName: "张三", ContributionCount: 5, ReachedAt: now},
-		{UserID: 7, DisplayName: "李四", ContributionCount: 5, ReachedAt: now},
-		{UserID: 9, DisplayName: "", ContributionCount: 1, ReachedAt: now},
+		{UserID: 2, Username: "Alice", ContributionCount: 5, ReachedAt: now},
+		{UserID: 7, Username: "Bob", ContributionCount: 5, ReachedAt: now},
+		{UserID: 9, Username: "", ContributionCount: 1, ReachedAt: now},
 	}
 	ranks := rankContributionRows(rows)
 	if len(ranks) != 3 || ranks[0].Rank != 1 || ranks[1].Rank != 2 {
 		t.Fatalf("排名编号错误: %#v", ranks)
 	}
-	if ranks[0].AvatarText != "张" || ranks[2].DisplayName != "匿名贡献者" {
+	if ranks[0].AvatarText != "A" || ranks[0].Username != "Alice" || ranks[0].DisplayName != "Alice" || ranks[2].DisplayName != "sc_unknown" {
 		t.Fatalf("公开展示字段错误: %#v", ranks)
 	}
 	if got := contributionRankForUser(ranks, 7); got == nil || got.Rank != 2 || got.ContributionCount != 5 {
@@ -53,7 +80,7 @@ func TestAvatarTextHandlesUnicodeAndBlankName(t *testing.T) {
 func TestTopContributionRanksKeepsFullPersonalRanking(t *testing.T) {
 	ranks := make([]contributionRank, 25)
 	for i := range ranks {
-		ranks[i] = contributionRank{Rank: i + 1, UserID: uint(i + 1), DisplayName: "贡献者", ContributionCount: int64(25 - i)}
+		ranks[i] = contributionRank{Rank: i + 1, UserID: uint(i + 1), Username: "Contributor", DisplayName: "Contributor", ContributionCount: int64(25 - i)}
 	}
 	top := topContributionRanks(ranks, 20)
 	if len(top) != 20 || top[19].Rank != 20 {
@@ -66,12 +93,12 @@ func TestTopContributionRanksKeepsFullPersonalRanking(t *testing.T) {
 }
 
 func TestContributionRankJSONDoesNotExposeSensitiveFields(t *testing.T) {
-	data, err := json.Marshal(contributionRank{Rank: 1, UserID: 1, DisplayName: "贡献者", AvatarText: "贡", ContributionCount: 3})
+	data, err := json.Marshal(contributionRank{Rank: 1, UserID: 1, Username: "Contributor", DisplayName: "Contributor", AvatarText: "C", ContributionCount: 3})
 	if err != nil {
 		t.Fatal(err)
 	}
 	text := string(data)
-	for _, forbidden := range []string{"email", "password", "role", "is_approved"} {
+	for _, forbidden := range []string{"email", "password", "role", "is_approved", "real_name"} {
 		if strings.Contains(text, forbidden) {
 			t.Fatalf("公开响应泄露字段 %q: %s", forbidden, text)
 		}

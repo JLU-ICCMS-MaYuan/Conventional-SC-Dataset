@@ -35,6 +35,7 @@ interface DataPoint {
 interface ContributionRank {
   rank: number
   user_id: number
+  username: string
   display_name: string
   avatar_text: string
   contribution_count: number
@@ -46,6 +47,11 @@ interface ContributionSnapshot {
   review_leaderboard: ContributionRank[]
   current_user?: { upload: ContributionRank | null; review: ContributionRank | null }
   generated_at: string
+}
+
+const contributionBarWidth = (count: number, maxCount: number): number => {
+  if (!Number.isFinite(count) || !Number.isFinite(maxCount) || count <= 0 || maxCount <= 0) return 0
+  return Math.min(100, Math.max(0, (count / maxCount) * 100))
 }
 
 // ── Constants ──
@@ -354,24 +360,40 @@ const SharePage: React.FC = () => {
     setYearTcField(DEFAULT_CHART_PREFERENCES.yearTcField)
   }
 
-  const renderLeaderboard = (title: string, rows: ContributionRank[], unit: string) => (
-    <Card variant="outlined" sx={{ flex: 1, minWidth: 280 }}>
-      <CardContent>
-        <Typography variant="h6" sx={{ mb: 1.5 }}>{title}</Typography>
-        {rows.length === 0 ? <Typography color="text.secondary">暂无贡献记录</Typography> : rows.map((row, index) => (
-          <React.Fragment key={row.user_id}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 1 }}>
-              <Typography sx={{ width: 28, fontWeight: 800, color: row.rank <= 3 ? 'primary.main' : 'text.secondary' }}>{row.rank}</Typography>
-              <Avatar sx={{ width: 34, height: 34, fontSize: 15 }}>{row.avatar_text}</Avatar>
-              <Typography sx={{ flex: 1, fontWeight: 650 }}>{row.display_name}</Typography>
-              <Typography fontWeight={800}>{row.contribution_count} {unit}</Typography>
-            </Box>
-            {index < rows.length - 1 && <Divider />}
-          </React.Fragment>
-        ))}
-      </CardContent>
-    </Card>
-  )
+  const renderLeaderboard = (title: string, rows: ContributionRank[], unit: string) => {
+    const maxCount = rows.length > 0 ? Math.max(...rows.map(row => row.contribution_count)) : 0
+    return (
+      <Card variant="outlined" sx={{ flex: { xs: '1 1 100%', md: 1 }, minWidth: { xs: 0, md: 280 } }}>
+        <CardContent>
+          <Typography variant="h6" sx={{ mb: 1.5 }}>{title}</Typography>
+          {rows.length === 0 ? <Typography color="text.secondary">暂无贡献记录</Typography> : rows.map((row, index) => (
+            <React.Fragment key={row.user_id}>
+              <Box sx={{ py: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                  <Typography sx={{ width: 28, flexShrink: 0, fontWeight: 800, color: row.rank <= 3 ? 'primary.main' : 'text.secondary' }}>{row.rank}</Typography>
+                  <Avatar sx={{ width: 34, height: 34, fontSize: 15 }}>{row.avatar_text}</Avatar>
+                  <Typography noWrap sx={{ flex: 1, minWidth: 0, fontWeight: 650 }}>{row.username}</Typography>
+                  <Typography fontWeight={800} sx={{ flexShrink: 0 }}>{row.contribution_count} {unit}</Typography>
+                </Box>
+                <Box sx={{ ml: 7.75, mt: 0.75, height: 8, overflow: 'hidden', borderRadius: 999, bgcolor: 'action.hover' }}>
+                  <Box
+                    data-testid={`contribution-bar-${row.user_id}`}
+                    sx={{
+                      width: `${contributionBarWidth(row.contribution_count, maxCount)}%`,
+                      height: '100%',
+                      borderRadius: 'inherit',
+                      bgcolor: row.rank <= 3 ? 'primary.main' : 'primary.light',
+                    }}
+                  />
+                </Box>
+              </Box>
+              {index < rows.length - 1 && <Divider />}
+            </React.Fragment>
+          ))}
+        </CardContent>
+      </Card>
+    )
+  }
 
   // ═══════════════════════════════════════════════════════
   return (
@@ -402,8 +424,11 @@ const SharePage: React.FC = () => {
           ) : contributions && (
             <>
               {user && (
-                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', p: 2, mb: 2, bgcolor: 'action.hover', borderRadius: 2 }}>
-                  <Typography fontWeight={800} sx={{ width: '100%' }}>我的排名</Typography>
+                <Box
+                  data-testid="current-user-ranking"
+                  sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: { xs: 'wrap', md: 'nowrap' }, p: 2, mb: 2, bgcolor: 'action.hover', borderRadius: 2 }}
+                >
+                  <Typography fontWeight={800} sx={{ flexShrink: 0 }}>我的排名</Typography>
                   <Chip label={`上传榜：${contributions.current_user?.upload ? `第 ${contributions.current_user.upload.rank} 名 · ${contributions.current_user.upload.contribution_count} 篇` : '暂无排名 · 0 篇'}`} />
                   <Chip label={`审核榜：${contributions.current_user?.review ? `第 ${contributions.current_user.review.rank} 名 · ${contributions.current_user.review.contribution_count} 次` : '暂无排名 · 0 次'}`} />
                 </Box>

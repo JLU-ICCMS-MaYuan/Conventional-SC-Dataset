@@ -15,8 +15,15 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from sqlalchemy.dialects import mysql
 
 from backend.database import Base
+
+
+USERNAME_TYPE = String(32).with_variant(
+    mysql.VARCHAR(32, collation="ascii_bin"),
+    "mysql",
+)
 
 
 class PeriodicTableElement(Base):
@@ -70,6 +77,8 @@ class User(Base):
 
     id = Column(Integer, primary_key=True)
     email = Column(String(255), unique=True, index=True, nullable=False)
+    username = Column(USERNAME_TYPE, unique=True, index=True, nullable=False)
+    username_change_allowed = Column(Boolean, default=False, nullable=False)
     password_hash = Column(String(255), nullable=False)
     real_name = Column(String(100), nullable=False)
     affiliation = Column(String(255))
@@ -98,6 +107,37 @@ class User(Base):
         "SuperconductorStructure",
         back_populates="created_by_user",
         foreign_keys="SuperconductorStructure.created_by_user_id",
+    )
+    username_changes_received = relationship(
+        "UsernameChangeAuditEvent",
+        foreign_keys="UsernameChangeAuditEvent.target_user_id",
+        back_populates="target_user",
+    )
+    username_changes_made = relationship(
+        "UsernameChangeAuditEvent",
+        foreign_keys="UsernameChangeAuditEvent.changed_by_user_id",
+        back_populates="changed_by_user",
+    )
+
+
+class UsernameChangeAuditEvent(Base):
+    """Append-only record of a superadmin username correction."""
+
+    __tablename__ = "username_change_audit_events"
+
+    id = Column(Integer, primary_key=True)
+    target_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    changed_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    old_username = Column(USERNAME_TYPE, nullable=False)
+    new_username = Column(USERNAME_TYPE, nullable=False)
+    reason = Column(String(500), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    target_user = relationship(
+        "User", foreign_keys=[target_user_id], back_populates="username_changes_received"
+    )
+    changed_by_user = relationship(
+        "User", foreign_keys=[changed_by_user_id], back_populates="username_changes_made"
     )
 
 

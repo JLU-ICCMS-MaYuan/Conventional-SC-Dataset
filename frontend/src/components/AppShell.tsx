@@ -2,15 +2,18 @@ import React, { useState } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import {
   Box, AppBar, Toolbar, Typography, Button, Avatar,
-  Menu, MenuItem, ListItemIcon, Divider, Chip,
+  Menu, MenuItem, ListItemIcon, Divider, Chip, Dialog, DialogTitle,
+  DialogContent, DialogActions, Alert, CircularProgress,
 } from '@mui/material'
 import {
   Person as PersonIcon,
   Logout as LogoutIcon,
   AdminPanelSettings as AdminIcon,
+  DriveFileRenameOutline as RenameIcon,
 } from '@mui/icons-material'
 import { useAuth } from '../context/AuthContext'
 import AuthDialog from './AuthDialog'
+import UsernameField from './UsernameField'
 
 const NAV_ITEMS = [
   { label: '热点', path: '/news' },
@@ -31,10 +34,14 @@ const ROLE_LABELS: Record<string, string> = {
 const AppShell: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
-  const { user, logout } = useAuth()
+  const { user, logout, updateUsername } = useAuth()
 
   const [authOpen, setAuthOpen] = useState(false)
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
+  const [usernameOpen, setUsernameOpen] = useState(false)
+  const [newUsername, setNewUsername] = useState('')
+  const [usernameError, setUsernameError] = useState('')
+  const [usernameSaving, setUsernameSaving] = useState(false)
   const menuOpen = Boolean(anchorEl)
 
   const handleMenuOpen = (e: React.MouseEvent<HTMLElement>) => setAnchorEl(e.currentTarget)
@@ -45,8 +52,22 @@ const AppShell: React.FC = () => {
     logout()
   }
 
+  const handleUsernameUpdate = async () => {
+    setUsernameError('')
+    setUsernameSaving(true)
+    try {
+      await updateUsername(newUsername)
+      setUsernameOpen(false)
+      setNewUsername('')
+    } catch (error) {
+      setUsernameError((error as Error).message)
+    } finally {
+      setUsernameSaving(false)
+    }
+  }
+
   return (
-    <Box sx={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: '88px 1fr', gridTemplateRows: '72px 1fr' }}>
+    <Box sx={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: '88px minmax(0, 1fr)', gridTemplateRows: '72px 1fr' }}>
       <AppBar
         position="sticky"
         color="inherit"
@@ -72,11 +93,11 @@ const AppShell: React.FC = () => {
                   sx={{ textTransform: 'none', color: 'text.primary', gap: 1 }}
                 >
                   <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main', fontSize: 14, fontWeight: 600 }}>
-                    {user.real_name?.charAt(0) || user.email.charAt(0).toUpperCase()}
+                    {user.username.charAt(0).toUpperCase()}
                   </Avatar>
                   <Box sx={{ textAlign: 'left', display: { xs: 'none', sm: 'block' } }}>
                     <Typography variant="body2" fontWeight={600} lineHeight={1.3}>
-                      {user.real_name || user.email}
+                      {user.username}
                     </Typography>
                     <Typography variant="caption" color="text.secondary" lineHeight={1}>
                       {ROLE_LABELS[user.role] || user.role}
@@ -92,7 +113,7 @@ const AppShell: React.FC = () => {
                   slotProps={{ paper: { sx: { minWidth: 200, mt: 1 } } }}
                 >
                   <Box sx={{ px: 2, py: 1 }}>
-                    <Typography variant="body2" fontWeight={600}>{user.real_name || user.email}</Typography>
+                    <Typography variant="body2" fontWeight={600}>{user.username}</Typography>
                     <Typography variant="caption" color="text.secondary">{user.email}</Typography>
                     <Chip
                       size="small"
@@ -102,6 +123,17 @@ const AppShell: React.FC = () => {
                     />
                   </Box>
                   <Divider />
+                  {user.username_change_allowed && (
+                    <>
+                      <Box sx={{ px: 2, py: 1 }}>
+                        <Alert severity="info" sx={{ py: 0 }}>可设置一次正式用户名</Alert>
+                      </Box>
+                      <MenuItem onClick={() => { handleMenuClose(); setUsernameOpen(true) }}>
+                        <ListItemIcon><RenameIcon fontSize="small" /></ListItemIcon>
+                        设置用户名
+                      </MenuItem>
+                    </>
+                  )}
                   {(user.role === 'admin' || user.role === 'superadmin') && (
                     <MenuItem onClick={() => { handleMenuClose(); navigate('/admin') }}>
                       <ListItemIcon><AdminIcon fontSize="small" /></ListItemIcon>
@@ -165,12 +197,27 @@ const AppShell: React.FC = () => {
         })}
       </Box>
 
-      <Box component="main" sx={{ p: 4, maxWidth: 1440, width: '100%', mx: 'auto' }}>
+      <Box component="main" sx={{ p: { xs: 2, md: 4 }, minWidth: 0, maxWidth: 1440, width: '100%', boxSizing: 'border-box', mx: 'auto' }}>
         <Outlet />
       </Box>
 
       {/* 登录 / 注册弹窗 */}
       <AuthDialog open={authOpen} onClose={() => setAuthOpen(false)} />
+
+      <Dialog open={usernameOpen} onClose={() => !usernameSaving && setUsernameOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>设置正式用户名</DialogTitle>
+        <DialogContent sx={{ pt: '12px !important' }}>
+          <Alert severity="warning" sx={{ mb: 2 }}>该用户名只能由你修改一次，提交前请仔细确认。</Alert>
+          <UsernameField value={newUsername} onChange={setNewUsername} autoFocus />
+          {usernameError && <Alert severity="error" sx={{ mt: 2 }}>{usernameError}</Alert>}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setUsernameOpen(false)} disabled={usernameSaving}>取消</Button>
+          <Button variant="contained" onClick={() => void handleUsernameUpdate()} disabled={usernameSaving || !newUsername}>
+            {usernameSaving ? <CircularProgress size={18} /> : '确认设置'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }

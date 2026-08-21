@@ -76,17 +76,29 @@ func TestApplyPaperReviewIgnoresRetriedRequest(t *testing.T) {
 	}
 }
 
-func TestApplyPaperReviewIgnoresUnchangedLegacyRequest(t *testing.T) {
+func TestApplyPaperReviewCountsUnchangedReviewAsNewParticipation(t *testing.T) {
 	db, mock := reviewEventTestDB(t)
 	comment := "证据充分"
 	paper := models.Paper{ID: 11, ReviewStatus: "approved", ReviewComment: &comment}
+	reviewedAt := time.Date(2026, 8, 20, 11, 0, 0, 0, time.UTC)
 
-	written, err := applyPaperReview(db, &paper, 7, "approved", comment, "", "single", time.Now())
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE `papers` SET .* WHERE `id` = \\?").
+		WithArgs(comment, "approved", reviewedAt, uint(7), sqlmock.AnyArg(), uint(11)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+	mock.ExpectBegin()
+	mock.ExpectExec("INSERT INTO `paper_review_events`").
+		WithArgs(uint(11), uint(7), "approved", comment, reviewedAt, nil, "single").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
+	written, err := applyPaperReview(db, &paper, 7, "approved", comment, "", "single", reviewedAt)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if written {
-		t.Fatal("状态与意见均未变化时不应重复计数")
+	if !written {
+		t.Fatal("同一论文的每次实际审核都应计入审核人贡献")
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)

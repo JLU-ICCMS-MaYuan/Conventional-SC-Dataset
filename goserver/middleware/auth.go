@@ -108,3 +108,22 @@ func AdminRequired(c *gin.Context) {
 
 	c.Next()
 }
+
+// SuperAdminRequired 超级管理员权限检查（需在 AuthRequired 之后）。
+func SuperAdminRequired(c *gin.Context) {
+	email, exists := c.Get("user_email")
+	if !exists {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+		return
+	}
+	var user models.User
+	if err := database.DB.Where("email = ?", email).First(&user).Error; err != nil {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "用户不存在"})
+		return
+	}
+	if user.Role != "superadmin" {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "需要超级管理员权限"})
+		return
+	}
+	c.Next()
+}

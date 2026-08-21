@@ -18,14 +18,14 @@ class EmailService:
         self.smtp_password = os.getenv("SMTP_PASSWORD", "")
         self.sender_email = os.getenv("SMTP_SENDER_EMAIL", self.smtp_username)
 
-    def send_verification_code(self, to_email: str, code: str, real_name: str) -> bool:
+    def send_verification_code(self, to_email: str, code: str, username: str) -> bool:
         """
         发送验证码邮件
 
         Args:
             to_email: 收件人邮箱
             code: 验证码
-            real_name: 用户真实姓名
+            username: 用户公开用户名
 
         Returns:
             bool: 发送成功返回True，失败返回False
@@ -46,7 +46,7 @@ class EmailService:
               <body style="font-family: Arial, sans-serif; padding: 20px; background-color: #f5f5f5;">
                 <div style="max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
                   <h2 style="color: #333; text-align: center;">超导文献数据库</h2>
-                  <p>尊敬的 <strong>{real_name}</strong>，您好！</p>
+                  <p>尊敬的 <strong>{username}</strong>，您好！</p>
                   <p>您正在申请成为超导文献数据库的用户。请使用以下验证码完成邮箱验证：</p>
                   <div style="background-color: #f0f0f0; padding: 20px; text-align: center; margin: 20px 0; border-radius: 5px;">
                     <h1 style="color: #0d6efd; margin: 0; letter-spacing: 5px;">{code}</h1>
@@ -64,7 +64,7 @@ class EmailService:
             text = f"""
             超导文献数据库 - 邮箱验证
 
-            尊敬的 {real_name}，您好！
+            尊敬的 {username}，您好！
 
             您正在申请成为超导文献数据库的用户。
             验证码：{code}
@@ -97,20 +97,20 @@ class EmailService:
             print(f"【降级模式】验证码: {code} (发送给 {to_email})")
             return True
 
-    def send_approval_notification(self, to_email: str, real_name: str, approved: bool) -> bool:
+    def send_approval_notification(self, to_email: str, username: str, approved: bool) -> bool:
         """
         发送用户审批通知
 
         Args:
             to_email: 收件人邮箱
-            real_name: 用户真实姓名
+            username: 用户公开用户名
             approved: 是否通过审批
 
         Returns:
             bool: 发送成功返回True
         """
         if not self.smtp_username or not self.smtp_password:
-            print(f"【开发模式】审批通知: {real_name} - {'通过' if approved else '拒绝'}")
+            print(f"【开发模式】审批通知: {username} - {'通过' if approved else '拒绝'}")
             return True
 
         try:
@@ -125,7 +125,7 @@ class EmailService:
                   <body style="font-family: Arial, sans-serif; padding: 20px; background-color: #f5f5f5;">
                     <div style="max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 10px;">
                       <h2 style="color: #28a745;">恭喜！用户申请已通过</h2>
-                      <p>尊敬的 <strong>{real_name}</strong>，您好！</p>
+                      <p>尊敬的 <strong>{username}</strong>，您好！</p>
                       <p>您的用户申请已通过审批，现在您可以登录系统并开始审核文献了。</p>
                       <p>感谢您为超导文献数据库做出的贡献！</p>
                     </div>
@@ -138,7 +138,7 @@ class EmailService:
                   <body style="font-family: Arial, sans-serif; padding: 20px; background-color: #f5f5f5;">
                     <div style="max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 10px;">
                       <h2 style="color: #dc3545;">用户申请未通过</h2>
-                      <p>尊敬的 <strong>{real_name}</strong>，您好！</p>
+                      <p>尊敬的 <strong>{username}</strong>，您好！</p>
                       <p>很抱歉，您的用户申请未通过审批。</p>
                       <p>如有疑问，请联系系统用户。</p>
                     </div>

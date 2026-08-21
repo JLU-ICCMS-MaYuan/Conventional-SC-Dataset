@@ -29,6 +29,7 @@ H1 H 0.50000000 0.50000000 0.50000000
 def _admin(db_session):
     user = models.User(
         email="admin@example.com",
+        username="StructureAdmin",
         password_hash="!",
         real_name="Admin User",
         role="admin",
@@ -43,6 +44,7 @@ def _admin(db_session):
 def _ordinary_user(db_session, email="user@example.com"):
     user = models.User(
         email=email,
+        username=f"User_{email.split('@', 1)[0]}",
         password_hash="!",
         real_name="Regular User",
         role="user",

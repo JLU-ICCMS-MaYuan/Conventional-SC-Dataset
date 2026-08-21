@@ -16,19 +16,28 @@ import {
   Person as UserIcon,
   Gavel as ReviewIcon,
   Download as DownloadIcon,
+  DriveFileRenameOutline as RenameIcon,
+  History as HistoryIcon,
 } from '@mui/icons-material'
-import { useAuth } from '../context/AuthContext'
+import { type User, useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
 import { SourceEvidence, UploadDraft, normalizeUploadDraft, unwrapData } from '../lib/paperProcessing'
 import ChartGroupEditor from '../components/ChartGroupEditor'
 import NewsManager from '../components/NewsManager'
+import UsernameField from '../components/UsernameField'
 
 /* ── Types ───────────────────────────────────── */
 interface UserRecord {
-  id: number; email: string; real_name: string; role: string
+  id: number; email: string; username: string; username_change_allowed: boolean; role: string
   is_admin: boolean; is_superadmin: boolean; is_approved: boolean
   is_email_verified: boolean; created_at: string; approved_at: string | null
   submitted_count: number; reviewed_count: number
+}
+
+interface UsernameAuditEvent {
+  id: number; target_user_id: number; changed_by_user_id: number
+  changed_by_username: string; old_username: string; new_username: string
+  reason: string; created_at: string
 }
 
 interface PaperRecord {
@@ -82,7 +91,7 @@ const paperSuperconductorTypes = (paper: PaperRecord) =>
 
 /* ═══════════════════════════════════════════════ */
 const AdminPage: React.FC = () => {
-  const { user } = useAuth()
+  const { user, replaceUser } = useAuth()
   const isSuper = user?.role === 'superadmin'
 
   const [tab, setTab] = useState(0)
@@ -122,6 +131,13 @@ const AdminPage: React.FC = () => {
   const [editUser, setEditUser] = useState<{user:UserRecord,open:boolean}>({user:null!,open:false})
   const [editRole, setEditRole] = useState('')
   const [editApproved, setEditApproved] = useState(true)
+  const [renameUser, setRenameUser] = useState<UserRecord | null>(null)
+  const [renameUsername, setRenameUsername] = useState('')
+  const [renameReason, setRenameReason] = useState('')
+  const [renameSaving, setRenameSaving] = useState(false)
+  const [auditOpen, setAuditOpen] = useState(false)
+  const [auditEvents, setAuditEvents] = useState<UsernameAuditEvent[]>([])
+  const [auditLoading, setAuditLoading] = useState(false)
 
   /* ── Chart Groups ────────────────────────────── */
   const [chartGroups, setChartGroups] = useState<any[]>([])
@@ -333,6 +349,40 @@ const AdminPage: React.FC = () => {
     } catch (e: unknown) { setSnackbar(`失败: ${(e as Error).message}`) }
   }
 
+  const handleUsernameRename = async () => {
+    if (!renameUser || !renameReason.trim()) return
+    setRenameSaving(true)
+    try {
+      const result = await api.put<{ user: User }>(`/api/admin/users/${renameUser.id}/username`, {
+        username: renameUsername, reason: renameReason.trim(),
+      })
+      if (renameUser.id === user?.id) replaceUser(result.user)
+      setSnackbar('用户名已更新并记录审计')
+      setRenameUser(null)
+      setRenameUsername('')
+      setRenameReason('')
+      loadUsers()
+    } catch (e: unknown) {
+      setSnackbar(`失败: ${(e as Error).message}`)
+    } finally {
+      setRenameSaving(false)
+    }
+  }
+
+  const openUsernameAudit = async () => {
+    setAuditOpen(true)
+    setAuditLoading(true)
+    try {
+      const events = await api.get<UsernameAuditEvent[]>('/api/admin/username-audit-events')
+      setAuditEvents(Array.isArray(events) ? events : [])
+    } catch (e: unknown) {
+      setSnackbar(`失败: ${(e as Error).message}`)
+      setAuditEvents([])
+    } finally {
+      setAuditLoading(false)
+    }
+  }
+
   const handleDeleteUser = async (id: number) => {
     if (!window.confirm('确认删除该用户？')) return
     try {
@@ -415,7 +465,7 @@ const AdminPage: React.FC = () => {
               <Typography variant="caption" color="text.secondary">当前角色</Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
                 <Chip size="small" color="error" label="超级管理员" />
-                <Typography variant="h6" fontWeight={700}>{user?.real_name}</Typography>
+                <Typography variant="h6" fontWeight={700}>{user?.username}</Typography>
               </Box>
             </CardContent>
           </Card>
@@ -551,6 +601,11 @@ const AdminPage: React.FC = () => {
       {/* ═══════════════════════════════════════════ */}
       {tab === 2 && isSuper && (
         <Box>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
+            <Button variant="outlined" size="small" startIcon={<HistoryIcon />} onClick={() => void openUsernameAudit()}>
+              更名审计
+            </Button>
+          </Box>
           {usersLoading && <LinearProgress sx={{ mb: 1 }} />}
           <TableContainer component={Paper} variant="outlined">
             <Table size="small">
@@ -571,10 +626,10 @@ const AdminPage: React.FC = () => {
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Avatar sx={{ width: 28, height: 28, fontSize: 12, bgcolor: u.role==='superadmin'?'error.main':u.role==='admin'?'primary.main':'grey.400' }}>
-                          {u.real_name?.charAt(0) || '?'}
+                          {u.username.charAt(0).toUpperCase()}
                         </Avatar>
                         <Box>
-                          <Typography variant="body2" fontWeight={600}>{u.real_name}</Typography>
+                          <Typography variant="body2" fontWeight={600}>{u.username}</Typography>
                           <Typography variant="caption" color="text.secondary">{u.email}</Typography>
                         </Box>
                       </Box>
@@ -601,6 +656,9 @@ const AdminPage: React.FC = () => {
                     </TableCell>
                     <TableCell align="right">
                       <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
+                        <Tooltip title="修改用户名"><IconButton size="small"
+                          onClick={()=>{setRenameUser(u);setRenameUsername(u.username);setRenameReason('')}}>
+                          <RenameIcon fontSize="small" /></IconButton></Tooltip>
                         <Tooltip title="编辑权限"><IconButton size="small" color="primary"
                           onClick={()=>{setEditUser({user:u,open:true});setEditRole(u.role);setEditApproved(u.is_approved)}}>
                           <EditIcon fontSize="small" /></IconButton></Tooltip>
@@ -1003,7 +1061,7 @@ const AdminPage: React.FC = () => {
         <DialogTitle>编辑用户权限</DialogTitle>
         <DialogContent sx={{ display:'flex',flexDirection:'column',gap:2,mt:1 }}>
           <Typography variant="body2" fontWeight={600}>
-            {editUser.user?.real_name} ({editUser.user?.email})
+            {editUser.user?.username} ({editUser.user?.email})
           </Typography>
           <FormControl fullWidth size="small">
             <InputLabel>角色</InputLabel>
@@ -1026,6 +1084,49 @@ const AdminPage: React.FC = () => {
           <Button onClick={()=>setEditUser({user:null!,open:false})}>取消</Button>
           <Button variant="contained" onClick={handleUserSave}>保存</Button>
         </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!renameUser} onClose={()=>!renameSaving&&setRenameUser(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>修改用户名</DialogTitle>
+        <DialogContent sx={{ display:'flex',flexDirection:'column',gap:2,pt:'12px !important' }}>
+          <Alert severity="warning">更名会立即改变公开贡献身份，并写入不可变审计记录。</Alert>
+          <UsernameField value={renameUsername} onChange={setRenameUsername} autoFocus />
+          <TextField label="更名原因" value={renameReason} onChange={e=>setRenameReason(e.target.value)}
+            required multiline minRows={2} inputProps={{ maxLength: 500 }} helperText={`${renameReason.length}/500`} />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={()=>setRenameUser(null)} disabled={renameSaving}>取消</Button>
+          <Button variant="contained" onClick={()=>void handleUsernameRename()}
+            disabled={renameSaving || !renameUsername || !renameReason.trim() || renameUsername === renameUser?.username}>
+            {renameSaving ? <CircularProgress size={18} /> : '确认更名'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={auditOpen} onClose={()=>setAuditOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>用户名更名审计</DialogTitle>
+        <DialogContent>
+          {auditLoading ? <LinearProgress /> : auditEvents.length === 0 ? (
+            <Alert severity="info">暂无更名记录</Alert>
+          ) : (
+            <TableContainer component={Paper} variant="outlined">
+              <Table size="small">
+                <TableHead><TableRow>
+                  <TableCell>时间</TableCell><TableCell>变更</TableCell><TableCell>操作者</TableCell><TableCell>原因</TableCell>
+                </TableRow></TableHead>
+                <TableBody>{auditEvents.map(event => (
+                  <TableRow key={event.id}>
+                    <TableCell>{new Date(event.created_at).toLocaleString('zh-CN')}</TableCell>
+                    <TableCell>{event.old_username} → {event.new_username}</TableCell>
+                    <TableCell>{event.changed_by_username}</TableCell>
+                    <TableCell>{event.reason}</TableCell>
+                  </TableRow>
+                ))}</TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DialogContent>
+        <DialogActions><Button onClick={()=>setAuditOpen(false)}>关闭</Button></DialogActions>
       </Dialog>
 
       {/* Snackbar */}
