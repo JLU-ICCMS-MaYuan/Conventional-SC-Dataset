@@ -29,6 +29,41 @@ const task = (id: string, filename: string) => ({
 })
 
 describe('论文上传工作区', () => {
+  it('只展示未提交任务，不请求或显示旧版 MySQL 上传记录', async () => {
+    localStorage.setItem('auth_token', 'test-token')
+    localStorage.setItem('auth_user', JSON.stringify({
+      id: 7, email: 'user@example.com', username: 'tester', username_change_allowed: false,
+      role: 'user', is_admin: false, is_superadmin: false, is_approved: true,
+      created_at: null, approved_at: null,
+    }))
+    const requested: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      requested.push(url)
+      const body = url === '/api/upload-tasks'
+        ? { ok: true, data: [] }
+        : url.startsWith('/api/papers/my-uploads')
+          ? {
+              items: [{
+                id: 19, title: null, source_file_path: 'upload/旧版失败论文.pdf',
+                review_status: 'pending', key_properties: [], created_at: '2026-08-19T00:00:00Z',
+              }],
+              total: 1,
+            }
+          : { ok: true }
+      return new Response(JSON.stringify(body), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      })
+    }))
+
+    render(<MemoryRouter><AuthProvider><UploadPage /></AuthProvider></MemoryRouter>)
+
+    expect(await screen.findByText('暂无活动任务')).toBeVisible()
+    expect(requested.some(url => url.startsWith('/api/papers/my-uploads'))).toBe(false)
+    expect(screen.queryByText('上传记录')).not.toBeInTheDocument()
+    expect(screen.queryByText('旧版失败论文.pdf')).not.toBeInTheDocument()
+  })
+
   it('把一次拖入的多个文件保留在同一个可清空的任务草稿中', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     render(<MultiFileUploadPanel onCreated={vi.fn()} />)

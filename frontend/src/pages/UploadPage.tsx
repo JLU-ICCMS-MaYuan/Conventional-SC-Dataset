@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Box, Typography, Card, CardContent, Button, TextField,
@@ -7,7 +7,6 @@ import {
 } from '@mui/material'
 import {
   CloudUpload, Check, PictureAsPdf, Description, Code,
-  Refresh as RefreshIcon, ChevronRight as ChevronRightIcon,
   Replay as ReplayIcon, EditNote as EditNoteIcon,
 } from '@mui/icons-material'
 import { useAuth } from '../context/AuthContext'
@@ -29,51 +28,12 @@ interface ParsedGroup {
   items: any[]
 }
 
-interface UploadRecord {
-  id: number
-  title: string | null
-  doi: string | null
-  journal: string | null
-  year: number | null
-  review_status: string
-  source_file_path: string | null
-  created_at: string
-  key_properties: any[] | null
-  record_count?: number
-  processing_status?: string | null
-  processing_error?: string | null
-  paper_type?: string | null
-  classification_reason?: string | null
-}
-
 /* ── Constants ────────────────────────────────── */
 
 const ACCEPTED_TYPES = ['.json', '.pdf', '.txt', '.md']
 const ACCEPTED_STR = ACCEPTED_TYPES.join(',')
 const MAX_PAPER_UPLOAD_BYTES = 50 * 1024 * 1024
 const FILE_TOO_LARGE_MESSAGE = '文件超过 50 MB 限制'
-
-const STATUS_CONFIG: Record<string, { label: string; color: 'warning' | 'info' | 'success' | 'error' }> = {
-  parsing:   { label: '解析中',   color: 'warning' },
-  processing: { label: '处理中', color: 'warning' },
-  succeeded: { label: '解析完成', color: 'success' },
-  failed: { label: '解析失败', color: 'error' },
-  pending:   { label: '待审核',   color: 'info' },
-  approved:  { label: '审核完成', color: 'success' },
-  rejected:  { label: '已拒绝',   color: 'error' },
-  needs_revision: { label: '待审核（旧状态）', color: 'warning' },
-}
-
-function getDisplayStatus(record: UploadRecord): string {
-  if (record.processing_status === 'failed') return 'failed'
-  if (record.processing_status === 'processing') return 'processing'
-  if (record.processing_status === 'succeeded') return 'succeeded'
-  if (record.review_status === 'pending' &&
-      (!record.key_properties || record.key_properties.length === 0)) {
-    return 'parsing'
-  }
-  return record.review_status || 'pending'
-}
 
 /* ═══════════════════════════════════════════════ */
 const UploadPage: React.FC = () => {
@@ -110,10 +70,6 @@ const UploadPage: React.FC = () => {
   const [description, setDescription] = useState('')
   const [saving, setSaving] = useState(false)
 
-  /* ── Upload history ────────────────────────── */
-  const [uploads, setUploads] = useState<UploadRecord[]>([])
-  const [historyLoading, setHistoryLoading] = useState(false)
-
   /* ── Snackbar & error ──────────────────────── */
   const [snackbar, setSnackbar] = useState('')
   const [error, setError] = useState('')
@@ -125,22 +81,6 @@ const UploadPage: React.FC = () => {
   const isJsonFile = (f: File) => fileSuffix(f).endsWith('.json')
   const formatSize = (s: number) =>
     s > 1024 * 1024 ? `${(s / 1024 / 1024).toFixed(1)} MB` : `${(s / 1024).toFixed(1)} KB`
-
-  /* ── Load history ──────────────────────────── */
-  const loadHistory = useCallback(async () => {
-    if (!user) return
-    setHistoryLoading(true)
-    try {
-      const res = await api.get<{ items: UploadRecord[]; total: number }>('/api/papers/my-uploads?limit=50')
-      setUploads(res.items || [])
-    } catch {
-      // 端点可能尚未部署，静默失败
-    } finally {
-      setHistoryLoading(false)
-    }
-  }, [user])
-
-  useEffect(() => { loadHistory() }, [loadHistory])
 
   const taskStorageKey = user ? `scwiki_active_upload_task:${user.id}` : null
 
@@ -365,7 +305,6 @@ const UploadPage: React.FC = () => {
     setActiveTaskId(null)
     setTaskState(null)
     setSnackbar('已提交管理员审核')
-    void loadHistory()
     setDetailPaperId(paperId)
     setStage('detail')
   }
@@ -408,7 +347,6 @@ const UploadPage: React.FC = () => {
   const handleDetailBack = () => {
     setStage('list')
     setDetailPaperId(null)
-    loadHistory()
   }
 
   const getFileIcon = () => {
@@ -455,14 +393,11 @@ const UploadPage: React.FC = () => {
   /* ═══════════════════════════════════════════════ */
   return (
     <Box sx={{ maxWidth: 840, mx: 'auto' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+      <Box sx={{ mb: 3 }}>
         <Box>
           <Typography variant="overline" color="text.secondary">Upload</Typography>
           <Typography variant="h4" fontWeight={800}>上传</Typography>
         </Box>
-        <Button variant="text" startIcon={<RefreshIcon />} onClick={loadHistory} disabled={historyLoading}>
-          刷新
-        </Button>
       </Box>
 
       {/* Tabs: Paper / JSON */}
@@ -577,87 +512,6 @@ const UploadPage: React.FC = () => {
 
           {error && <Alert severity="error" sx={{ mt: 2 }} onClose={() => setError('')}>{error}</Alert>}
 
-          {/* Upload history */}
-          <Box sx={{ mt: 4 }}>
-            <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
-              上传记录
-              {uploads.length > 0 && (
-                <Chip size="small" label={uploads.length} sx={{ ml: 1, fontWeight: 700 }} />
-              )}
-            </Typography>
-
-            {historyLoading && <LinearProgress sx={{ mb: 2, borderRadius: 999 }} />}
-
-            {uploads.length === 0 && !historyLoading && (
-              <Card variant="outlined" sx={{ textAlign: 'center', py: 4 }}>
-                <Typography variant="body2" color="text.secondary">
-                  暂无上传记录。拖拽 PDF/TXT/MD 文件到上方区域开始上传。
-                </Typography>
-              </Card>
-            )}
-
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-              {uploads.map(record => {
-                const status = getDisplayStatus(record)
-                const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.pending
-                const sourcePath = record.source_file_path || ''
-                const fileName = sourcePath.replace(/^upload\//, '') || '-'
-                const isPdf = fileName.endsWith('.pdf')
-
-                return (
-                  <Card key={record.id} variant="outlined"
-                    sx={{
-                      cursor: 'pointer', transition: 'all 0.15s',
-                      '&:hover': { borderColor: 'primary.main', boxShadow: '0 2px 12px rgba(79,70,229,.08)' },
-                    }}
-                    onClick={() => handleDetailOpen(record.id)}>
-                    <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 2, '&:last-child': { pb: 2 } }}>
-                      {/* File icon */}
-                      <Box sx={{
-                        width: 44, height: 44, borderRadius: 2, display: 'flex', alignItems: 'center',
-                        justifyContent: 'center', bgcolor: isPdf ? '#fee2e2' : '#e0f2fe', flexShrink: 0,
-                      }}>
-                        {isPdf
-                          ? <PictureAsPdf sx={{ color: '#b3261e' }} />
-                          : <Description sx={{ color: '#0891b2' }} />}
-                      </Box>
-
-                      {/* Content */}
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography variant="body1" fontWeight={700} noWrap>
-                          {record.title || fileName}
-                        </Typography>
-                        <Box sx={{ display: 'flex', gap: 1.5, mt: 0.25, flexWrap: 'wrap' }}>
-                          <Typography variant="caption" color="text.secondary">
-                            {fileName}
-                          </Typography>
-                          {record.year && (
-                            <Typography variant="caption" color="text.secondary">
-                              {record.year}
-                            </Typography>
-                          )}
-                          <Typography variant="caption" color="text.secondary">
-                            {record.created_at ? new Date(record.created_at).toLocaleDateString('zh-CN') : '-'}
-                          </Typography>
-                        </Box>
-                      </Box>
-
-                      {/* Status + arrow */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
-                        <Chip
-                          size="small"
-                          label={cfg.label}
-                          color={cfg.color}
-                          sx={{ fontWeight: 700, minWidth: 72 }}
-                        />
-                        <ChevronRightIcon sx={{ color: 'text.disabled' }} />
-                      </Box>
-                    </CardContent>
-                  </Card>
-                )
-              })}
-            </Box>
-          </Box>
         </>
       )}
 
