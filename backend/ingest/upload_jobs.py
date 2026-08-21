@@ -9,7 +9,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import func
+from sqlalchemy import and_, func
 
 from backend.database import SessionLocal
 from backend.ingest.chunker import Chunk, chunk_paper
@@ -25,8 +25,8 @@ from backend.ingest.upload_tasks import (
     schedule_cleanup,
     update_state,
 )
-from backend.ingest.upload_contracts import compare_file_identities
-from backend.models import Paper
+from backend.ingest.upload_contracts import UPLOAD_STATE_SCHEMA_VERSION, compare_file_identities
+from backend.models import Paper, PaperFile
 from backend.rag.llm import complete_json
 
 
@@ -567,13 +567,29 @@ def normalize_doi(value: Any) -> str | None:
     return doi or None
 
 
-def _find_existing_paper(doi: str | None) -> Paper | None:
+def _existing_paper_query(db):
+    return db.query(
+        Paper.id,
+        Paper.doi,
+        Paper.review_status,
+        Paper.uploaded_by_user_id,
+        PaperFile.stored_path.label("main_stored_path"),
+        PaperFile.sha256.label("main_sha256"),
+    ).outerjoin(
+        PaperFile,
+        and_(PaperFile.paper_id == Paper.id, PaperFile.role == "main"),
+    )
+
+
+def _find_existing_paper(doi: str | None) -> Any | None:
     normalized = normalize_doi(doi)
     if not normalized:
         return None
     db = SessionLocal()
     try:
-        candidates = db.query(Paper).filter(func.lower(Paper.doi).contains(normalized.lower())).all()
+        candidates = _existing_paper_query(db).filter(
+            func.lower(Paper.doi).contains(normalized.lower())
+        ).all()
         return next(
             (paper for paper in candidates if (normalize_doi(paper.doi) or "").lower() == normalized.lower()),
             None,
@@ -582,18 +598,15 @@ def _find_existing_paper(doi: str | None) -> Paper | None:
         db.close()
 
 
-def _find_existing_by_hash(state: dict[str, Any]) -> Paper | None:
+def _find_existing_by_hash(state: dict[str, Any]) -> Any | None:
     expected = str(state.get("file_sha256") or "")
     if not expected:
         return None
     db = SessionLocal()
     try:
-        papers = db.query(Paper).filter(Paper.source_file_path.isnot(None)).all()
-        for paper in papers:
-            path = _resolve_stored_file(paper.source_file_path)
-            if path and path.is_file() and sha256_file(path) == expected:
-                return paper
-        return None
+        return _existing_paper_query(db).filter(
+            func.lower(PaperFile.sha256) == expected.lower()
+        ).first()
     finally:
         db.close()
 
@@ -606,17 +619,11 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _resolve_stored_file(source_file_path: str | None) -> Path | None:
-    if not source_file_path:
-        return None
-    path = Path(source_file_path)
-    return path if path.is_absolute() else data_path("") / path
-
-
-def _handle_duplicate(task_id: str, state: dict[str, Any], existing: Paper) -> dict[str, Any]:
+def _handle_duplicate(task_id: str, state: dict[str, Any], existing: Any) -> dict[str, Any]:
     source = _original_path(state)
-    existing_path = _resolve_stored_file(existing.source_file_path)
-    same_file = bool(existing_path and existing_path.is_file() and sha256_file(source) == sha256_file(existing_path))
+    source_sha256 = str(state.get("file_sha256") or "") or sha256_file(source)
+    existing_sha256 = str(getattr(existing, "main_sha256", None) or "")
+    same_file = bool(existing_sha256 and source_sha256.lower() == existing_sha256.lower())
     shutil.rmtree(artifact_directory(task_id), ignore_errors=True)
     markdown_path(task_id).unlink(missing_ok=True)
 
@@ -668,6 +675,7 @@ def _handle_duplicate(task_id: str, state: dict[str, Any], existing: Paper) -> d
         duplicate_reason=("数据库中已有该论文" if can_view else "数据库中已有该论文，但当前账号无权查看"),
         duplicate_file_action=action,
         candidate_attachment=str(candidate_path) if candidate_path else None,
+        state_schema_version=UPLOAD_STATE_SCHEMA_VERSION,
     )
     _schedule_terminal_cleanup(task_id)
     return duplicate

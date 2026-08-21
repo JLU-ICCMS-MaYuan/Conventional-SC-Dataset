@@ -8,8 +8,11 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-
-from backend.ingest.upload_contracts import MAX_UPLOAD_BYTES, public_task_state
+from backend.ingest.upload_contracts import (
+    MAX_UPLOAD_BYTES,
+    UPLOAD_STATE_SCHEMA_VERSION,
+    public_task_state,
+)
 from backend.models import User
 from backend.security import get_current_user
 
@@ -45,6 +48,20 @@ def _owned_state(task_id: str, user: User) -> dict[str, Any]:
     return state
 
 
+def _versioned_public_state(state: dict[str, Any]) -> dict[str, Any]:
+    try:
+        version = int(state.get("state_schema_version") or 0)
+    except (TypeError, ValueError):
+        version = 0
+    if version != UPLOAD_STATE_SCHEMA_VERSION:
+        raise _error(
+            409,
+            "UPLOAD_STATE_VERSION_UNSUPPORTED",
+            "上传任务由旧版 Worker 生成，请先执行状态迁移",
+        )
+    return public_task_state(state)
+
+
 @router.post("")
 def create_upload_task(
     body: CreateUploadTask,
@@ -65,10 +82,15 @@ def create_upload_task(
 
 
 @router.get("")
-def get_upload_tasks(current_user: User = Depends(get_current_user)):
+def get_upload_tasks(
+    current_user: User = Depends(get_current_user),
+):
     from backend.ingest.upload_tasks import list_user_tasks
 
-    return {"ok": True, "data": list_user_tasks(current_user.id)}
+    return {
+        "ok": True,
+        "data": [_versioned_public_state(state) for state in list_user_tasks(current_user.id)],
+    }
 
 
 @router.get("/{task_id}")
@@ -82,7 +104,7 @@ def get_upload_task(
     state = _owned_state(task_id, current_user)
     if touch:
         state = touch_user_activity(task_id)
-    return {"ok": True, "data": public_task_state(state)}
+    return {"ok": True, "data": _versioned_public_state(state)}
 
 
 @router.post("/{task_id}/activity")

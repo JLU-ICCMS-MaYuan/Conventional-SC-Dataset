@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 from uuid import uuid4
 
 
+UPLOAD_STATE_SCHEMA_VERSION = 1
 TASK_TTL = 24 * 60 * 60
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 RUNNING_STATUSES = {
@@ -22,6 +24,7 @@ PUBLIC_TASK_FIELDS = {
     "task_id", "status", "stage", "progress", "processing_status",
     "processing_error", "error_code", "created_at", "updated_at",
     "cleanup_at", "filename", "file_kind", "files", "revision",
+    "state_schema_version",
     "duplicate", "existing_paper_id", "existing_paper_status", "allowed_actions",
     "duplicate_reason", "paper_id",
     "consistency", "completed_chunks", "total_chunks", "stage_index", "stage_total",
@@ -30,6 +33,33 @@ PUBLIC_FILE_FIELDS = {
     "file_id", "role", "original_filename", "media_type", "kind", "size",
     "sha256", "sort_order", "upload_status", "extraction_status", "error",
 }
+
+
+@dataclass(frozen=True)
+class CleanupContext:
+    """Redis state 过期后仍足够执行受限清理的最小上下文。"""
+
+    task_id: str
+    user_id: int | None
+    processing_job_id: str | None
+    existing_paper_id: int | None
+    expected_updated_at: int
+    state_schema_version: int
+
+    @classmethod
+    def from_state(cls, task_id: str, state: dict[str, Any]) -> "CleanupContext":
+        return cls(
+            task_id=task_id,
+            user_id=int(state["user_id"]) if state.get("user_id") is not None else None,
+            processing_job_id=str(state.get("job_id") or "") or None,
+            existing_paper_id=(
+                int(state["existing_paper_id"])
+                if state.get("existing_paper_id") is not None
+                else None
+            ),
+            expected_updated_at=int(state.get("updated_at") or 0),
+            state_schema_version=int(state.get("state_schema_version") or 0),
+        )
 
 
 def apply_state_changes(

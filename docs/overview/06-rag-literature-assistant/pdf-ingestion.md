@@ -13,8 +13,9 @@
 5. 文本提取后、分段 LLM 前，系统用 DOI、标题页和开头文本检查正文与附件的一致性。信息缺失不阻塞；明确冲突显示警告并要求用户在提交前确认。
 6. Markdown 保存到 `/data/parsed_markdown`；每个分段先建立状态清单，结果采用临时文件加原子替换保存。任务详情提供“AI 临时表单”和“分段解析与证据”页签；无分段时显示提取或等待状态，分段完成即可查看候选值、来源文件、角色、章节、页码和证据句。
 7. 解析中的临时表单只读并持续合并结果。单值字段出现不同候选时标记冲突并并列显示，不静默覆盖；任务进入 `ready` 后同一页签原地切换为可编辑最终草稿。
-8. 用户停止编辑 5 秒后自动保存，也可立即保存；点击提交后，一篇论文、全部 `paper_files`、正式文本块、证据和物性在一个 MySQL 事务中写入并进入 `pending`。
-9. 管理员对照 AI 建议、用户值和原文证据审核。`approved` 会同步发布 Qdrant 后清理临时证据；`rejected` 清理临时证据；`pending` 保留证据。
+8. 用户停止编辑 5 秒后自动保存，也可立即保存；点击提交后，一篇论文、全部 `paper_files`、正式文本块、证据和物性在一个 MySQL 事务中写入并进入 `pending`。提交响应丢失时，相同上传者用同一 `task_id` 重试会按 `papers.upload_task_id` 返回原 `paper_id`，不会创建第二篇论文。
+9. MySQL 事务成功后，系统保留 PDF、附件、组合及分文件 Markdown 和精简 `result.json` 审核快照；删除 Redis state/draft、用户任务索引、RQ 处理 Job、分段 JSON 和其他 LLM 中间产物。快照写入失败时不执行该临时清理，以便后续恢复。
+10. 管理员对照 AI 建议、用户值和原文证据审核。快照同时绑定 `task_id`、`paper_id` 和 `paper_revision`，只有与论文当前 revision 一致的 pending 快照可以读取。`approved` 会同步发布 Qdrant 后幂等删除快照；`rejected` 幂等删除快照；`pending` 保留快照。
 
 ## 分类规则
 
@@ -26,17 +27,18 @@
 
 ## 持久化与可见性
 
-- Redis：任务阶段、文件清单、错误、进度和未提交草稿；每个用户有活动任务索引，上限 100 个。
+- Redis：任务阶段、文件清单、错误、进度和未提交草稿；每个用户有活动任务索引，上限 100 个。状态带 `state_schema_version`，API 和 Worker 共用同一契约版本。
 - `ready` 从用户主动打开详情、编辑或保存草稿起滑动保留 24 小时；后台轮询不续期。`failed/duplicate/cancelled` 从进入状态起固定保留 24 小时。
 - `uploading` 连续 1 小时无进度转为失败；队列、解析、汇总和提交中的任务不按创建时间强制过期。
 - MySQL：用户提交后的最终候选值和 `pending/approved/rejected` 审核状态；不保存处理进度、失败历史或 AI 原始判断。
-- 文件目录：未提交终态任务到期后删除原文件、Markdown 和 AI 产物；清理前必须用 `papers.upload_task_id` 查询永久认领，数据库不可用时延后，不得依据 Redis 缺失直接删除。
+- 文件目录：未提交终态任务到期后删除原文件、组合及分文件 Markdown、AI 产物和 duplicate 候选副本；清理 Job 携带最小 `CleanupContext`，即使 Redis state 已过期仍能定位用户索引、RQ Job 和候选副本。删除文件前必须用 `papers.upload_task_id` 查询永久认领，数据库不可用时延后，不得依据 Redis 缺失直接删除。
+- 清理职责分为 `cleanup_transient_data`、`cleanup_unsubmitted_files` 和 `cleanup_duplicate_candidate`。已提交任务只执行临时清理并保留正式文件与待审快照；未提交的 `failed/duplicate/cancelled` 才执行全部清理。
 - 已提交论文通过 `paper_files` 永久认领所有来源文件；`paper_chunks` 和正式证据保存来源文件与页码范围。
 - 统计、搜索和 RAG 只使用 `approved` 论文。统一论文详情的权限为：匿名仅 approved；登录用户可看 approved/pending；上传者还可看自己的 rejected 和 `review_comment`；管理员可看全部及 `admin_internal_note`。内部路径始终不公开。
 
 ## 上传任务中心
 
-- `GET /api/upload-tasks` 从服务端恢复当前用户活动任务，不依赖浏览器保存的单个 task ID。
+- `GET /api/upload-tasks` 从 Redis 恢复当前用户活动任务，不依赖浏览器保存的单个 task ID，也不为 duplicate 刷新查询 Paper 表。未知状态契约版本返回稳定错误，不静默猜测权限。
 - 列表在解析记录旁显示服务端 `cleanup_at` 驱动的倒计时；少于一小时显示分秒，到期待 Worker 执行时显示“等待清理”。
 - 每个任务行提供明确的“查看解析/收起解析”按钮并标识当前任务；同一时刻只展开一个任务详情，切换任务不清空上传区尚未提交的本地文件。
 - 运行任务可请求取消，Worker 在文件、分段和汇总边界停止；当前阻塞的 LLM 请求允许完成或超时。
@@ -47,7 +49,9 @@
 
 - 同一任务内文件哈希相同：直接拒绝重复文件。与已有正式论文哈希相同：删除新副本并返回已有论文权限动作。
 - DOI 相同但文件不同：禁止创建草稿，将新文件保存为该论文的管理员候选附件，不覆盖原文件。
-- 重复结果返回已有论文 ID、状态、允许动作和原因；前端使用统一 `/api/papers/{id}`，不再错误跳转到仅本人上传接口。候选附件列表和下载接口仅管理员可访问。
+- Worker 检测重复时查询 MySQL 一次，并把已有论文 ID、状态、允许动作、原因和固定 24 小时截止时间写入 Redis；后续任务列表和详情只读该快照。点击论文后由统一 `/api/papers/{id}` 再查 MySQL 并最终鉴权，不再错误跳转到仅本人上传接口。
+- 旧 Worker 留下的不完整 duplicate 状态由 `python -m backend.scripts.migrate_upload_task_states --apply` 一次性回填；默认不带 `--apply` 时只 dry-run。迁移后的 `cleanup_at` 沿用旧 `updated_at`，不会重新获得 24 小时。
+- 候选附件列表和下载接口仅管理员可访问；duplicate 到期或被主动清理时，仅删除该 `task_id` 的候选 PDF/JSON，不影响同论文其他候选。
 
 ## 失败语义
 

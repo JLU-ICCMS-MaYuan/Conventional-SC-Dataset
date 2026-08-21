@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import time
 import uuid
@@ -12,12 +13,16 @@ from typing import Any, Iterator
 
 from redis import Redis
 from rq import Queue
+from rq.exceptions import NoSuchJobError
+from rq.job import Job
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.rag.config import settings
 from backend.ingest.upload_contracts import (
     FIXED_TERMINAL_STATUSES,
     RUNNING_STATUSES,
+    CleanupContext,
+    UPLOAD_STATE_SCHEMA_VERSION,
     apply_state_changes,
     apply_user_activity,
     public_task_state,
@@ -29,6 +34,7 @@ TASK_TTL = settings.upload_task_ttl_seconds
 QUEUE_NAME = "scwiki-upload"
 TASK_LOCK_TIMEOUT = 120
 ACTIVE_TASK_LIMIT = settings.upload_active_task_limit
+TASK_ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 
 
 def redis_client() -> Redis:
@@ -121,6 +127,7 @@ def create_task(
         "last_progress_at": now,
         "cleanup_at": None,
         "revision": 1,
+        "state_schema_version": UPLOAD_STATE_SCHEMA_VERSION,
     }
     client = redis_client()
     index_key = user_tasks_key(user_id)
@@ -354,6 +361,85 @@ def artifact_path(task_id: str) -> Path:
     return artifact_directory(task_id) / "result.json"
 
 
+def _validated_task_id(task_id: str) -> str:
+    if not TASK_ID_PATTERN.fullmatch(task_id):
+        raise ValueError("上传任务 ID 格式无效")
+    return task_id
+
+
+def _delete_processing_job(job_id: str) -> None:
+    try:
+        job = Job.fetch(job_id, connection=Redis.from_url(settings.redis_url))
+    except NoSuchJobError:
+        return
+    job.delete()
+
+
+def cleanup_transient_data(
+    task_id: str,
+    *,
+    context: CleanupContext | None = None,
+    preserve_review_snapshot: bool = False,
+) -> None:
+    """删除 Redis/RQ 和处理产物，可选择保留待审核快照。"""
+    task_id = _validated_task_id(task_id)
+    cleanup_context = context
+    if cleanup_context is None:
+        cleanup_context = CleanupContext.from_state(task_id, get_state(task_id) or {})
+    if cleanup_context.task_id != task_id:
+        raise ValueError("清理上下文与上传任务不匹配")
+
+    artifact_root = data_path("review_artifacts") / task_id
+    if artifact_root.is_dir():
+        for child in artifact_root.iterdir():
+            if preserve_review_snapshot and child.name == "result.json":
+                continue
+            if child.is_dir() and not child.is_symlink():
+                shutil.rmtree(child, ignore_errors=True)
+            else:
+                child.unlink(missing_ok=True)
+        try:
+            artifact_root.rmdir()
+        except OSError:
+            pass
+
+    if cleanup_context.processing_job_id:
+        _delete_processing_job(cleanup_context.processing_job_id)
+    client = redis_client()
+    client.delete(task_key(task_id), draft_key(task_id))
+    if cleanup_context.user_id is not None:
+        client.zrem(user_tasks_key(cleanup_context.user_id), task_id)
+
+
+def cleanup_unsubmitted_files(task_id: str) -> None:
+    """删除未提交任务的上传文件和两类 Markdown 布局。"""
+    task_id = _validated_task_id(task_id)
+    shutil.rmtree(data_path("upload_PDFs") / task_id, ignore_errors=True)
+    markdown_root = data_path("parsed_markdown")
+    (markdown_root / f"{task_id}.md").unlink(missing_ok=True)
+    shutil.rmtree(markdown_root / task_id, ignore_errors=True)
+
+
+def cleanup_duplicate_candidate(task_id: str, existing_paper_id: int | None) -> None:
+    """删除某个 duplicate 任务生成的候选文件，不影响同论文其他候选。"""
+    task_id = _validated_task_id(task_id)
+    if existing_paper_id is None:
+        return
+    paper_id = int(existing_paper_id)
+    if paper_id <= 0:
+        raise ValueError("已有论文 ID 格式无效")
+    root = data_path("upload_PDFs") / "candidates" / str(paper_id)
+    if not root.is_dir():
+        return
+    for candidate in root.glob(f"{task_id}.*"):
+        if candidate.is_file() or candidate.is_symlink():
+            candidate.unlink(missing_ok=True)
+    try:
+        root.rmdir()
+    except OSError:
+        pass
+
+
 def enqueue_processing(task_id: str) -> str:
     from backend.ingest.upload_jobs import process_upload_task
 
@@ -369,14 +455,12 @@ def enqueue_processing(task_id: str) -> str:
 
 
 def cleanup_task_files(task_id: str) -> None:
-    state = get_state(task_id)
-    shutil.rmtree(data_path("upload_PDFs") / task_id, ignore_errors=True)
-    shutil.rmtree(data_path("review_artifacts") / task_id, ignore_errors=True)
-    markdown_path(task_id).unlink(missing_ok=True)
-    client = redis_client()
-    client.delete(task_key(task_id), draft_key(task_id))
-    if state and state.get("user_id"):
-        client.zrem(user_tasks_key(int(state["user_id"])), task_id)
+    """兼容旧调用方；新代码应按场景组合三个清理原语。"""
+    state = get_state(task_id) or {}
+    context = CleanupContext.from_state(task_id, state)
+    cleanup_transient_data(task_id, context=context, preserve_review_snapshot=False)
+    cleanup_unsubmitted_files(task_id)
+    cleanup_duplicate_candidate(task_id, context.existing_paper_id)
 
 
 def submitted_paper_id(task_id: str) -> int | None:
@@ -391,28 +475,47 @@ def submitted_paper_id(task_id: str) -> int | None:
             paper_id = session.scalar(select(Paper.id).where(Paper.upload_task_id == task_id))
             if paper_id is not None:
                 return paper_id
-        prefix = f"upload_PDFs/{task_id}/%"
-        return session.scalar(select(Paper.id).where(Paper.source_file_path.like(prefix)))
+        if hasattr(Paper, "source_file_path"):
+            prefix = f"upload_PDFs/{task_id}/%"
+            return session.scalar(select(Paper.id).where(Paper.source_file_path.like(prefix)))
+        return None
 
 
-def _enqueue_cleanup(task_id: str, expected_updated_at: int, delay: int = TASK_TTL) -> None:
+def _enqueue_cleanup(context: CleanupContext, delay: int = TASK_TTL) -> None:
     upload_queue().enqueue_in(
         __import__("datetime").timedelta(seconds=delay),
         cleanup_upload_task,
-        task_id,
-        expected_updated_at,
+        context,
     )
 
 
-def cleanup_upload_task(task_id: str, expected_updated_at: int) -> None:
+def _cleanup_context(
+    context_or_task_id: CleanupContext | dict[str, Any] | str,
+    expected_updated_at: int | None,
+) -> CleanupContext:
+    if isinstance(context_or_task_id, CleanupContext):
+        return context_or_task_id
+    if isinstance(context_or_task_id, dict):
+        return CleanupContext(**context_or_task_id)
+    task_id = _validated_task_id(context_or_task_id)
+    state = get_state(task_id) or {"updated_at": expected_updated_at or 0}
+    return CleanupContext.from_state(task_id, state)
+
+
+def cleanup_upload_task(
+    context_or_task_id: CleanupContext | dict[str, Any] | str,
+    expected_updated_at: int | None = None,
+) -> None:
+    context = _cleanup_context(context_or_task_id, expected_updated_at)
+    task_id = context.task_id
     try:
         with upload_task_lock(task_id):
             state = get_state(task_id)
-            if state and int(state.get("updated_at", 0)) != int(expected_updated_at):
+            if state and int(state.get("updated_at", 0)) != context.expected_updated_at:
                 cleanup_at = state.get("cleanup_at")
                 if cleanup_at:
                     _enqueue_cleanup(
-                        task_id, int(state["updated_at"]),
+                        CleanupContext.from_state(task_id, state),
                         delay=max(1, int(cleanup_at) - int(time.time())),
                     )
                 return
@@ -421,27 +524,37 @@ def cleanup_upload_task(task_id: str, expected_updated_at: int) -> None:
                 or state.get("submission_status") == "submitting"
             ):
                 if state.get("submission_status") == "submitting" and not state.get("status"):
-                    _enqueue_cleanup(task_id, int(state["updated_at"]))
+                    _enqueue_cleanup(CleanupContext.from_state(task_id, state))
                 return
             try:
                 persisted_paper_id = submitted_paper_id(task_id)
             except SQLAlchemyError:
                 # 数据库不可用时宁可延期，也不能冒险删除可能已提交的论文。
-                _enqueue_cleanup(task_id, expected_updated_at, delay=60)
+                _enqueue_cleanup(context, delay=60)
                 return
             if (state and state.get("paper_id") is not None) or persisted_paper_id is not None:
+                cleanup_transient_data(
+                    task_id,
+                    context=context,
+                    preserve_review_snapshot=True,
+                )
                 return
-            cleanup_task_files(task_id)
+            cleanup_transient_data(
+                task_id,
+                context=context,
+                preserve_review_snapshot=False,
+            )
+            cleanup_unsubmitted_files(task_id)
+            cleanup_duplicate_candidate(task_id, context.existing_paper_id)
     except TimeoutError:
         # 提交请求持有生命周期锁时延期，避免在事务执行中删除文件。
-        _enqueue_cleanup(task_id, expected_updated_at, delay=60)
+        _enqueue_cleanup(context, delay=60)
 
 
 def schedule_cleanup(task_id: str) -> None:
     state = get_state(task_id)
     if state and state.get("cleanup_at"):
         _enqueue_cleanup(
-            task_id,
-            int(state["updated_at"]),
+            CleanupContext.from_state(task_id, state),
             delay=max(1, int(state["cleanup_at"]) - int(time.time())),
         )

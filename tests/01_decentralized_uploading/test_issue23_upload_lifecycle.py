@@ -6,28 +6,46 @@ from backend.ingest import upload_tasks
 
 
 def test_expired_redis_state_preserves_files_for_submitted_paper(monkeypatch):
-    deleted = []
+    events = []
     monkeypatch.setattr(upload_tasks, "get_state", lambda _task_id: None)
     monkeypatch.setattr(upload_tasks, "submitted_paper_id", lambda _task_id: 42)
     monkeypatch.setattr(upload_tasks, "upload_task_lock", lambda _task_id: nullcontext())
-    monkeypatch.setattr(upload_tasks, "cleanup_task_files", deleted.append)
+    monkeypatch.setattr(
+        upload_tasks,
+        "cleanup_transient_data",
+        lambda task_id, **kwargs: events.append((task_id, kwargs["preserve_review_snapshot"])),
+    )
+    monkeypatch.setattr(
+        upload_tasks,
+        "cleanup_unsubmitted_files",
+        lambda _task_id: (_ for _ in ()).throw(AssertionError("正式文件不得删除")),
+    )
 
     upload_tasks.cleanup_upload_task("a" * 32, expected_updated_at=1)
 
-    assert deleted == []
+    assert events == [("a" * 32, True)]
 
 
 def test_missing_paper_id_in_redis_still_preserves_persisted_paper(monkeypatch):
-    deleted = []
+    events = []
     state = {"task_id": "b" * 32, "updated_at": 1, "paper_id": None}
     monkeypatch.setattr(upload_tasks, "get_state", lambda _task_id: state)
     monkeypatch.setattr(upload_tasks, "submitted_paper_id", lambda _task_id: 43)
     monkeypatch.setattr(upload_tasks, "upload_task_lock", lambda _task_id: nullcontext())
-    monkeypatch.setattr(upload_tasks, "cleanup_task_files", deleted.append)
+    monkeypatch.setattr(
+        upload_tasks,
+        "cleanup_transient_data",
+        lambda task_id, **kwargs: events.append((task_id, kwargs["preserve_review_snapshot"])),
+    )
+    monkeypatch.setattr(
+        upload_tasks,
+        "cleanup_unsubmitted_files",
+        lambda _task_id: (_ for _ in ()).throw(AssertionError("正式文件不得删除")),
+    )
 
     upload_tasks.cleanup_upload_task("b" * 32, expected_updated_at=1)
 
-    assert deleted == []
+    assert events == [("b" * 32, True)]
 
 
 def test_expired_unsubmitted_task_is_deleted(monkeypatch):
@@ -35,14 +53,32 @@ def test_expired_unsubmitted_task_is_deleted(monkeypatch):
     monkeypatch.setattr(upload_tasks, "get_state", lambda _task_id: None)
     monkeypatch.setattr(upload_tasks, "submitted_paper_id", lambda _task_id: None)
     monkeypatch.setattr(upload_tasks, "upload_task_lock", lambda _task_id: nullcontext())
-    monkeypatch.setattr(upload_tasks, "cleanup_task_files", deleted.append)
+    monkeypatch.setattr(
+        upload_tasks,
+        "cleanup_transient_data",
+        lambda task_id, **_kwargs: deleted.append(("transient", task_id)),
+    )
+    monkeypatch.setattr(
+        upload_tasks,
+        "cleanup_unsubmitted_files",
+        lambda task_id: deleted.append(("files", task_id)),
+    )
+    monkeypatch.setattr(
+        upload_tasks,
+        "cleanup_duplicate_candidate",
+        lambda task_id, paper_id: deleted.append(("candidate", task_id, paper_id)),
+    )
 
     upload_tasks.cleanup_upload_task("c" * 32, expected_updated_at=1)
 
-    assert deleted == ["c" * 32]
+    assert deleted == [
+        ("transient", "c" * 32),
+        ("files", "c" * 32),
+        ("candidate", "c" * 32, None),
+    ]
 
 
-def test_submitted_paper_is_found_from_durable_source_path(sqlite_engine, monkeypatch):
+def test_submitted_paper_is_found_from_durable_upload_task_id(sqlite_engine, monkeypatch):
     from sqlalchemy.orm import sessionmaker
 
     from backend import database
@@ -54,7 +90,7 @@ def test_submitted_paper_is_found_from_durable_source_path(sqlite_engine, monkey
         paper = Paper(
             title="Persisted",
             review_status="pending",
-            source_file_path=f"upload_PDFs/{task_id}/paper.pdf",
+            upload_task_id=task_id,
         )
         session.add(paper)
         session.flush()
@@ -76,16 +112,18 @@ def test_submitting_task_is_rescheduled_instead_of_deleted(monkeypatch):
     monkeypatch.setattr(
         upload_tasks,
         "_enqueue_cleanup",
-        lambda task, updated, delay=upload_tasks.TASK_TTL: rescheduled.append((task, updated, delay)),
+        lambda context, delay=upload_tasks.TASK_TTL: rescheduled.append((context, delay)),
     )
 
     upload_tasks.cleanup_upload_task(task_id, expected_updated_at=9)
 
     assert deleted == []
-    assert rescheduled == [(task_id, 9, upload_tasks.TASK_TTL)]
+    assert rescheduled[0][0].task_id == task_id
+    assert rescheduled[0][0].expected_updated_at == 9
+    assert rescheduled[0][1] == upload_tasks.TASK_TTL
 
 
-def test_review_artifact_recovers_task_from_database_path(tmp_path, sqlite_engine, monkeypatch):
+def test_review_artifact_is_located_from_durable_upload_task_id(tmp_path, sqlite_engine, monkeypatch):
     from sqlalchemy.orm import sessionmaker
 
     from backend import database
@@ -93,23 +131,27 @@ def test_review_artifact_recovers_task_from_database_path(tmp_path, sqlite_engin
     from backend.models import Paper
 
     task_id = "4" * 32
-    artifact = tmp_path / "review_artifacts" / task_id / "result.json"
-    artifact.parent.mkdir(parents=True)
-    artifact.write_text(json.dumps({"task_id": task_id, "paper_id": None}), encoding="utf-8")
     Session = sessionmaker(bind=sqlite_engine, future=True)
     with Session.begin() as session:
         paper = Paper(
             title="Recoverable",
             review_status="pending",
-            source_file_path=f"upload_PDFs/{task_id}/paper.pdf",
+            upload_task_id=task_id,
         )
         session.add(paper)
         session.flush()
         paper_id = paper.id
+    artifact = tmp_path / "review_artifacts" / task_id / "result.json"
+    artifact.parent.mkdir(parents=True)
+    artifact.write_text(
+        json.dumps({"task_id": task_id, "paper_id": paper_id, "paper_revision": 1}),
+        encoding="utf-8",
+    )
     monkeypatch.setattr(database, "SessionLocal", Session)
     monkeypatch.setattr(upload_tasks.settings, "sc_wiki_data_dir", tmp_path)
 
-    found = rag._artifact_by_paper_id(paper_id)
+    context = rag._paper_review_context(paper_id)
+    found = rag._artifact_by_paper_id(paper_id, context["task_id"])
 
     assert found is not None
     assert found[0] == task_id
@@ -122,19 +164,13 @@ def test_submit_retry_recovers_committed_paper_without_creating_duplicate(monkey
     from backend.api import rag
 
     task_id = "5" * 32
-    state = {
-        "task_id": task_id,
-        "user_id": 7,
-        "stage": "ready",
-        "processing_status": "succeeded",
-        "source_file_path": f"upload_PDFs/{task_id}/paper.pdf",
-    }
-    draft = {"paper": {"title": "Recovered"}, "key_properties": []}
-    recorded = []
-    monkeypatch.setattr(rag, "_task_for_user", lambda *_args: state)
-    monkeypatch.setattr(upload_tasks, "get_draft", lambda _task_id: draft)
-    monkeypatch.setattr(rag, "_paper_id_for_source_path", lambda _path: _async_value(77))
-    monkeypatch.setattr(rag, "_record_submitted_upload", lambda *args: recorded.append(args))
+    monkeypatch.setattr(rag, "_submitted_paper_for_task", lambda _task_id: _async_value({
+        "paper_id": 77,
+        "uploaded_by_user_id": 7,
+        "review_status": "pending",
+        "paper_revision": 1,
+    }))
+    monkeypatch.setattr(rag, "_recover_submitted_upload", lambda *_args: None)
 
     async def must_not_create(*_args):
         raise AssertionError("已提交论文不得重复创建")
@@ -144,7 +180,6 @@ def test_submit_retry_recovers_committed_paper_without_creating_duplicate(monkey
     result = asyncio.run(rag._submit_upload_draft_locked(task_id, SimpleNamespace(id=7)))
 
     assert result["paper_id"] == 77
-    assert recorded[0][:2] == (task_id, 77)
 
 
 def test_submit_endpoint_uses_same_lifecycle_lock_as_cleanup(monkeypatch):

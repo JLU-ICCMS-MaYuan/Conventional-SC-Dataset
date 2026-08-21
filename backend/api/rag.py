@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.exc import IntegrityError
 
 from backend.models import KeyProperty, Paper, PaperChunk, PaperEvidence, PaperFile, User
 from backend.rag import service
@@ -180,35 +180,66 @@ def _property_values(item: dict[str, Any]) -> tuple[float | None, float | None, 
     return parse_range(item.get("value_raw") or item.get("value"))
 
 
-def _artifact_by_paper_id(paper_id: int) -> tuple[str, Path, dict[str, Any]] | None:
+def _paper_review_context(paper_id: int) -> dict[str, Any] | None:
     from backend.database import SessionLocal
+
+    with SessionLocal() as session:
+        row = session.execute(
+            select(
+                Paper.id,
+                Paper.upload_task_id,
+                Paper.review_status,
+                Paper.content_revision,
+            ).where(Paper.id == paper_id)
+        ).first()
+    if row is None:
+        return None
+    return {
+        "task_id": row.upload_task_id,
+        "paper_id": int(row.id),
+        "review_status": row.review_status,
+        "paper_revision": int(row.content_revision or 1),
+    }
+
+
+def _artifact_by_paper_id(
+    paper_id: int,
+    task_id: str | None = None,
+) -> tuple[str, Path, dict[str, Any]] | None:
     from backend.ingest.upload_tasks import data_path
 
     root = data_path("review_artifacts")
-    try:
-        with SessionLocal() as session:
-            source_file_path = session.scalar(
-                select(Paper.source_file_path).where(Paper.id == paper_id)
-            )
-        match = re.match(r"^upload_PDFs/([0-9a-f]{32})/", source_file_path or "")
-        if match:
-            result_path = root / match.group(1) / "result.json"
-            if result_path.is_file():
-                payload = json.loads(result_path.read_text(encoding="utf-8"))
-                payload["paper_id"] = paper_id
-                return match.group(1), result_path, payload
-    except (OSError, json.JSONDecodeError, SQLAlchemyError):
-        pass
-
-    # 兼容 source_file_path 缺失或旧版审核证据。
-    for result_path in root.glob("*/result.json"):
+    candidates = [root / task_id / "result.json"] if task_id else root.glob("*/result.json")
+    for result_path in candidates:
         try:
             payload = json.loads(result_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
         if int(payload.get("paper_id") or 0) == paper_id:
             return result_path.parent.name, result_path, payload
+
     return None
+
+
+def _validate_review_snapshot(
+    context: dict[str, Any],
+    task_id: str,
+    payload: dict[str, Any],
+) -> None:
+    identity_matches = (
+        int(payload.get("paper_id") or 0) == int(context["paper_id"])
+        and str(payload.get("task_id") or "") == task_id
+        and (not context.get("task_id") or str(context["task_id"]) == task_id)
+    )
+    revision_matches = int(payload.get("paper_revision") or 0) == int(
+        context["paper_revision"]
+    )
+    if not identity_matches or not revision_matches:
+        raise _upload_error(
+            409,
+            "review_artifact_revision_mismatch",
+            "待审 AI 证据不属于论文当前版本",
+        )
 
 
 def _candidate_attachments(paper_id: int) -> list[dict[str, Any]]:
@@ -685,7 +716,6 @@ async def _create_pending_paper(
                     paper_type=paper_data.get("paper_type"),
                     theoretical_subtype=paper_data.get("theoretical_subtype"),
                     keywords_tags=json.dumps(paper_data.get("keywords_tags") or [], ensure_ascii=False),
-                    source_file_path=state.get("source_file_path"),
                     methodology=json.dumps(paper_data.get("methodology") or [], ensure_ascii=False),
                     key_finding=paper_data.get("key_finding"),
                     rationale=draft.get("classification_reason") or paper_data.get("rationale"),
@@ -714,6 +744,7 @@ async def _create_pending_paper(
                 for index, source in enumerate(source_files):
                     paper_file = PaperFile(
                         paper_id=paper.id,
+                        paper_revision=paper.content_revision,
                         role=source.get("role") or "attachment",
                         original_filename=source.get("original_filename") or source.get("filename") or "file",
                         stored_path=source.get("source_file_path") or "",
@@ -765,23 +796,33 @@ async def _create_pending_paper(
                             chunk_sources.append((file_id, source_md.read_text(encoding="utf-8")))
                 else:
                     chunk_sources = [("main", markdown)] if markdown else []
+                paper_chunks: dict[tuple[str, int], PaperChunk] = {}
+                main_paper_file = next(
+                    (item for item in paper_files.values() if item.role == "main"),
+                    None,
+                )
                 for file_id, source_markdown in chunk_sources:
                     for chunk in chunk_paper(source_markdown, paper.id):
                         page_match = re.search(r"<!--\s*page:\s*(\d+)\s*-->", chunk.content)
                         page = int(page_match.group(1)) if page_match else None
-                        session.add(
-                            PaperChunk(
-                                paper_id=paper.id,
-                                paper_file_id=(paper_files.get(file_id).id if paper_files.get(file_id) else None),
-                                chunk_index=chunk.chunk_index,
-                                section_name=chunk.section_name,
-                                heading=chunk.heading,
-                                content=chunk.content,
-                                token_count=chunk.token_count,
-                                page_start=page,
-                                page_end=page,
-                            )
+                        paper_file = paper_files.get(file_id) or main_paper_file
+                        if paper_file is None:
+                            continue
+                        paper_chunk = PaperChunk(
+                            paper_id=paper.id,
+                            paper_revision=paper.content_revision,
+                            paper_file_id=paper_file.id,
+                            chunk_index=chunk.chunk_index,
+                            section_name=chunk.section_name,
+                            heading=chunk.heading,
+                            content=chunk.content,
+                            token_count=chunk.token_count,
+                            page_start=page,
+                            page_end=page,
                         )
+                        session.add(paper_chunk)
+                        await session.flush()
+                        paper_chunks[(str(file_id), int(chunk.chunk_index))] = paper_chunk
 
                 evidence_groups = [
                     ("classification", draft.get("classification_evidence") or []),
@@ -796,12 +837,36 @@ async def _create_pending_paper(
                         if not isinstance(evidence, dict) or not str(evidence.get("quote") or "").strip():
                             continue
                         file_id = str(evidence.get("file_id") or "")
+                        chunk_index = evidence.get("chunk_index")
+                        paper_chunk = None
+                        if chunk_index is not None:
+                            paper_chunk = paper_chunks.get((file_id, int(chunk_index)))
+                            if paper_chunk is None:
+                                matches = [
+                                    item
+                                    for (_source_file_id, source_index), item in paper_chunks.items()
+                                    if source_index == int(chunk_index)
+                                ]
+                                if len(matches) == 1:
+                                    paper_chunk = matches[0]
                         page = evidence.get("page") or evidence.get("page_start")
+                        if paper_chunk is None and page is not None:
+                            matches = [
+                                item
+                                for item in paper_chunks.values()
+                                if item.page_start is not None
+                                and item.page_end is not None
+                                and item.page_start <= int(page) <= item.page_end
+                            ]
+                            if len(matches) == 1:
+                                paper_chunk = matches[0]
+                        if paper_chunk is None:
+                            continue
                         session.add(PaperEvidence(
                             paper_id=paper.id,
-                            paper_file_id=(paper_files.get(file_id).id if paper_files.get(file_id) else None),
+                            paper_revision=paper.content_revision,
+                            paper_chunk_id=paper_chunk.id,
                             field_path=field_path,
-                            chunk_index=evidence.get("chunk_index"),
                             section=evidence.get("section"),
                             page_start=page,
                             page_end=evidence.get("page_end") or page,
@@ -813,42 +878,83 @@ async def _create_pending_paper(
         raise _upload_error(409, "duplicate_doi", "该论文已经存在") from exc
 
 
-async def _paper_id_for_source_path(source_file_path: str | None) -> int | None:
-    if not source_file_path:
-        return None
+async def _submitted_paper_for_task(task_id: str) -> dict[str, Any] | None:
     from backend.rag.database import async_session_factory
 
     async with async_session_factory() as session:
-        task_match = re.match(r"^upload_PDFs/([0-9a-f]{32})/", source_file_path or "")
-        if task_match:
-            paper_id = await session.scalar(
-                select(Paper.id).where(Paper.upload_task_id == task_match.group(1))
-            )
-            if paper_id is not None:
-                return paper_id
-        return await session.scalar(
-            select(Paper.id).where(Paper.source_file_path == source_file_path)
+        result = await session.execute(
+            select(
+                Paper.id,
+                Paper.uploaded_by_user_id,
+                Paper.review_status,
+                Paper.content_revision,
+            ).where(Paper.upload_task_id == task_id)
         )
+        row = result.first()
+    if row is None:
+        return None
+    return {
+        "paper_id": int(row.id),
+        "uploaded_by_user_id": (
+            int(row.uploaded_by_user_id) if row.uploaded_by_user_id is not None else None
+        ),
+        "review_status": row.review_status,
+        "paper_revision": int(row.content_revision or 1),
+    }
 
 
-def _record_submitted_upload(task_id: str, paper_id: int, draft: dict[str, Any]) -> None:
+def _record_submitted_upload(
+    task_id: str,
+    paper_id: int,
+    draft: dict[str, Any],
+    *,
+    paper_revision: int = 1,
+) -> None:
     from backend.ingest.upload_tasks import artifact_path, update_state
 
     result_path = artifact_path(task_id)
     artifact = json.loads(result_path.read_text(encoding="utf-8")) if result_path.exists() else {}
-    artifact.update(
-        {
-            "task_id": task_id,
-            "paper_id": paper_id,
-            "ai_values": artifact.get("ai_values") or draft.get("ai_original") or {},
-            "user_values": {key: value for key, value in draft.items() if key != "ai_original"},
-        }
-    )
-    result_path.write_text(json.dumps(artifact, ensure_ascii=False, indent=2), encoding="utf-8")
+    snapshot = {
+        "task_id": task_id,
+        "paper_id": paper_id,
+        "paper_revision": paper_revision,
+        "ai_values": artifact.get("ai_values") or draft.get("ai_original") or {},
+        "user_values": {key: value for key, value in draft.items() if key != "ai_original"},
+        "evidence": artifact.get("evidence") or {},
+    }
+    temporary = result_path.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary.replace(result_path)
     update_state(
         task_id, status="submitted", paper_id=paper_id,
         review_status="pending", submission_status="submitted",
     )
+
+
+def _recover_submitted_upload(task_id: str, submitted: dict[str, Any]) -> None:
+    """尽力补完提交后的快照与临时清理；正式论文结果不依赖该步骤。"""
+    from backend.ingest.upload_contracts import CleanupContext
+    from backend.ingest.upload_tasks import cleanup_transient_data, get_draft, get_state
+
+    try:
+        state = get_state(task_id)
+        draft = get_draft(task_id) if state else None
+        if not state or not draft:
+            return
+        context = CleanupContext.from_state(task_id, state)
+        _record_submitted_upload(
+            task_id,
+            int(submitted["paper_id"]),
+            draft,
+            paper_revision=int(submitted.get("paper_revision") or 1),
+        )
+        cleanup_transient_data(
+            task_id,
+            context=context,
+            preserve_review_snapshot=True,
+        )
+    except Exception as exc:
+        print(f"  [上传] task_id={task_id} 已提交，但临时数据收尾仍待重试: {exc}")
 
 
 @router.post("/upload-tasks/{task_id}/submit")
@@ -876,7 +982,19 @@ async def _submit_upload_draft_locked(
     *,
     consistency_acknowledged: bool = False,
 ) -> dict[str, Any]:
-    from backend.ingest.upload_tasks import artifact_path, get_draft, update_state
+    from backend.ingest.upload_contracts import CleanupContext
+    from backend.ingest.upload_tasks import cleanup_transient_data, get_draft, update_state
+
+    submitted = await _submitted_paper_for_task(task_id)
+    if submitted is not None:
+        if int(submitted.get("uploaded_by_user_id") or 0) != current_user.id:
+            raise _upload_error(403, "submit_forbidden", "只有上传者可以提交草稿")
+        _recover_submitted_upload(task_id, submitted)
+        return {
+            "ok": True,
+            "paper_id": int(submitted["paper_id"]),
+            "review_status": submitted.get("review_status") or "pending",
+        }
 
     state = _task_for_user(task_id, current_user)
     if int(state.get("user_id") or 0) != current_user.id:
@@ -899,22 +1017,7 @@ async def _submit_upload_draft_locked(
     if draft is None:
         raise _upload_error(409, "draft_not_found", "草稿不存在或已过期")
 
-    paper_id = await _paper_id_for_source_path(state.get("source_file_path"))
-    if paper_id is None:
-        existing_artifact = artifact_path(task_id)
-        if existing_artifact.exists():
-            try:
-                existing_payload = json.loads(existing_artifact.read_text(encoding="utf-8"))
-                paper_id = existing_payload.get("paper_id")
-            except (OSError, json.JSONDecodeError):
-                pass
-    if paper_id is not None:
-        try:
-            _record_submitted_upload(task_id, int(paper_id), draft)
-        except Exception as exc:
-            print(f"  [上传] paper_id={paper_id} 已存在，但临时审核证据恢复失败: {exc}")
-        return {"ok": True, "paper_id": int(paper_id), "review_status": "pending"}
-
+    cleanup_context = CleanupContext.from_state(task_id, state)
     update_state(task_id, status="submitting", submission_status="submitting")
     try:
         paper_id = await _create_pending_paper(task_id, state, draft)
@@ -925,9 +1028,18 @@ async def _submit_upload_draft_locked(
             pass
         raise
     try:
-        _record_submitted_upload(task_id, paper_id, draft)
+        _record_submitted_upload(task_id, paper_id, draft, paper_revision=1)
     except Exception as exc:
         print(f"  [上传] paper_id={paper_id} 已提交，但临时审核证据更新失败: {exc}")
+    else:
+        try:
+            cleanup_transient_data(
+                task_id,
+                context=cleanup_context,
+                preserve_review_snapshot=True,
+            )
+        except Exception as exc:
+            print(f"  [上传] paper_id={paper_id} 已提交，但临时数据清理失败: {exc}")
     return {"ok": True, "paper_id": paper_id, "review_status": "pending"}
 
 
@@ -936,15 +1048,22 @@ async def get_paper_review_artifact(
     paper_id: int,
     _current_user: User = Depends(get_current_admin),
 ):
-    found = _artifact_by_paper_id(paper_id)
+    context = _paper_review_context(paper_id)
+    if context is None:
+        raise _upload_error(404, "paper_not_found", "论文不存在")
+    if context["review_status"] != "pending":
+        raise _upload_error(409, "review_artifact_not_pending", "论文已不在待审核状态")
+    found = _artifact_by_paper_id(paper_id, context.get("task_id"))
     if not found:
         raise _upload_error(404, "review_artifact_not_found", "该论文没有待审 AI 证据")
     task_id, _path, payload = found
+    _validate_review_snapshot(context, task_id, payload)
     return {
         "ok": True,
         "data": {
             "task_id": task_id,
             "paper_id": paper_id,
+            "paper_revision": context["paper_revision"],
             "ai_values": payload.get("ai_values") or {},
             "user_values": payload.get("user_values") or {},
             "evidence": payload.get("evidence") or {},
@@ -1011,12 +1130,17 @@ async def delete_paper_review_artifact(
     paper_id: int,
     _current_user: User = Depends(get_current_admin),
 ):
-    from backend.ingest.upload_tasks import draft_key, redis_client, task_key
-
-    found = _artifact_by_paper_id(paper_id)
+    context = _paper_review_context(paper_id)
+    if context is None:
+        raise _upload_error(404, "paper_not_found", "论文不存在")
+    if context["review_status"] == "pending":
+        raise _upload_error(409, "review_artifact_still_pending", "论文仍在待审核状态")
+    if context["review_status"] not in {"approved", "rejected"}:
+        raise _upload_error(409, "review_artifact_not_terminal", "论文审核状态不允许清理")
+    found = _artifact_by_paper_id(paper_id, context.get("task_id"))
     if not found:
-        raise _upload_error(404, "review_artifact_not_found", "该论文没有待审 AI 证据")
-    task_id, result_path, _payload = found
+        return {"ok": True, "paper_id": paper_id, "cleaned": False}
+    task_id, result_path, payload = found
+    _validate_review_snapshot(context, task_id, payload)
     shutil.rmtree(result_path.parent, ignore_errors=True)
-    redis_client().delete(task_key(task_id), draft_key(task_id))
     return {"ok": True, "paper_id": paper_id, "cleaned": True}
