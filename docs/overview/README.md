@@ -43,7 +43,7 @@ flowchart LR
 ## 当前边界
 
 - Docker 部署入口使用 Nginx 前端、Go API、Python RAG、MySQL、Redis、Neo4j、Qdrant 七类服务；本地直接运行 Python FastAPI 时只包含 Python 注册的接口。
-- `backend/main.py` 当前只 include `tc_predict`、`structures`、`rag`、`kg` 四类 Python 路由；Go 未注册的认证邮箱验证、图表组合导入/导出/复制/搜索等前端调用需按实际部署链路继续核验。
+- `backend/main.py` 当前 include `tc_predict`、`structures`、`rag`、`upload_tasks`、`kg` 五类 Python 路由；canonical `/api/upload-tasks` 由 Go 未匹配路由转发到 Python。Go 未注册的认证邮箱验证、图表组合导入/导出/复制/搜索等前端调用仍需按实际部署链路继续核验。
 - RAG 已从 Chroma 迁移到 Qdrant 封装，但部分兼容命名仍保留 `chroma` 字样。
 - 晶体结构后端 API 已实现，前端主要在论文编辑详情中展示 `key_properties.structure_text` 结构，完整结构审核工作台仍未从当前路由中确认。
 - “社区”当前是公共图表、图表组合和论文详情抽屉，不包含帖子、评论或关注等论坛能力。

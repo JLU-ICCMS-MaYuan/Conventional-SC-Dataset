@@ -88,8 +88,11 @@ func main() {
 
 	// 论文公开 API（替代 Python /api/papers/*）
 	papers := r.Group("/api/papers")
+	papers.Use(middleware.OptionalAuth)
 	{
+		papers.GET("", handlers.ListPapers)
 		papers.GET("/:id", handlers.GetPaper)
+		papers.PATCH("/:id", handlers.PatchPaper)
 		papers.POST("/search/records", handlers.SearchRecords)
 		papers.POST("/search/all", handlers.SearchAll)
 	}

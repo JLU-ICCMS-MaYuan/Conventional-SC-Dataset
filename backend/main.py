@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pathlib import Path
 
-from backend.api import kg, rag, structures, tc_predict
+from backend.api import kg, rag, structures, tc_predict, upload_tasks
 
 
 app = FastAPI(
@@ -23,6 +23,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.include_router(tc_predict.router)
 app.include_router(structures.router)
 app.include_router(rag.router)
+app.include_router(upload_tasks.router)
 app.include_router(kg.router)
 BASE_DIR = Path(__file__).resolve().parent.parent
 STATIC_DIR = BASE_DIR / "frontend" / "static"

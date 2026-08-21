@@ -19,6 +19,9 @@ class RagSettings(BaseSettings):
     sc_wiki_data_dir: Path = Path("/data")
     redis_url: str = "redis://127.0.0.1:6379/0"
     upload_task_ttl_seconds: int = 24 * 60 * 60
+    upload_stale_seconds: int = 60 * 60
+    upload_active_task_limit: int = 100
+    upload_llm_concurrency: int = 2
 
     # Qdrant 配置
     qdrant_host: str = "127.0.0.1"

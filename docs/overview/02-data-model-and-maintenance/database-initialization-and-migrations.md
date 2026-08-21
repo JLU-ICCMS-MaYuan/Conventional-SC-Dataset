@@ -10,6 +10,7 @@
 - Go 服务从 `DATABASE_URL` 解析 MySQL DSN，缺少 `DATABASE_URL` 或 `JWT_SECRET_KEY` 会直接拒绝启动。
 - Python 服务仍通过 `backend/database.py` 与 Alembic 使用 `DATABASE_URL`，并保留 `Base.metadata.create_all` 和周期表元素初始化脚本。
 - Alembic 环境允许 `DATABASE_URL` 覆盖配置文件连接串。
+- 当前 Alembic head 为 `20260820_0005`。论文上传模型包含唯一 `papers.upload_task_id`、多来源 `paper_files`、带来源文件和页码范围的 `paper_chunks`，以及永久 `paper_evidences`；`papers.admin_internal_note` 与面向上传者的 `review_comment` 分开保存。
 
 ## 工作流程
 
@@ -31,6 +32,7 @@ Docker 部署时先启动数据库、缓存、图数据库和向量数据库，�
 - `backend/database.py`
 - `goserver/main.go`
 - `alembic/env.py`、`alembic/versions/`
+- `alembic/versions/20260820_0005_add_multifile_uploads.py`
 - `tests/02_maintenance_and_verification/`
 
 ## 相关变更记录

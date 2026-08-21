@@ -88,12 +88,13 @@ services:
   # ────── 论文上传任务 Worker（与 Python API 使用同一镜像） ──────
   worker:
     image: mayuanmark/scwiki-python:mayuan
-    command: ["rq", "worker", "--url", "redis://redis:6379/0", "--with-scheduler", "scwiki-upload"]
+    command: ["python", "-m", "backend.scripts.run_upload_workers"]
     environment:
       DATABASE_URL: ${DATABASE_URL}
       RAG_DATABASE_URL: ${RAG_DATABASE_URL}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       REDIS_URL: redis://redis:6379/0
+      UPLOAD_LLM_CONCURRENCY: ${UPLOAD_LLM_CONCURRENCY:-2}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
       DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-chat}
       DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com/v1}

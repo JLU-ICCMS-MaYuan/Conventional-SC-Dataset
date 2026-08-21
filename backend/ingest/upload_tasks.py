@@ -15,11 +15,20 @@ from rq import Queue
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.rag.config import settings
+from backend.ingest.upload_contracts import (
+    FIXED_TERMINAL_STATUSES,
+    RUNNING_STATUSES,
+    apply_state_changes,
+    apply_user_activity,
+    public_task_state,
+    validate_manifest,
+)
 
 
 TASK_TTL = settings.upload_task_ttl_seconds
 QUEUE_NAME = "scwiki-upload"
 TASK_LOCK_TIMEOUT = 120
+ACTIVE_TASK_LIMIT = settings.upload_active_task_limit
 
 
 def redis_client() -> Redis:
@@ -48,6 +57,23 @@ def lock_key(task_id: str) -> str:
     return f"upload:{task_id}:lock"
 
 
+def user_tasks_key(user_id: int) -> str:
+    return f"upload:user:{user_id}:tasks"
+
+
+def _encoded(state: dict[str, Any]) -> str:
+    return json.dumps(state, ensure_ascii=False)
+
+
+def _store_state(client: Redis, task_id: str, state: dict[str, Any]) -> None:
+    cleanup_at = state.get("cleanup_at")
+    if cleanup_at:
+        ttl = max(1, int(cleanup_at) - int(time.time()))
+        client.setex(task_key(task_id), ttl, _encoded(state))
+    else:
+        client.set(task_key(task_id), _encoded(state))
+
+
 @contextmanager
 def upload_task_lock(task_id: str) -> Iterator[None]:
     """串行处理同一上传任务的提交和清理判断。"""
@@ -66,14 +92,23 @@ def upload_task_lock(task_id: str) -> Iterator[None]:
             pass
 
 
-def create_task(user_id: int, filename: str, file_kind: str) -> dict[str, Any]:
+def create_task(
+    user_id: int,
+    filename: str | None = None,
+    file_kind: str | None = None,
+    *,
+    files: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     task_id = uuid.uuid4().hex
     now = int(time.time())
+    manifest = validate_manifest(files) if files is not None else []
     state = {
         "task_id": task_id,
         "user_id": user_id,
-        "filename": filename,
-        "file_kind": file_kind,
+        "filename": filename or (manifest[0]["original_filename"] if manifest else ""),
+        "file_kind": file_kind or (manifest[0]["kind"] if manifest else ""),
+        "files": manifest,
+        "status": "uploading",
         "stage": "saving_file",
         "stage_index": 1,
         "stage_total": 5,
@@ -83,8 +118,32 @@ def create_task(user_id: int, filename: str, file_kind: str) -> dict[str, Any]:
         "total_chunks": 0,
         "created_at": now,
         "updated_at": now,
+        "last_progress_at": now,
+        "cleanup_at": None,
+        "revision": 1,
     }
-    save_state(task_id, state)
+    client = redis_client()
+    index_key = user_tasks_key(user_id)
+    while True:
+        with client.pipeline(transaction=True) as pipeline:
+            try:
+                pipeline.watch(index_key)
+                members = pipeline.zrange(index_key, 0, -1)
+                existing = client.mget([task_key(item) for item in members]) if members else []
+                stale = [item for item, raw in zip(members, existing) if not raw]
+                if len(members) - len(stale) >= ACTIVE_TASK_LIMIT:
+                    raise ValueError("活动上传任务已达到 100 个上限")
+                pipeline.multi()
+                if stale:
+                    pipeline.zrem(index_key, *stale)
+                pipeline.set(task_key(task_id), _encoded(state))
+                pipeline.zadd(index_key, {task_id: now})
+                pipeline.execute()
+                break
+            except Exception as exc:
+                if exc.__class__.__name__ == "WatchError":
+                    continue
+                raise
     return state
 
 
@@ -95,16 +154,165 @@ def get_state(task_id: str) -> dict[str, Any] | None:
 
 def save_state(task_id: str, state: dict[str, Any]) -> dict[str, Any]:
     state["updated_at"] = int(time.time())
-    redis_client().setex(task_key(task_id), TASK_TTL, json.dumps(state, ensure_ascii=False))
+    client = redis_client()
+    _store_state(client, task_id, state)
+    if state.get("user_id"):
+        client.zadd(user_tasks_key(int(state["user_id"])), {task_id: state["updated_at"]})
     return state
 
 
 def update_state(task_id: str, **changes: Any) -> dict[str, Any]:
-    state = get_state(task_id)
-    if not state:
-        raise KeyError("上传任务不存在或已过期")
-    state.update(changes)
-    return save_state(task_id, state)
+    client = redis_client()
+    key = task_key(task_id)
+    while True:
+        with client.pipeline(transaction=True) as pipeline:
+            try:
+                pipeline.watch(key)
+                raw = pipeline.get(key)
+                if not raw:
+                    raise KeyError("上传任务不存在或已过期")
+                state = apply_state_changes(json.loads(raw), now=int(time.time()), **changes)
+                pipeline.multi()
+                cleanup_at = state.get("cleanup_at")
+                if cleanup_at:
+                    pipeline.setex(key, max(1, int(cleanup_at) - int(time.time())), _encoded(state))
+                else:
+                    pipeline.set(key, _encoded(state))
+                if state.get("user_id"):
+                    index_key = user_tasks_key(int(state["user_id"]))
+                    if state.get("status") == "submitted":
+                        pipeline.zrem(index_key, task_id)
+                    else:
+                        pipeline.zadd(index_key, {task_id: state["updated_at"]})
+                pipeline.execute()
+                return state
+            except Exception as exc:
+                if exc.__class__.__name__ == "WatchError":
+                    continue
+                raise
+
+
+def list_user_tasks(user_id: int) -> list[dict[str, Any]]:
+    """按最近活动返回用户任务，并顺手清除失效索引成员。"""
+    client = redis_client()
+    index_key = user_tasks_key(user_id)
+    task_ids = client.zrevrange(index_key, 0, -1)
+    raws = client.mget([task_key(item) for item in task_ids]) if task_ids else []
+    stale = [task_id for task_id, raw in zip(task_ids, raws) if not raw]
+    if stale:
+        client.zrem(index_key, *stale)
+    states: list[dict[str, Any]] = []
+    now = int(time.time())
+    for raw in raws:
+        if not raw:
+            continue
+        state = json.loads(raw)
+        if state.get("status") == "uploading" and now - int(
+            state.get("last_progress_at") or state.get("updated_at") or now
+        ) >= settings.upload_stale_seconds:
+            state = update_state(
+                state["task_id"], status="failed", processing_status="failed",
+                error_code="upload_stalled", processing_error="上传连续 1 小时没有进度",
+            )
+            schedule_cleanup(state["task_id"])
+        states.append(public_task_state(state))
+    return states
+
+
+def touch_user_activity(task_id: str) -> dict[str, Any]:
+    client = redis_client()
+    key = task_key(task_id)
+    while True:
+        with client.pipeline(transaction=True) as pipeline:
+            try:
+                pipeline.watch(key)
+                raw = pipeline.get(key)
+                if not raw:
+                    raise KeyError("上传任务不存在或已过期")
+                state = apply_user_activity(json.loads(raw), now=int(time.time()))
+                pipeline.multi()
+                cleanup_at = state.get("cleanup_at")
+                if cleanup_at:
+                    pipeline.setex(key, max(1, int(cleanup_at) - int(time.time())), _encoded(state))
+                else:
+                    pipeline.set(key, _encoded(state))
+                if state.get("user_id"):
+                    pipeline.zadd(user_tasks_key(int(state["user_id"])), {task_id: state["updated_at"]})
+                pipeline.execute()
+                return state
+            except Exception as exc:
+                if exc.__class__.__name__ == "WatchError":
+                    continue
+                raise
+
+
+def update_task_file(task_id: str, file_id: str, **changes: Any) -> dict[str, Any]:
+    """原子更新一个 manifest 文件，避免并行上传相互覆盖。"""
+    client = redis_client()
+    key = task_key(task_id)
+    while True:
+        with client.pipeline(transaction=True) as pipeline:
+            try:
+                pipeline.watch(key)
+                raw = pipeline.get(key)
+                if not raw:
+                    raise KeyError("上传任务不存在或已过期")
+                state = json.loads(raw)
+                if state.get("status") != "uploading":
+                    raise ValueError("文件清单已锁定")
+                files = list(state.get("files") or [])
+                target = next((item for item in files if item.get("file_id") == file_id), None)
+                if target is None:
+                    raise KeyError("上传文件不存在")
+                candidate_hash = changes.get("sha256")
+                if candidate_hash and any(
+                    item is not target and item.get("sha256") == candidate_hash for item in files
+                ):
+                    raise ValueError("任务内存在内容完全相同的重复文件")
+                target.update(changes)
+                state = apply_state_changes(
+                    state, now=int(time.time()), files=files, last_progress_at=int(time.time()),
+                )
+                pipeline.multi()
+                pipeline.set(key, _encoded(state))
+                pipeline.execute()
+                return state
+            except Exception as exc:
+                if exc.__class__.__name__ == "WatchError":
+                    continue
+                raise
+
+
+def lock_uploaded_manifest(task_id: str) -> tuple[dict[str, Any], bool]:
+    """全部文件完成时只允许一个请求获得入队权。"""
+    client = redis_client()
+    key = task_key(task_id)
+    while True:
+        with client.pipeline(transaction=True) as pipeline:
+            try:
+                pipeline.watch(key)
+                raw = pipeline.get(key)
+                if not raw:
+                    raise KeyError("上传任务不存在或已过期")
+                state = json.loads(raw)
+                if state.get("status") != "uploading":
+                    return state, False
+                if not state.get("files") or any(
+                    item.get("upload_status") != "completed" for item in state["files"]
+                ):
+                    raise ValueError("仍有文件未上传完成")
+                state = apply_state_changes(
+                    state, now=int(time.time()), status="queued", stage="queued",
+                    processing_status="processing",
+                )
+                pipeline.multi()
+                pipeline.set(key, _encoded(state))
+                pipeline.execute()
+                return state, True
+            except Exception as exc:
+                if exc.__class__.__name__ == "WatchError":
+                    continue
+                raise
 
 
 def get_draft(task_id: str) -> dict[str, Any] | None:
@@ -117,11 +325,11 @@ def save_draft(task_id: str, draft: dict[str, Any]) -> dict[str, Any]:
     raw_state = client.get(task_key(task_id))
     if not raw_state:
         raise KeyError("上传任务不存在或已过期")
-    state = json.loads(raw_state)
-    state["updated_at"] = int(time.time())
+    state = apply_user_activity(json.loads(raw_state), now=int(time.time()))
+    ttl = max(1, int(state.get("cleanup_at") or (int(time.time()) + TASK_TTL)) - int(time.time()))
     with client.pipeline(transaction=True) as pipeline:
-        pipeline.setex(task_key(task_id), TASK_TTL, json.dumps(state, ensure_ascii=False))
-        pipeline.setex(draft_key(task_id), TASK_TTL, json.dumps(draft, ensure_ascii=False))
+        pipeline.setex(task_key(task_id), ttl, _encoded(state))
+        pipeline.setex(draft_key(task_id), ttl, json.dumps(draft, ensure_ascii=False))
         pipeline.execute()
     return draft
 
@@ -161,11 +369,14 @@ def enqueue_processing(task_id: str) -> str:
 
 
 def cleanup_task_files(task_id: str) -> None:
+    state = get_state(task_id)
     shutil.rmtree(data_path("upload_PDFs") / task_id, ignore_errors=True)
     shutil.rmtree(data_path("review_artifacts") / task_id, ignore_errors=True)
     markdown_path(task_id).unlink(missing_ok=True)
     client = redis_client()
     client.delete(task_key(task_id), draft_key(task_id))
+    if state and state.get("user_id"):
+        client.zrem(user_tasks_key(int(state["user_id"])), task_id)
 
 
 def submitted_paper_id(task_id: str) -> int | None:
@@ -175,8 +386,12 @@ def submitted_paper_id(task_id: str) -> int | None:
     from backend.database import SessionLocal
     from backend.models import Paper
 
-    prefix = f"upload_PDFs/{task_id}/%"
     with SessionLocal() as session:
+        if hasattr(Paper, "upload_task_id"):
+            paper_id = session.scalar(select(Paper.id).where(Paper.upload_task_id == task_id))
+            if paper_id is not None:
+                return paper_id
+        prefix = f"upload_PDFs/{task_id}/%"
         return session.scalar(select(Paper.id).where(Paper.source_file_path.like(prefix)))
 
 
@@ -194,10 +409,19 @@ def cleanup_upload_task(task_id: str, expected_updated_at: int) -> None:
         with upload_task_lock(task_id):
             state = get_state(task_id)
             if state and int(state.get("updated_at", 0)) != int(expected_updated_at):
-                _enqueue_cleanup(task_id, int(state["updated_at"]))
+                cleanup_at = state.get("cleanup_at")
+                if cleanup_at:
+                    _enqueue_cleanup(
+                        task_id, int(state["updated_at"]),
+                        delay=max(1, int(cleanup_at) - int(time.time())),
+                    )
                 return
-            if state and state.get("submission_status") == "submitting":
-                _enqueue_cleanup(task_id, int(state["updated_at"]))
+            if state and (
+                state.get("status") in RUNNING_STATUSES
+                or state.get("submission_status") == "submitting"
+            ):
+                if state.get("submission_status") == "submitting" and not state.get("status"):
+                    _enqueue_cleanup(task_id, int(state["updated_at"]))
                 return
             try:
                 persisted_paper_id = submitted_paper_id(task_id)
@@ -215,5 +439,9 @@ def cleanup_upload_task(task_id: str, expected_updated_at: int) -> None:
 
 def schedule_cleanup(task_id: str) -> None:
     state = get_state(task_id)
-    if state:
-        _enqueue_cleanup(task_id, int(state["updated_at"]))
+    if state and state.get("cleanup_at"):
+        _enqueue_cleanup(
+            task_id,
+            int(state["updated_at"]),
+            delay=max(1, int(state["cleanup_at"]) - int(time.time())),
+        )

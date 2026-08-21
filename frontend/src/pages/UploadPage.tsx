@@ -14,6 +14,9 @@ import { useAuth } from '../context/AuthContext'
 import AuthDialog from '../components/AuthDialog'
 import PaperEditView from '../components/PaperEditView'
 import UploadTaskEditor from '../components/UploadTaskEditor'
+import UploadTaskCenter from '../components/UploadTaskCenter'
+import MultiFileUploadPanel from '../components/MultiFileUploadPanel'
+import UploadParsingDetail from '../components/UploadParsingDetail'
 import { api } from '../lib/api'
 import {
   PROCESSING_STAGES, UploadAcceptedResponse, UploadTaskState, unwrapData,
@@ -100,6 +103,7 @@ const UploadPage: React.FC = () => {
   const [taskState, setTaskState] = useState<UploadTaskState | null>(null)
   const [taskLoading, setTaskLoading] = useState(false)
   const [taskPollTick, setTaskPollTick] = useState(0)
+  const [taskCenterTick, setTaskCenterTick] = useState(0)
 
   /* ── JSON import state ─────────────────────── */
   const [parsed, setParsed] = useState<ParsedGroup | null>(null)
@@ -156,7 +160,7 @@ const UploadPage: React.FC = () => {
       setTaskLoading(true)
       try {
         const response = await api.get<{ ok: boolean; data: UploadTaskState }>(
-          `/api/rag/upload-tasks/${activeTaskId}`,
+          `/api/upload-tasks/${activeTaskId}`,
           { signal: controller.signal },
         )
         if (stopped) return
@@ -472,6 +476,21 @@ const UploadPage: React.FC = () => {
       {/* ── TAB 0: Paper upload ── */}
       {tab === 0 && !parsed && (
         <>
+          <UploadTaskCenter refreshKey={taskCenterTick} onOpen={task => {
+            setActiveTaskId(task.task_id)
+            setTaskState(task)
+            if (taskStorageKey) localStorage.setItem(taskStorageKey, task.task_id)
+            void api.post(`/api/upload-tasks/${task.task_id}/activity`)
+          }} />
+          {!activeTaskId && <MultiFileUploadPanel onCreated={task => {
+            setActiveTaskId(task.task_id)
+            setTaskState(task)
+            setTaskCenterTick(value => value + 1)
+            if (taskStorageKey) localStorage.setItem(taskStorageKey, task.task_id)
+          }} />}
+          {!activeTaskId && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: -2, mb: 2 }}>
+            支持 PDF · TXT · MD，每个文件最大 50 MB
+          </Typography>}
           {activeTaskId && (
             <Box sx={{ mb: 3 }}>
               <Card variant="outlined">
@@ -542,10 +561,13 @@ const UploadPage: React.FC = () => {
                   )}
                   {taskState?.duplicate && taskState.existing_paper_id && (
                     <Alert severity="warning" sx={{ mt: 2 }}
-                      action={<Button color="inherit" size="small" onClick={() => openExistingPaper(taskState.existing_paper_id!)}>打开已有论文</Button>}>
-                      数据库中已有相同 DOI，未创建重复论文。
+                      action={taskState.allowed_actions?.includes('view')
+                        ? <Button color="inherit" size="small" onClick={() => openExistingPaper(taskState.existing_paper_id!)}>打开已有论文</Button>
+                        : undefined}>
+                      {taskState.duplicate_reason || '数据库中已有相同 DOI，未创建重复论文。'}
                     </Alert>
                   )}
+                  {activeTaskId && <UploadParsingDetail taskId={activeTaskId} />}
                 </CardContent>
               </Card>
 
@@ -554,59 +576,6 @@ const UploadPage: React.FC = () => {
               )}
             </Box>
           )}
-
-          {/* Upload drop zone */}
-          {!activeTaskId && <Card variant="outlined"
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-            onDragLeave={() => setDragOver(false)} onDrop={handleDrop}
-            onClick={() => fileInput.current?.click()}
-            sx={{
-              cursor: 'pointer', borderStyle: 'dashed', borderWidth: 2,
-              borderColor: dragOver ? 'primary.main' : 'divider',
-              bgcolor: dragOver ? '#eef2ff' : 'transparent', transition: 'all 0.2s',
-            }}>
-            <CardContent sx={{ textAlign: 'center', py: 6 }}>
-              {getFileIcon()}
-              {file ? (
-                <>
-                  <Typography variant="h6" gutterBottom>{file.name}</Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    {formatSize(file.size)} · {fileType === 'json' ? '组合 JSON' : '论文文件'}
-                  </Typography>
-                  {fileType === 'paper' && (
-                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-                      <Button variant="contained" onClick={(e) => { e.stopPropagation(); handleUploadPaper() }}
-                        disabled={uploading}
-                        startIcon={uploading ? <CircularProgress size={18} /> : <CloudUpload />}>
-                        {uploading ? '上传中…' : '上传论文'}
-                      </Button>
-                      {uploading && (
-                        <Box sx={{ width: '100%', maxWidth: 320, mt: 1 }}>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                            <Typography variant="caption" color="text.secondary">上传进度</Typography>
-                            <Typography variant="caption" fontWeight={700}>{uploadProgress}%</Typography>
-                          </Box>
-                          <LinearProgress variant="determinate" value={uploadProgress}
-                            sx={{ height: 6, borderRadius: 3 }} />
-                        </Box>
-                      )}
-                    </Box>
-                  )}
-                </>
-              ) : (
-                <>
-                  <Typography variant="h6" gutterBottom>拖拽文件到此处</Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    支持 PDF · TXT · MD（超导论文，最大 50 MB）
-                  </Typography>
-                </>
-              )}
-              <input ref={fileInput} type="file" accept={ACCEPTED_STR} hidden onChange={handleFileChange} />
-              <Button variant="outlined" onClick={(e) => { e.stopPropagation(); fileInput.current?.click() }}>
-                选择文件
-              </Button>
-            </CardContent>
-          </Card>}
 
           {error && <Alert severity="error" sx={{ mt: 2 }} onClose={() => setError('')}>{error}</Alert>}
 

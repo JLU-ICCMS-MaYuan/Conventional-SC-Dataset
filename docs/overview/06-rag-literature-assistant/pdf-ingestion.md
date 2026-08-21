@@ -2,15 +2,16 @@
 
 ## 功能说明
 
-登录用户上传 PDF、TXT 或 Markdown 后，系统异步读取全文并生成可编辑 AI 草稿。用户确认并提交前不写入 MySQL；管理员审核通过后，论文才进入公开查询和正式 Qdrant 索引。
+登录用户可同时维护多条论文上传任务。一个任务对应一篇论文，包含恰好一个正文和任意数量的补充材料或附件；所有文件均为 PDF、TXT 或 Markdown。系统异步读取全文并生成可编辑 AI 草稿。用户确认并提交前不写入 MySQL；管理员审核通过后，论文才进入公开查询和正式 Qdrant 索引。
 
 ## 工作流程
 
-1. 页面允许选择不超过 50 MB（50 MiB）的 PDF、TXT 或 Markdown；Python API 执行精确文件大小校验。Nginx 上传路由允许 51 MB 请求体，以容纳 50 MB 文件之外的 multipart 表单边界。
-2. Python 将原文件保存到 `/data/upload_PDFs`，在 Redis 创建 24 小时任务并返回 `202 + task_id`。
-3. RQ Worker 依次执行保存原文件、提取正文、LLM 分段阅读、LLM 全文汇总和等待用户校对五个阶段。
-4. Markdown 保存到 `/data/parsed_markdown`；AI 原值、证据和用户草稿分别保存在临时 JSON 与 Redis，不写入正式业务表。
-5. 用户停止编辑 5 秒后自动保存，也可立即保存；点击提交后，论文、物性和正式文本块在一个 MySQL 事务中写入并进入 `pending`。
+1. 页面先声明完整文件清单和角色。每个文件不超过 50 MB（50 MiB）；Python 执行精确大小校验，Nginx canonical 上传路由允许 51 MB multipart 请求体。
+2. 浏览器最多并行上传 3 个文件。Python 将原文件保存到 `/data/upload_PDFs/<task_id>`；所有文件完成后原子锁定清单并只入队一次。
+3. RQ Worker 按文件提取正文，然后执行 LLM 分段阅读、LLM 全文汇总和等待用户校对。部署默认使用 2 个 Worker 进程处理两篇论文，可通过 `UPLOAD_LLM_CONCURRENCY` 调整。
+4. 文本提取后、分段 LLM 前，系统用 DOI、标题页和开头文本检查正文与附件的一致性。信息缺失不阻塞；明确冲突显示警告并要求用户在提交前确认。
+5. Markdown 保存到 `/data/parsed_markdown`；每个分段先建立状态清单，结果采用临时文件加原子替换保存。页面每 2 秒读取文件、分段和汇总详情，分段完成即可查看结构化候选和来源证据。
+6. 用户停止编辑 5 秒后自动保存，也可立即保存；点击提交后，一篇论文、全部 `paper_files`、正式文本块、证据和物性在一个 MySQL 事务中写入并进入 `pending`。
 6. 管理员对照 AI 建议、用户值和原文证据审核。`approved` 会同步发布 Qdrant 后清理临时证据；`rejected` 清理临时证据；`pending` 保留证据。
 
 ## 分类规则
@@ -23,16 +24,27 @@
 
 ## 持久化与可见性
 
-- Redis：任务阶段、错误、进度和未提交草稿，按最后操作时间滑动保留 24 小时。
+- Redis：任务阶段、文件清单、错误、进度和未提交草稿；每个用户有活动任务索引，上限 100 个。
+- `ready` 从用户主动打开详情、编辑或保存草稿起滑动保留 24 小时；后台轮询不续期。`failed/duplicate/cancelled` 从进入状态起固定保留 24 小时。
+- `uploading` 连续 1 小时无进度转为失败；队列、解析、汇总和提交中的任务不按创建时间强制过期。
 - MySQL：用户提交后的最终候选值和 `pending/approved/rejected` 审核状态；不保存处理进度、失败历史或 AI 原始判断。
-- 文件目录：未提交任务的原文件、Markdown 和 AI 产物在任务过期后删除；已提交论文的原文件和 Markdown 永久保留，审核期 AI 产物保留到管理员通过或拒绝。
-- 公开 API、统计和 RAG 只返回 `approved` 论文；原 PDF、Markdown、待审数据和内部文件路径不公开。
+- 文件目录：未提交终态任务到期后删除原文件、Markdown 和 AI 产物；清理前必须用 `papers.upload_task_id` 查询永久认领，数据库不可用时延后，不得依据 Redis 缺失直接删除。
+- 已提交论文通过 `paper_files` 永久认领所有来源文件；`paper_chunks` 和正式证据保存来源文件与页码范围。
+- 统计、搜索和 RAG 只使用 `approved` 论文。统一论文详情的权限为：匿名仅 approved；登录用户可看 approved/pending；上传者还可看自己的 rejected 和 `review_comment`；管理员可看全部及 `admin_internal_note`。内部路径始终不公开。
+
+## 上传任务中心
+
+- `GET /api/upload-tasks` 从服务端恢复当前用户活动任务，不依赖浏览器保存的单个 task ID。
+- 列表在解析记录旁显示服务端 `cleanup_at` 驱动的倒计时；少于一小时显示分秒，到期待 Worker 执行时显示“等待清理”。
+- 运行任务可请求取消，Worker 在文件、分段和汇总边界停止；当前阻塞的 LLM 请求允许完成或超时。
+- 单项和批量清理只处理失败、重复和已取消任务，运行中或正在提交的任务会被跳过。
+- 对外任务和解析 DTO 使用字段白名单，不返回绝对路径、RQ job ID、Redis key、提示词或原始 LLM 响应。
 
 ## 重复文件
 
-- 文件哈希与已有原文件相同：删除新副本并打开已有论文。
+- 同一任务内文件哈希相同：直接拒绝重复文件。与已有正式论文哈希相同：删除新副本并返回已有论文权限动作。
 - DOI 相同但文件不同：禁止创建草稿，将新文件保存为该论文的管理员候选附件，不覆盖原文件。
-- 候选附件列表和下载接口仅管理员可访问。
+- 重复结果返回已有论文 ID、状态、允许动作和原因；前端使用统一 `/api/papers/{id}`，不再错误跳转到仅本人上传接口。候选附件列表和下载接口仅管理员可访问。
 
 ## 失败语义
 
@@ -44,11 +56,17 @@
 ## 主要实现
 
 - `backend/api/rag.py`
+- `backend/api/upload_tasks.py`
+- `backend/ingest/upload_contracts.py`
 - `backend/ingest/upload_jobs.py`
 - `backend/ingest/upload_tasks.py`
 - `backend/rag/llm.py`
 - `frontend/src/components/UploadTaskEditor.tsx`
+- `frontend/src/components/MultiFileUploadPanel.tsx`
+- `frontend/src/components/UploadTaskCenter.tsx`
+- `frontend/src/components/UploadParsingDetail.tsx`
 - `frontend/src/pages/UploadPage.tsx`
 - `frontend/src/pages/AdminPage.tsx`
 - `goserver/handlers/admin.go`
+- `goserver/handlers/papers.go`
 - `goserver/handlers/stats.go`

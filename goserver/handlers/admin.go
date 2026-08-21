@@ -361,9 +361,10 @@ func applyPaperReview(tx *gorm.DB, paper *models.Paper, reviewerID uint, status,
 func ReviewPaper(c *gin.Context) {
 	id := c.Param("id")
 	var body struct {
-		Status  string `json:"status"`
-		Comment string `json:"comment"`
-		ReviewRequestID string `json:"review_request_id"`
+		Status            string  `json:"status"`
+		Comment           string  `json:"comment"`
+		ReviewRequestID   string  `json:"review_request_id"`
+		AdminInternalNote *string `json:"admin_internal_note"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
@@ -404,7 +405,13 @@ func ReviewPaper(c *gin.Context) {
 	now := time.Now()
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
 		_, err := applyPaperReview(tx, &paper, user.ID, body.Status, body.Comment, body.ReviewRequestID, "single", now)
-		return err
+		if err != nil {
+			return err
+		}
+		if body.AdminInternalNote != nil {
+			return tx.Model(&paper).Update("admin_internal_note", *body.AdminInternalNote).Error
+		}
+		return nil
 	}); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "审核操作失败"})
 		return

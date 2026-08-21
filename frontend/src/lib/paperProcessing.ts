@@ -1,5 +1,17 @@
-export type ProcessingStage = 'saving_file' | 'extracting' | 'reading' | 'summarizing' | 'ready'
-export type ProcessingStatus = 'processing' | 'succeeded' | 'failed'
+export type ProcessingStage = 'saving_file' | 'queued' | 'extracting' | 'reading' | 'summarizing' | 'ready'
+export type ProcessingStatus = 'processing' | 'succeeded' | 'failed' | 'cancelled'
+export type UploadTaskStatus = 'uploading' | 'queued' | 'extracting' | 'reading' | 'summarizing' |
+  'ready' | 'submitting' | 'submitted' | 'failed' | 'duplicate' | 'cancelling' | 'cancelled'
+
+export interface UploadTaskFile {
+  file_id: string
+  role: 'main' | 'supplementary' | 'attachment'
+  original_filename: string
+  size?: number
+  upload_status?: string
+  extraction_status?: string
+  error?: string | null
+}
 
 export interface SourceEvidence {
   section?: string | null
@@ -71,8 +83,16 @@ export interface UploadTaskState {
   completed_chunks: number
   total_chunks: number
   existing_paper_id?: number | null
+  existing_paper_status?: string | null
+  allowed_actions?: string[]
+  duplicate_reason?: string | null
   duplicate?: boolean
   paper_id?: number | null
+  status?: UploadTaskStatus
+  cleanup_at?: number | null
+  updated_at?: number
+  files?: UploadTaskFile[]
+  revision?: number
 }
 
 export interface UploadAcceptedResponse extends Partial<UploadTaskState> {

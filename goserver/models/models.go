@@ -24,22 +24,24 @@ type User struct {
 
 // Paper 论文
 type Paper struct {
-	ID            uint      `gorm:"primaryKey" json:"id"`
-	DOI           *string   `gorm:"size:255" json:"doi"`
-	Title         *string   `json:"title"`
-	Journal       *string   `json:"journal"`
-	Volume        *string   `json:"volume"`
-	Pages         *string   `json:"pages"`
-	Year          *int      `json:"year"`
-	Abstract      *string   `json:"abstract"`
-	Authors       *string   `json:"authors"` // JSON string
-	ReviewStatus  string    `gorm:"size:50;default:pending" json:"review_status"`
-	ReviewComment *string   `json:"review_comment"`
-	ReviewedBy    *uint     `json:"reviewed_by_user_id"`
-	UploadedBy    *uint     `json:"uploaded_by_user_id"`
-	ReviewedAt    *time.Time `json:"reviewed_at"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID                uint       `gorm:"primaryKey" json:"id"`
+	DOI               *string    `gorm:"size:255" json:"doi"`
+	Title             *string    `json:"title"`
+	Journal           *string    `json:"journal"`
+	Volume            *string    `json:"volume"`
+	Pages             *string    `json:"pages"`
+	Year              *int       `json:"year"`
+	Abstract          *string    `json:"abstract"`
+	Authors           *string    `json:"authors"` // JSON string
+	ReviewStatus      string     `gorm:"size:50;default:pending" json:"review_status"`
+	ReviewComment     *string    `json:"review_comment"`
+	AdminInternalNote *string    `json:"admin_internal_note"`
+	ReviewedBy        *uint      `json:"reviewed_by_user_id"`
+	UploadedBy        *uint      `json:"uploaded_by_user_id"`
+	UploadTaskID      *string    `gorm:"size:32;uniqueIndex" json:"upload_task_id"`
+	ReviewedAt        *time.Time `json:"reviewed_at"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
 	// LLM 富化字段
 	Summary             *string `json:"summary"`
 	PaperType           *string `gorm:"size:20" json:"paper_type"`

@@ -71,7 +71,7 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paperId, onBack }) => {
     setLoading(true)
     setError('')
     try {
-      const data = await api.get<any>(`/api/papers/my-uploads/${paperId}`)
+      const data = await api.get<any>(`/api/papers/${paperId}`)
       setPaper(data)
       setEditTitle(data.title || '')
       setEditDoi(data.doi || '')

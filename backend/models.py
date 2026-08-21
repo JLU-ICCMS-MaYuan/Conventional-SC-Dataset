@@ -118,6 +118,8 @@ class Paper(Base):
     review_status = Column(String(50), default="pending", nullable=False, index=True)
     reviewed_at = Column(DateTime(timezone=True))
     review_comment = Column(Text)
+    admin_internal_note = Column(Text)
+    upload_task_id = Column(String(32), unique=True, index=True, nullable=True)
     # LLM 富化列（旧库 alembic 演进列 + clean_results 结构化列）
     summary = Column(Text)
     paper_type = Column(String(20))
@@ -146,6 +148,46 @@ class Paper(Base):
     )
     records = relationship("SuperconductorRecord", back_populates="paper")
     key_properties = relationship("KeyProperty", back_populates="paper")
+    files = relationship("PaperFile", back_populates="paper", cascade="all, delete-orphan")
+    evidences = relationship("PaperEvidence", back_populates="paper", cascade="all, delete-orphan")
+
+
+class PaperFile(Base):
+    """正式论文永久认领的正文、补充材料或附件。"""
+
+    __tablename__ = "paper_files"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    paper_id = Column(Integer, ForeignKey("papers.id"), nullable=False, index=True)
+    role = Column(String(20), nullable=False)
+    original_filename = Column(String(500), nullable=False)
+    stored_path = Column(String(500), nullable=False)
+    sha256 = Column(String(64), nullable=False, index=True)
+    size = Column(Integer, nullable=False)
+    media_type = Column(String(100))
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    paper = relationship("Paper", back_populates="files")
+
+
+class PaperEvidence(Base):
+    """正式论文关键字段的可追溯来源证据。"""
+
+    __tablename__ = "paper_evidences"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    paper_id = Column(Integer, ForeignKey("papers.id"), nullable=False, index=True)
+    paper_file_id = Column(Integer, ForeignKey("paper_files.id"), nullable=True, index=True)
+    field_path = Column(String(255), nullable=False)
+    chunk_index = Column(Integer)
+    section = Column(String(500))
+    page_start = Column(Integer)
+    page_end = Column(Integer)
+    quote = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    paper = relationship("Paper", back_populates="evidences")
 
 
 class PaperReviewEvent(Base):
@@ -330,8 +372,11 @@ class PaperChunk(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     paper_id = Column(Integer, ForeignKey("papers.id"), nullable=False, index=True)
+    paper_file_id = Column(Integer, ForeignKey("paper_files.id"), nullable=True, index=True)
     chunk_index = Column(Integer, nullable=False, comment="块编号，从 0 开始")
     section_name = Column(String(500), nullable=True, comment="章节名如 Introduction/Results")
     heading = Column(String(500), nullable=True, comment="小节标题原文")
     content = Column(Text, nullable=False, comment="块文本内容")
     token_count = Column(Integer, nullable=True, comment="近似 token 数")
+    page_start = Column(Integer, nullable=True)
+    page_end = Column(Integer, nullable=True)

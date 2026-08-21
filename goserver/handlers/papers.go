@@ -31,12 +31,143 @@ func GetPaper(c *gin.Context) {
 	}
 
 	var paper models.Paper
-	if err := approvedPaperDetailQuery(database.DB).First(&paper, uint(id)).Error; err != nil {
+	if err := database.DB.Preload("KeyProperties").First(&paper, uint(id)).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "论文不存在"})
 		return
 	}
+	user := optionalPaperUser(c)
+	if !canViewPaper(&paper, user) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "无权查看该论文"})
+		return
+	}
+	c.JSON(http.StatusOK, paperForViewer(paper, user))
+}
 
-	c.JSON(http.StatusOK, paperToDict(paper))
+func optionalPaperUser(c *gin.Context) *models.User {
+	email, exists := c.Get("user_email")
+	if !exists {
+		return nil
+	}
+	var user models.User
+	if err := database.DB.Where("email = ?", email).First(&user).Error; err != nil {
+		return nil
+	}
+	return &user
+}
+
+func paperAdmin(user *models.User) bool {
+	return user != nil && user.IsApproved && (user.Role == "admin" || user.Role == "superadmin")
+}
+
+func paperOwner(paper *models.Paper, user *models.User) bool {
+	return user != nil && paper.UploadedBy != nil && *paper.UploadedBy == user.ID
+}
+
+func canViewPaper(paper *models.Paper, user *models.User) bool {
+	if paperAdmin(user) || paper.ReviewStatus == reviewStatusApproved {
+		return true
+	}
+	if user == nil {
+		return false
+	}
+	if paper.ReviewStatus == reviewStatusPending {
+		return true
+	}
+	return paper.ReviewStatus == reviewStatusRejected && paperOwner(paper, user)
+}
+
+func paperForViewer(paper models.Paper, user *models.User) gin.H {
+	result := paperToDict(paper)
+	if paperOwner(&paper, user) || paperAdmin(user) {
+		result["review_comment"] = paper.ReviewComment
+	}
+	if paperAdmin(user) {
+		result["admin_internal_note"] = paper.AdminInternalNote
+		result["uploaded_by_user_id"] = paper.UploadedBy
+		result["reviewed_by_user_id"] = paper.ReviewedBy
+	}
+	result["can_edit"] = paperOwner(&paper, user) || paperAdmin(user)
+	return result
+}
+
+// ListPapers 返回当前身份可见的正式论文列表。
+func ListPapers(c *gin.Context) {
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	if limit < 1 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	user := optionalPaperUser(c)
+	query := database.DB.Model(&models.Paper{})
+	if !paperAdmin(user) {
+		if user == nil {
+			query = query.Where("review_status = ?", reviewStatusApproved)
+		} else {
+			query = query.Where(
+				"review_status IN ? OR (review_status = ? AND uploaded_by_user_id = ?)",
+				[]string{reviewStatusApproved, reviewStatusPending}, reviewStatusRejected, user.ID,
+			)
+		}
+	}
+	var total int64
+	query.Count(&total)
+	var papers []models.Paper
+	query.Preload("KeyProperties").Order("created_at DESC").Limit(limit).Offset(offset).Find(&papers)
+	items := make([]gin.H, 0, len(papers))
+	for _, paper := range papers {
+		items = append(items, paperForViewer(paper, user))
+	}
+	c.JSON(http.StatusOK, gin.H{"items": items, "total": total})
+}
+
+// PatchPaper 只允许上传者或管理员修改业务白名单字段。
+func PatchPaper(c *gin.Context) {
+	var paper models.Paper
+	if err := database.DB.First(&paper, c.Param("id")).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "论文不存在"})
+		return
+	}
+	user := optionalPaperUser(c)
+	if user == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+		return
+	}
+	if !paperOwner(&paper, user) && !paperAdmin(user) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "无权修改该论文"})
+		return
+	}
+	var body map[string]interface{}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+		return
+	}
+	allowed := map[string]bool{
+		"title": true, "doi": true, "authors": true, "journal": true, "volume": true,
+		"pages": true, "year": true, "abstract": true, "summary": true,
+		"paper_type": true, "theoretical_subtype": true, "keywords_tags": true,
+		"methodology": true, "key_finding": true, "rationale": true,
+		"research_materials": true, "referenced_materials": true,
+		"material_relations": true, "builds_on": true,
+	}
+	updates := map[string]interface{}{}
+	for key, value := range body {
+		if allowed[key] {
+			updates[key] = value
+		}
+	}
+	if len(updates) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "没有可修改字段"})
+		return
+	}
+	if err := database.DB.Model(&paper).Updates(updates).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "保存失败"})
+		return
+	}
+	database.DB.Preload("KeyProperties").First(&paper, paper.ID)
+	c.JSON(http.StatusOK, paperForViewer(paper, user))
 }
 
 // SearchRecords 扁平记录搜索（替代 Python POST /api/papers/search/records）
@@ -342,9 +473,6 @@ func paperToDict(p models.Paper) gin.H {
 		"key_finding":         p.KeyFinding,
 		"rationale":           p.Rationale,
 		"review_status":       p.ReviewStatus,
-		"review_comment":      p.ReviewComment,
-		"reviewed_by_user_id": p.ReviewedBy,
-		"uploaded_by_user_id": p.UploadedBy,
 		"created_at":          p.CreatedAt,
 		"updated_at":          p.UpdatedAt,
 		"tc_max":              tcMax,

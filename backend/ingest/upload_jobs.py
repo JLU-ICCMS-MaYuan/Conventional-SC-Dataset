@@ -22,8 +22,10 @@ from backend.ingest.upload_tasks import (
     get_state,
     markdown_path,
     save_draft,
+    schedule_cleanup,
     update_state,
 )
+from backend.ingest.upload_contracts import compare_file_identities
 from backend.models import Paper
 from backend.rag.llm import complete_json
 
@@ -44,6 +46,12 @@ CHUNK_SYSTEM_PROMPT = """你是超导论文证据提取助手。只根据给出�
   "key_findings": [],
   "sc_type_candidates": [{"value": "", "page": 1, "quote": ""}]
 }"""
+
+PUBLIC_CHUNK_RESULT_FIELDS = {
+    "metadata", "paper_type_evidence", "research_materials", "referenced_materials",
+    "material_relations", "key_properties", "methodology", "key_findings",
+    "sc_type_candidates", "_source",
+}
 
 
 SUMMARY_SYSTEM_PROMPT = """你是超导材料论文分类与结构化提取专家。汇总整篇论文各分段候选事实，去重并返回 JSON 草稿。
@@ -79,8 +87,42 @@ SUMMARY_SYSTEM_PROMPT = """你是超导材料论文分类与结构化提取专�
 }"""
 
 
+class UploadCancelled(RuntimeError):
+    """任务已请求取消，Worker 应停止且不得写回成功状态。"""
+
+
+def _schedule_terminal_cleanup(task_id: str) -> None:
+    """清理调度失败不能覆盖已完成或已记录的处理结果。"""
+    try:
+        schedule_cleanup(task_id)
+    except Exception as exc:
+        print(f"  [上传] task_id={task_id} 无法安排终态清理: {exc}")
+
+
+def _ensure_not_cancelled(task_id: str) -> dict[str, Any]:
+    state = get_state(task_id)
+    if not state:
+        raise UploadCancelled("上传任务已被清理")
+    if state.get("status") in {"cancelling", "cancelled"}:
+        if state.get("status") == "cancelling":
+            cancelled = update_state(
+                task_id, status="cancelled", processing_status="cancelled",
+                processing_error=None,
+            )
+            _schedule_terminal_cleanup(task_id)
+            return cancelled
+        raise UploadCancelled("上传任务已取消")
+    return state
+
+
 def _original_path(state: dict[str, Any]) -> Path:
     value = state.get("file_path")
+    if not value:
+        main = next(
+            (item for item in state.get("files") or [] if item.get("role") == "main"),
+            None,
+        )
+        value = main.get("stored_path") if main else None
     if not value:
         raise RuntimeError("上传文件路径缺失")
     path = Path(str(value))
@@ -101,6 +143,23 @@ def _extract_markdown(state: dict[str, Any], source: Path) -> str:
         except UnicodeDecodeError:
             continue
     raise ValueError("无法解码文件内容，请使用 UTF-8 编码")
+
+
+def _lightweight_identity(file_item: dict[str, Any], markdown: str) -> dict[str, Any]:
+    head = markdown[:12000]
+    doi_match = re.search(r"10\.\d{4,9}/[^\s<>\"]+", head, re.IGNORECASE)
+    lines = [
+        re.sub(r"^#+\s*", "", line).strip()
+        for line in head.splitlines()
+        if line.strip() and not line.lstrip().startswith("<!--")
+    ]
+    return {
+        "file_id": file_item.get("file_id"),
+        "role": file_item.get("role"),
+        "title": lines[0] if lines else None,
+        "doi": doi_match.group(0).rstrip(".,;)") if doi_match else None,
+        "authors": None,
+    }
 
 
 def _chunks_with_preamble(markdown: str) -> list[Chunk]:
@@ -132,14 +191,33 @@ def _chunks_with_preamble(markdown: str) -> list[Chunk]:
     return chunks
 
 
-def _chunk_result_path(task_id: str, chunk_index: int) -> Path:
-    directory = artifact_directory(task_id) / "chunks"
-    directory.mkdir(parents=True, exist_ok=True)
+def _chunk_result_path(
+    task_id: str, chunk_index: int, file_id: str | None = None, *, create: bool = True,
+) -> Path:
+    directory = (
+        artifact_directory(task_id) if create
+        else data_path("review_artifacts") / task_id
+    ) / "chunks"
+    if file_id:
+        directory = directory / file_id
+    if create:
+        directory.mkdir(parents=True, exist_ok=True)
     return directory / f"{chunk_index:05d}.json"
 
 
-def _read_chunk(task_id: str, chunk: Chunk) -> dict[str, Any]:
-    result_path = _chunk_result_path(task_id, chunk.chunk_index)
+def _atomic_write_json(path: Path, payload: Any) -> None:
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary.replace(path)
+
+
+def _read_chunk(
+    task_id: str,
+    chunk: Chunk,
+    file_id: str | None = None,
+    source: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    result_path = _chunk_result_path(task_id, chunk.chunk_index, file_id)
     if result_path.exists():
         return json.loads(result_path.read_text(encoding="utf-8"))
     prompt = (
@@ -148,12 +226,81 @@ def _read_chunk(task_id: str, chunk: Chunk) -> dict[str, Any]:
     )
     result = complete_json(CHUNK_SYSTEM_PROMPT, prompt)
     result["_source"] = {
+        "file_id": file_id,
+        "filename": (source or {}).get("original_filename"),
+        "file_role": (source or {}).get("role"),
         "chunk_index": chunk.chunk_index,
         "section": chunk.section_name or "正文",
-        "page": getattr(chunk, "source_page", None),
+        "page_start": getattr(chunk, "source_page", None),
+        "page_end": getattr(chunk, "source_page", None),
     }
-    result_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    _atomic_write_json(result_path, result)
     return result
+
+
+def _chunk_manifest_path(task_id: str, *, create: bool = True) -> Path:
+    root = artifact_directory(task_id) if create else data_path("review_artifacts") / task_id
+    path = root / "chunks" / "manifest.json"
+    if create:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _save_chunk_manifest(task_id: str, items: list[dict[str, Any]]) -> None:
+    _atomic_write_json(_chunk_manifest_path(task_id), {"items": items})
+
+
+def public_parsing_detail(task_id: str) -> dict[str, Any]:
+    """返回安全的文件/分段/汇总快照。"""
+    state = get_state(task_id)
+    if not state:
+        raise KeyError("上传任务不存在或已过期")
+    manifest_path = _chunk_manifest_path(task_id, create=False)
+    try:
+        items = json.loads(manifest_path.read_text(encoding="utf-8")).get("items", [])
+    except (OSError, json.JSONDecodeError):
+        items = []
+    chunks: list[dict[str, Any]] = []
+    for item in items:
+        public = {
+            key: item.get(key) for key in (
+                "chunk_id", "file_id", "filename", "file_role", "index", "section",
+                "page_start", "page_end", "status", "error",
+            )
+        }
+        if item.get("status") == "completed":
+            path = _chunk_result_path(
+                task_id, int(item["index"]), item.get("cache_file_id"), create=False,
+            )
+            try:
+                result = json.loads(path.read_text(encoding="utf-8"))
+                public["result"] = {
+                    key: result[key] for key in PUBLIC_CHUNK_RESULT_FIELDS if key in result
+                }
+            except (OSError, json.JSONDecodeError):
+                public["status"] = "failed"
+                public["error"] = "分段结果不可读取"
+        chunks.append(public)
+    stable = state.get("status") in {"ready", "failed", "duplicate", "cancelled", "submitted"}
+    return {
+        "task_id": task_id,
+        "status": state.get("status"),
+        "stage": state.get("stage"),
+        "files": [
+            {key: file.get(key) for key in (
+                "file_id", "role", "original_filename", "upload_status", "extraction_status", "error",
+            )}
+            for file in state.get("files") or []
+        ],
+        "chunks": chunks,
+        "summary": {
+            "status": "completed" if state.get("status") == "ready" else state.get("stage"),
+            "completed": state.get("completed_chunks", 0),
+            "total": state.get("total_chunks", 0),
+        },
+        "next_poll_ms": None if stable else 2000,
+        "revision": state.get("revision", 0),
+    }
 
 
 def _as_list(value: Any) -> list[Any]:
@@ -374,17 +521,30 @@ def _handle_duplicate(task_id: str, state: dict[str, Any], existing: Paper) -> d
         )
         action = "candidate_saved"
 
-    return update_state(
+    can_view = existing.review_status in {"approved", "pending"} or (
+        existing.review_status == "rejected"
+        and int(existing.uploaded_by_user_id or 0) == int(state.get("user_id") or 0)
+    )
+    allowed_actions = ["view"] if can_view else []
+    if can_view and int(existing.uploaded_by_user_id or 0) == int(state.get("user_id") or 0):
+        allowed_actions.append("edit")
+    duplicate = update_state(
         task_id,
+        status="duplicate",
         stage="ready",
         stage_index=5,
         processing_status="succeeded",
         processing_error=None,
         duplicate=True,
         existing_paper_id=existing.id,
+        existing_paper_status=existing.review_status,
+        allowed_actions=allowed_actions,
+        duplicate_reason=("数据库中已有该论文" if can_view else "数据库中已有该论文，但当前账号无权查看"),
         duplicate_file_action=action,
         candidate_attachment=str(candidate_path) if candidate_path else None,
     )
+    _schedule_terminal_cleanup(task_id)
+    return duplicate
 
 
 def process_upload_task(task_id: str) -> dict[str, Any]:
@@ -393,33 +553,104 @@ def process_upload_task(task_id: str) -> dict[str, Any]:
     if not state:
         raise RuntimeError("上传任务不存在或已过期")
     try:
+        _ensure_not_cancelled(task_id)
         source = _original_path(state)
         existing_by_hash = _find_existing_by_hash(state)
         if existing_by_hash:
             return _handle_duplicate(task_id, state, existing_by_hash)
         md_path = markdown_path(task_id)
         update_state(
-            task_id, stage="extracting", stage_index=2, processing_status="processing",
+            task_id, status="extracting", stage="extracting", stage_index=2, processing_status="processing",
             processing_error=None, error_code=None,
         )
-        if md_path.exists():
-            markdown = md_path.read_text(encoding="utf-8")
-        else:
-            markdown = _extract_markdown(state, source)
-            md_path.write_text(markdown, encoding="utf-8")
-
-        chunks = _chunks_with_preamble(markdown)
-        if not chunks:
+        multi_file = bool(state.get("files"))
+        sources = state.get("files") or [{
+            "file_id": "main", "role": "main", "original_filename": state.get("filename"),
+            "kind": state.get("file_kind"), "stored_path": str(source),
+        }]
+        extracted_root = data_path("parsed_markdown") / task_id
+        extracted_root.mkdir(parents=True, exist_ok=True)
+        all_chunks: list[tuple[dict[str, Any], Chunk]] = []
+        combined_markdown: list[str] = []
+        identities: list[dict[str, Any]] = []
+        for file_item in sources:
+            _ensure_not_cancelled(task_id)
+            file_source = Path(str(file_item.get("stored_path") or source))
+            file_state = {**state, "file_kind": file_item.get("kind") or file_source.suffix.lstrip(".")}
+            file_md = extracted_root / f"{file_item['file_id']}.md"
+            if multi_file:
+                file_item["extraction_status"] = "processing"
+                update_state(task_id, files=sources)
+            try:
+                if not multi_file and md_path.exists():
+                    markdown = md_path.read_text(encoding="utf-8")
+                elif file_md.exists():
+                    markdown = file_md.read_text(encoding="utf-8")
+                else:
+                    markdown = _extract_markdown(file_state, file_source)
+                    file_md.write_text(markdown, encoding="utf-8")
+            except Exception as extraction_exc:
+                if multi_file:
+                    file_item["extraction_status"] = "failed"
+                    file_item["error"] = str(extraction_exc)
+                    update_state(task_id, files=sources)
+                raise
+            if multi_file:
+                file_item["extraction_status"] = "completed"
+                file_item["error"] = None
+                update_state(task_id, files=sources)
+            combined_markdown.append(
+                f"\n\n# 来源文件：{file_item.get('original_filename') or file_source.name}\n\n{markdown}"
+            )
+            identities.append(_lightweight_identity(file_item, markdown))
+            for chunk in _chunks_with_preamble(markdown):
+                all_chunks.append((file_item, chunk))
+        md_path.write_text("".join(combined_markdown), encoding="utf-8")
+        update_state(task_id, consistency=compare_file_identities(identities))
+        if not all_chunks:
             raise ValueError("论文正文为空，无法生成可校对草稿")
+        manifest = [
+            {
+                "chunk_id": f"{item['file_id']}:{chunk.chunk_index}",
+                "file_id": item["file_id"],
+                "filename": item.get("original_filename"),
+                "file_role": item.get("role"),
+                "index": chunk.chunk_index,
+                "section": chunk.section_name or "正文",
+                "page_start": getattr(chunk, "source_page", None),
+                "page_end": getattr(chunk, "source_page", None),
+                "status": "waiting",
+                "error": None,
+                "cache_file_id": item["file_id"] if multi_file else None,
+            }
+            for item, chunk in all_chunks
+        ]
+        _save_chunk_manifest(task_id, manifest)
         update_state(
-            task_id, stage="reading", stage_index=3, completed_chunks=0, total_chunks=len(chunks),
+            task_id, status="reading", stage="reading", stage_index=3,
+            completed_chunks=0, total_chunks=len(all_chunks),
         )
         candidates: list[dict[str, Any]] = []
-        for completed, chunk in enumerate(chunks, start=1):
-            candidates.append(_read_chunk(task_id, chunk))
-            update_state(task_id, completed_chunks=completed, total_chunks=len(chunks))
+        for completed, (file_item, chunk) in enumerate(all_chunks, start=1):
+            _ensure_not_cancelled(task_id)
+            manifest[completed - 1]["status"] = "processing"
+            _save_chunk_manifest(task_id, manifest)
+            try:
+                if multi_file:
+                    candidates.append(_read_chunk(task_id, chunk, file_item["file_id"], file_item))
+                else:
+                    candidates.append(_read_chunk(task_id, chunk))
+                manifest[completed - 1]["status"] = "completed"
+            except Exception as chunk_exc:
+                manifest[completed - 1]["status"] = "failed"
+                manifest[completed - 1]["error"] = str(chunk_exc)
+                _save_chunk_manifest(task_id, manifest)
+                raise
+            _save_chunk_manifest(task_id, manifest)
+            update_state(task_id, completed_chunks=completed, total_chunks=len(all_chunks))
 
-        update_state(task_id, stage="summarizing", stage_index=4)
+        _ensure_not_cancelled(task_id)
+        update_state(task_id, status="summarizing", stage="summarizing", stage_index=4)
         raw_draft = complete_json(SUMMARY_SYSTEM_PROMPT, json.dumps(candidates, ensure_ascii=False))
         draft = _normalize_draft(raw_draft)
         current_state = get_state(task_id) or state
@@ -447,14 +678,26 @@ def process_upload_task(task_id: str) -> dict[str, Any]:
             encoding="utf-8",
         )
         save_draft(task_id, draft)
-        return update_state(
-            task_id, stage="ready", stage_index=5, processing_status="succeeded",
-            processing_error=None, completed_chunks=len(chunks), total_chunks=len(chunks), duplicate=False,
+        ready = update_state(
+            task_id, status="ready", stage="ready", stage_index=5, processing_status="succeeded",
+            processing_error=None, completed_chunks=len(all_chunks), total_chunks=len(all_chunks), duplicate=False,
         )
+        _schedule_terminal_cleanup(task_id)
+        return ready
+    except UploadCancelled:
+        current = get_state(task_id)
+        if current and current.get("status") == "cancelling":
+            cancelled = update_state(
+                task_id, status="cancelled", processing_status="cancelled", processing_error=None,
+            )
+            _schedule_terminal_cleanup(task_id)
+            return cancelled
+        return current or {"task_id": task_id, "status": "cancelled"}
     except Exception as exc:
         current = get_state(task_id) or state
         update_state(
-            task_id, processing_status="failed", processing_error=str(exc),
+            task_id, status="failed", processing_status="failed", processing_error=str(exc),
             error_code="paper_processing_failed", failed_stage=current.get("stage"),
         )
+        _schedule_terminal_cleanup(task_id)
         raise

@@ -9,6 +9,8 @@
 - 管理后台可按状态、关键词、材料和年份筛选论文列表，并分页展示。
 - 管理员可编辑论文基础字段、摘要、LLM 富化字段和 `key_properties`；关键物性支持新增、修改、标记删除、主记录标记、结构文本和结构格式编辑。
 - 管理员可对论文执行审核、删除、批量审核和批量删除。
+- Go 统一承载 `/api/papers` 列表、`/api/papers/{id}` 详情和白名单 PATCH：匿名仅查看 approved；登录用户可查看 approved 与 pending；上传者额外可查看自己的 rejected 和 `review_comment`；管理员可查看全部及 `admin_internal_note`。
+- 无权查看的已存在 rejected 论文返回 403，不再伪装成 404。普通用户不能修改审核状态、文件路径、上传者、审核者或内部备注。
 - 超级管理员可查看用户列表、修改角色和审批状态、删除用户。
 - 管理后台还可维护快讯和图表组合公开状态。
 
@@ -19,12 +21,14 @@
 ## 约束
 
 - 所有审核操作需要有效且已批准的管理员身份。
+- `review_comment` 在界面称为“审核意见”，用于向上传者反馈；`admin_internal_note` 只允许管理员读取和通过审核接口维护。
 - 图表组合管理的前端存在搜索、导入、导出、复制等调用，但当前 Go 路由只注册列表、详情、创建、更新、删除和公开切换。
 - 删除属于不可逆数据操作，当前前端使用浏览器确认框防止误删。
 
 ## 代码与测试
 
 - `goserver/handlers/admin.go`
+- `goserver/handlers/papers.go`
 - `goserver/handlers/news.go`
 - `goserver/handlers/chart_groups.go`
 - `backend/models.py`

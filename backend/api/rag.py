@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
-from backend.models import KeyProperty, Paper, PaperChunk, User
+from backend.models import KeyProperty, Paper, PaperChunk, PaperEvidence, PaperFile, User
 from backend.rag import service
 from backend.security import get_current_admin, get_current_user
 
@@ -26,6 +26,10 @@ MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 PAPER_TYPES = {"theoretical", "experimental", "review"}
 THEORETICAL_SUBTYPES = {"calculation", "method", "theory"}
 DOI_PATTERN = re.compile(r"^10\.\d{4,9}/\S+$", re.IGNORECASE)
+
+
+class SubmitUploadOptions(BaseModel):
+    consistency_acknowledged: bool = False
 
 
 def _upload_error(status_code: int, code: str, message: str, **extra: Any) -> HTTPException:
@@ -576,7 +580,10 @@ async def retry_upload_task(
         )
     if state.get("processing_status") != "failed":
         raise _upload_error(409, "retry_not_allowed", "只有失败的任务可以重新解析")
-    update_state(task_id, processing_status="processing", processing_error=None, error_code=None)
+    update_state(
+        task_id, status="queued", retry=True,
+        processing_status="processing", processing_error=None, error_code=None,
+    )
     enqueue_processing(task_id)
     return JSONResponse(
         status_code=202,
@@ -614,6 +621,7 @@ async def use_manual_upload_draft(
     )
     update_state(
         task_id,
+        status="ready",
         stage="ready",
         stage_index=5,
         processing_status="succeeded",
@@ -664,6 +672,7 @@ async def _create_pending_paper(
                         )
 
                 paper = Paper(
+                    upload_task_id=task_id,
                     doi=doi,
                     title=str(paper_data.get("title")).strip(),
                     authors=paper_data.get("authors") or None,
@@ -689,6 +698,33 @@ async def _create_pending_paper(
                 )
                 session.add(paper)
                 await session.flush()
+
+                paper_files: dict[str, PaperFile] = {}
+                source_files = state.get("files") or []
+                if not source_files and state.get("source_file_path"):
+                    source_files = [{
+                        "file_id": "main",
+                        "role": "main",
+                        "original_filename": state.get("filename") or "paper.pdf",
+                        "source_file_path": state.get("source_file_path"),
+                        "sha256": state.get("file_sha256") or "",
+                        "size": state.get("file_size") or 0,
+                        "sort_order": 0,
+                    }]
+                for index, source in enumerate(source_files):
+                    paper_file = PaperFile(
+                        paper_id=paper.id,
+                        role=source.get("role") or "attachment",
+                        original_filename=source.get("original_filename") or source.get("filename") or "file",
+                        stored_path=source.get("source_file_path") or "",
+                        sha256=source.get("sha256") or "",
+                        size=int(source.get("size") or 0),
+                        media_type=source.get("media_type"),
+                        sort_order=int(source.get("sort_order", index)),
+                    )
+                    session.add(paper_file)
+                    await session.flush()
+                    paper_files[str(source.get("file_id") or index)] = paper_file
 
                 for item in properties:
                     name_raw = str(item.get("name_raw") or item.get("name") or "").strip()
@@ -719,17 +755,58 @@ async def _create_pending_paper(
                         )
                     )
 
-                for chunk in chunk_paper(markdown, paper.id) if markdown else []:
-                    session.add(
-                        PaperChunk(
-                            paper_id=paper.id,
-                            chunk_index=chunk.chunk_index,
-                            section_name=chunk.section_name,
-                            heading=chunk.heading,
-                            content=chunk.content,
-                            token_count=chunk.token_count,
+                extracted_root = md_path.parent / task_id
+                if source_files and extracted_root.is_dir():
+                    chunk_sources = []
+                    for source in source_files:
+                        file_id = str(source.get("file_id") or "")
+                        source_md = extracted_root / f"{file_id}.md"
+                        if source_md.exists():
+                            chunk_sources.append((file_id, source_md.read_text(encoding="utf-8")))
+                else:
+                    chunk_sources = [("main", markdown)] if markdown else []
+                for file_id, source_markdown in chunk_sources:
+                    for chunk in chunk_paper(source_markdown, paper.id):
+                        page_match = re.search(r"<!--\s*page:\s*(\d+)\s*-->", chunk.content)
+                        page = int(page_match.group(1)) if page_match else None
+                        session.add(
+                            PaperChunk(
+                                paper_id=paper.id,
+                                paper_file_id=(paper_files.get(file_id).id if paper_files.get(file_id) else None),
+                                chunk_index=chunk.chunk_index,
+                                section_name=chunk.section_name,
+                                heading=chunk.heading,
+                                content=chunk.content,
+                                token_count=chunk.token_count,
+                                page_start=page,
+                                page_end=page,
+                            )
                         )
-                    )
+
+                evidence_groups = [
+                    ("classification", draft.get("classification_evidence") or []),
+                    *[
+                        (f"key_properties[{index}]", [item.get("evidence")])
+                        for index, item in enumerate(properties)
+                        if isinstance(item.get("evidence"), dict)
+                    ],
+                ]
+                for field_path, evidences in evidence_groups:
+                    for evidence in evidences:
+                        if not isinstance(evidence, dict) or not str(evidence.get("quote") or "").strip():
+                            continue
+                        file_id = str(evidence.get("file_id") or "")
+                        page = evidence.get("page") or evidence.get("page_start")
+                        session.add(PaperEvidence(
+                            paper_id=paper.id,
+                            paper_file_id=(paper_files.get(file_id).id if paper_files.get(file_id) else None),
+                            field_path=field_path,
+                            chunk_index=evidence.get("chunk_index"),
+                            section=evidence.get("section"),
+                            page_start=page,
+                            page_end=evidence.get("page_end") or page,
+                            quote=str(evidence["quote"]),
+                        ))
                 paper_id = paper.id
         return paper_id
     except IntegrityError as exc:
@@ -742,6 +819,13 @@ async def _paper_id_for_source_path(source_file_path: str | None) -> int | None:
     from backend.rag.database import async_session_factory
 
     async with async_session_factory() as session:
+        task_match = re.match(r"^upload_PDFs/([0-9a-f]{32})/", source_file_path or "")
+        if task_match:
+            paper_id = await session.scalar(
+                select(Paper.id).where(Paper.upload_task_id == task_match.group(1))
+            )
+            if paper_id is not None:
+                return paper_id
         return await session.scalar(
             select(Paper.id).where(Paper.source_file_path == source_file_path)
         )
@@ -762,7 +846,8 @@ def _record_submitted_upload(task_id: str, paper_id: int, draft: dict[str, Any])
     )
     result_path.write_text(json.dumps(artifact, ensure_ascii=False, indent=2), encoding="utf-8")
     update_state(
-        task_id, paper_id=paper_id, review_status="pending", submission_status="submitted",
+        task_id, status="submitted", paper_id=paper_id,
+        review_status="pending", submission_status="submitted",
     )
 
 
@@ -770,17 +855,27 @@ def _record_submitted_upload(task_id: str, paper_id: int, draft: dict[str, Any])
 async def submit_upload_draft(
     task_id: str,
     current_user: User = Depends(get_current_user),
+    options: SubmitUploadOptions | None = None,
 ):
     try:
         from backend.ingest.upload_tasks import upload_task_lock
 
         with upload_task_lock(task_id):
+            if options and options.consistency_acknowledged:
+                return await _submit_upload_draft_locked(
+                    task_id, current_user, consistency_acknowledged=True,
+                )
             return await _submit_upload_draft_locked(task_id, current_user)
     except TimeoutError as exc:
         raise _upload_error(409, "submission_in_progress", "该上传任务正在提交，请稍后重试") from exc
 
 
-async def _submit_upload_draft_locked(task_id: str, current_user: User) -> dict[str, Any]:
+async def _submit_upload_draft_locked(
+    task_id: str,
+    current_user: User,
+    *,
+    consistency_acknowledged: bool = False,
+) -> dict[str, Any]:
     from backend.ingest.upload_tasks import artifact_path, get_draft, update_state
 
     state = _task_for_user(task_id, current_user)
@@ -792,6 +887,11 @@ async def _submit_upload_draft_locked(task_id: str, current_user: User) -> dict[
         raise _upload_error(
             409, "duplicate_doi", "该论文已经存在",
             existing_paper_id=state.get("existing_paper_id"),
+        )
+    if (state.get("consistency") or {}).get("status") == "warning" and not consistency_acknowledged:
+        raise _upload_error(
+            409, "consistency_ack_required",
+            "正文与附件的标题、DOI 或作者存在明确差异，请确认这些文件属于同一篇论文",
         )
     if state.get("stage") != "ready" or state.get("processing_status") != "succeeded":
         raise _upload_error(409, "draft_not_ready", "草稿尚未准备完成")
@@ -815,7 +915,7 @@ async def _submit_upload_draft_locked(task_id: str, current_user: User) -> dict[
             print(f"  [上传] paper_id={paper_id} 已存在，但临时审核证据恢复失败: {exc}")
         return {"ok": True, "paper_id": int(paper_id), "review_status": "pending"}
 
-    update_state(task_id, submission_status="submitting")
+    update_state(task_id, status="submitting", submission_status="submitting")
     try:
         paper_id = await _create_pending_paper(task_id, state, draft)
     except Exception:

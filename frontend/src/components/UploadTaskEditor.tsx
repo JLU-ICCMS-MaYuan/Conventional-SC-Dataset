@@ -173,7 +173,19 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
     setSubmitting(true)
     try {
       if (!(await saveDraft(false))) return
-      const response = await api.post<SubmitResponse | { data: SubmitResponse }>(`/api/rag/upload-tasks/${taskId}/submit`)
+      let response: SubmitResponse | { data: SubmitResponse }
+      try {
+        response = await api.post<SubmitResponse | { data: SubmitResponse }>(`/api/rag/upload-tasks/${taskId}/submit`)
+      } catch (reason) {
+        const apiError = reason as ApiError
+        if (apiError.code !== 'consistency_ack_required' || !window.confirm(
+          '正文与附件的标题、DOI 或作者存在差异。确认这些文件属于同一篇论文并继续提交吗？',
+        )) throw reason
+        response = await api.post<SubmitResponse | { data: SubmitResponse }>(
+          `/api/rag/upload-tasks/${taskId}/submit`,
+          { consistency_acknowledged: true },
+        )
+      }
       onSubmitted(unwrapData(response).paper_id)
     } catch (reason) {
       const apiError = reason as ApiError
