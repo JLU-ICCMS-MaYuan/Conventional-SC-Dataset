@@ -33,19 +33,25 @@ from backend.rag.llm import complete_json
 CHUNK_SYSTEM_PROMPT = """你是超导论文证据提取助手。只根据给出的一个论文分段提取候选事实，返回 JSON。
 每个事实都要保留可逐字核对的原文 quote 和最近的 <!-- page: N --> 页码；没有信息时返回空数组或 null，不要猜测。
 论文整体类型和材料类型此时只给候选证据，不做最终决定。
+每条论文类型证据和材料类型候选必须标记 scope：current_paper 表示本文作者实际完成的工作，
+referenced_work 表示前人研究、引用论文或领域背景。同一分段同时含两类陈述时分别输出。
+前人实验、理论预测或综述叙述不能作为本文自身类型证据。材料类型 value 允许自由文本，但必须描述
+材料家族或体系，不能用临界温度高低、配对机制或计算方法代替材料类型。
 
 返回结构：
 {
   "metadata": {"title": null, "doi": null, "authors": [], "journal": null, "year": null, "abstract": null},
-  "paper_type_evidence": [{"candidate": "theoretical|experimental|review|unknown", "page": 1, "quote": "原文"}],
+  "paper_type_evidence": [{"candidate": "theoretical|experimental|review|unknown", "scope": "current_paper|referenced_work", "page": 1, "quote": "原文"}],
   "research_materials": [],
   "referenced_materials": [],
   "material_relations": [{"material": "", "relation": "discovers|investigates|predicts", "page": 1, "quote": ""}],
   "key_properties": [{"material": "", "name": "", "value": null, "unit": null, "condition": {}, "is_primary": false, "article_type": "e|t", "page": 1, "quote": ""}],
   "methodology": [],
   "key_findings": [],
-  "sc_type_candidates": [{"value": "", "page": 1, "quote": ""}]
+  "sc_type_candidates": [{"value": "自由材料类型", "scope": "current_paper|referenced_work", "page": 1, "quote": ""}]
 }"""
+
+CHUNK_RESULT_SCHEMA_VERSION = 2
 
 PUBLIC_CHUNK_RESULT_FIELDS = {
     "metadata", "paper_type_evidence", "research_materials", "referenced_materials",
@@ -79,6 +85,13 @@ FORM_PREVIEW_MULTI_FIELDS = {
     "paper.builds_on", "key_properties",
 }
 
+FORM_PREVIEW_CLASSIFICATION_FIELDS = {
+    path
+    for group_id, _, fields in FORM_PREVIEW_GROUPS
+    if group_id == "classification"
+    for path, _ in fields
+}
+
 
 SUMMARY_SYSTEM_PROMPT = """你是超导材料论文分类与结构化提取专家。汇总整篇论文各分段候选事实，去重并返回 JSON 草稿。
 
@@ -89,6 +102,8 @@ SUMMARY_SYSTEM_PROMPT = """你是超导材料论文分类与结构化提取专�
 - 以整理评价已有工作为主，归 review。
 理论二级类型只允许 calculation、method、theory。新算法、新模型、新研究工具归 method；使用已有计算方法研究具体问题归 calculation；解析推导、理论模型或机制研究归 theory。
 材料超导类型必须综合全文判断，可以使用已有类型，也可以提出自由文本新类型，不能只凭化学式猜测。
+分段证据中的 scope 表示证据主体；只有 scope=current_paper 的候选可以决定本文 paper_type 和 sc_type，
+scope=referenced_work 或缺少 scope 的候选只能作为背景，不能参与本文分类。
 论文整体 paper_type 与每条物性的 article_type 必须分别判断，article_type 只允许 e 或 t。
 每个关键分类和物性保留 section/page/quote 证据；无法确定就返回 unknown 或空值，不要编造。
 
@@ -245,12 +260,15 @@ def _read_chunk(
 ) -> dict[str, Any]:
     result_path = _chunk_result_path(task_id, chunk.chunk_index, file_id)
     if result_path.exists():
-        return json.loads(result_path.read_text(encoding="utf-8"))
+        cached = json.loads(result_path.read_text(encoding="utf-8"))
+        if cached.get("_schema_version") == CHUNK_RESULT_SCHEMA_VERSION:
+            return cached
     prompt = (
         f"章节：{chunk.section_name or '正文'}\n页码：{getattr(chunk, 'source_page', None) or '未知'}\n"
         f"分段编号：{chunk.chunk_index}\n\n{chunk.content}"
     )
     result = complete_json(CHUNK_SYSTEM_PROMPT, prompt)
+    result["_schema_version"] = CHUNK_RESULT_SCHEMA_VERSION
     result["_source"] = {
         "file_id": file_id,
         "filename": (source or {}).get("original_filename"),
@@ -302,6 +320,33 @@ def _preview_item_value(item: Any, *keys: str) -> Any:
     return None
 
 
+def _is_current_paper_evidence(item: Any) -> bool:
+    return isinstance(item, dict) and item.get("scope") == "current_paper"
+
+
+def _is_effective_paper_type_evidence(item: Any) -> bool:
+    return (
+        _is_current_paper_evidence(item)
+        and _preview_item_value(item, "candidate", "value") != "unknown"
+    )
+
+
+def _summary_classification_candidates(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    prepared = json.loads(json.dumps(candidates, ensure_ascii=False))
+    for result in prepared:
+        if "paper_type_evidence" in result:
+            result["paper_type_evidence"] = [
+                item for item in result.get("paper_type_evidence") or []
+                if _is_effective_paper_type_evidence(item)
+            ]
+        if "sc_type_candidates" in result:
+            result["sc_type_candidates"] = [
+                item for item in result.get("sc_type_candidates") or []
+                if _is_current_paper_evidence(item)
+            ]
+    return prepared
+
+
 def _build_form_preview(chunks: list[dict[str, Any]], state: dict[str, Any]) -> dict[str, Any]:
     buckets: dict[str, dict[str, dict[str, Any]]] = {
         path: {} for _, _, fields in FORM_PREVIEW_GROUPS for path, _ in fields
@@ -332,9 +377,11 @@ def _build_form_preview(chunks: list[dict[str, Any]], state: dict[str, Any]) -> 
         for author in metadata.get("authors") or []:
             add("paper.authors", author, chunk)
         for item in result.get("paper_type_evidence") or []:
-            add("paper.paper_type", _preview_item_value(item, "candidate", "value"), chunk, item)
+            if _is_effective_paper_type_evidence(item):
+                add("paper.paper_type", _preview_item_value(item, "candidate", "value"), chunk, item)
         for item in result.get("sc_type_candidates") or []:
-            add("sc_type", _preview_item_value(item, "value", "candidate"), chunk, item)
+            if _is_current_paper_evidence(item):
+                add("sc_type", _preview_item_value(item, "value", "candidate"), chunk, item)
         for result_key, path, keys in (
             ("research_materials", "paper.research_materials", ("value", "material", "name")),
             ("referenced_materials", "paper.referenced_materials", ("value", "material", "name")),
@@ -347,21 +394,29 @@ def _build_form_preview(chunks: list[dict[str, Any]], state: dict[str, Any]) -> 
         for item in result.get("key_properties") or []:
             add("key_properties", item, chunk, item)
 
+    task_status = state.get("status")
+    classification_pending = task_status in {"reading", "summarizing"}
     groups: list[dict[str, Any]] = []
     for group_id, label, field_specs in FORM_PREVIEW_GROUPS:
         fields: list[dict[str, Any]] = []
         for path, field_label in field_specs:
             candidates = list(buckets[path].values())
             conflict = path not in FORM_PREVIEW_MULTI_FIELDS and len(candidates) > 1
+            field_state = (
+                "pending_summary"
+                if classification_pending and path in FORM_PREVIEW_CLASSIFICATION_FIELDS
+                else "conflict" if conflict
+                else "filled" if candidates
+                else "waiting"
+            )
             fields.append({
                 "path": path,
                 "label": field_label,
-                "state": "conflict" if conflict else "filled" if candidates else "waiting",
+                "state": field_state,
                 "candidates": candidates,
             })
         groups.append({"id": group_id, "label": label, "fields": fields})
 
-    task_status = state.get("status")
     preview_status = (
         "ready" if task_status == "ready"
         else "summarizing" if task_status == "summarizing"
@@ -785,7 +840,11 @@ def process_upload_task(task_id: str) -> dict[str, Any]:
 
         _ensure_not_cancelled(task_id)
         update_state(task_id, status="summarizing", stage="summarizing", stage_index=4)
-        raw_draft = complete_json(SUMMARY_SYSTEM_PROMPT, json.dumps(candidates, ensure_ascii=False))
+        summary_candidates = _summary_classification_candidates(candidates)
+        raw_draft = complete_json(
+            SUMMARY_SYSTEM_PROMPT,
+            json.dumps(summary_candidates, ensure_ascii=False),
+        )
         draft = _normalize_draft(raw_draft)
         current_state = get_state(task_id) or state
         existing = _find_existing_paper(draft["paper"].get("doi")) or _find_existing_by_hash(current_state)

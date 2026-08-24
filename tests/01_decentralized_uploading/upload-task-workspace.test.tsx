@@ -169,6 +169,54 @@ describe('论文上传工作区', () => {
     expect(screen.getByText('supp.pdf · 补充材料 · Cover · 第 2 页')).toBeVisible()
   })
 
+  it('分类字段等待全文汇总且保留自由材料类型，元数据仍显示真实冲突', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      ok: true,
+      data: {
+        status: 'reading', stage: 'reading', files: [], chunks: [],
+        form_preview: {
+          status: 'updating', read_only: true, groups: [
+            {
+              id: 'bibliography', label: '基本信息', fields: [{
+                path: 'paper.title', label: '标题', state: 'conflict', candidates: [
+                  { value: 'Main title', sources: [{ filename: 'paper.pdf', file_role: 'main' }] },
+                  { value: 'Supplement title', sources: [{ filename: 'supp.pdf', file_role: 'supplementary' }] },
+                ],
+              }],
+            },
+            {
+              id: 'classification', label: '分类判断', fields: [
+                {
+                  path: 'paper.paper_type', label: '论文类型', state: 'pending_summary',
+                  candidates: [{ value: 'theoretical', sources: [{
+                    filename: '2019 Li-Mg-H-孙莹.pdf', file_role: 'main', page_start: 2,
+                    quote: 'The phase diagram is constructed through structure searching simulations.',
+                  }] }],
+                },
+                {
+                  path: 'sc_type', label: '超导材料类型', state: 'pending_summary',
+                  candidates: [{ value: '高压三元氢化物超导体', sources: [{
+                    filename: '2019 Li-Mg-H-孙莹.pdf', file_role: 'main', page_start: 1,
+                    quote: 'ternary Li2MgH16',
+                  }] }],
+                },
+              ],
+            },
+          ],
+        },
+        summary: { status: 'reading', completed: 1, total: 2 }, next_poll_ms: null,
+      },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+
+    render(<UploadParsingDetail taskId={'f'.repeat(32)} />)
+
+    expect((await screen.findAllByText('候选尚未汇总')).length).toBe(2)
+    expect(screen.getByText('高压三元氢化物超导体')).toBeVisible()
+    expect(screen.getByText('有冲突')).toBeVisible()
+    expect(screen.getByText('Main title')).toBeVisible()
+    expect(screen.getByText('Supplement title')).toBeVisible()
+  })
+
   it('查看和切换解析任务时仍保留上传入口及其本地文件', async () => {
     const first = task('a'.repeat(32), '第一篇.pdf')
     const second = task('b'.repeat(32), '第二篇.pdf')

@@ -152,3 +152,84 @@ def test_parsing_detail_builds_one_read_only_form_with_conflicting_sourced_candi
     }
     assert fields["paper.research_materials"]["state"] == "filled"
     assert [candidate["value"] for candidate in fields["paper.research_materials"]["candidates"]] == ["LaH10"]
+
+
+def test_parsing_detail_scopes_li_mg_h_classification_without_hiding_references(tmp_path, monkeypatch):
+    import json
+    from backend.ingest import upload_jobs
+
+    task_id = "4" * 32
+    monkeypatch.setattr(upload_jobs, "get_state", lambda _task_id: {
+        "task_id": task_id, "status": "reading", "stage": "reading",
+        "completed_chunks": 1, "total_chunks": 2, "revision": 5,
+        "files": [{
+            "file_id": "main", "role": "main",
+            "original_filename": "2019 Li-Mg-H-孙莹.pdf",
+        }],
+    })
+    artifact_root = tmp_path / "review_artifacts"
+    task_root = artifact_root / task_id
+    monkeypatch.setattr(upload_jobs, "data_path", lambda _name: artifact_root)
+    manifest = task_root / "chunks/manifest.json"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text(json.dumps({"items": [{
+        "chunk_id": "main:0", "file_id": "main", "filename": "2019 Li-Mg-H-孙莹.pdf",
+        "file_role": "main", "index": 0, "section": "全文", "page_start": 1,
+        "page_end": 2, "status": "completed", "cache_file_id": "main", "error": None,
+    }]}), encoding="utf-8")
+    result_path = task_root / "chunks/main/00000.json"
+    result_path.parent.mkdir(parents=True)
+    result_path.write_text(json.dumps({
+        "paper_type_evidence": [
+            {
+                "candidate": "unknown", "scope": "current_paper", "page": 1,
+                "quote": "Route to a Superconducting Phase above Room Temperature",
+            },
+            {
+                "candidate": "theoretical", "scope": "current_paper", "page": 2,
+                "quote": "The phase diagram is constructed through structure searching simulations.",
+            },
+            {
+                "candidate": "experimental", "scope": "referenced_work", "page": 1,
+                "quote": "Subsequent experimental work found two superconducting states.",
+            },
+            {
+                "candidate": "review", "scope": "referenced_work", "page": 2,
+                "quote": "There have been few studies on compressed ternary hydrides.",
+            },
+            {
+                "candidate": "experimental", "page": 1,
+                "quote": "Legacy cached evidence without a scope.",
+            },
+        ],
+        "sc_type_candidates": [
+            {
+                "value": "高压三元氢化物超导体", "scope": "current_paper", "page": 1,
+                "quote": "ternary Li2MgH16",
+            },
+            {
+                "value": "Bardeen-Cooper-Schrieffer superconductor",
+                "scope": "referenced_work", "page": 1,
+                "quote": "the materials were Bardeen-Cooper-Schrieffer superconductors",
+            },
+        ],
+        "key_properties": [],
+    }, ensure_ascii=False), encoding="utf-8")
+
+    detail = upload_jobs.public_parsing_detail(task_id)
+    fields = {
+        field["path"]: field
+        for group in detail["form_preview"]["groups"]
+        for field in group["fields"]
+    }
+
+    assert fields["paper.paper_type"]["state"] == "pending_summary"
+    assert [item["value"] for item in fields["paper.paper_type"]["candidates"]] == ["theoretical"]
+    assert fields["sc_type"]["state"] == "pending_summary"
+    assert [item["value"] for item in fields["sc_type"]["candidates"]] == ["高压三元氢化物超导体"]
+    public_evidence = detail["chunks"][0]["result"]["paper_type_evidence"]
+    assert {item["scope"] for item in public_evidence if item.get("scope")} == {
+        "current_paper", "referenced_work",
+    }
+    assert any(item["candidate"] == "experimental" for item in public_evidence)
+    assert any(item["candidate"] == "review" for item in public_evidence)

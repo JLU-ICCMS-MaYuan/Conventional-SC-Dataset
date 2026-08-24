@@ -26,7 +26,7 @@ interface PreviewCandidate {
 interface PreviewField {
   path: string
   label: string
-  state: 'filled' | 'waiting' | 'conflict'
+  state: 'filled' | 'waiting' | 'conflict' | 'pending_summary'
   candidates: PreviewCandidate[]
 }
 
@@ -68,6 +68,7 @@ const stateLabel: Record<PreviewField['state'], string> = {
   filled: '已填写',
   waiting: '等待解析',
   conflict: '有冲突',
+  pending_summary: '候选尚未汇总',
 }
 
 const roleLabel: Record<string, string> = {
@@ -162,7 +163,7 @@ const UploadParsingDetail: React.FC<Props> = ({ taskId, onSubmitted = () => unde
                     <Typography variant="subtitle2" fontWeight={700}>AI 已填写内容</Typography>
                     <Chip size="small" label="解析中，只读" />
                     <Typography variant="caption" color="text.secondary">
-                      解析结果会持续合并；冲突内容不会自动覆盖。
+                      分类候选将在全文汇总后形成草稿；元数据冲突不会自动覆盖。
                     </Typography>
                   </Box>
                   {!preview?.groups.length && (
@@ -173,17 +174,25 @@ const UploadParsingDetail: React.FC<Props> = ({ taskId, onSubmitted = () => unde
                   <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>{group.label}</Typography>
                   <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1 }}>
                     {group.fields.map(field => (
-                      <Box key={field.path} sx={{ p: 1.5, border: 1, borderColor: field.state === 'conflict' ? 'warning.main' : 'divider', borderRadius: 1 }}>
+                      <Box key={field.path} sx={{
+                        p: 1.5, border: 1,
+                        borderColor: field.state === 'conflict' ? 'warning.main' : field.state === 'pending_summary' ? 'info.main' : 'divider',
+                        borderRadius: 1,
+                      }}>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, alignItems: 'center', mb: 0.75 }}>
                           <Typography variant="body2" fontWeight={700}>{field.label}</Typography>
                           <Chip
                             size="small"
                             label={stateLabel[field.state]}
-                            color={field.state === 'conflict' ? 'warning' : field.state === 'filled' ? 'success' : 'default'}
+                            color={field.state === 'conflict' ? 'warning' : field.state === 'filled' ? 'success' : field.state === 'pending_summary' ? 'info' : 'default'}
                             variant={field.state === 'waiting' ? 'outlined' : 'filled'}
                           />
                         </Box>
-                        {field.candidates.length === 0 && <Typography variant="body2" color="text.secondary">等待解析</Typography>}
+                        {field.candidates.length === 0 && (
+                          <Typography variant="body2" color="text.secondary">
+                            {field.state === 'pending_summary' ? '当前分段尚无法判断，等待全文汇总' : '等待解析'}
+                          </Typography>
+                        )}
                         {field.candidates.map((candidate, index) => (
                           <Box key={index} sx={{ '& + &': { mt: 1, pt: 1, borderTop: 1, borderColor: 'divider' } }}>
                             <Typography component="pre" variant="body2" sx={{ m: 0, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontFamily: 'inherit' }}>

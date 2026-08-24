@@ -269,6 +269,91 @@ def test_full_paper_summary_receives_every_chunk(tmp_path, monkeypatch):
     assert result["processing_status"] == "succeeded"
 
 
+def test_full_paper_summary_only_receives_current_paper_classification_candidates(tmp_path, monkeypatch):
+    from backend.ingest import upload_jobs
+    from backend.ingest.chunker import Chunk
+
+    task_id = "5" * 32
+    source = tmp_path / "paper.pdf"
+    source.write_bytes(b"pdf")
+    markdown = tmp_path / "paper.md"
+    markdown.write_text("full paper", encoding="utf-8")
+    artifact = tmp_path / "result.json"
+    state = {
+        "task_id": task_id, "file_path": str(source),
+        "stage": "saving_file", "updated_at": 1,
+    }
+    chunks = [
+        Chunk(0, 0, "Introduction", None, "introduction", 3),
+        Chunk(0, 1, "Methods", None, "methods", 2),
+    ]
+    chunk_results = {
+        0: {
+            "paper_type_evidence": [
+                {"candidate": "unknown", "scope": "current_paper", "quote": "Title"},
+                {
+                    "candidate": "experimental", "scope": "referenced_work",
+                    "quote": "Subsequent experimental work found two states.",
+                },
+                {"candidate": "review", "quote": "Legacy unscoped review evidence."},
+            ],
+            "sc_type_candidates": [{
+                "value": "Bardeen-Cooper-Schrieffer superconductor",
+                "scope": "referenced_work", "quote": "the materials were BCS superconductors",
+            }],
+        },
+        1: {
+            "paper_type_evidence": [{
+                "candidate": "theoretical", "scope": "current_paper",
+                "quote": "The phase diagram is constructed through structure searching simulations.",
+            }],
+            "sc_type_candidates": [{
+                "value": "高压三元氢化物超导体", "scope": "current_paper",
+                "quote": "ternary Li2MgH16",
+            }],
+        },
+    }
+    summary_inputs = []
+
+    monkeypatch.setattr(upload_jobs, "get_state", lambda _task_id: state)
+    monkeypatch.setattr(upload_jobs, "markdown_path", lambda _task_id: markdown)
+    monkeypatch.setattr(upload_jobs, "artifact_path", lambda _task_id: artifact)
+    monkeypatch.setattr(upload_jobs, "_chunks_with_preamble", lambda _markdown: chunks)
+    monkeypatch.setattr(
+        upload_jobs, "_read_chunk",
+        lambda _task_id, chunk: chunk_results[chunk.chunk_index],
+    )
+    monkeypatch.setattr(upload_jobs, "_find_existing_by_hash", lambda _state: None)
+    monkeypatch.setattr(upload_jobs, "_find_existing_paper", lambda _doi: None)
+    monkeypatch.setattr(upload_jobs, "save_draft", lambda _task_id, _draft: None)
+
+    def update_state(_task_id, **changes):
+        state.update(changes)
+        return dict(state)
+
+    def complete_json(_system_prompt, prompt):
+        summary_inputs.append(json.loads(prompt))
+        return {
+            "paper": {
+                "title": "Li2MgH16", "paper_type": "theoretical",
+                "theoretical_subtype": "calculation",
+            },
+            "sc_type": "高压三元氢化物超导体",
+            "key_properties": [],
+        }
+
+    monkeypatch.setattr(upload_jobs, "update_state", update_state)
+    monkeypatch.setattr(upload_jobs, "complete_json", complete_json)
+
+    upload_jobs.process_upload_task(task_id)
+
+    assert len(summary_inputs[0]) == 2
+    assert summary_inputs[0][0]["paper_type_evidence"] == []
+    assert summary_inputs[0][0]["sc_type_candidates"] == []
+    assert summary_inputs[0][1]["paper_type_evidence"] == [chunk_results[1]["paper_type_evidence"][0]]
+    assert summary_inputs[0][1]["sc_type_candidates"] == [chunk_results[1]["sc_type_candidates"][0]]
+
+
 def test_cached_chunk_is_reused_while_missing_chunk_calls_llm(tmp_path, monkeypatch):
     from backend.ingest import upload_jobs
     from backend.ingest.chunker import Chunk
@@ -277,11 +362,15 @@ def test_cached_chunk_is_reused_while_missing_chunk_calls_llm(tmp_path, monkeypa
     chunk = Chunk(0, 0, "Results", None, "content", 2)
     cache = tmp_path / "chunks/00000.json"
     cache.parent.mkdir()
-    cache.write_text(json.dumps({"cached": True}), encoding="utf-8")
+    cached_result = {
+        "_schema_version": upload_jobs.CHUNK_RESULT_SCHEMA_VERSION,
+        "cached": True,
+    }
+    cache.write_text(json.dumps(cached_result), encoding="utf-8")
     calls = []
     monkeypatch.setattr(upload_jobs, "complete_json", lambda *_args: calls.append(True) or {"fresh": True})
 
-    assert upload_jobs._read_chunk("e" * 32, chunk) == {"cached": True}
+    assert upload_jobs._read_chunk("e" * 32, chunk) == cached_result
     assert calls == []
 
     cache.unlink()

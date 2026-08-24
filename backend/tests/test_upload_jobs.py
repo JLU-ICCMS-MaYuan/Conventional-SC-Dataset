@@ -1,3 +1,4 @@
+import json
 import os
 
 import pytest
@@ -6,7 +7,12 @@ import pytest
 os.environ.setdefault("DATABASE_URL", "sqlite:////tmp/scwiki-upload-jobs-test.db")
 os.environ.setdefault("JWT_SECRET_KEY", "test-only-secret")
 
-from backend.ingest.upload_jobs import SUMMARY_SYSTEM_PROMPT, _chunks_with_preamble, _normalize_draft
+from backend.ingest.upload_jobs import (
+    CHUNK_SYSTEM_PROMPT,
+    SUMMARY_SYSTEM_PROMPT,
+    _chunks_with_preamble,
+    _normalize_draft,
+)
 from backend.api.rag import _property_values, _validate_draft
 
 
@@ -74,6 +80,49 @@ def test_summary_prompt_defines_mixed_theory_experiment_tie_breaker():
     assert "理论和实验同等重要、无法分主次，也归 experimental" in SUMMARY_SYSTEM_PROMPT
     assert "新算法、新模型、新研究工具归 method" in SUMMARY_SYSTEM_PROMPT
     assert "不能只凭化学式猜测" in SUMMARY_SYSTEM_PROMPT
+
+
+def test_chunk_prompt_defines_evidence_scope_without_restricting_material_vocabulary():
+    assert "scope" in CHUNK_SYSTEM_PROMPT
+    assert "current_paper" in CHUNK_SYSTEM_PROMPT
+    assert "referenced_work" in CHUNK_SYSTEM_PROMPT
+    assert "材料类型 value 允许自由文本" in CHUNK_SYSTEM_PROMPT
+
+
+def test_legacy_chunk_cache_is_reread_with_scoped_evidence_contract(tmp_path, monkeypatch):
+    from backend.ingest import upload_jobs
+    from backend.ingest.chunker import Chunk
+
+    monkeypatch.setattr(upload_jobs, "artifact_directory", lambda _task_id: tmp_path)
+    chunk = Chunk(0, 0, "Introduction", None, "content", 2)
+    cache = tmp_path / "chunks/00000.json"
+    cache.parent.mkdir()
+    cache.write_text(json.dumps({
+        "paper_type_evidence": [{
+            "candidate": "experimental",
+            "quote": "Subsequent experimental work found two states.",
+        }],
+    }), encoding="utf-8")
+    calls = []
+
+    def complete_json(_system_prompt, _prompt):
+        calls.append(True)
+        return {
+            "paper_type_evidence": [{
+                "candidate": "experimental", "scope": "referenced_work",
+                "quote": "Subsequent experimental work found two states.",
+            }],
+        }
+
+    monkeypatch.setattr(upload_jobs, "complete_json", complete_json)
+
+    result = upload_jobs._read_chunk("e" * 32, chunk)
+
+    assert calls == [True]
+    assert result["_schema_version"] == upload_jobs.CHUNK_RESULT_SCHEMA_VERSION
+    assert result["paper_type_evidence"][0]["scope"] == "referenced_work"
+    assert upload_jobs._read_chunk("e" * 32, chunk) == result
+    assert calls == [True]
 
 
 def test_submission_rejects_unknown_paper_type_but_accepts_custom_material_type():
