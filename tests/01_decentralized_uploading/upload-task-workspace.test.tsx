@@ -28,19 +28,28 @@ const task = (id: string, filename: string) => ({
   files: [],
 })
 
+const authenticatedUser = {
+  id: 7, email: 'user@example.com', username: 'tester', username_change_allowed: false,
+  role: 'user', is_admin: false, is_superadmin: false, is_approved: true,
+  is_email_verified: true, account_status: 'active',
+  created_at: null, approved_at: null,
+}
+
+const seedAuthenticatedUser = () => {
+  localStorage.setItem('auth_token', 'test-token')
+  localStorage.setItem('auth_user', JSON.stringify(authenticatedUser))
+}
+
 describe('论文上传工作区', () => {
   it('只展示未提交任务，不请求或显示旧版 MySQL 上传记录', async () => {
-    localStorage.setItem('auth_token', 'test-token')
-    localStorage.setItem('auth_user', JSON.stringify({
-      id: 7, email: 'user@example.com', username: 'tester', username_change_allowed: false,
-      role: 'user', is_admin: false, is_superadmin: false, is_approved: true,
-      created_at: null, approved_at: null,
-    }))
+    seedAuthenticatedUser()
     const requested: string[] = []
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input)
       requested.push(url)
-      const body = url === '/api/upload-tasks'
+      const body = url === '/api/auth/me'
+        ? { user: authenticatedUser }
+        : url === '/api/upload-tasks'
         ? { ok: true, data: [] }
         : url.startsWith('/api/papers/my-uploads')
           ? {
@@ -163,17 +172,13 @@ describe('论文上传工作区', () => {
   it('查看和切换解析任务时仍保留上传入口及其本地文件', async () => {
     const first = task('a'.repeat(32), '第一篇.pdf')
     const second = task('b'.repeat(32), '第二篇.pdf')
-    localStorage.setItem('auth_token', 'test-token')
-    localStorage.setItem('auth_user', JSON.stringify({
-      id: 7, email: 'user@example.com', username: 'tester', username_change_allowed: false,
-      role: 'user', is_admin: false, is_superadmin: false, is_approved: true,
-      created_at: null, approved_at: null,
-    }))
+    seedAuthenticatedUser()
     localStorage.setItem('scwiki_active_upload_task:7', first.task_id)
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input)
       let body: unknown = { ok: true }
-      if (url === '/api/upload-tasks') body = { ok: true, data: [first, second] }
+      if (url === '/api/auth/me') body = { user: authenticatedUser }
+      else if (url === '/api/upload-tasks') body = { ok: true, data: [first, second] }
       else if (url === `/api/upload-tasks/${first.task_id}`) body = { ok: true, data: first }
       else if (url === `/api/upload-tasks/${second.task_id}`) body = { ok: true, data: second }
       else if (url.endsWith('/parsing')) body = {
