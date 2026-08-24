@@ -89,7 +89,7 @@ func TestApplyAdminUsernameChangeRollsBackWhenAuditFails(t *testing.T) {
 }
 
 func TestDuplicateUsernameError(t *testing.T) {
-	if !isDuplicateUsernameError(&mysqldriver.MySQLError{Number: 1062, Message: "duplicate"}) {
+	if !isDuplicateKeyError(&mysqldriver.MySQLError{Number: 1062, Message: "duplicate"}) {
 		t.Fatal("MySQL duplicate key should map to username conflict")
 	}
 }

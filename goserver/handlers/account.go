@@ -190,7 +190,7 @@ func UpdateAccountProfile(c *gin.Context) {
 		return tx.Model(&locked).Updates(updates).Error
 	})
 	if err != nil {
-		if isDuplicateUsernameError(err) {
+		if isDuplicateKeyError(err) {
 			c.JSON(409, gin.H{"error": "ORCID 已绑定其他账号"})
 		} else {
 			c.JSON(500, gin.H{"error": "资料保存失败"})

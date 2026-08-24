@@ -100,8 +100,9 @@ const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
         setResendSeconds(60)
         setStep('verify')
       } else {
-        setDoneMessage('注册成功！账号审批通过后即可使用邮箱登录')
-        setStep('done')
+        await login(regEmail, regPassword)
+        handleClose()
+        navigate('/account')
       }
     } catch (e: unknown) {
       setError((e as Error).message || '注册失败')

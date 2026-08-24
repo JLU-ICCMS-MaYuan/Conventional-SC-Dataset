@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"math/big"
 	"net/http"
 	"os"
@@ -128,10 +129,6 @@ func loginHandler(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "账号不可用", "code": "account_inactive"})
 		return
 	}
-	if !user.IsEmailVerified {
-		c.JSON(http.StatusForbidden, gin.H{"error": "邮箱尚未验证", "code": "email_not_verified"})
-		return
-	}
 	token, err := middleware.GenerateTokenForUser(user)
 	if err != nil {
 		c.JSON(500, gin.H{"error": "生成 token 失败"})
@@ -159,19 +156,7 @@ func registerHandler(c *gin.Context) {
 	var existing models.User
 	err := database.DB.Where("email = ?", body.Email).First(&existing).Error
 	if err == nil {
-		if existing.IsEmailVerified {
-			c.JSON(409, gin.H{"error": "该邮箱已注册"})
-			return
-		}
-		if retry, sendErr := sendVerification(body.Email, c.ClientIP()); sendErr != nil {
-			c.JSON(503, gin.H{"error": "验证码发送失败"})
-			return
-		} else if retry > 0 {
-			c.Header("Retry-After", fmt.Sprint(retry))
-			c.JSON(429, gin.H{"error": "请求过于频繁"})
-			return
-		}
-		c.JSON(http.StatusAccepted, gin.H{"requires_email_verification": true, "resend_after_seconds": 60})
+		c.JSON(409, gin.H{"error": "该邮箱已注册"})
 		return
 	}
 	if err != gorm.ErrRecordNotFound {
@@ -192,20 +177,17 @@ func registerHandler(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "密码加密失败"})
 		return
 	}
-	user := models.User{Email: body.Email, Username: body.Username, PasswordHash: string(hash), RealName: strings.TrimSpace(body.RealName), Role: "user", IsApproved: true, IsEmailVerified: false, AccountStatus: "active"}
+	user := models.User{Email: body.Email, Username: body.Username, PasswordHash: string(hash), RealName: strings.TrimSpace(body.RealName), Role: "user", IsApproved: true, IsEmailVerified: true, AccountStatus: "active"}
 	if err := database.DB.Create(&user).Error; err != nil {
-		c.JSON(409, gin.H{"error": "邮箱或用户名已被占用"})
+		if isDuplicateKeyError(err) {
+			c.JSON(409, gin.H{"error": "邮箱或用户名已被占用"})
+			return
+		}
+		log.Printf("注册用户写入数据库失败: %v", err)
+		c.JSON(500, gin.H{"error": "注册失败"})
 		return
 	}
-	if retry, sendErr := sendVerification(body.Email, c.ClientIP()); sendErr != nil {
-		c.JSON(503, gin.H{"error": "验证码发送失败，可稍后重新发送"})
-		return
-	} else if retry > 0 {
-		c.Header("Retry-After", fmt.Sprint(retry))
-		c.JSON(429, gin.H{"error": "请求过于频繁"})
-		return
-	}
-	c.JSON(http.StatusAccepted, gin.H{"requires_email_verification": true, "resend_after_seconds": 60})
+	c.JSON(http.StatusCreated, gin.H{"requires_email_verification": false})
 }
 
 func VerifyEmail(c *gin.Context) {

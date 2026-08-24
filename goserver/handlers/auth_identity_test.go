@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -48,6 +49,7 @@ func identityTestRouter(t *testing.T) (*gin.Engine, *verificationFakeMailer) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.POST("/register", registerHandler)
+	router.POST("/login", loginHandler)
 	router.POST("/verify", VerifyEmail)
 	return router, mailer
 }
@@ -65,38 +67,45 @@ func jsonRequest(t *testing.T, router *gin.Engine, method, path string, body any
 	return response
 }
 
-func TestRegisterCreatesUserAndVerificationAutoLogsIn(t *testing.T) {
+func TestRegisterCreatesVerifiedUserWhoCanLoginWithoutEmail(t *testing.T) {
 	router, mailer := identityTestRouter(t)
 	registered := jsonRequest(t, router, http.MethodPost, "/register", map[string]any{
 		"email": "Researcher@Example.Test", "password": "strong-pass-123", "username": "Researcher", "real_name": "研究者",
 	})
-	if registered.Code != http.StatusAccepted {
+	if registered.Code != http.StatusCreated {
 		t.Fatalf("register = %d %s", registered.Code, registered.Body.String())
+	}
+	if !bytes.Contains(registered.Body.Bytes(), []byte(`"requires_email_verification":false`)) {
+		t.Fatalf("register body = %s", registered.Body.String())
 	}
 	var user models.User
 	if err := database.DB.Where("email = ?", "researcher@example.test").First(&user).Error; err != nil {
 		t.Fatal(err)
 	}
-	if user.Role != "user" || !user.IsApproved || user.IsEmailVerified || user.AccountStatus != "active" {
+	if user.Role != "user" || !user.IsApproved || !user.IsEmailVerified || user.AccountStatus != "active" {
 		t.Fatalf("registered user = %#v", user)
 	}
-	if mailer.email != user.Email || len(mailer.code) != 6 {
-		t.Fatalf("mail = %q %q", mailer.email, mailer.code)
+	if mailer.email != "" || mailer.code != "" {
+		t.Fatalf("verification email should not be sent: %q %q", mailer.email, mailer.code)
 	}
+	loggedIn := jsonRequest(t, router, http.MethodPost, "/login", map[string]string{"email": user.Email, "password": "strong-pass-123"})
+	if loggedIn.Code != http.StatusOK || !bytes.Contains(loggedIn.Body.Bytes(), []byte("access_token")) {
+		t.Fatalf("login = %d %s", loggedIn.Code, loggedIn.Body.String())
+	}
+}
 
-	verified := jsonRequest(t, router, http.MethodPost, "/verify", map[string]string{"email": user.Email, "code": mailer.code})
-	if verified.Code != http.StatusOK || !bytes.Contains(verified.Body.Bytes(), []byte("access_token")) {
-		t.Fatalf("verify = %d %s", verified.Code, verified.Body.String())
-	}
-	if err := database.DB.First(&user, user.ID).Error; err != nil {
+func TestRegisterDoesNotReportGenericDatabaseFailureAsDuplicate(t *testing.T) {
+	router, _ := identityTestRouter(t)
+	if err := database.DB.Callback().Create().Before("gorm:create").Register("test:fail-create", func(tx *gorm.DB) {
+		tx.AddError(errors.New("forced create failure"))
+	}); err != nil {
 		t.Fatal(err)
 	}
-	if !user.IsEmailVerified {
-		t.Fatal("email should be verified")
-	}
-	reused := jsonRequest(t, router, http.MethodPost, "/verify", map[string]string{"email": user.Email, "code": mailer.code})
-	if reused.Code != http.StatusBadRequest {
-		t.Fatalf("reused code = %d", reused.Code)
+	response := jsonRequest(t, router, http.MethodPost, "/register", map[string]any{
+		"email": "failure@example.test", "password": "strong-pass-123", "username": "FailureUser",
+	})
+	if response.Code != http.StatusInternalServerError || !bytes.Contains(response.Body.Bytes(), []byte(`"error":"注册失败"`)) {
+		t.Fatalf("register = %d %s", response.Code, response.Body.String())
 	}
 }
 

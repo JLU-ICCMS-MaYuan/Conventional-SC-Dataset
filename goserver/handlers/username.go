@@ -70,7 +70,7 @@ func usernameAvailable(db *gorm.DB, username string, excludeUserID uint) (bool, 
 	return count == 0, nil
 }
 
-func isDuplicateUsernameError(err error) bool {
+func isDuplicateKeyError(err error) bool {
 	var mysqlErr *mysqldriver.MySQLError
 	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1062
 }
@@ -140,7 +140,7 @@ func applySelfUsernameChange(db *gorm.DB, userID uint, username string) error {
 			Where("id = ? AND username_change_allowed = ?", userID, true).
 			Updates(map[string]any{"username": username, "username_change_allowed": false})
 		if result.Error != nil {
-			if isDuplicateUsernameError(result.Error) {
+			if isDuplicateKeyError(result.Error) {
 				return errUsernameTaken
 			}
 			return result.Error
@@ -209,7 +209,7 @@ func applyAdminUsernameChange(
 	return db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&models.User{}).Where("id = ?", target.ID).
 			Update("username", username).Error; err != nil {
-			if isDuplicateUsernameError(err) {
+			if isDuplicateKeyError(err) {
 				return errUsernameTaken
 			}
 			return err
