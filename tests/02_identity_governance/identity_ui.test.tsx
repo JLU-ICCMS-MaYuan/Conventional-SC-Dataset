@@ -50,6 +50,13 @@ afterEach(() => {
 describe('身份与工作台导航', () => {
   it('按当前角色显示左侧入口，头像菜单只保留退出登录', () => {
     render(<MemoryRouter initialEntries={['/account']}><Routes><Route element={<AppShell />}><Route path="/account" element={<div>账户内容</div>} /></Route></Routes></MemoryRouter>)
+    const navigation = screen.getByRole('navigation', { name: '主导航' })
+    expect(navigation).toHaveStyle({
+      position: 'sticky',
+      top: '72px',
+      height: 'calc(100vh - 72px)',
+      overflowY: 'auto',
+    })
     expect(screen.getByRole('button', { name: '用户' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '打开账户菜单' }))
     expect(screen.getByRole('menuitem', { name: '退出登录' })).toBeInTheDocument()

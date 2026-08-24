@@ -7,6 +7,7 @@
 ## 当前行为
 
 - 所有已登录角色都进入 `/account`“用户中心”；左侧末项按角色显示“用户 / 管理员 / 超级管理员”，顶部头像菜单只保留退出登录。
+- 左侧主导航固定在 72px 顶部栏下方，高度受当前视口约束；导航入口超过可用高度时可在导航区域内独立纵向滚动。
 - 用户中心可维护头像、一次性用户名、真实姓名、所属机构、ORCID 和研究方向，并修改密码。除邮箱外，已填写资料通过匿名 `/users/:username` 公开；公开页设置 `noindex`。
 - 普通用户在邮箱已验证且真实姓名、所属机构齐全时可无理由提交管理员申请；同一时间只允许一个待审申请，可撤回、被拒后再次申请，申请保存资料快照。
 - 超级管理员批准申请会把角色从 `user` 改为 `admin`；拒绝或管理员降级必须记录原因。申请、角色、封禁、解封、注销、实名/机构和用户名变更均保留审计。
@@ -37,6 +38,8 @@
 - `frontend/src/pages/AccountPage.tsx`
 - `frontend/src/pages/PublicUserPage.tsx`
 - `frontend/src/pages/SuperAdminPage.tsx`
+- `frontend/src/components/AppShell.tsx`
+- `tests/02_identity_governance/identity_ui.test.tsx`
 - `goserver/handlers/admin_applications.go`
 - `goserver/handlers/governance.go`
 - `goserver/handlers/username_test.go`
@@ -44,6 +47,7 @@
 ## 相关变更记录
 
 - [Feature #31：唯一公开用户名与贡献榜身份](../../specs/31-community-ranking-visuals/spec.md)
+- [Issue #48：修复页面滚动时左侧导航和解析收起操作不可达](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/48)
 
 ## 已知问题
 

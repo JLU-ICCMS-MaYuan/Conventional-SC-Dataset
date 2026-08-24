@@ -249,9 +249,17 @@ describe('论文上传工作区', () => {
     await waitFor(() => expect(screen.getByText('待上传.pdf')).toBeVisible())
     expect(screen.getByLabelText('拖拽或选择论文文件')).toBeVisible()
     expect(screen.getByRole('button', { name: '收起 第二篇.pdf 的解析详情' })).toBeVisible()
+    const stickyTaskActions = screen.getByRole('region', { name: '当前解析任务操作' })
+    expect(stickyTaskActions).toHaveStyle({
+      position: 'sticky',
+      top: '80px',
+    })
+    expect(stickyTaskActions.closest('.MuiCard-root')).toHaveStyle({ overflow: 'visible' })
 
-    fireEvent.click(screen.getByRole('button', { name: '收起 第二篇.pdf 的解析详情' }))
+    fireEvent.click(screen.getByRole('button', { name: '收起当前解析详情' }))
 
     expect(await screen.findByRole('button', { name: '查看 第二篇.pdf 的解析详情' })).toBeVisible()
+    expect(screen.getByText('待上传.pdf')).toBeVisible()
+    expect(screen.queryByRole('region', { name: '当前解析任务操作' })).not.toBeInTheDocument()
   })
 })

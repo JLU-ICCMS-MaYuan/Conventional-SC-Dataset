@@ -7,7 +7,7 @@ import {
 } from '@mui/material'
 import {
   CloudUpload, Check, PictureAsPdf, Description, Code,
-  Replay as ReplayIcon, EditNote as EditNoteIcon,
+  Replay as ReplayIcon, EditNote as EditNoteIcon, KeyboardArrowUp as KeyboardArrowUpIcon,
 } from '@mui/icons-material'
 import { useAuth } from '../context/AuthContext'
 import AuthDialog from '../components/AuthDialog'
@@ -83,6 +83,23 @@ const UploadPage: React.FC = () => {
     s > 1024 * 1024 ? `${(s / 1024 / 1024).toFixed(1)} MB` : `${(s / 1024).toFixed(1)} KB`
 
   const taskStorageKey = user ? `scwiki_active_upload_task:${user.id}` : null
+
+  const collapseActiveTask = () => {
+    setActiveTaskId(null)
+    setTaskState(null)
+    if (taskStorageKey) localStorage.removeItem(taskStorageKey)
+  }
+
+  const toggleTask = (task: UploadTaskState) => {
+    if (task.task_id === activeTaskId) {
+      collapseActiveTask()
+      return
+    }
+    setActiveTaskId(task.task_id)
+    setTaskState(task)
+    if (taskStorageKey) localStorage.setItem(taskStorageKey, task.task_id)
+    void api.post(`/api/upload-tasks/${task.task_id}/activity`)
+  }
 
   useEffect(() => {
     if (!taskStorageKey) { setActiveTaskId(null); setTaskState(null); return }
@@ -416,32 +433,37 @@ const UploadPage: React.FC = () => {
             setTaskCenterTick(value => value + 1)
             if (taskStorageKey) localStorage.setItem(taskStorageKey, task.task_id)
           }} />
-          <UploadTaskCenter refreshKey={taskCenterTick} activeTaskId={activeTaskId} onToggle={task => {
-            if (task.task_id === activeTaskId) {
-              setActiveTaskId(null)
-              setTaskState(null)
-              if (taskStorageKey) localStorage.removeItem(taskStorageKey)
-              return
-            }
-            setActiveTaskId(task.task_id)
-            setTaskState(task)
-            if (taskStorageKey) localStorage.setItem(taskStorageKey, task.task_id)
-            void api.post(`/api/upload-tasks/${task.task_id}/activity`)
-          }} />
+          <UploadTaskCenter refreshKey={taskCenterTick} activeTaskId={activeTaskId} onToggle={toggleTask} />
           {activeTaskId && (
             <Box sx={{ mb: 3 }}>
-              <Card variant="outlined">
+              <Card variant="outlined" sx={{ overflow: 'visible' }}>
                 <CardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2, mb: 2 }}>
-                    <Box>
-                      <Typography variant="h6" fontWeight={700}>{taskState?.filename || '正在读取上传任务'}</Typography>
+                  <Box role="region" aria-label="当前解析任务操作" sx={{
+                    position: 'sticky', top: '80px', zIndex: theme => theme.zIndex.appBar - 1,
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2,
+                    mx: -2, mt: -2, mb: 2, px: 2, py: 1.5,
+                    bgcolor: 'background.paper', borderBottom: '1px solid', borderColor: 'divider',
+                    boxShadow: '0 1px 2px rgba(15,23,42,0.08)',
+                  }}>
+                    <Box sx={{ minWidth: 0, flex: 1 }}>
+                      <Typography variant="h6" fontWeight={700} noWrap>{taskState?.filename || '正在读取上传任务'}</Typography>
                       <Typography variant="body2" color="text.secondary">
                         {taskState
                           ? `第 ${taskState.stage_index}/${taskState.stage_total} 步：${PROCESSING_STAGES.find(item => item.key === taskState.stage)?.label || taskState.stage}`
                           : '正在恢复处理进度…'}
                       </Typography>
                     </Box>
-                    {taskLoading && <CircularProgress size={22} />}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
+                      {taskLoading && <CircularProgress size={22} />}
+                      <Button
+                        size="small"
+                        variant="contained"
+                        startIcon={<KeyboardArrowUpIcon />}
+                        aria-label="收起当前解析详情"
+                        onClick={collapseActiveTask}
+                        sx={{ minHeight: 44, flexShrink: 0 }}
+                      >收起解析</Button>
+                    </Box>
                   </Box>
 
                   <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(5, minmax(0, 1fr))' }, gap: 1 }}>

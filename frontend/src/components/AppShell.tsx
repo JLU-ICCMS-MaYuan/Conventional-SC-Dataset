@@ -16,6 +16,7 @@ const NAV_ITEMS = [
 ]
 
 const ROLE_LABELS: Record<string, string> = { superadmin: '超级管理员', admin: '管理员', user: '用户' }
+const APP_BAR_HEIGHT = 72
 
 const AppShell: React.FC = () => {
   const navigate = useNavigate()
@@ -33,9 +34,9 @@ const AppShell: React.FC = () => {
   }
 
   return (
-    <Box sx={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: '88px minmax(0, 1fr)', gridTemplateRows: '72px 1fr' }}>
-      <AppBar position="sticky" color="inherit" sx={{ gridColumn: '1 / -1', zIndex: 10, minHeight: 72, borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
-        <Toolbar sx={{ minHeight: '72px !important', px: 3, justifyContent: 'space-between' }}>
+    <Box sx={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: '88px minmax(0, 1fr)', gridTemplateRows: `${APP_BAR_HEIGHT}px 1fr` }}>
+      <AppBar position="sticky" color="inherit" sx={{ gridColumn: '1 / -1', zIndex: theme => theme.zIndex.appBar, minHeight: APP_BAR_HEIGHT, borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
+        <Toolbar sx={{ minHeight: `${APP_BAR_HEIGHT}px !important`, px: 3, justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <Box onClick={() => navigate('/')} sx={{ width: 40, height: 40, borderRadius: '12px', bgcolor: 'primary.main', color: 'primary.contrastText', display: 'grid', placeItems: 'center', boxShadow: 3, fontWeight: 700, cursor: 'pointer' }}>SC</Box>
             <Typography fontWeight={700} sx={{ cursor: 'pointer' }} onClick={() => navigate('/')}>SC-Wiki</Typography>
@@ -61,7 +62,13 @@ const AppShell: React.FC = () => {
         </Toolbar>
       </AppBar>
 
-      <Box component="nav" sx={{ bgcolor: 'background.paper', borderRight: '1px solid', borderColor: 'divider', display: 'flex', flexDirection: 'column', gap: 1, p: '16px 10px', position: 'relative', overflowY: 'auto' }}>
+      <Box component="nav" aria-label="主导航" sx={{
+        bgcolor: 'background.paper', borderRight: '1px solid', borderColor: 'divider',
+        display: 'flex', flexDirection: 'column', gap: 1, p: '16px 10px',
+        position: 'sticky', top: `${APP_BAR_HEIGHT}px`, alignSelf: 'start',
+        height: `calc(100vh - ${APP_BAR_HEIGHT}px)`, boxSizing: 'border-box', overflowY: 'auto',
+        zIndex: theme => theme.zIndex.appBar - 1,
+      }}>
         {activeIndex >= 0 && <Box sx={{ position: 'absolute', left: 10, top: 16, width: 68, height: 60, borderRadius: '18px', bgcolor: '#e0e7ff', transform: `translateY(${activeIndex * 68}px)`, transition: 'transform 0.35s cubic-bezier(0.4, 0, 0.2, 1)' }} />}
         {navItems.map(item => {
           const isActive = location.pathname.startsWith(item.path)
