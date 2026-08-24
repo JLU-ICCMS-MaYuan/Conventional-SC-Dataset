@@ -150,9 +150,14 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     real_name = Column(String(100), nullable=False)
     affiliation = Column(String(255))
+    avatar_key = Column(String(500))
+    orcid = Column(String(19), unique=True)
+    research_interests = Column(JSON)
     role = Column(String(50), default="user", nullable=False, index=True)
     is_approved = Column(Boolean, default=False, nullable=False)
     is_email_verified = Column(Boolean, default=False, nullable=False)
+    session_version = Column(BigInteger, default=0, nullable=False)
+    account_status = Column(String(20), default="active", nullable=False, index=True)
     verification_code = Column(String(16))
     verification_expires = Column(DateTime(timezone=True))
     approved_at = Column(DateTime(timezone=True))
@@ -234,6 +239,51 @@ class UsernameChangeAuditEvent(Base):
         foreign_keys=[changed_by_user_id],
         back_populates="username_changes_made",
     )
+
+
+class ProfileChangeAuditEvent(Base):
+    __tablename__ = "profile_change_audit_events"
+
+    id = Column(BigInteger, primary_key=True)
+    target_user_id = Column(Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    changed_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    field_name = Column(String(32), nullable=False)
+    old_value = Column(Text)
+    new_value = Column(Text)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class AdminApplication(Base):
+    __tablename__ = "admin_applications"
+
+    id = Column(BigInteger, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    real_name_snapshot = Column(String(100), nullable=False)
+    affiliation_snapshot = Column(String(255), nullable=False)
+    orcid_snapshot = Column(String(19))
+    research_interests_snapshot = Column(JSON)
+    status = Column(String(20), nullable=False, default="pending")
+    pending_guard = Column(Boolean)
+    reviewed_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="RESTRICT"))
+    rejection_reason = Column(Text)
+    submitted_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    withdrawn_at = Column(DateTime(timezone=True))
+    reviewed_at = Column(DateTime(timezone=True))
+
+
+class UserGovernanceAuditEvent(Base):
+    __tablename__ = "user_governance_audit_events"
+
+    id = Column(BigInteger, primary_key=True)
+    actor_user_id = Column(Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    target_user_id = Column(Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    event_type = Column(String(32), nullable=False)
+    old_role = Column(String(50))
+    new_role = Column(String(50))
+    old_status = Column(String(20))
+    new_status = Column(String(20))
+    reason = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
 class Paper(Base):

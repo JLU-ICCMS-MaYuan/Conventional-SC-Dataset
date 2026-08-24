@@ -1,8 +1,9 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Dialog, DialogTitle, DialogContent, DialogActions,
   Button, TextField, Typography, Tabs, Tab, Box, IconButton,
-  InputAdornment, CircularProgress, Alert, Checkbox, FormControlLabel,
+  InputAdornment, CircularProgress, Alert,
 } from '@mui/material'
 import {
   Visibility, VisibilityOff, Close, Login as LoginIcon,
@@ -18,7 +19,8 @@ interface Props {
 }
 
 const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
-  const { login, register, verifyEmail } = useAuth()
+  const { login, register, verifyEmail, resendVerification } = useAuth()
+  const navigate = useNavigate()
 
   // tab
   const [tab, setTab] = useState(0)  // 0=login, 1=register
@@ -33,11 +35,11 @@ const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
   const [regPassword, setRegPassword] = useState('')
   const [regUsername, setRegUsername] = useState('')
   const [regRealName, setRegRealName] = useState('')
-  const [regIsAdmin, setRegIsAdmin] = useState(false)
   const [showRegPw, setShowRegPw] = useState(false)
 
   // verify
   const [verifyCode, setVerifyCode] = useState('')
+  const [resendSeconds, setResendSeconds] = useState(60)
 
   // shared
   const [step, setStep] = useState<Step>('form')
@@ -49,11 +51,17 @@ const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
     setStep('form')
     setTab(0)
     setLoginEmail(''); setLoginPassword(''); setShowLoginPw(false)
-    setRegEmail(''); setRegPassword(''); setRegUsername(''); setRegRealName(''); setRegIsAdmin(false); setShowRegPw(false)
+    setRegEmail(''); setRegPassword(''); setRegUsername(''); setRegRealName(''); setShowRegPw(false)
     setVerifyCode('')
     setError('')
     setDoneMessage('')
   }
+
+  useEffect(() => {
+    if (step !== 'verify' || resendSeconds <= 0) return
+    const timer = window.setTimeout(() => setResendSeconds(value => value - 1), 1000)
+    return () => window.clearTimeout(timer)
+  }, [resendSeconds, step])
 
   const handleClose = () => {
     reset()
@@ -84,11 +92,12 @@ const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
   const handleRegister = async () => {
     setError('')
     if (!regEmail || !regPassword || !regUsername) { setError('请填写邮箱、密码和用户名'); return }
-    if (regPassword.length < 6) { setError('密码至少 6 位'); return }
+    if (regPassword.length < 10) { setError('密码至少 10 位'); return }
     setLoading(true)
     try {
-      const result = await register(regEmail, regPassword, regUsername, regRealName, regIsAdmin)
+      const result = await register(regEmail, regPassword, regUsername, regRealName)
       if (result.requiresEmailVerification) {
+        setResendSeconds(60)
         setStep('verify')
       } else {
         setDoneMessage('注册成功！账号审批通过后即可使用邮箱登录')
@@ -107,10 +116,8 @@ const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
     setLoading(true)
     try {
       await verifyEmail(regEmail, verifyCode)
-      setDoneMessage(regIsAdmin
-        ? '邮箱验证成功！管理员申请已提交，请等待超级管理员审批'
-        : '注册成功！您现在可以登录了')
-      setStep('done')
+      handleClose()
+      navigate('/account')
     } catch (e: unknown) {
       setError((e as Error).message || '验证失败')
     } finally {
@@ -156,7 +163,7 @@ const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
          onSubmit={e => { e.preventDefault(); handleRegister() }}>
       <UsernameField value={regUsername} onChange={setRegUsername} autoFocus />
       <TextField
-        label="实名（选填，不公开展示）" fullWidth size="small"
+        label="真实姓名（选填，填写后公开）" fullWidth size="small"
         value={regRealName} onChange={e => setRegRealName(e.target.value)}
       />
       <TextField
@@ -166,7 +173,7 @@ const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
       <TextField
         label="密码" type={showRegPw ? 'text' : 'password'} fullWidth size="small"
         value={regPassword} onChange={e => setRegPassword(e.target.value)}
-        helperText="至少 6 位"
+        helperText="至少 10 位"
         InputProps={{
           endAdornment: (
             <InputAdornment position="end">
@@ -176,10 +183,6 @@ const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
             </InputAdornment>
           ),
         }}
-      />
-      <FormControlLabel
-        control={<Checkbox checked={regIsAdmin} onChange={e => setRegIsAdmin(e.target.checked)} size="small" />}
-        label={<Typography variant="body2" color="text.secondary">申请成为管理员（需超级管理员审批）</Typography>}
       />
       {error && <Alert severity="error" sx={{ py: 0 }}>{error}</Alert>}
       <Button
@@ -210,6 +213,24 @@ const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
       >
         验证
       </Button>
+      <Button
+        size="small"
+        disabled={loading || resendSeconds > 0}
+        onClick={async () => {
+          setError('')
+          setLoading(true)
+          try {
+            await resendVerification(regEmail)
+            setResendSeconds(60)
+          } catch (e: unknown) {
+            setError((e as Error).message || '验证码发送失败')
+          } finally {
+            setLoading(false)
+          }
+        }}
+      >
+        {resendSeconds > 0 ? `${resendSeconds} 秒后可重新发送` : '重新发送验证码'}
+      </Button>
     </Box>
   )
 
@@ -217,7 +238,7 @@ const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1, alignItems: 'center' }}>
       <Alert severity="success" sx={{ width: '100%' }}>{doneMessage}</Alert>
       <Button variant="contained" onClick={handleClose} sx={{ minWidth: 120 }}>
-        {regIsAdmin ? '关闭' : '前往登录'}
+        关闭
       </Button>
     </Box>
   )

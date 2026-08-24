@@ -16,6 +16,9 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
-    include: ['tests/01_decentralized_uploading/**/*.test.tsx'],
+    include: [
+      'tests/01_decentralized_uploading/**/*.test.tsx',
+      'tests/02_identity_governance/**/*.test.tsx',
+    ],
   },
 })

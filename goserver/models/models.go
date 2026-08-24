@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // ═══════════════════════════════════════════════
 // Go struct → MySQL 表的映射规则：
@@ -11,18 +14,24 @@ import "time"
 
 // User 用户
 type User struct {
-	ID                    uint       `gorm:"primaryKey" json:"id"`
-	Email                 string     `gorm:"uniqueIndex;size:255" json:"email"`
-	Username              string     `gorm:"uniqueIndex;size:32;not null;collate:ascii_bin" json:"username"`
-	UsernameChangeAllowed bool       `gorm:"not null;default:false" json:"username_change_allowed"`
-	PasswordHash          string     `gorm:"size:255" json:"-"`
-	RealName              string     `gorm:"size:100" json:"-"`
-	Role                  string     `gorm:"size:50;default:user" json:"role"`
-	IsApproved            bool       `json:"is_approved"`
-	IsEmailVerified       bool       `json:"is_email_verified"`
-	CreatedAt             time.Time  `json:"created_at"`
-	UpdatedAt             time.Time  `json:"updated_at"`
-	ApprovedAt            *time.Time `json:"approved_at"` // *time.Time = 可为 nil
+	ID                    uint            `gorm:"primaryKey" json:"id"`
+	Email                 string          `gorm:"uniqueIndex;size:255" json:"email"`
+	Username              string          `gorm:"uniqueIndex;size:32;not null;collate:ascii_bin" json:"username"`
+	UsernameChangeAllowed bool            `gorm:"not null;default:false" json:"username_change_allowed"`
+	PasswordHash          string          `gorm:"size:255" json:"-"`
+	RealName              string          `gorm:"size:100" json:"-"`
+	Affiliation           *string         `gorm:"size:255" json:"-"`
+	AvatarKey             *string         `gorm:"size:500" json:"-"`
+	ORCID                 *string         `gorm:"column:orcid;size:19;uniqueIndex" json:"-"`
+	ResearchInterests     json.RawMessage `gorm:"type:json" json:"-"`
+	Role                  string          `gorm:"size:50;default:user" json:"role"`
+	IsApproved            bool            `json:"is_approved"`
+	IsEmailVerified       bool            `json:"is_email_verified"`
+	SessionVersion        int64           `gorm:"not null;default:0" json:"-"`
+	AccountStatus         string          `gorm:"size:20;not null;default:active" json:"account_status"`
+	CreatedAt             time.Time       `json:"created_at"`
+	UpdatedAt             time.Time       `json:"updated_at"`
+	ApprovedAt            *time.Time      `json:"approved_at"` // *time.Time = 可为 nil
 }
 
 // UsernameChangeAuditEvent 超级管理员更名的只追加审计事件。
@@ -34,6 +43,45 @@ type UsernameChangeAuditEvent struct {
 	NewUsername     string    `gorm:"size:32;not null;collate:ascii_bin" json:"new_username"`
 	Reason          string    `gorm:"size:500;not null" json:"reason"`
 	CreatedAt       time.Time `gorm:"index:ix_username_audit_target_time,priority:2;index:ix_username_audit_actor_time,priority:2" json:"created_at"`
+}
+
+type ProfileChangeAuditEvent struct {
+	ID              uint64    `gorm:"primaryKey" json:"id"`
+	TargetUserID    uint      `gorm:"not null;index:ix_profile_audit_target_time,priority:1" json:"target_user_id"`
+	ChangedByUserID uint      `gorm:"not null" json:"changed_by_user_id"`
+	FieldName       string    `gorm:"size:32;not null" json:"field_name"`
+	OldValue        *string   `gorm:"type:text" json:"old_value"`
+	NewValue        *string   `gorm:"type:text" json:"new_value"`
+	CreatedAt       time.Time `gorm:"index:ix_profile_audit_target_time,priority:2" json:"created_at"`
+}
+
+type AdminApplication struct {
+	ID                        uint64          `gorm:"primaryKey" json:"id"`
+	UserID                    uint            `gorm:"not null;uniqueIndex:uq_admin_application_pending,priority:1" json:"user_id"`
+	RealNameSnapshot          string          `gorm:"size:100;not null" json:"real_name_snapshot"`
+	AffiliationSnapshot       string          `gorm:"size:255;not null" json:"affiliation_snapshot"`
+	ORCIDSnapshot             *string         `gorm:"column:orcid_snapshot;size:19" json:"orcid_snapshot"`
+	ResearchInterestsSnapshot json.RawMessage `gorm:"type:json" json:"research_interests_snapshot"`
+	Status                    string          `gorm:"size:20;not null;default:pending" json:"status"`
+	PendingGuard              *bool           `gorm:"uniqueIndex:uq_admin_application_pending,priority:2" json:"-"`
+	ReviewedByUserID          *uint           `json:"reviewed_by_user_id"`
+	RejectionReason           *string         `gorm:"type:text" json:"rejection_reason"`
+	SubmittedAt               time.Time       `json:"submitted_at"`
+	WithdrawnAt               *time.Time      `json:"withdrawn_at"`
+	ReviewedAt                *time.Time      `json:"reviewed_at"`
+}
+
+type UserGovernanceAuditEvent struct {
+	ID           uint64    `gorm:"primaryKey" json:"id"`
+	ActorUserID  uint      `gorm:"not null" json:"actor_user_id"`
+	TargetUserID uint      `gorm:"not null;index:ix_governance_target_time,priority:1" json:"target_user_id"`
+	EventType    string    `gorm:"size:32;not null" json:"event_type"`
+	OldRole      *string   `gorm:"size:50" json:"old_role"`
+	NewRole      *string   `gorm:"size:50" json:"new_role"`
+	OldStatus    *string   `gorm:"size:20" json:"old_status"`
+	NewStatus    *string   `gorm:"size:20" json:"new_status"`
+	Reason       string    `gorm:"type:text;not null" json:"reason"`
+	CreatedAt    time.Time `gorm:"index:ix_governance_target_time,priority:2" json:"created_at"`
 }
 
 // Paper 论文

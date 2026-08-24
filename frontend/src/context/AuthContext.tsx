@@ -9,6 +9,9 @@ export interface User {
   is_admin: boolean
   is_superadmin: boolean
   is_approved: boolean
+  is_email_verified: boolean
+  account_status: 'active' | 'banned' | 'deactivated'
+  avatar_url?: string | null
   created_at: string | null
   approved_at: string | null
 }
@@ -18,10 +21,11 @@ export interface AuthState {
   token: string | null
   loading: boolean
   login: (email: string, password: string) => Promise<{ needApproval?: boolean }>
-  register: (email: string, password: string, username: string, realName: string, isAdmin: boolean) => Promise<{ requiresEmailVerification: boolean }>
+  register: (email: string, password: string, username: string, realName: string) => Promise<{ requiresEmailVerification: boolean }>
   updateUsername: (username: string) => Promise<void>
   replaceUser: (user: User) => void
   verifyEmail: (email: string, code: string) => Promise<void>
+  resendVerification: (email: string) => Promise<void>
   logout: () => void
 }
 
@@ -34,6 +38,7 @@ const AuthContext = createContext<AuthState>({
   updateUsername: async () => {},
   replaceUser: () => {},
   verifyEmail: async () => {},
+  resendVerification: async () => {},
   logout: () => {},
 })
 
@@ -77,6 +82,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else {
           setToken(savedToken)
           setUser(parsed)
+          void fetch('/api/auth/me', { headers: { Authorization: `Bearer ${savedToken}` } })
+            .then(async response => {
+              if (!response.ok) throw new Error('登录状态已失效')
+              const data = await response.json()
+              saveAuth(savedToken, data.user)
+              setUser(data.user)
+            })
+            .catch(() => {
+              clearAuth()
+              setToken(null)
+              setUser(null)
+            })
         }
       } catch {
         clearAuth()
@@ -102,11 +119,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return {}
   }, [])
 
-  const register = useCallback(async (email: string, password: string, username: string, realName: string, isAdmin: boolean) => {
+  const register = useCallback(async (email: string, password: string, username: string, realName: string) => {
     const res = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, username, real_name: realName || undefined, is_admin: isAdmin }),
+      body: JSON.stringify({ email, password, username, real_name: realName || undefined }),
     })
     if (!res.ok) {
       throw await responseError(res, '注册失败')
@@ -143,6 +160,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!res.ok) {
       throw await responseError(res, '验证失败')
     }
+    const data = await res.json()
+    saveAuth(data.access_token, data.user)
+    setToken(data.access_token)
+    setUser(data.user)
+  }, [])
+
+  const resendVerification = useCallback(async (email: string) => {
+    const res = await fetch('/api/auth/resend-verification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    })
+    if (!res.ok) throw await responseError(res, '验证码发送失败')
   }, [])
 
   const logout = useCallback(() => {
@@ -152,7 +182,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, updateUsername, replaceUser, verifyEmail, logout }}>
+    <AuthContext.Provider value={{ user, token, loading, login, register, updateUsername, replaceUser, verifyEmail, resendVerification, logout }}>
       {children}
     </AuthContext.Provider>
   )

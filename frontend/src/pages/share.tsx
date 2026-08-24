@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Box, Typography, Card, CardContent, Button,
   Select, MenuItem, FormControl, InputLabel, IconButton, Tooltip,
@@ -39,6 +40,7 @@ interface ContributionRank {
   display_name: string
   avatar_text: string
   contribution_count: number
+  account_status: 'active' | 'banned' | 'deactivated'
 }
 
 interface ContributionSnapshot {
@@ -68,6 +70,7 @@ const SC_TYPE_SHAPE_ICONS: Record<string, string> = {
 
 // ═══════════════════════════════════════════════════════
 const SharePage: React.FC = () => {
+  const navigate = useNavigate()
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin' || user?.role === 'superadmin'
 
@@ -372,7 +375,11 @@ const SharePage: React.FC = () => {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                   <Typography sx={{ width: 28, flexShrink: 0, fontWeight: 800, color: row.rank <= 3 ? 'primary.main' : 'text.secondary' }}>{row.rank}</Typography>
                   <Avatar sx={{ width: 34, height: 34, fontSize: 15 }}>{row.avatar_text}</Avatar>
-                  <Typography noWrap sx={{ flex: 1, minWidth: 0, fontWeight: 650 }}>{row.username}</Typography>
+                  <Typography
+                    noWrap
+                    onClick={() => row.account_status !== 'deactivated' && navigate(`/users/${row.username}`)}
+                    sx={{ flex: 1, minWidth: 0, fontWeight: 650, cursor: row.account_status === 'deactivated' ? 'default' : 'pointer', '&:hover': row.account_status === 'deactivated' ? undefined : { color: 'primary.main' } }}
+                  >{row.username}{row.account_status === 'banned' ? ' · 已封禁' : ''}</Typography>
                   <Typography fontWeight={800} sx={{ flexShrink: 0 }}>{row.contribution_count} {unit}</Typography>
                 </Box>
                 <Box sx={{ ml: 7.75, mt: 0.75, height: 8, overflow: 'hidden', borderRadius: 999, bgcolor: 'action.hover' }}>

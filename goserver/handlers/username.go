@@ -86,9 +86,19 @@ func clientUserPayload(user models.User) gin.H {
 		"is_superadmin":           user.Role == "superadmin",
 		"is_approved":             user.IsApproved,
 		"is_email_verified":       user.IsEmailVerified,
+		"account_status":          user.AccountStatus,
+		"avatar_url":              avatarURL(user),
 		"created_at":              user.CreatedAt,
 		"approved_at":             user.ApprovedAt,
 	}
+}
+
+func avatarURL(user models.User) *string {
+	if user.AvatarKey == nil || *user.AvatarKey == "" {
+		return nil
+	}
+	value := "/api/users/" + user.Username + "/avatar"
+	return &value
 }
 
 // UsernameAvailability 返回规则与占用状态，不泄露账号资料。

@@ -21,6 +21,9 @@ TARGET_TABLES = {
     "structure_models",
     "superconductor_properties",
     "tc_results",
+    "profile_change_audit_events",
+    "admin_applications",
+    "user_governance_audit_events",
 }
 
 
@@ -35,7 +38,8 @@ def _config(database_url=None):
 def test_alembic_has_one_ordered_head():
     script = ScriptDirectory.from_config(_config())
 
-    assert script.get_heads() == ["20260821_0008"]
+    assert script.get_heads() == ["20260824_0009"]
+    assert script.get_revision("20260824_0009").down_revision == "20260821_0008"
     assert script.get_revision("20260821_0008").down_revision == "20260821_0007"
     assert script.get_revision("20260821_0007").down_revision == "20260821_0006"
 
@@ -65,6 +69,12 @@ def test_fresh_mysql_upgrade_downgrade_guard_and_constraints():
         command.upgrade(config, "head")
         assert TARGET_TABLES.issubset(inspect(engine).get_table_names())
         assert "key_properties" not in inspect(engine).get_table_names()
+        user_columns = {column["name"] for column in inspect(engine).get_columns("users")}
+        assert {"avatar_key", "orcid", "research_interests", "session_version", "account_status"} <= user_columns
+        user_uniques = {tuple(item["column_names"]) for item in inspect(engine).get_unique_constraints("users")}
+        assert ("orcid",) in user_uniques
+        application_uniques = {tuple(item["column_names"]) for item in inspect(engine).get_unique_constraints("admin_applications")}
+        assert ("user_id", "pending_guard") in application_uniques
         command.check(config)
 
         command.downgrade(config, "20260821_0006")

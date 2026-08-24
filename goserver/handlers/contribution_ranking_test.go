@@ -25,11 +25,11 @@ func TestLoadContributionSnapshotUsesUniqueUsername(t *testing.T) {
 	t.Cleanup(func() { database.DB = previousDB })
 
 	mock.ExpectQuery(`(?s)SELECT u\.id AS user_id, u\.username AS username,.*FROM users u JOIN papers`).
-		WillReturnRows(sqlmock.NewRows([]string{"user_id", "username", "contribution_count", "reached_at"}).
-			AddRow(7, "张三", 3, time.Now()))
+		WillReturnRows(sqlmock.NewRows([]string{"user_id", "username", "account_status", "contribution_count", "reached_at"}).
+			AddRow(7, "张三", "active", 3, time.Now()))
 	mock.ExpectQuery(`(?s)SELECT u\.id AS user_id, u\.username AS username,.*FROM users u JOIN paper_review_events`).
-		WillReturnRows(sqlmock.NewRows([]string{"user_id", "username", "contribution_count", "reached_at"}).
-			AddRow(7, "张三", 1, time.Now()))
+		WillReturnRows(sqlmock.NewRows([]string{"user_id", "username", "account_status", "contribution_count", "reached_at"}).
+			AddRow(7, "张三", "active", 1, time.Now()))
 
 	snapshot, err := loadContributionSnapshot()
 	if err != nil {
@@ -40,6 +40,13 @@ func TestLoadContributionSnapshotUsesUniqueUsername(t *testing.T) {
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestRankContributionRowsAnonymizesDeactivatedUser(t *testing.T) {
+	ranks := rankContributionRows([]contributionRow{{UserID: 7, Username: "FormerUser", AccountStatus: "deactivated", ContributionCount: 4}})
+	if len(ranks) != 1 || ranks[0].Username != "已注销用户" || ranks[0].DisplayName != "已注销用户" || ranks[0].AccountStatus != "deactivated" {
+		t.Fatalf("deactivated rank = %#v", ranks)
 	}
 }
 

@@ -12,11 +12,9 @@ import (
 
 	"scwiki/server/cache"
 	"scwiki/server/database"
-	"scwiki/server/middleware"
 	"scwiki/server/models"
 
 	"github.com/gin-gonic/gin"
-	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -590,37 +588,19 @@ func GetUsers(c *gin.Context) {
 // UpdateUser 编辑用户权限
 // PUT /api/admin/users/:id
 func UpdateUser(c *gin.Context) {
-	id := c.Param("id")
-	var body struct {
-		Role       string `json:"role"`
-		IsApproved bool   `json:"is_approved"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
-		return
-	}
-
-	var user models.User
-	if err := database.DB.First(&user, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "用户不存在"})
-		return
-	}
-
-	database.DB.Model(&user).Updates(map[string]interface{}{
-		"role":        body.Role,
-		"is_approved": body.IsApproved,
+	c.JSON(http.StatusMethodNotAllowed, gin.H{
+		"error": "通用权限更新接口已停用，请使用需要原因和审计的治理动作",
+		"code":  "governance_action_required",
 	})
-	c.JSON(http.StatusOK, gin.H{"message": "已更新", "user": user})
 }
 
 // DeleteUser 删除用户
 // DELETE /api/admin/users/:id
 func DeleteUser(c *gin.Context) {
-	id, _ := strconv.Atoi(c.Param("id"))
-	database.DB.Delete(&models.User{}, uint(id))
-	cache.FlushPattern("chart:*")
-	cache.FlushPattern("search:*")
-	c.JSON(http.StatusOK, gin.H{"message": "已删除"})
+	c.JSON(http.StatusMethodNotAllowed, gin.H{
+		"error": "物理删除已停用，请使用可审计的账号注销操作",
+		"code":  "account_deactivation_required",
+	})
 }
 
 // ═══════════════════════════════════════════════
@@ -649,115 +629,11 @@ func GetStats(c *gin.Context) {
 // Login 登录
 // POST /api/auth/login
 func Login(c *gin.Context) {
-	var body struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
-		return
-	}
-
-	var user models.User
-	if err := database.DB.Where("email = ?", body.Email).First(&user).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "邮箱或密码错误"})
-		return
-	}
-
-	// 验证密码（bcrypt）
-	if user.PasswordHash == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "账号未设置密码，请通过注册流程创建"})
-		return
-	}
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(body.Password)); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "邮箱或密码错误"})
-		return
-	}
-
-	// 检查审批状态
-	if !user.IsApproved {
-		c.JSON(http.StatusForbidden, gin.H{"error": "账号尚未通过审批"})
-		return
-	}
-
-	token, err := middleware.GenerateToken(user.Email)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "生成 token 失败"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"access_token": token,
-		"token_type":   "bearer",
-		"user":         clientUserPayload(user),
-	})
+	loginHandler(c)
 }
 
 // Register 注册
 // POST /api/auth/register
 func Register(c *gin.Context) {
-	var body struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
-		Username string `json:"username"`
-		RealName string `json:"real_name"`
-		IsAdmin  bool   `json:"is_admin"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil || body.Email == "" || body.Password == "" || body.Username == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "邮箱、密码和用户名不能为空"})
-		return
-	}
-	if err := validatePublicUsername(body.Username); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	var existing models.User
-	if database.DB.Where("email = ?", body.Email).First(&existing).Error == nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "该邮箱已注册"})
-		return
-	}
-	available, err := usernameAvailable(database.DB, body.Username, 0)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "用户名检查失败"})
-		return
-	}
-	if !available {
-		c.JSON(http.StatusConflict, gin.H{"error": errUsernameTaken.Error()})
-		return
-	}
-
-	hash, err := bcrypt.GenerateFromPassword([]byte(body.Password), bcrypt.DefaultCost)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "密码加密失败"})
-		return
-	}
-
-	role := "user"
-	if body.IsAdmin {
-		role = "admin"
-	}
-
-	user := models.User{
-		Email: body.Email, Username: body.Username,
-		UsernameChangeAllowed: false,
-		PasswordHash:          string(hash),
-		RealName:              body.RealName,
-		Role:                  role,
-		IsApproved:            false,
-	}
-	if err := database.DB.Create(&user).Error; err != nil {
-		if isDuplicateUsernameError(err) {
-			c.JSON(http.StatusConflict, gin.H{"error": "邮箱或用户名已被占用"})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "注册失败"})
-		}
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message":                     "注册成功，等待管理员审核",
-		"requires_email_verification": false,
-		"user":                        clientUserPayload(user),
-	})
+	registerHandler(c)
 }

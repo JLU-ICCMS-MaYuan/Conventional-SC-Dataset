@@ -98,6 +98,13 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    if user.account_status != "active" or int(payload.get("sv", 0)) != user.session_version:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="登录已失效",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     return user
 
 
@@ -115,14 +122,19 @@ async def get_current_user_optional(
     email: str = payload.get("sub")
     if email is None:
         return None
-    return db.query(User).filter(User.email == email).first()
+    user = db.query(User).filter(User.email == email).first()
+    if user is None or user.account_status != "active":
+        return None
+    if int(payload.get("sv", 0)) != user.session_version:
+        return None
+    return user
 
 
 async def get_current_admin(
     current_user: User = Depends(get_current_user)
 ) -> User:
     """获取当前管理员（必须已批准）"""
-    if current_user.role not in {"admin", "superadmin"} or not current_user.is_approved:
+    if current_user.role not in {"admin", "superadmin"}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="需要管理员权限"

@@ -58,6 +58,7 @@ func main() {
 
 	// 3. 初始化 JWT
 	middleware.InitJWT(cfg.JWTSecret)
+	handlers.ConfigureAuth(cfg)
 
 	// 4. 创建路由引擎
 	// gin.Default() = 带 Logger + Recovery 中间件
@@ -85,7 +86,11 @@ func main() {
 	// 公开路由（不需要 JWT）
 	r.POST("/api/auth/login", handlers.Login)
 	r.POST("/api/auth/register", handlers.Register)
+	r.POST("/api/auth/verify-email", handlers.VerifyEmail)
+	r.POST("/api/auth/resend-verification", handlers.ResendVerification)
 	r.GET("/api/auth/username-availability", handlers.UsernameAvailability)
+	r.GET("/api/users/:username", handlers.GetPublicProfile)
+	r.GET("/api/users/:username/avatar", handlers.GetPublicAvatar)
 
 	// 论文公开 API（替代 Python /api/papers/*）
 	papers := r.Group("/api/papers")
@@ -116,10 +121,10 @@ func main() {
 	{
 		cg.GET("", handlers.ListChartGroups)
 		cg.GET("/:id", handlers.GetChartGroup)
-		cg.POST("", handlers.CreateChartGroup)
-		cg.PUT("/:id", handlers.UpdateChartGroup)
-		cg.DELETE("/:id", handlers.DeleteChartGroup)
-		cg.PATCH("/:id/public", handlers.ToggleChartGroupPublic)
+		cg.POST("", middleware.AuthRequired, middleware.SuperAdminRequired, handlers.CreateChartGroup)
+		cg.PUT("/:id", middleware.AuthRequired, middleware.SuperAdminRequired, handlers.UpdateChartGroup)
+		cg.DELETE("/:id", middleware.AuthRequired, middleware.SuperAdminRequired, handlers.DeleteChartGroup)
+		cg.PATCH("/:id/public", middleware.AuthRequired, middleware.SuperAdminRequired, handlers.ToggleChartGroupPublic)
 	}
 
 	// 快讯 API
@@ -131,6 +136,31 @@ func main() {
 		auth.GET("/papers/my-uploads", handlers.GetMyUploads)
 		auth.GET("/papers/my-uploads/:id", handlers.GetMyUploadDetail)
 		auth.PATCH("/auth/username", handlers.UpdateOwnUsername)
+		auth.GET("/auth/me", handlers.GetCurrentUser)
+		auth.GET("/account/profile", handlers.GetAccountProfile)
+		auth.PATCH("/account/profile", handlers.UpdateAccountProfile)
+		auth.POST("/account/avatar", handlers.UploadAvatar)
+		auth.DELETE("/account/avatar", handlers.DeleteAvatar)
+		auth.POST("/account/change-password", handlers.ChangePassword)
+		auth.POST("/account/admin-applications", handlers.SubmitAdminApplication)
+		auth.GET("/account/admin-applications", handlers.GetOwnAdminApplications)
+		auth.POST("/account/admin-applications/:id/withdraw", handlers.WithdrawAdminApplication)
+	}
+
+	superadmin := r.Group("/api/superadmin")
+	superadmin.Use(middleware.AuthRequired, middleware.SuperAdminRequired)
+	{
+		superadmin.GET("/admin-applications", handlers.ListAdminApplications)
+		superadmin.POST("/admin-applications/:id/approve", handlers.ApproveAdminApplication)
+		superadmin.POST("/admin-applications/:id/reject", handlers.RejectAdminApplication)
+		superadmin.GET("/users", handlers.ListGovernanceUsers)
+		superadmin.POST("/users/:id/ban", handlers.BanUser)
+		superadmin.POST("/users/:id/unban", handlers.UnbanUser)
+		superadmin.POST("/users/:id/deactivate", handlers.DeactivateUser)
+		superadmin.POST("/users/:id/role", handlers.ChangeUserRole)
+		superadmin.GET("/audits/profile-changes", handlers.ListProfileAudits)
+		superadmin.GET("/audits/username-changes", handlers.GetUsernameAuditEvents)
+		superadmin.GET("/audits/governance", handlers.ListGovernanceAudits)
 	}
 
 	// 管理员路由组
@@ -141,20 +171,20 @@ func main() {
 		admin.GET("/papers/:id", handlers.GetPaperDetail)
 		admin.PUT("/papers/:id", handlers.UpdatePaper)
 		admin.POST("/papers/:id/review", handlers.ReviewPaper)
-		admin.DELETE("/papers/:id", handlers.DeletePaper)
+		admin.DELETE("/papers/:id", middleware.SuperAdminRequired, handlers.DeletePaper)
 		admin.POST("/papers/batch-review", handlers.BatchReview)
-		admin.POST("/papers/batch-delete", handlers.BatchDelete)
-		admin.GET("/users", handlers.GetUsers)
-		admin.PUT("/users/:id", handlers.UpdateUser)
-		admin.PUT("/users/:id/permissions", handlers.UpdateUser)
-		admin.DELETE("/users/:id", handlers.DeleteUser)
+		admin.POST("/papers/batch-delete", middleware.SuperAdminRequired, handlers.BatchDelete)
+		admin.GET("/users", middleware.SuperAdminRequired, handlers.GetUsers)
+		admin.PUT("/users/:id", middleware.SuperAdminRequired, handlers.UpdateUser)
+		admin.PUT("/users/:id/permissions", middleware.SuperAdminRequired, handlers.UpdateUser)
+		admin.DELETE("/users/:id", middleware.SuperAdminRequired, handlers.DeleteUser)
 		admin.PUT("/users/:id/username", middleware.SuperAdminRequired, handlers.AdminUpdateUsername)
 		admin.GET("/username-audit-events", middleware.SuperAdminRequired, handlers.GetUsernameAuditEvents)
-		admin.GET("/all-users", handlers.AllUsers)
+		admin.GET("/all-users", middleware.SuperAdminRequired, handlers.AllUsers)
 		admin.GET("/stats", handlers.GetStats)
-		admin.POST("/news", handlers.CreateNews)
-		admin.PUT("/news/:id", handlers.UpdateNews)
-		admin.DELETE("/news/:id", handlers.DeleteNews)
+		admin.POST("/news", middleware.SuperAdminRequired, handlers.CreateNews)
+		admin.PUT("/news/:id", middleware.SuperAdminRequired, handlers.UpdateNews)
+		admin.DELETE("/news/:id", middleware.SuperAdminRequired, handlers.DeleteNews)
 	}
 
 	// 统计 API

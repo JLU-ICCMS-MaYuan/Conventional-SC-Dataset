@@ -16,7 +16,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const contributionCacheKey = "community:contributions:v1"
+const contributionCacheKey = "community:contributions:v2"
 
 var contributionRefreshMu sync.Mutex
 var contributionSnapshotLoader = loadContributionSnapshot
@@ -24,6 +24,7 @@ var contributionSnapshotLoader = loadContributionSnapshot
 type contributionRow struct {
 	UserID            uint      `gorm:"column:user_id"`
 	Username          string    `gorm:"column:username"`
+	AccountStatus     string    `gorm:"column:account_status"`
 	ContributionCount int64     `gorm:"column:contribution_count"`
 	ReachedAt         time.Time `gorm:"column:reached_at"`
 }
@@ -35,6 +36,7 @@ type contributionRank struct {
 	DisplayName       string `json:"display_name"`
 	AvatarText        string `json:"avatar_text"`
 	ContributionCount int64  `json:"contribution_count"`
+	AccountStatus     string `json:"account_status"`
 }
 
 type contributionSnapshot struct {
@@ -56,12 +58,16 @@ func rankContributionRows(rows []contributionRow) []contributionRank {
 	ranks := make([]contributionRank, 0, len(rows))
 	for i, row := range rows {
 		name := strings.TrimSpace(row.Username)
+		if row.AccountStatus == "deactivated" {
+			name = "已注销用户"
+		}
 		if name == "" {
 			name = "sc_unknown"
 		}
 		ranks = append(ranks, contributionRank{
 			Rank: i + 1, UserID: row.UserID, Username: name, DisplayName: name,
 			AvatarText: avatarText(name), ContributionCount: row.ContributionCount,
+			AccountStatus: row.AccountStatus,
 		})
 	}
 	return ranks
@@ -71,21 +77,21 @@ func loadContributionSnapshot() (contributionSnapshot, error) {
 	var uploadRows, reviewRows []contributionRow
 	// username 是唯一公开身份；display_name 仅在响应层作为兼容别名。
 	if err := database.DB.Raw(`
-		SELECT u.id AS user_id, u.username AS username,
+		SELECT u.id AS user_id, u.username AS username, u.account_status AS account_status,
 		       COUNT(p.id) AS contribution_count,
 		       MAX(COALESCE(p.reviewed_at, p.updated_at, p.created_at)) AS reached_at
 		FROM users u JOIN papers p ON p.uploaded_by_user_id = u.id
 		WHERE p.review_status = 'approved'
-		GROUP BY u.id, u.username
+		GROUP BY u.id, u.username, u.account_status
 		ORDER BY contribution_count DESC, reached_at ASC, user_id ASC
 	`).Scan(&uploadRows).Error; err != nil {
 		return contributionSnapshot{}, err
 	}
 	if err := database.DB.Raw(`
-		SELECT u.id AS user_id, u.username AS username,
+		SELECT u.id AS user_id, u.username AS username, u.account_status AS account_status,
 		       COUNT(e.id) AS contribution_count, MAX(e.reviewed_at) AS reached_at
 		FROM users u JOIN paper_review_events e ON e.reviewer_user_id = u.id
-		GROUP BY u.id, u.username
+		GROUP BY u.id, u.username, u.account_status
 		ORDER BY contribution_count DESC, reached_at ASC, user_id ASC
 	`).Scan(&reviewRows).Error; err != nil {
 		return contributionSnapshot{}, err

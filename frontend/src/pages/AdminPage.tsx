@@ -24,6 +24,7 @@ import { api } from '../lib/api'
 import { SourceEvidence, UploadDraft, normalizeUploadDraft, unwrapData } from '../lib/paperProcessing'
 import ChartGroupEditor from '../components/ChartGroupEditor'
 import NewsManager from '../components/NewsManager'
+import SuperAdminGovernance from '../components/SuperAdminGovernance'
 import UsernameField from '../components/UsernameField'
 
 /* ── Types ───────────────────────────────────── */
@@ -90,9 +91,11 @@ const paperSuperconductorTypes = (paper: PaperRecord) =>
     : [...new Set((paper.key_properties || []).map(item => item.superconductor_type).filter(Boolean) as string[])]
 
 /* ═══════════════════════════════════════════════ */
-const AdminPage: React.FC = () => {
+interface AdminPageProps { mode?: 'admin' | 'superadmin' }
+
+const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
   const { user, replaceUser } = useAuth()
-  const isSuper = user?.role === 'superadmin'
+  const isSuper = mode === 'superadmin'
 
   const [tab, setTab] = useState(0)
   const [snackbar, setSnackbar] = useState('')
@@ -147,17 +150,16 @@ const AdminPage: React.FC = () => {
   /* ── Load ────────────────────────────────────── */
   const loadStats = useCallback(async () => {
     try {
-      const [u, p] = await Promise.all([
-        api.get<UserRecord[]>('/api/admin/all-users').catch(() => [] as UserRecord[]),
-        api.get<{items:PaperRecord[],total:number}>('/api/admin/papers/all?limit=1&offset=0').catch(() => ({items:[],total:0})),
-      ])
+      const p = await api.get<{items:PaperRecord[],total:number}>('/api/admin/papers/all?limit=1&offset=0')
+      const u = isSuper ? await api.get<UserRecord[]>('/api/superadmin/users') : []
+      const applications = isSuper ? await api.get<Array<{status:string}>>('/api/superadmin/admin-applications?status=pending') : []
       setStats({
         users: Array.isArray(u) ? u.length : 0,
         papers: p.total || 0,
-        pending: Array.isArray(u) ? u.filter(x=>!x.is_approved).length : 0,
+        pending: applications.length,
       })
     } catch { /* ignore */ }
-  }, [])
+  }, [isSuper])
 
   const loadPapers = useCallback(async () => {
     setPapersLoading(true)
@@ -195,8 +197,7 @@ const AdminPage: React.FC = () => {
 
   useEffect(() => { loadStats() }, [loadStats])
   useEffect(() => { loadPapers() }, [loadPapers])
-  useEffect(() => { loadUsers() }, [loadUsers])
-  useEffect(() => { loadChartGroups() }, [loadChartGroups])
+  useEffect(() => { if (isSuper) void loadChartGroups() }, [isSuper, loadChartGroups])
 
   /* ── Review actions ──────────────────────────── */
   const openReview = async (paper: PaperRecord) => {
@@ -424,17 +425,17 @@ const AdminPage: React.FC = () => {
     <Box sx={{ maxWidth: 1280, mx: 'auto' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
-          <Typography variant="overline" color="text.secondary">管理后台</Typography>
-          <Typography variant="h4" fontWeight={800}>SC-Wiki Admin</Typography>
+          <Typography variant="overline" color="text.secondary">WORKSPACE</Typography>
+          <Typography variant="h4" fontWeight={800}>{isSuper ? '超级管理员工作台' : '管理员工作台'}</Typography>
         </Box>
       </Box>
 
-      <Tabs value={tab} onChange={(_,v)=>setTab(v)} sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}>
+      <Tabs value={tab} onChange={(_,v)=>setTab(v)} variant="scrollable" allowScrollButtonsMobile sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}>
         <Tab label="概览" />
         <Tab label={`论文审核${papersStatus === 'pending' ? ` (${papersTotal})` : ''}`} />
-        {isSuper && <Tab label="用户管理" icon={<AdminIcon fontSize="small" />} iconPosition="start" />}
-        <Tab label="图表管理" />
-        <Tab label="快讯管理" />
+        {isSuper && <Tab label="用户与权限" icon={<AdminIcon fontSize="small" />} iconPosition="start" />}
+        {isSuper && <Tab label="图表管理" />}
+        {isSuper && <Tab label="快讯管理" />}
       </Tabs>
 
       {/* ═══════════════════════════════════════════ */}
@@ -442,29 +443,29 @@ const AdminPage: React.FC = () => {
       {/* ═══════════════════════════════════════════ */}
       {tab === 0 && (
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 2 }}>
-          <Card sx={{ borderLeft: '4px solid', borderColor: 'primary.main' }}>
+          {isSuper && <Card sx={{ borderLeft: '4px solid', borderColor: 'primary.main' }}>
             <CardContent>
               <Typography variant="caption" color="text.secondary">用户总数</Typography>
               <Typography variant="h3" fontWeight={700}>{stats?.users ?? '…'}</Typography>
             </CardContent>
-          </Card>
+          </Card>}
           <Card sx={{ borderLeft: '4px solid', borderColor: 'success.main' }}>
             <CardContent>
               <Typography variant="caption" color="text.secondary">论文总数</Typography>
               <Typography variant="h3" fontWeight={700}>{stats?.papers ?? '…'}</Typography>
             </CardContent>
           </Card>
-          <Card sx={{ borderLeft: '4px solid', borderColor: 'warning.main' }}>
+          {isSuper && <Card sx={{ borderLeft: '4px solid', borderColor: 'warning.main' }}>
             <CardContent>
               <Typography variant="caption" color="text.secondary">待审批管理员</Typography>
               <Typography variant="h3" fontWeight={700}>{stats?.pending ?? '…'}</Typography>
             </CardContent>
-          </Card>
+          </Card>}
           <Card sx={{ borderLeft: '4px solid', borderColor: 'info.main' }}>
             <CardContent>
               <Typography variant="caption" color="text.secondary">当前角色</Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                <Chip size="small" color="error" label="超级管理员" />
+                <Chip size="small" color={isSuper ? 'error' : 'primary'} label={isSuper ? '超级管理员' : '管理员'} />
                 <Typography variant="h6" fontWeight={700}>{user?.username}</Typography>
               </Box>
             </CardContent>
@@ -599,7 +600,8 @@ const AdminPage: React.FC = () => {
       {/* ═══════════════════════════════════════════ */}
       {/* TAB 2: User Management (superadmin only) */}
       {/* ═══════════════════════════════════════════ */}
-      {tab === 2 && isSuper && (
+      {tab === 2 && isSuper && <SuperAdminGovernance />}
+      {false && tab === 2 && isSuper && (
         <Box>
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
             <Button variant="outlined" size="small" startIcon={<HistoryIcon />} onClick={() => void openUsernameAudit()}>
@@ -679,13 +681,13 @@ const AdminPage: React.FC = () => {
       {/* ═══════════════════════════════════════════ */}
       {/* TAB: Chart Groups */}
       {/* ═══════════════════════════════════════════ */}
-      {tab === (isSuper ? 4 : 3) && (
+      {isSuper && tab === 4 && (
         /* ── News Management ── */
         <Box>
           <NewsManager />
         </Box>
       )}
-      {tab === (isSuper ? 3 : 2) && (
+      {isSuper && tab === 3 && (
         <Box>
           <Box sx={{ display: 'flex', gap: 1, mb: 2, alignItems: 'center' }}>
             <Typography variant="h6" fontWeight={600} sx={{ flex: 1 }}>图表组合管理</Typography>

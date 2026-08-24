@@ -18,10 +18,18 @@ services:
       PYTHON_BACKEND_URL: http://python:8000
       REDIS_ADDR: redis:6379
       SC_WIKI_DATA_DIR: /data
+      AVATAR_DIR: /data/avatars
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_TLS_MODE: ${SMTP_TLS_MODE:-starttls}
     volumes:
       - ./data/graph.json:/data/graph.json
       - ./data/htsc2025.json:/data/htsc2025.json
       - ./data/clean_results:/data/clean_results
+      - ./data/avatars:/data/avatars
     depends_on:
       mysql:
         condition: service_healthy

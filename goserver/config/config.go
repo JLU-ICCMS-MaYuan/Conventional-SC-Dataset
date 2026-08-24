@@ -15,16 +15,31 @@ type Config struct {
 	JWTSecret     string
 	PythonBackend string
 	DataDir       string // 数据目录路径
+	SMTPHost      string
+	SMTPPort      string
+	SMTPUsername  string
+	SMTPPassword  string
+	SMTPFrom      string
+	SMTPTLSMode   string
+	AvatarDir     string
 }
 
 // Load 加载配置。关键配置缺少环境变量时直接 Fatal 退出。
 func Load() Config {
+	dataDir := getEnv("SC_WIKI_DATA_DIR", "data")
 	return Config{
 		Port:          getEnv("PORT", "8080"),
 		MySQL_DSN:     parseMySQLDSN(requireEnv("DATABASE_URL")),
 		JWTSecret:     requireEnv("JWT_SECRET_KEY"),
 		PythonBackend: getEnv("PYTHON_BACKEND_URL", "http://127.0.0.1:8000"),
-		DataDir:       getEnv("SC_WIKI_DATA_DIR", "data"),
+		DataDir:       dataDir,
+		SMTPHost:      getEnv("SMTP_HOST", ""),
+		SMTPPort:      getEnv("SMTP_PORT", "587"),
+		SMTPUsername:  getEnv("SMTP_USERNAME", getEnv("SMTP_USER", "")),
+		SMTPPassword:  getEnv("SMTP_PASSWORD", ""),
+		SMTPFrom:      getEnv("SMTP_FROM", ""),
+		SMTPTLSMode:   getEnv("SMTP_TLS_MODE", "starttls"),
+		AvatarDir:     getEnv("AVATAR_DIR", dataDir+"/avatars"),
 	}
 }
 

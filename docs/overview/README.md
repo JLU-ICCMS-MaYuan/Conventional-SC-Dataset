@@ -13,7 +13,7 @@ SC-Wiki 是面向超导材料研究的数据检索与知识服务应用。当前
 | [材料与文献检索](01-material-search-and-discovery/README.md) | 检索本地材料、论文、物性记录及 Alexandria/HTSC-2025 外部候选数据 | Go API、主业务数据库、外部数据表 |
 | [数据模型与维护](02-data-model-and-maintenance/README.md) | 维护领域模型、数据库初始化、迁移、离线导入导出和 Docker 部署数据依赖 | GORM、SQLAlchemy、Alembic、MySQL |
 | [晶体结构管理](03-crystal-structure-management/README.md) | 校验、保存、审核和分发 CIF/POSCAR 结构，并支持从物性记录读取结构文本 | 用户认证、主业务数据库、ASE |
-| [认证与审核](04-authentication-and-review/README.md) | 处理注册登录、角色审批、论文编辑审核、用户管理和快讯管理 | JWT、bcrypt、管理员 API |
+| [认证与审核](04-authentication-and-review/README.md) | 处理邮箱验证注册、用户中心、公开研究身份、分级工作台、论文审核和账号治理 | JWT、bcrypt、Redis、SMTP、管理员 API |
 | [可视化与统计](05-visualization-and-metrics/README.md) | 展示 Tc 年代、压力关系、图表组合和管理统计 | key_properties、Recharts、缓存 |
 | [RAG 文献助手](06-rag-literature-assistant/README.md) | 提供混合检索、流式问答、证据展示、PDF/TXT/MD 摄入和灵感探索 | Python FastAPI、MySQL、Qdrant、LLM 配置 |
 | [实验性 Tc 估算](07-experimental-tc-estimation/README.md) | 根据 CONTCAR 与 PDOS 文件计算实验性 Tc 估算和解释特征 | pymatgen、NumPy、上传文件 |
@@ -43,12 +43,12 @@ flowchart LR
 ## 当前边界
 
 - Docker 部署入口使用 Nginx 前端、Go API、Python RAG、MySQL、Redis、Neo4j、Qdrant 七类服务；本地直接运行 Python FastAPI 时只包含 Python 注册的接口。
-- `backend/main.py` 当前 include `tc_predict`、`structures`、`rag`、`upload_tasks`、`kg` 五类 Python 路由；canonical `/api/upload-tasks` 由 Go 未匹配路由转发到 Python。Go 未注册的认证邮箱验证、图表组合导入/导出/复制/搜索等前端调用仍需按实际部署链路继续核验。
+- `backend/main.py` 当前 include `tc_predict`、`structures`、`rag`、`upload_tasks`、`kg` 五类 Python 路由；canonical `/api/upload-tasks` 由 Go 未匹配路由转发到 Python。邮箱验证、用户中心、公开资料与管理员治理由 Go 直接承载；图表组合导入/导出/复制/搜索等前端调用仍需按实际部署链路继续核验。
 - RAG 已从 Chroma 迁移到 Qdrant 封装，但部分兼容命名仍保留 `chroma` 字样。
 - 晶体结构后端 API 已实现，前端主要在论文编辑详情中展示 `key_properties.structure_text` 结构，完整结构审核工作台仍未从当前路由中确认。
 - “社区”当前是公共图表、图表组合和论文详情抽屉，不包含帖子、评论或关注等论坛能力。
 - Tc 估算由代码明确标记为实验页面，不构成模型科学有效性的保证。
-- 仓库存在相关测试文件，但本次文档维护遵循 Overview Skill 未运行测试，不声明测试已通过。
+- 账号身份与分级工作台变更已通过 Go 全量测试、Vitest、前端生产构建和 Alembic MySQL 离线迁移 SQL 生成；真实 SMTP、持久化 MySQL 与完整部署链路仍需在目标环境验收。
 
 ## 文档维护
 
