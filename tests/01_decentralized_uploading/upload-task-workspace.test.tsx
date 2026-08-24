@@ -297,6 +297,7 @@ describe('论文上传工作区', () => {
     render(<UploadParsingDetail taskId={'f'.repeat(32)} onSubmitted={vi.fn()} />)
 
     expect(await screen.findByRole('textbox', { name: '材料' })).toHaveValue('Li2MgH16')
+    expect(screen.queryByRole('textbox', { name: '物相' })).not.toBeInTheDocument()
     expect(screen.getByRole('spinbutton', { name: '压力 (GPa)' })).toHaveValue(300)
     expect(screen.getByRole('textbox', { name: '空间群符号' })).toHaveValue('Fd-3m')
     expect(screen.getByRole('spinbutton', { name: '空间群号' })).toHaveValue(227)
@@ -315,6 +316,7 @@ describe('论文上传工作区', () => {
       }],
     })
     expect(savedBodies[0]).not.toHaveProperty('key_properties')
+    expect(savedBodies[0]).not.toHaveProperty('material_states.0.phase_label')
   })
 
   it('临时表单并列显示冲突候选及其文件来源', async () => {

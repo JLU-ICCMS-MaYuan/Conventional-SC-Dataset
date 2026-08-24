@@ -8,10 +8,12 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import SaveIcon from '@mui/icons-material/Save'
 import SendIcon from '@mui/icons-material/Send'
+import UploadFileIcon from '@mui/icons-material/UploadFile'
 import { api, ApiError } from '../lib/api'
 import StructureCandidatePanel from './StructureCandidatePanel'
+import StructureViewer3D from './StructureViewer3D'
 import {
-  DraftKeyProperty, DraftMaterialState, DraftTcResult, SourceEvidence, UploadDraft, evidenceList,
+  DraftKeyProperty, DraftMaterialState, DraftTcResult, SourceEvidence, StructureCandidate, UploadDraft, evidenceList,
   normalizeUploadDraft, unwrapData,
 } from '../lib/paperProcessing'
 
@@ -155,6 +157,8 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [authorMenu, setAuthorMenu] = useState<{ author: string; anchorEl: HTMLElement } | null>(null)
+  const [structureUploading, setStructureUploading] = useState<Record<number, boolean>>({})
+  const [authorInput, setAuthorInput] = useState('')
   const revisionRef = useRef(0)
 
   useEffect(() => {
@@ -198,6 +202,14 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
     if (authorMenu && !authors.includes(authorMenu.author)) setAuthorMenu(null)
   }
 
+  const commitAuthorInput = (raw = authorInput) => {
+    const author = raw.trim().replace(/[，,]+/g, '').trim()
+    if (!author) { setAuthorInput(''); return }
+    const authors = draft?.paper.authors || []
+    if (!authors.includes(author)) setAuthors([...authors, author])
+    setAuthorInput('')
+  }
+
   const toggleAuthorRole = (field: AuthorRoleField, author: string) => {
     changeDraft(current => {
       const selected = current.paper[field] || []
@@ -231,6 +243,29 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
       material_states: current.material_states.map((item, itemIndex) =>
         itemIndex === index ? { ...item, [field]: value } : item),
     }))
+  }
+
+  const uploadStructureForState = async (stateIndex: number, file: File) => {
+    setStructureUploading(current => ({ ...current, [stateIndex]: true }))
+    try {
+      const body = new FormData()
+      body.append('material_state_index', String(stateIndex))
+      body.append('file', file)
+      const response = await api.post<{ ok: boolean; data: StructureCandidate }>(
+        `/api/rag/upload-tasks/${taskId}/structure-candidates`, body,
+      )
+      const candidate = unwrapData(response)
+      changeDraft(current => ({
+        ...current,
+        structure_candidates: [...(current.structure_candidates || []).filter(item => item.candidate_id !== candidate.candidate_id), candidate],
+      }))
+      setError('')
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : '结构附件上传失败'
+      setError(message)
+    } finally {
+      setStructureUploading(current => ({ ...current, [stateIndex]: false }))
+    }
   }
 
   const updateCalculationContext = (
@@ -414,7 +449,10 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
             forcePopupIcon={false}
             options={draft.paper.authors || []}
             value={draft.paper.authors || []}
-            onChange={(_, values) => setAuthors(values)}
+            inputValue={authorInput}
+            onInputChange={(_, value, reason) => { if (reason !== 'reset') setAuthorInput(value) }}
+            onClose={(_, reason) => { if (reason === 'blur') commitAuthorInput() }}
+            onChange={(_, values) => { setAuthors(values); setAuthorInput('') }}
             renderTags={(values, getTagProps) => values.map((author, index) => {
               const { key, ...tagProps } = getTagProps({ index })
               const roles = [
@@ -433,7 +471,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
               )
             })}
             renderInput={params => (
-              <TextField {...params} label="作者" placeholder={(draft.paper.authors || []).length ? '' : '输入姓名后按 Enter'} />
+              <TextField {...params} label="作者" placeholder={(draft.paper.authors || []).length ? '' : '输入姓名后按 Enter'} onKeyDown={event => { if ((event.key === 'Enter' || event.key === ',' || event.key === '，') && authorInput.trim()) { event.preventDefault(); commitAuthorInput() } }} />
             )}
             sx={{
               '& .MuiOutlinedInput-root': {
@@ -578,6 +616,9 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1.5, gridColumn: { xs: '1', md: '1' }, gridRow: { xs: '4', md: '3' } }}>
         {draft.material_states.map((state, index) => {
           const aiState = ai.material_states?.[index]
+          const stateCandidates = (draft.structure_candidates || []).filter(candidate => candidate.material_state_ref === `material_states[${index}]` && candidate.confirmation !== 'excluded')
+          const stateStructure = [...stateCandidates].reverse().find(candidate => candidate.status === 'valid' || candidate.status === 'confirmed')
+          const statePreview = stateStructure?.representations?.conventional?.cif?.text || stateStructure?.representations?.conventional?.poscar?.text
           return (
             <Card key={index} variant="outlined">
               <CardContent>
@@ -596,8 +637,6 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
                     onChange={event => updateMaterialState(index, 'material', event.target.value)} />
                   <TextField label="压力 (GPa)" type="number" value={state.pressure_value_gpa ?? ''} helperText={state.pressure_value_gpa == null && state.pressure_raw ? '原文压力：' + state.pressure_raw + ' ' + (state.pressure_unit_raw || '') : undefined}
                     onChange={event => updateMaterialState(index, 'pressure_value_gpa', event.target.value ? Number(event.target.value) : null)} />
-                  <TextField label="物相" value={state.phase_label || ''}
-                    onChange={event => updateMaterialState(index, 'phase_label', event.target.value || null)} />
                   <TextField label="空间群符号" value={state.reported_space_group_symbol || ''}
                     onChange={event => updateMaterialState(index, 'reported_space_group_symbol', event.target.value || null)} />
                   <TextField label="空间群号" type="number" value={state.reported_space_group_number ?? ''}
@@ -615,6 +654,42 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
                   aiValue={aiState ? `${aiState.material || ''} ${aiState.pressure_value_gpa ?? ''} GPa`.trim() : undefined}
                   evidence={state.space_group_evidence || aiState?.space_group_evidence}
                 />
+
+                <Box sx={{ mt: 2, p: 1.5, borderRadius: 1, bgcolor: 'action.hover' }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                    <Box>
+                      <Typography variant="subtitle2" fontWeight={700}>结构附件</Typography>
+                      <Typography variant="caption" color="text.secondary">上传后自动校验，并在当前材料状态下预览</Typography>
+                    </Box>
+                    <Button
+                      component="label"
+                      size="small"
+                      variant="outlined"
+                      startIcon={structureUploading[index] ? <CircularProgress size={16} /> : <UploadFileIcon />}
+                      disabled={Boolean(structureUploading[index])}
+                    >
+                      {structureUploading[index] ? '校验中' : '上传 CIF / POSCAR'}
+                      <input
+                        hidden
+                        type="file"
+                        accept=".cif,.poscar,POSCAR,CONTCAR"
+                        onChange={event => {
+                          const selected = event.target.files?.[0]
+                          event.target.value = ''
+                          if (selected) void uploadStructureForState(index, selected)
+                        }}
+                      />
+                    </Button>
+                  </Box>
+                  {stateStructure && (
+                    <Box sx={{ mt: 1.5 }}>
+                      {statePreview ? <StructureViewer3D data={statePreview} format="cif" height={220} /> : <Alert severity="warning">结构已通过基础校验，但暂无可用预览数据。</Alert>}
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, overflowWrap: 'anywhere' }}>
+                        {stateStructure.sources?.map(source => String(source.filename || '')).filter(Boolean).join('、') || '结构附件'} · {stateStructure.validation?.atom_count ?? '未提供'} 个原子 · {stateStructure.confirmation === 'confirmed' ? '已确认' : '待确认'}
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
 
                 <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Typography variant="subtitle2" fontWeight={700}>临界温度 Tc</Typography>

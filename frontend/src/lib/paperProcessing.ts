@@ -99,7 +99,6 @@ export interface StructureCandidate {
 
 export interface DraftMaterialState {
   material?: string
-  phase_label?: string | null
   pressure_value_gpa?: number | null
   pressure_min_gpa?: number | null
   pressure_max_gpa?: number | null
@@ -277,21 +276,25 @@ export function normalizeUploadDraft(value: unknown): UploadDraft {
     ...empty,
     ...raw,
     paper: normalizePaperFields(rawPaper),
-    material_states: Array.isArray(raw.material_states) ? raw.material_states.map(state => ({
-      ...state,
-      tc_results: Array.isArray(state.tc_results) ? state.tc_results : [],
-      properties: Array.isArray(state.properties) ? state.properties.map(item => ({
-        ...item,
-        value_raw: item.value_raw ?? (item.value == null ? '' : String(item.value)),
-      })) : [],
-      calculation_context: state.calculation_context ? {
-        phonon_nuclear_treatment: 'unknown',
-        lambda_ep: null,
-        omega_log_k: null,
-        mu_star: null,
-        ...state.calculation_context,
-      } : null,
-    })) : [],
+    material_states: Array.isArray(raw.material_states) ? raw.material_states.map(state => {
+      const normalizedState = { ...state }
+      delete (normalizedState as { phase_label?: unknown }).phase_label
+      return {
+        ...normalizedState,
+        tc_results: Array.isArray(state.tc_results) ? state.tc_results : [],
+        properties: Array.isArray(state.properties) ? state.properties.map(item => ({
+          ...item,
+          value_raw: item.value_raw ?? (item.value == null ? '' : String(item.value)),
+        })) : [],
+        calculation_context: state.calculation_context ? {
+          phonon_nuclear_treatment: 'unknown',
+          lambda_ep: null,
+          omega_log_k: null,
+          mu_star: null,
+          ...state.calculation_context,
+        } : null,
+      }
+    }) : [],
     structure_candidates: Array.isArray(raw.structure_candidates) ? raw.structure_candidates : [],
     classification_evidence: Array.isArray(raw.classification_evidence)
       ? raw.classification_evidence
