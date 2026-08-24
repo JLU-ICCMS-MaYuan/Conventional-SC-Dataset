@@ -51,3 +51,18 @@ Fe1 Fe 0 0 0
     assert len(candidates) == 2
     assert [item["sources"][0]["page"] for item in candidates] == [1, 2]
     assert [item["validation"]["elements"] for item in candidates] == [["Cu"], ["Fe"]]
+
+
+def test_expands_numeric_wyckoff_sites_and_marks_derivation():
+    text = """<!-- page: 6 -->
+Space group Fm-3m (225); lattice a = 3.6, b = 3.6, c = 3.6, alpha = 90, beta = 90, gamma = 90.
+Wyckoff sites:
+Cu 4a 0 0 0
+"""
+    candidates = extract_structure_candidates(text, source={"file_id": "pdf-4", "filename": "paper.pdf"})
+
+    assert len(candidates) == 1
+    assert candidates[0]["status"] == "valid"
+    assert candidates[0]["source_kind"] == "pdf_derived"
+    assert candidates[0]["derivation"]["kind"] == "space_group_expansion"
+    assert candidates[0]["validation"]["atom_count"] == 4

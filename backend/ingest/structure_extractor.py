@@ -81,6 +81,49 @@ def _coordinate_rows(text: str, mode: str) -> tuple[list[str], list[tuple[float,
     return symbols, positions, "\n".join(rows)
 
 
+def _wyckoff_structure(text: str, cells: dict[str, float]):
+    if not re.search(r"wyckoff", text, re.IGNORECASE):
+        return None
+    number_match = re.search(r"(?:space\s*group|international\s+number|no\.?)[^\n]{0,80}?\b(\d{1,3})\b", text, re.IGNORECASE)
+    symbol_match = re.search(r"(?:space\s*group|Hermann[- ]Mauguin)[^\n:=]{0,20}[:=]?\s*([PIFRAC][^\n,(;]{1,18})", text, re.IGNORECASE)
+    if not number_match and not symbol_match:
+        return None
+    try:
+        from pymatgen.core import Lattice, Structure
+        from pymatgen.symmetry.groups import SpaceGroup
+
+        if number_match:
+            group = SpaceGroup.from_int_number(int(number_match.group(1)))
+        else:
+            group = SpaceGroup(symbol_match.group(1).strip())
+    except Exception:
+        return None
+    species: list[str] = []
+    coords: list[list[float]] = []
+    independent_rows: list[str] = []
+    row_pattern = re.compile(
+        rf"^\s*(?:(?:\d+)?[A-Za-z]\s+)?({_ELEMENT})\s+(?:(?:\d+)?[A-Za-z]\s+)?"
+        rf"({_NUMBER})\s+({_NUMBER})\s+({_NUMBER})(?:\s|$)"
+    )
+    for line in text.splitlines():
+        if not re.search(r"\b\d*[a-zA-Z]\b", line):
+            continue
+        match = row_pattern.match(line)
+        if not match:
+            continue
+        species.append(match.group(1))
+        coords.append([float(match.group(index)) for index in (2, 3, 4)])
+        independent_rows.append(line.strip())
+    if not species:
+        return None
+    lattice = Lattice.from_parameters(
+        cells["a"], cells["b"], cells["c"],
+        cells["alpha"], cells["beta"], cells["gamma"],
+    )
+    structure = Structure.from_spacegroup(group.symbol, lattice, species, coords)
+    return structure, group.symbol, independent_rows
+
+
 def _blocked_candidate(source: dict[str, Any], reason: str, *, page: int | None, quote: str) -> dict[str, Any]:
     file_id = source.get("file_id") or source.get("filename") or "pdf"
     return {
@@ -117,6 +160,33 @@ def _extract_structure_candidate_block(
     mode = _coordinate_mode(text)
     if len(cells) < 6:
         return [_blocked_candidate(source, "PDF 结构缺少完整晶胞参数（a、b、c、alpha、beta、gamma）", page=_page_for_offset(text, cues.start()), quote=text[max(0, cues.start() - 160):cues.end() + 320])]
+    wyckoff = _wyckoff_structure(text, cells)
+    if wyckoff is not None:
+        structure, group_symbol, independent_rows = wyckoff
+        try:
+            from pymatgen.io.ase import AseAtomsAdaptor
+
+            atoms = AseAtomsAdaptor.get_atoms(structure)
+            source_with_locator = {**source, "page": _page_for_offset(text, cues.start()), "quote": "\n".join(independent_rows)}
+            candidate = build_structure_candidate(
+                structure_format="cif",
+                structure_text=serialize_atoms(atoms, "cif"),
+                source=source_with_locator,
+                material_state_ref=material_state_ref or f"unassigned:{source.get('file_id') or 'pdf'}",
+                source_kind="pdf_derived",
+            )
+            candidate["original_format"] = None
+            candidate["original_text"] = None
+            candidate["reported_structure"] = {"space_group_symbol": group_symbol, "cell_parameters": cells}
+            candidate["derivation"] = {
+                "kind": "space_group_expansion",
+                "label": "推导",
+                "space_group_symbol": group_symbol,
+                "independent_wyckoff_rows": independent_rows,
+            }
+            return [candidate]
+        except Exception:
+            return [_blocked_candidate(source, "Wyckoff 位点展开失败，需人工核对空间群和独立坐标", page=_page_for_offset(text, cues.start()), quote="\n".join(independent_rows))]
     if mode is None:
         return [_blocked_candidate(source, "PDF 原子坐标类型不明确，无法区分分数坐标和笛卡尔坐标", page=_page_for_offset(text, cues.start()), quote=text[max(0, cues.start() - 160):cues.end() + 320])]
     symbols, positions, quote = _coordinate_rows(text, mode)
