@@ -47,6 +47,8 @@ referenced_materials 仅作为后台排除误判的临时候选，不进入用�
 每个压力条件单独建立 material_state；压力同时保留换算后的 GPa 数值和论文原始文本/单位。
 空间群必须拆为 Hermann–Mauguin 符号与国际群号。λ 写入 lambda_ep，ωlog 写入 omega_log_k（K）；
 原文未报告的字段必须为 null。Tc 写入 tc_results，不得混入普通 properties。
+通讯作者只能根据星号说明、通讯邮箱或 correspondence 声明识别；共同第一作者只能根据
+equal contribution、contributed equally 等明确声明识别。证据不足时返回空数组，不得按作者顺序猜测。
 
 返回结构：
 {
@@ -126,6 +128,7 @@ scope=referenced_work 或缺少 scope 的候选只能作为背景，不能参与
 referenced_materials 仅用于帮助区分本文对象与背景对象，最终草稿不要返回该字段。
 论文整体 paper_type 与每条物性的 article_type 必须分别判断，article_type 只允许 e 或 t。
 每个关键分类和物性保留 section/page/quote 证据；无法确定就返回 unknown 或空值，不要编造。
+通讯作者和共同第一作者必须来自 authors；仅在分段候选包含明确声明时保留，不能根据作者顺序猜测。
 按材料、物相和压力合并 material_states。空间群符号与群号必须分开；λ、ωlog 只写入
 calculation_context，Tc 只写入 tc_results。压力优先换算为 GPa，同时保留 pressure_raw 和
 pressure_unit_raw；无法可靠换算或原文没有报告时保留原文并将规范数值设为 null。

@@ -7,7 +7,13 @@
 
 ```json
 {
-  "paper": {"title": "...", "paper_type": "theoretical"},
+  "paper": {
+    "title": "...",
+    "authors": ["Ying Sun", "Jian Lv", "Hanyu Liu"],
+    "corresponding_authors": ["Hanyu Liu"],
+    "co_first_authors": ["Ying Sun", "Jian Lv"],
+    "paper_type": "theoretical"
+  },
   "material_states": [
     {
       "material": "Li2MgH16",
@@ -29,6 +35,9 @@
 ```
 
 新响应不得输出 `key_properties` 作为科学事实来源。旧请求可在服务端转换，保存响应必须为新契约。
+
+`corresponding_authors` 和 `co_first_authors` 必须是 `authors` 的子集。作者姓名保持纯文本，
+不得把 `*`、`†` 或中文身份说明拼入 `authors`。
 
 ## 提交
 

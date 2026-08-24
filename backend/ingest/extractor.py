@@ -25,6 +25,8 @@ SYSTEM_PROMPT = """你是一个材料科学专家，专门研究超导材料。�
   "title": "论文标题（从 # 标题行或正文开头提取）",
   "doi": "DOI 号，如 10.1103/PhysRevLett.126.117002，找不到则 null",
   "authors": ["第一作者", "第二作者"],
+  "corresponding_authors": ["通讯作者"],
+  "co_first_authors": ["共同第一作者1", "共同第一作者2"],
   "journal": "期刊全称，如 Physical Review Letters、Nature Communications，找不到则 null",
   "year": 2024,
   "abstract": "摘要全文，找不到则 null",
@@ -37,7 +39,9 @@ SYSTEM_PROMPT = """你是一个材料科学专家，专门研究超导材料。�
 
 - title: 从文件开头的 # 标题或正文第一段提取
 - doi: 全文搜索 "doi: 10." 或 "10.10" 或 "https://doi.org/" 模式
-- authors: 从标题下方作者行提取，存为字符串数组，不要带序号标记
+- authors: 从标题下方作者行提取，存为字符串数组，不要把序号、星号或脚注符号写入姓名
+- corresponding_authors: 仅根据星号说明、通讯邮箱或 correspondence 声明识别；证据不足时返回空数组
+- co_first_authors: 仅根据 equal contribution、contributed equally 等明确声明识别；证据不足时返回空数组
 - journal: 按优先级从以下线索提取：(1) 文中 "Peer review information [期刊名]" 行 (2) DOI 域名（10.1103/→Phys.Rev.、10.1038/→Nature、10.1063/→AIP、10.1073/→PNAS）(3) 文中 "Published in" / "Published by" / "Published online" 附近文字 (4) 参考文献列表中与当前论文标题相似的那条
 - year: 从 "Received/Accepted/Published" 日期、或 "year" 字段、或文件夹/文件名中的年份提取
 - abstract: 从 "Abstract" 或 "摘要" 后面提取完整段落
@@ -130,6 +134,8 @@ def _parse_result(raw: dict[str, Any]) -> ExtractionResult:
         "doi": _safe_str(paper_data.get("doi")),
         "title": _safe_str(paper_data.get("title")),
         "authors": authors_str,
+        "corresponding_authors": paper_data.get("corresponding_authors") or [],
+        "co_first_authors": paper_data.get("co_first_authors") or [],
         "journal": _safe_str(paper_data.get("journal")),
         "year": year,
         "abstract": _safe_str(paper_data.get("abstract")),

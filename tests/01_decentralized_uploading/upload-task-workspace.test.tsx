@@ -143,6 +143,53 @@ describe('论文上传工作区', () => {
     expect(screen.getByRole('button', { name: '提交审核' })).toBeVisible()
   })
 
+  it('作者保持单行并可标记通讯作者和共同第一作者', async () => {
+    const savedBodies: any[] = []
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        const body = JSON.parse(String(init.body))
+        savedBodies.push(body)
+        return new Response(JSON.stringify({ ok: true, data: body }), {
+          status: 200, headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      const data = String(input).endsWith('/parsing')
+        ? {
+            status: 'ready', stage: 'ready', files: [], chunks: [],
+            form_preview: { status: 'ready', read_only: false, groups: [] },
+            summary: { status: 'completed', completed: 1, total: 1 }, next_poll_ms: null,
+          }
+        : {
+            paper: {
+              title: 'Hydride study', authors: ['Ying Sun', 'Jian Lv', 'Hanyu Liu'],
+              corresponding_authors: ['Hanyu Liu'], co_first_authors: ['Ying Sun', 'Jian Lv'],
+              paper_type: 'review', research_materials: [],
+            },
+            material_states: [], classification_evidence: [], field_evidence: {},
+          }
+      return new Response(JSON.stringify({ ok: true, data }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      })
+    }))
+
+    render(<UploadParsingDetail taskId={'n'.repeat(32)} onSubmitted={vi.fn()} />)
+
+    expect(await screen.findByRole('combobox', { name: '作者' })).toBeInstanceOf(HTMLInputElement)
+    expect(screen.getByText('Ying Sun · 共同第一作者')).toBeVisible()
+    expect(screen.getByText('Jian Lv · 共同第一作者')).toBeVisible()
+    fireEvent.click(screen.getByText('Hanyu Liu · 通讯作者'))
+    fireEvent.click(screen.getByRole('menuitem', { name: '共同第一作者' }))
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+    fireEvent.click(screen.getByRole('button', { name: '立即保存' }))
+
+    await waitFor(() => expect(savedBodies).toHaveLength(1))
+    expect(savedBodies[0].paper).toMatchObject({
+      authors: ['Ying Sun', 'Jian Lv', 'Hanyu Liu'],
+      corresponding_authors: ['Hanyu Liu'],
+      co_first_authors: ['Ying Sun', 'Jian Lv', 'Hanyu Liu'],
+    })
+  })
+
   it('可编辑草稿中的长 AI 解释按字段宽度收起并可独立展开', async () => {
     vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function () {
       return this.textContent?.includes('CALYPSO群智能结构搜索') ? 240 : 48
