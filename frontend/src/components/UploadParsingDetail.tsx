@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import {
-  Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Chip,
-  LinearProgress, Tab, Tabs, Typography,
+  Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Chip, Collapse,
+  LinearProgress, Tab, Tabs, Typography, useMediaQuery,
 } from '@mui/material'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import RefreshIcon from '@mui/icons-material/Refresh'
@@ -75,6 +75,8 @@ const roleLabel: Record<string, string> = {
   main: '正文', supplementary: '补充材料', attachment: '附件',
 }
 
+const COLLAPSED_PREVIEW_HEIGHT = 176
+
 function displayValue(value: unknown): string {
   if (value == null || value === '') return '等待解析'
   if (Array.isArray(value)) return value.map(displayValue).join('、')
@@ -88,6 +90,109 @@ function sourceLabel(source: PreviewSource): string {
     : ''
   return [source.filename, roleLabel[source.file_role || ''] || source.file_role, source.section, page]
     .filter(Boolean).join(' · ')
+}
+
+const PreviewFieldCard: React.FC<{ field: PreviewField }> = ({ field }) => {
+  const contentId = useId()
+  const contentRef = useRef<HTMLDivElement>(null)
+  const overflowRef = useRef(false)
+  const [isOverflowing, setIsOverflowing] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
+  const hasCandidates = field.candidates.length > 0
+
+  const measureOverflow = useCallback(() => {
+    const nextOverflowing = hasCandidates
+      && (contentRef.current?.scrollHeight || 0) > COLLAPSED_PREVIEW_HEIGHT
+    if (nextOverflowing === overflowRef.current) return
+
+    overflowRef.current = nextOverflowing
+    setIsOverflowing(nextOverflowing)
+    setExpanded(false)
+  }, [hasCandidates])
+
+  useLayoutEffect(() => {
+    measureOverflow()
+  }, [field.candidates, measureOverflow])
+
+  useEffect(() => {
+    const content = contentRef.current
+    if (!content) return undefined
+
+    window.addEventListener('resize', measureOverflow)
+    let observer: ResizeObserver | undefined
+    if (typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(measureOverflow)
+      observer.observe(content)
+    }
+
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('resize', measureOverflow)
+    }
+  }, [measureOverflow])
+
+  return (
+    <Box sx={{
+      p: 1.5, border: 1,
+      borderColor: field.state === 'conflict' ? 'warning.main' : field.state === 'pending_summary' ? 'info.main' : 'divider',
+      borderRadius: 1,
+      minWidth: 0,
+    }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, alignItems: 'center', mb: 0.75 }}>
+        <Typography variant="body2" fontWeight={700}>{field.label}</Typography>
+        <Chip
+          size="small"
+          label={stateLabel[field.state]}
+          color={field.state === 'conflict' ? 'warning' : field.state === 'filled' ? 'success' : field.state === 'pending_summary' ? 'info' : 'default'}
+          variant={field.state === 'waiting' ? 'outlined' : 'filled'}
+        />
+      </Box>
+      <Collapse
+        in={!isOverflowing || expanded}
+        collapsedSize={isOverflowing ? COLLAPSED_PREVIEW_HEIGHT : 0}
+        timeout={prefersReducedMotion ? 0 : 180}
+      >
+        <Box id={contentId} ref={contentRef}>
+          {field.candidates.length === 0 && (
+            <Typography variant="body2" color="text.secondary">
+              {field.state === 'pending_summary' ? '当前分段尚无法判断，等待全文汇总' : '等待解析'}
+            </Typography>
+          )}
+          {field.candidates.map((candidate, index) => (
+            <Box key={index} sx={{ '& + &': { mt: 1, pt: 1, borderTop: 1, borderColor: 'divider' } }}>
+              <Typography component="pre" variant="body2" sx={{ m: 0, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontFamily: 'inherit' }}>
+                {displayValue(candidate.value)}
+              </Typography>
+              {candidate.sources.map((source, sourceIndex) => (
+                <Box key={sourceIndex} sx={{ mt: 0.5 }}>
+                  <Typography variant="caption" color="text.secondary" display="block">{sourceLabel(source) || '来源待确认'}</Typography>
+                  {source.quote && <Typography variant="caption" color="text.secondary" display="block">“{source.quote}”</Typography>}
+                </Box>
+              ))}
+            </Box>
+          ))}
+        </Box>
+      </Collapse>
+      {isOverflowing && (
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 0.5 }}>
+          <Button
+            size="small"
+            onClick={() => setExpanded(value => !value)}
+            aria-expanded={expanded}
+            aria-controls={contentId}
+            aria-label={`${expanded ? '收起' : '展开'} ${field.label}`}
+            endIcon={<ExpandMoreIcon sx={{
+              transform: expanded ? 'rotate(180deg)' : 'none',
+              transition: prefersReducedMotion ? 'none' : 'transform 180ms ease',
+            }} />}
+          >
+            {expanded ? '收起' : '展开'}
+          </Button>
+        </Box>
+      )}
+    </Box>
+  )
 }
 
 interface Props {
@@ -172,41 +277,9 @@ const UploadParsingDetail: React.FC<Props> = ({ taskId, onSubmitted = () => unde
                   {preview?.groups.map(group => (
                 <Box key={group.id} component="section" sx={{ mb: 2.5 }}>
                   <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>{group.label}</Typography>
-                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1 }}>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1, alignItems: 'start' }}>
                     {group.fields.map(field => (
-                      <Box key={field.path} sx={{
-                        p: 1.5, border: 1,
-                        borderColor: field.state === 'conflict' ? 'warning.main' : field.state === 'pending_summary' ? 'info.main' : 'divider',
-                        borderRadius: 1,
-                      }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, alignItems: 'center', mb: 0.75 }}>
-                          <Typography variant="body2" fontWeight={700}>{field.label}</Typography>
-                          <Chip
-                            size="small"
-                            label={stateLabel[field.state]}
-                            color={field.state === 'conflict' ? 'warning' : field.state === 'filled' ? 'success' : field.state === 'pending_summary' ? 'info' : 'default'}
-                            variant={field.state === 'waiting' ? 'outlined' : 'filled'}
-                          />
-                        </Box>
-                        {field.candidates.length === 0 && (
-                          <Typography variant="body2" color="text.secondary">
-                            {field.state === 'pending_summary' ? '当前分段尚无法判断，等待全文汇总' : '等待解析'}
-                          </Typography>
-                        )}
-                        {field.candidates.map((candidate, index) => (
-                          <Box key={index} sx={{ '& + &': { mt: 1, pt: 1, borderTop: 1, borderColor: 'divider' } }}>
-                            <Typography component="pre" variant="body2" sx={{ m: 0, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontFamily: 'inherit' }}>
-                              {displayValue(candidate.value)}
-                            </Typography>
-                            {candidate.sources.map((source, sourceIndex) => (
-                              <Box key={sourceIndex} sx={{ mt: 0.5 }}>
-                                <Typography variant="caption" color="text.secondary" display="block">{sourceLabel(source) || '来源待确认'}</Typography>
-                                {source.quote && <Typography variant="caption" color="text.secondary" display="block">“{source.quote}”</Typography>}
-                              </Box>
-                            ))}
-                          </Box>
-                        ))}
-                      </Box>
+                      <PreviewFieldCard key={`${taskId}:${field.path}`} field={field} />
                     ))}
                   </Box>
                 </Box>

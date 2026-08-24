@@ -1,6 +1,7 @@
 import React from 'react'
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 
@@ -167,6 +168,198 @@ describe('论文上传工作区', () => {
     expect(screen.getByText('Supplement title')).toBeVisible()
     expect(screen.getByText('paper.pdf · 正文 · Title · 第 1 页')).toBeVisible()
     expect(screen.getByText('supp.pdf · 补充材料 · Cover · 第 2 页')).toBeVisible()
+  })
+
+  it('临时表单只收起真实溢出的字段卡片', async () => {
+    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function () {
+      return (this.textContent?.split('\n').length || 0) >= 20 ? 240 : 80
+    })
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      ok: true,
+      data: {
+        status: 'reading', stage: 'reading', files: [], chunks: [],
+        form_preview: {
+          status: 'updating', read_only: true, groups: [{
+            id: 'bibliography', label: '基本信息', fields: [
+              {
+                path: 'paper.doi', label: 'DOI', state: 'filled',
+                candidates: [{ value: '10.1103/PhysRevLett.123.097001', sources: [] }],
+              },
+              {
+                path: 'paper.authors', label: '作者', state: 'filled',
+                candidates: [{ value: Array.from({ length: 20 }, (_, index) => `Author ${index + 1}`).join('\n'), sources: [] }],
+              },
+              {
+                path: 'paper.abstract', label: '摘要', state: 'waiting', candidates: [],
+              },
+            ],
+          }],
+        },
+        summary: { status: 'reading', completed: 1, total: 2 }, next_poll_ms: null,
+      },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+
+    render(<UploadParsingDetail taskId={'g'.repeat(32)} />)
+
+    expect(await screen.findByText('10.1103/PhysRevLett.123.097001')).toBeVisible()
+    expect(screen.queryByRole('button', { name: '展开 DOI' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '展开 摘要' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '展开 作者' })).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByText(/Author 20/)).toBeInTheDocument()
+  })
+
+  it('临时表单字段卡片可以独立展开和收起且正文点击不误触', async () => {
+    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(240)
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      ok: true,
+      data: {
+        status: 'reading', stage: 'reading', files: [], chunks: [],
+        form_preview: {
+          status: 'updating', read_only: true, groups: [{
+            id: 'bibliography', label: '基本信息',
+            fields: ['作者', '期刊', '摘要'].map((label, index) => ({
+              path: `paper.field_${index}`, label, state: 'filled',
+              candidates: [{ value: `${label} line 1\n${label} line 20`, sources: [{ filename: `${label}.pdf`, file_role: 'main' }] }],
+            })),
+          }],
+        },
+        summary: { status: 'reading', completed: 1, total: 2 }, next_poll_ms: null,
+      },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+
+    render(<UploadParsingDetail taskId={'h'.repeat(32)} />)
+
+    const authorButton = await screen.findByRole('button', { name: '展开 作者' })
+    const journalButton = screen.getByRole('button', { name: '展开 期刊' })
+    const abstractButton = screen.getByRole('button', { name: '展开 摘要' })
+    fireEvent.click(authorButton)
+    fireEvent.click(journalButton)
+    fireEvent.click(abstractButton)
+
+    expect(screen.getByRole('button', { name: '收起 作者' })).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('button', { name: '收起 期刊' })).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('button', { name: '收起 摘要' })).toHaveAttribute('aria-expanded', 'true')
+
+    fireEvent.click(screen.getByText(/期刊 line 20/))
+    expect(screen.getByRole('button', { name: '收起 期刊' })).toHaveAttribute('aria-expanded', 'true')
+
+    fireEvent.click(screen.getByRole('button', { name: '收起 期刊' }))
+    expect(screen.getByRole('button', { name: '展开 期刊' })).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByRole('button', { name: '收起 作者' })).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('button', { name: '收起 摘要' })).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText('期刊.pdf · 正文')).toBeInTheDocument()
+  })
+
+  it('切换上传任务后重置字段展开状态并支持键盘操作', async () => {
+    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(240)
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const taskId = String(input).split('/').at(-2)
+      return new Response(JSON.stringify({
+        ok: true,
+        data: {
+          status: 'reading', stage: 'reading', files: [], chunks: [],
+          form_preview: {
+            status: 'updating', read_only: true, groups: [{
+              id: 'bibliography', label: '基本信息', fields: [{
+                path: 'paper.authors', label: '作者', state: 'filled',
+                candidates: [{ value: 'Author 1\nAuthor 20', sources: [{ filename: `${taskId}.pdf`, file_role: 'main' }] }],
+              }],
+            }],
+          },
+          summary: { status: 'reading', completed: 1, total: 2 }, next_poll_ms: null,
+        },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    }))
+    const user = userEvent.setup()
+    const firstTaskId = 'i'.repeat(32)
+    const secondTaskId = 'j'.repeat(32)
+    const { rerender } = render(<UploadParsingDetail taskId={firstTaskId} />)
+
+    const firstButton = await screen.findByRole('button', { name: '展开 作者' })
+    firstButton.focus()
+    await user.keyboard('{Enter}')
+    expect(screen.getByRole('button', { name: '收起 作者' })).toHaveAttribute('aria-expanded', 'true')
+    await user.keyboard(' ')
+    expect(screen.getByRole('button', { name: '展开 作者' })).toHaveAttribute('aria-expanded', 'false')
+    await user.keyboard(' ')
+    expect(screen.getByRole('button', { name: '收起 作者' })).toHaveAttribute('aria-expanded', 'true')
+
+    rerender(<UploadParsingDetail taskId={secondTaskId} />)
+
+    expect(await screen.findByText(`${secondTaskId}.pdf · 正文`)).toBeVisible()
+    const secondButton = screen.getByRole('button', { name: '展开 作者' })
+    expect(secondButton).toHaveAttribute('aria-expanded', 'false')
+    expect(document.getElementById(secondButton.getAttribute('aria-controls') || '')).toBeInTheDocument()
+  })
+
+  it('布局变化后重新判断字段卡片是否溢出', async () => {
+    let measuredHeight = 80
+    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(() => measuredHeight)
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      ok: true,
+      data: {
+        status: 'reading', stage: 'reading', files: [], chunks: [],
+        form_preview: {
+          status: 'updating', read_only: true, groups: [{
+            id: 'bibliography', label: '基本信息', fields: [{
+              path: 'paper.authors', label: '作者', state: 'filled',
+              candidates: [{ value: 'Author 1\nAuthor 2', sources: [] }],
+            }],
+          }],
+        },
+        summary: { status: 'reading', completed: 1, total: 2 }, next_poll_ms: null,
+      },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+
+    render(<UploadParsingDetail taskId={'k'.repeat(32)} />)
+
+    expect(await screen.findByText(/Author 2/)).toBeVisible()
+    expect(screen.queryByRole('button', { name: '展开 作者' })).not.toBeInTheDocument()
+
+    measuredHeight = 240
+    fireEvent(window, new Event('resize'))
+
+    expect(await screen.findByRole('button', { name: '展开 作者' })).toHaveAttribute('aria-expanded', 'false')
+
+    measuredHeight = 80
+    fireEvent(window, new Event('resize'))
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: '展开 作者' })).not.toBeInTheDocument())
+  })
+
+  it('轮询追加字段内容时保持已展开状态', async () => {
+    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(240)
+    let requestCount = 0
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      requestCount += 1
+      const authors = requestCount === 1
+        ? ['Author 1', 'Author 2']
+        : ['Author 1', 'Author 2', 'Author 21']
+      return new Response(JSON.stringify({
+        ok: true,
+        data: {
+          status: 'reading', stage: 'reading', files: [], chunks: [],
+          form_preview: {
+            status: 'updating', read_only: true, groups: [{
+              id: 'bibliography', label: '基本信息', fields: [{
+                path: 'paper.authors', label: '作者', state: 'filled',
+                candidates: [{ value: authors, sources: [{ filename: 'main.pdf', file_role: 'main' }] }],
+              }],
+            }],
+          },
+          summary: { status: 'reading', completed: requestCount, total: 2 },
+          next_poll_ms: requestCount === 1 ? 250 : null,
+        },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    }))
+
+    render(<UploadParsingDetail taskId={'l'.repeat(32)} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: '展开 作者' }))
+    expect(screen.getByRole('button', { name: '收起 作者' })).toHaveAttribute('aria-expanded', 'true')
+
+    expect(await screen.findByText(/Author 21/)).toBeVisible()
+    expect(screen.getByRole('button', { name: '收起 作者' })).toHaveAttribute('aria-expanded', 'true')
   })
 
   it('分类字段等待全文汇总且保留自由材料类型，元数据仍显示真实冲突', async () => {
