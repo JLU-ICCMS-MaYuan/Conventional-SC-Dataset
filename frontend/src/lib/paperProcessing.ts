@@ -62,6 +62,41 @@ export interface DraftExperimentalContext {
   tc_criterion?: string
 }
 
+export interface StructureCandidateValidation {
+  structure_format?: 'cif' | 'poscar' | string
+  structure_hash?: string
+  atom_count?: number
+  elements?: string[]
+  cell_parameters?: Record<string, number>
+  volume?: number
+  ase_valid?: boolean
+  code?: string
+  message?: string
+}
+
+export interface StructureCandidate {
+  candidate_id: string
+  material_state_ref?: string | null
+  source_kind?: 'attachment' | 'pdf_reported' | 'pdf_derived' | 'merged' | string
+  status?: 'needs_review' | 'valid' | 'confirmed' | 'excluded' | 'blocked' | string
+  confirmation?: 'unreviewed' | 'confirmed' | 'excluded' | string
+  original_format?: 'cif' | 'poscar' | string | null
+  original_text?: string | null
+  validation?: StructureCandidateValidation
+  derivation?: Record<string, unknown> | null
+  representations?: Partial<Record<'primitive' | 'conventional', Partial<Record<'cif' | 'poscar', {
+    text?: string
+    available?: boolean
+    format?: string
+    cell_kind?: string
+    standardization_method?: string
+    validation?: StructureCandidateValidation
+  }>>>>
+  sources?: Array<Record<string, unknown>>
+  conflicts?: Array<Record<string, unknown>>
+  user_note?: string | null
+}
+
 export interface DraftMaterialState {
   material?: string
   phase_label?: string | null
@@ -85,6 +120,8 @@ export interface PaperDraftFields {
   title?: string
   doi?: string
   authors?: string[]
+  corresponding_authors?: string[]
+  co_first_authors?: string[]
   journal?: string
   volume?: string
   pages?: string
@@ -105,6 +142,7 @@ export interface PaperDraftFields {
 export interface UploadDraft {
   paper: PaperDraftFields
   material_states: DraftMaterialState[]
+  structure_candidates?: StructureCandidate[]
   classification_reason?: string
   classification_evidence?: SourceEvidence[]
   sc_type?: string
@@ -160,12 +198,14 @@ export function unwrapData<T>(response: T | { data: T }): T {
 export function emptyUploadDraft(): UploadDraft {
   return {
     paper: {
-      title: '', doi: '', authors: [], journal: '', volume: '', pages: '', year: null,
+      title: '', doi: '', authors: [], corresponding_authors: [], co_first_authors: [],
+      journal: '', volume: '', pages: '', year: null,
       abstract: '', summary: '', paper_type: 'unknown', theoretical_subtype: null,
       keywords_tags: [], methodology: [], key_finding: '', rationale: '',
       research_materials: [], material_relations: [], builds_on: [],
     },
     material_states: [],
+    structure_candidates: [],
     classification_reason: '',
     classification_evidence: [],
     sc_type: '',
@@ -200,10 +240,17 @@ function normalizePaperFields(value: unknown): PaperDraftFields {
     ? { ...(value as PaperDraftFields & { referenced_materials?: unknown }) }
     : {}
   delete paper.referenced_materials
+  const authors = normalizeTextItems(paper.authors, ['name', 'value'])
+  const normalizeRoles = (roles: unknown) => {
+    const selected = new Set(normalizeTextItems(roles, ['name', 'value']).map(name => name.toLowerCase()))
+    return authors.filter(author => selected.has(author.toLowerCase()))
+  }
   return {
     ...empty,
     ...paper,
-    authors: normalizeTextItems(paper.authors, ['name', 'value']),
+    authors,
+    corresponding_authors: normalizeRoles(paper.corresponding_authors),
+    co_first_authors: normalizeRoles(paper.co_first_authors),
     keywords_tags: normalizeTextItems(paper.keywords_tags, ['keyword', 'value', 'name']),
     methodology: normalizeTextItems(paper.methodology, ['method', 'value', 'name']),
     research_materials: normalizeTextItems(paper.research_materials, ['material', 'value', 'name']),
@@ -245,6 +292,7 @@ export function normalizeUploadDraft(value: unknown): UploadDraft {
         ...state.calculation_context,
       } : null,
     })) : [],
+    structure_candidates: Array.isArray(raw.structure_candidates) ? raw.structure_candidates : [],
     classification_evidence: Array.isArray(raw.classification_evidence)
       ? raw.classification_evidence
       : [],

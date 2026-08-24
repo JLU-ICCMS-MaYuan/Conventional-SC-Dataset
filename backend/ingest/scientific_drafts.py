@@ -14,6 +14,7 @@ from sqlalchemy import select
 from backend import models
 from backend.db_helpers import build_composition_key, build_system_key, normalize_formula
 from backend.ingest.prop_names import normalize_prop_name
+from backend.services.structure_candidates import validate_structure_text
 
 
 RESERVED_PROPERTY_CODES = {
@@ -31,6 +32,38 @@ class ScientificEvidenceTarget:
     evidence: dict[str, Any]
     kind: str | None = None
     entity: Any | None = None
+
+
+def _candidate_state_index(candidate: dict[str, Any]) -> int | None:
+    """Return the explicit material-state index assigned by the user."""
+    match = re.fullmatch(r"material_states\[(\d+)\]", str(candidate.get("material_state_ref") or ""))
+    return int(match.group(1)) if match else None
+
+
+def _confirmed_candidates_by_state(draft: dict[str, Any]) -> dict[int, list[dict[str, Any]]]:
+    grouped: dict[int, list[dict[str, Any]]] = {}
+    for candidate in draft.get("structure_candidates") or []:
+        if not isinstance(candidate, dict):
+            continue
+        if candidate.get("confirmation") != "confirmed" or candidate.get("status") != "confirmed":
+            continue
+        state_index = _candidate_state_index(candidate)
+        if state_index is not None:
+            grouped.setdefault(state_index, []).append(candidate)
+    return grouped
+
+
+def _candidate_conventional_representation(candidate: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
+    representations = candidate.get("representations")
+    if not isinstance(representations, dict):
+        return None
+    conventional = representations.get("conventional")
+    if not isinstance(conventional, dict):
+        return None
+    cif = conventional.get("cif")
+    if not isinstance(cif, dict) or not str(cif.get("text") or "").strip():
+        return None
+    return str(cif["text"]), cif
 
 
 def _json_number(value: Decimal) -> int | float:
@@ -152,6 +185,7 @@ async def persist_scientific_draft(
 ) -> list[ScientificEvidenceTarget]:
     """Create the scientific entity graph and return evidence-link targets."""
     targets: list[ScientificEvidenceTarget] = []
+    candidates_by_state = _confirmed_candidates_by_state(draft)
     for state_index, state_data in enumerate(draft.get("material_states") or []):
         material = str(state_data.get("material") or "").strip()
         superconductor = await _get_or_create_superconductor(session, material)
@@ -209,6 +243,53 @@ async def persist_scientific_draft(
                     "structure",
                     structure,
                 ))
+
+        # Native CIF/POSCAR attachments are only persisted after explicit confirmation.
+        # Store the conventional-cell CIF as the canonical representation; the draft
+        # retains primitive-cell and POSCAR variants for user export.
+        for candidate in candidates_by_state.get(state_index, []):
+            representation = _candidate_conventional_representation(candidate)
+            if representation is None:
+                continue
+            structure_text, metadata = representation
+            # Never trust validation/hash fields supplied by the browser draft.
+            validation = validate_structure_text("cif", structure_text)
+            source = next(
+                (item for item in candidate.get("sources") or [] if isinstance(item, dict)),
+                {},
+            )
+            source_name = str(source.get("filename") or source.get("file_id") or "structure attachment")
+            calculation_data = state_data.get("calculation_context")
+            candidate_structure = models.StructureModel(
+                paper_id=paper.id,
+                paper_revision=paper.content_revision,
+                material_state_id=state.id,
+                space_group_symbol=state_data.get("reported_space_group_symbol"),
+                space_group_number=state_data.get("reported_space_group_number"),
+                structure_format="cif",
+                structure_text=structure_text,
+                structure_hash=(validation or {}).get("structure_hash")
+                or hashlib.sha256(structure_text.encode("utf-8")).hexdigest(),
+                cell_parameters=(validation or {}).get("cell_parameters"),
+                volume_angstrom3=(validation or {}).get("volume"),
+                atom_count=(validation or {}).get("atom_count"),
+                geometry_method=(metadata or {}).get("standardization_method") or "attachment_conventional",
+                nuclear_treatment=(calculation_data or {}).get("phonon_nuclear_treatment")
+                if isinstance(calculation_data, dict) else "unknown",
+                source_locator=f"attachment: {source_name}",
+            )
+            session.add(candidate_structure)
+            await session.flush()
+            for source_evidence in candidate.get("sources") or []:
+                if isinstance(source_evidence, dict) and str(source_evidence.get("quote") or "").strip():
+                    targets.append(ScientificEvidenceTarget(
+                        f"{state_path}.structure_candidates[{candidate.get('candidate_id')}]",
+                        source_evidence,
+                        "structure",
+                        candidate_structure,
+                    ))
+            if structure is None:
+                structure = candidate_structure
 
         tc_items = [item for item in state_data.get("tc_results") or [] if isinstance(item, dict)]
         calculation_data = state_data.get("calculation_context")

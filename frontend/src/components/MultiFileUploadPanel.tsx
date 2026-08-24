@@ -47,7 +47,7 @@ const MultiFileUploadPanel: React.FC<Props> = ({ onCreated }) => {
     const accepted: File[] = []
     for (const file of Array.from(files)) {
       const signature = `${file.name}:${file.size}:${file.lastModified}`
-      if (!/\.(pdf|txt|md)$/i.test(file.name)) rejected.push(`${file.name}：仅支持 PDF、TXT、MD`)
+      if (!/\.(pdf|txt|md|cif|poscar)$/i.test(file.name) && !/^(POSCAR|CONTCAR)$/i.test(file.name)) rejected.push(`${file.name}：仅支持 PDF、TXT、MD、CIF、POSCAR`)
       else if (file.size > MAX_BYTES) rejected.push(`${file.name}：超过 50 MB`)
       else if (signatures.has(signature)) rejected.push(`${file.name}：已在当前列表中`)
       else { accepted.push(file); signatures.add(signature) }
@@ -136,7 +136,7 @@ const MultiFileUploadPanel: React.FC<Props> = ({ onCreated }) => {
           <CloudUploadOutlinedIcon color="primary" />
           <Box>
             <Typography fontWeight={700}>拖拽文件到这里，或点击选择</Typography>
-            <Typography variant="caption" color="text.secondary">PDF、TXT、MD · 每个最大 50 MB · 同时上传最多 3 个</Typography>
+            <Typography variant="caption" color="text.secondary">PDF、TXT、MD、CIF、POSCAR · 每个最大 50 MB · 同时上传最多 3 个</Typography>
           </Box>
         </Box>
         {items.map(item => <Box key={item.clientId} sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr) 112px 40px', sm: 'minmax(0, 1fr) 150px 40px' }, gap: 1, mb: 1, alignItems: 'center' }}>
@@ -152,7 +152,7 @@ const MultiFileUploadPanel: React.FC<Props> = ({ onCreated }) => {
           <Button variant="contained" onClick={() => void start()} disabled={busy || items.length === 0}>{busy ? '上传中…' : '开始上传并解析'}</Button>
           {items.length > 0 && <Button color="inherit" onClick={clear} disabled={busy}>清空</Button>}
         </Box>
-        <input ref={input} type="file" hidden multiple accept=".pdf,.txt,.md" onChange={event => { choose(event.target.files); event.target.value = '' }} />
+        <input ref={input} type="file" hidden multiple accept=".pdf,.txt,.md,.cif,.poscar,POSCAR,CONTCAR" onChange={event => { choose(event.target.files); event.target.value = '' }} />
       </CardContent>
     </Card>
   )

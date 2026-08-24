@@ -7,6 +7,7 @@ os.environ.setdefault("JWT_SECRET_KEY", "test-only-secret")
 
 from backend import models
 from backend.ingest.scientific_drafts import persist_scientific_draft
+from backend.services.structure_candidates import build_structure_candidate
 
 
 class _EmptyResult:
@@ -100,3 +101,31 @@ def test_li2mgh16_draft_persists_conditioned_scientific_entity_graph():
     assert tc_result.calculation_context_id == calculation.id
     assert general_property.material_state_id == state.id
     assert {target.kind for target in targets} == {None, "tc", "property"}
+
+
+def test_confirmed_structure_candidate_persists_conventional_cif():
+    source_text = "data_Cu\n_cell_length_a 3.6\n_cell_length_b 3.6\n_cell_length_c 3.6\n_cell_angle_alpha 90\n_cell_angle_beta 90\n_cell_angle_gamma 90\n_symmetry_space_group_name_H-M 'P 1'\n_symmetry_Int_Tables_number 1\nloop_\n _atom_site_label\n _atom_site_type_symbol\n _atom_site_fract_x\n _atom_site_fract_y\n _atom_site_fract_z\n Cu1 Cu 0 0 0\n"
+    candidate = build_structure_candidate(
+        structure_format="cif",
+        structure_text=source_text,
+        source={"file_id": "cif-1", "filename": "Cu.cif", "page": 1, "quote": "attached Cu structure"},
+        material_state_ref="material_states[0]",
+    )
+    candidate["confirmation"] = "confirmed"
+    candidate["status"] = "confirmed"
+    candidate["validation"]["atom_count"] = 999
+    session = _RecordingAsyncSession()
+    paper = models.Paper(id=18, content_revision=1)
+
+    targets = asyncio.run(persist_scientific_draft(session, paper, {
+        "material_states": [{"material": "Cu", "state_kind": "experimental"}],
+        "structure_candidates": [candidate],
+    }))
+
+    structure = next(item for item in session.added if isinstance(item, models.StructureModel))
+    assert structure.material_state_id
+    assert structure.structure_format == "cif"
+    assert structure.geometry_method.startswith("pymatgen.") or structure.geometry_method == "identity_fallback"
+    assert structure.atom_count == 1
+    assert structure.source_locator == "attachment: Cu.cif"
+    assert any(target.kind == "structure" and target.entity is structure for target in targets)

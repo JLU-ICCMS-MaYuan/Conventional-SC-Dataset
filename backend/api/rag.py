@@ -181,6 +181,29 @@ def _validate_draft(draft: dict[str, Any]) -> tuple[dict[str, Any], list[dict[st
                 raise _upload_error(400, "dedicated_property_required", f"{name} 必须填写到专用字段")
             if not any(item.get(key) not in (None, "") for key in ("value", "value_min", "value_max", "value_raw")):
                 raise _upload_error(400, "property_value_required", f"第 {state_index + 1} 个材料状态的第 {property_index + 1} 条普通物性缺少数值")
+    for candidate_index, candidate in enumerate(draft.get("structure_candidates") or []):
+        if not isinstance(candidate, dict):
+            continue
+        if candidate.get("confirmation") != "confirmed" or candidate.get("status") != "confirmed":
+            continue
+        match = re.fullmatch(r"material_states\[(\d+)\]", str(candidate.get("material_state_ref") or ""))
+        if not match or int(match.group(1)) >= len(material_states):
+            raise _upload_error(
+                400,
+                "structure_material_state_required",
+                f"第 {candidate_index + 1} 个已确认结构候选必须关联材料状态",
+            )
+        representations = candidate.get("representations")
+        conventional = representations.get("conventional") if isinstance(representations, dict) else None
+        cif = conventional.get("cif") if isinstance(conventional, dict) else None
+        if not isinstance(cif, dict) or not str(cif.get("text") or "").strip():
+            raise _upload_error(400, "structure_representation_missing", f"第 {candidate_index + 1} 个结构候选缺少惯用胞 CIF")
+        try:
+            from backend.services.structure_candidates import validate_structure_text
+
+            candidate["validation"] = validate_structure_text("cif", str(cif["text"]))
+        except Exception as exc:
+            raise _upload_error(400, "structure_validation_failed", f"第 {candidate_index + 1} 个结构候选未通过服务端校验") from exc
     return paper, material_states
 
 

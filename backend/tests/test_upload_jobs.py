@@ -52,6 +52,19 @@ def test_normalize_draft_flattens_evidenced_text_lists():
     assert draft["material_states"][0]["tc_results"][0]["value_raw"] == "42"
 
 
+def test_normalize_draft_preserves_structure_candidates_for_user_confirmation():
+    candidate = {
+        "candidate_id": "candidate-1",
+        "status": "valid",
+        "confirmation": "unreviewed",
+        "material_state_ref": "unassigned:file-1",
+        "representations": {"conventional": {"cif": {"text": "data_test"}}},
+    }
+    draft = _normalize_draft({"paper": {"paper_type": "review"}, "structure_candidates": [candidate]})
+
+    assert draft["structure_candidates"] == [candidate]
+
+
 def test_referenced_materials_remain_internal_and_are_removed_from_final_draft():
     evidence = {"section": "Introduction", "page": 1, "quote": "LaH10 was reported previously."}
     draft = _normalize_draft({

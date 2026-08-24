@@ -18,7 +18,7 @@ RUNNING_STATUSES = {
 FIXED_TERMINAL_STATUSES = {"failed", "duplicate", "cancelled"}
 FINAL_STATUSES = FIXED_TERMINAL_STATUSES | {"submitted"}
 FILE_ROLES = {"main", "supplementary", "attachment"}
-FILE_SUFFIXES = {".pdf", ".txt", ".md"}
+FILE_SUFFIXES = {".pdf", ".txt", ".md", ".cif", ".poscar"}
 
 PUBLIC_TASK_FIELDS = {
     "task_id", "status", "stage", "progress", "processing_status",
@@ -109,7 +109,9 @@ def validate_manifest(files: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
         size = int(item.get("size") or 0)
         if role not in FILE_ROLES:
             raise ValueError("文件角色不支持")
-        if Path(filename).suffix.lower() not in FILE_SUFFIXES:
+        suffix = Path(filename).suffix.lower()
+        is_extensionless_poscar = Path(filename).name.upper() in {"POSCAR", "CONTCAR"}
+        if suffix not in FILE_SUFFIXES and not is_extensionless_poscar:
             raise ValueError("文件类型不支持")
         if size < 0 or size > MAX_UPLOAD_BYTES:
             raise ValueError("文件超过 50 MB 限制")
@@ -119,7 +121,7 @@ def validate_manifest(files: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
             "role": role,
             "original_filename": filename,
             "media_type": item.get("media_type"),
-            "kind": Path(filename).suffix.lower().lstrip("."),
+            "kind": "poscar" if is_extensionless_poscar else suffix.lstrip("."),
             "size": size,
             "sort_order": index,
             "upload_status": "waiting",

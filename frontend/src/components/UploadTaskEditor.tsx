@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import {
-  Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Collapse,
-  FormControl, InputLabel, MenuItem, Select, TextField, Typography, useMediaQuery,
+  Alert, Autocomplete, Box, Button, Card, CardContent, Checkbox, Chip, CircularProgress, Collapse,
+  FormControl, InputLabel, ListItemText, Menu, MenuItem, Select, TextField, Typography, useMediaQuery,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import DeleteIcon from '@mui/icons-material/Delete'
@@ -9,6 +9,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import SaveIcon from '@mui/icons-material/Save'
 import SendIcon from '@mui/icons-material/Send'
 import { api, ApiError } from '../lib/api'
+import StructureCandidatePanel from './StructureCandidatePanel'
 import {
   DraftKeyProperty, DraftMaterialState, DraftTcResult, SourceEvidence, UploadDraft, evidenceList,
   normalizeUploadDraft, unwrapData,
@@ -24,6 +25,8 @@ interface SubmitResponse {
   paper_id: number
   review_status: 'pending'
 }
+
+type AuthorRoleField = 'corresponding_authors' | 'co_first_authors'
 
 const PAPER_TYPE_OPTIONS = [
   { value: 'theoretical', label: '理论文章' },
@@ -151,6 +154,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
   const [submitting, setSubmitting] = useState(false)
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const [authorMenu, setAuthorMenu] = useState<{ author: string; anchorEl: HTMLElement } | null>(null)
   const revisionRef = useRef(0)
 
   useEffect(() => {
@@ -178,6 +182,35 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
 
   const setPaperField = (field: keyof UploadDraft['paper'], value: unknown) => {
     changeDraft(current => ({ ...current, paper: { ...current.paper, [field]: value } }))
+  }
+
+  const setAuthors = (values: string[]) => {
+    const authors = values.map(value => value.trim()).filter((value, index, all) => value && all.indexOf(value) === index)
+    changeDraft(current => ({
+      ...current,
+      paper: {
+        ...current.paper,
+        authors,
+        corresponding_authors: (current.paper.corresponding_authors || []).filter(author => authors.includes(author)),
+        co_first_authors: (current.paper.co_first_authors || []).filter(author => authors.includes(author)),
+      },
+    }))
+    if (authorMenu && !authors.includes(authorMenu.author)) setAuthorMenu(null)
+  }
+
+  const toggleAuthorRole = (field: AuthorRoleField, author: string) => {
+    changeDraft(current => {
+      const selected = current.paper[field] || []
+      return {
+        ...current,
+        paper: {
+          ...current.paper,
+          [field]: selected.includes(author)
+            ? selected.filter(item => item !== author)
+            : [...selected, author],
+        },
+      }
+    })
   }
 
   const setDraftField = (field: keyof UploadDraft, value: unknown) => {
@@ -375,9 +408,55 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
           <EvidenceNotes label="DOI" aiValue={aiPaper.doi} />
         </Box>
         <Box>
-          <TextField fullWidth label="作者（每行一位）" multiline minRows={2}
-            value={toLines(draft.paper.authors)}
-            onChange={event => setPaperField('authors', fromLines(event.target.value))} />
+          <Autocomplete
+            multiple
+            freeSolo
+            forcePopupIcon={false}
+            options={draft.paper.authors || []}
+            value={draft.paper.authors || []}
+            onChange={(_, values) => setAuthors(values)}
+            renderTags={(values, getTagProps) => values.map((author, index) => {
+              const { key, ...tagProps } = getTagProps({ index })
+              const roles = [
+                draft.paper.corresponding_authors?.includes(author) ? '通讯作者' : '',
+                draft.paper.co_first_authors?.includes(author) ? '共同第一作者' : '',
+              ].filter(Boolean)
+              return (
+                <Chip
+                  {...tagProps}
+                  key={key}
+                  label={[author, ...roles].join(' · ')}
+                  title="点击设置作者身份"
+                  onClick={event => setAuthorMenu({ author, anchorEl: event.currentTarget })}
+                  onDelete={() => setAuthors(values.filter(item => item !== author))}
+                />
+              )
+            })}
+            renderInput={params => (
+              <TextField {...params} label="作者" placeholder={(draft.paper.authors || []).length ? '' : '输入姓名后按 Enter'} />
+            )}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                flexWrap: 'nowrap',
+                overflowX: 'auto',
+                overflowY: 'hidden',
+                scrollbarWidth: 'thin',
+              },
+              '& .MuiAutocomplete-tag': { flexShrink: 0 },
+              '& .MuiAutocomplete-input': { minWidth: '10ch !important' },
+            }}
+          />
+          <Menu anchorEl={authorMenu?.anchorEl} open={Boolean(authorMenu)} onClose={() => setAuthorMenu(null)}>
+            {authorMenu && ([
+              ['corresponding_authors', '通讯作者'],
+              ['co_first_authors', '共同第一作者'],
+            ] as const).map(([field, label]) => (
+              <MenuItem key={field} onClick={() => toggleAuthorRole(field, authorMenu.author)}>
+                <Checkbox checked={(draft.paper[field] || []).includes(authorMenu.author)} />
+                <ListItemText primary={label} />
+              </MenuItem>
+            ))}
+          </Menu>
           <EvidenceNotes label="作者" aiValue={aiPaper.authors} />
         </Box>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: '2fr 1fr 1fr 1fr' }, gap: 1 }}>
@@ -465,9 +544,9 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
         <EvidenceNotes label="分类理由" aiValue={ai.classification_reason} evidence={classificationEvidence} />
       </Box>
 
-      <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Box sx={{ mt: 3, display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) minmax(320px, 0.8fr)' }, alignItems: 'start', gap: 2 }}>
         <Typography variant="h6" fontWeight={700}>材料状态与计算条件</Typography>
-        <Button startIcon={<AddIcon />} onClick={() => changeDraft(current => ({
+        <Button sx={{ gridColumn: '1', gridRow: { xs: '2', md: '2' }, justifySelf: 'end' }} startIcon={<AddIcon />} onClick={() => changeDraft(current => ({
           ...current,
           material_states: [...current.material_states, {
             material: '',
@@ -483,9 +562,20 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
             properties: [],
           }],
         }))}>添加材料状态</Button>
-      </Box>
 
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1.5 }}>
+      <StructureCandidatePanel
+        sx={{ gridColumn: { xs: '1', md: '2' }, gridRow: { xs: '3', md: '1 / span 3' }, mt: { xs: 0, md: 0 } }}
+        candidates={draft.structure_candidates || []}
+        materialStates={draft.material_states}
+        onChange={(candidateId, changes) => changeDraft(current => ({
+          ...current,
+          structure_candidates: (current.structure_candidates || []).map(candidate =>
+            candidate.candidate_id === candidateId ? { ...candidate, ...changes } : candidate,
+          ),
+        }))}
+      />
+
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1.5, gridColumn: { xs: '1', md: '1' }, gridRow: { xs: '4', md: '3' } }}>
         {draft.material_states.map((state, index) => {
           const aiState = ai.material_states?.[index]
           return (
@@ -591,6 +681,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
           <Alert severity="info">AI 没有提取到材料状态。综述可以直接提交，其他论文请补充后提交。</Alert>
         )}
       </Box>
+    </Box>
     </Box>
   )
 }

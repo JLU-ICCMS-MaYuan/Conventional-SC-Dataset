@@ -27,8 +27,13 @@ from backend.ingest.upload_tasks import (
     update_state,
 )
 from backend.ingest.upload_contracts import UPLOAD_STATE_SCHEMA_VERSION, compare_file_identities
+from backend.ingest.structure_extractor import extract_structure_candidates
 from backend.models import Paper, PaperFile
 from backend.rag.llm import complete_json
+from backend.services.structure_candidates import (
+    StructureCandidateError,
+    build_structure_candidate,
+)
 
 
 CHUNK_SYSTEM_PROMPT = """你是超导论文证据提取助手。只根据给出的一个论文分段提取候选事实，返回 JSON。
@@ -45,7 +50,7 @@ referenced_materials 仅作为后台排除误判的临时候选，不进入用�
 
 返回结构：
 {
-  "metadata": {"title": null, "doi": null, "authors": [], "journal": null, "year": null, "abstract": null},
+  "metadata": {"title": null, "doi": null, "authors": [], "corresponding_authors": [], "co_first_authors": [], "journal": null, "year": null, "abstract": null},
   "paper_type_evidence": [{"candidate": "theoretical|experimental|review|unknown", "scope": "current_paper|referenced_work", "page": 1, "quote": "原文"}],
   "research_materials": [],
   "referenced_materials": [],
@@ -128,7 +133,8 @@ pressure_unit_raw；无法可靠换算或原文没有报告时保留原文并将
 返回结构：
 {
   "paper": {
-    "title": "", "doi": null, "authors": [], "journal": null, "volume": null, "pages": null,
+    "title": "", "doi": null, "authors": [], "corresponding_authors": [], "co_first_authors": [],
+    "journal": null, "volume": null, "pages": null,
     "year": null, "abstract": null, "summary": "", "paper_type": "theoretical|experimental|review|unknown",
     "theoretical_subtype": null, "keywords_tags": [], "methodology": [], "key_finding": "",
     "rationale": "", "research_materials": [], "material_relations": [], "builds_on": []
@@ -217,6 +223,18 @@ def _extract_markdown(state: dict[str, Any], source: Path) -> str:
         except UnicodeDecodeError:
             continue
     raise ValueError("无法解码文件内容，请使用 UTF-8 编码")
+
+
+def _structure_format_for_file(file_item: dict[str, Any], source: Path) -> str | None:
+    filename = str(file_item.get("original_filename") or source.name)
+    if Path(filename).name.upper() in {"POSCAR", "CONTCAR"}:
+        return "poscar"
+    suffix = Path(filename).suffix.lower()
+    if suffix == ".cif":
+        return "cif"
+    if suffix == ".poscar":
+        return "poscar"
+    return None
 
 
 def _lightweight_identity(file_item: dict[str, Any], markdown: str) -> dict[str, Any]:
@@ -546,6 +564,11 @@ def _normalize_authors(value: Any) -> list[str]:
     return []
 
 
+def _normalize_author_roles(value: Any, authors: list[str]) -> list[str]:
+    selected = {name.casefold() for name in _normalize_authors(value)}
+    return [author for author in authors if author.casefold() in selected]
+
+
 def _flatten_properties(value: Any) -> list[dict[str, Any]]:
     if isinstance(value, list):
         return [dict(item) for item in value if isinstance(item, dict)]
@@ -805,10 +828,13 @@ def _normalize_draft(raw: dict[str, Any]) -> dict[str, Any]:
     research_materials, research_evidence = _normalize_text_items(
         raw_paper.get("research_materials"), "material", "value", "name",
     )
+    authors = _normalize_authors(raw_paper.get("authors") or parsed.paper.get("authors"))
     paper = {
         "title": raw_paper.get("title") or parsed.paper.get("title") or "",
         "doi": raw_paper.get("doi") or parsed.paper.get("doi"),
-        "authors": _normalize_authors(raw_paper.get("authors") or parsed.paper.get("authors")),
+        "authors": authors,
+        "corresponding_authors": _normalize_author_roles(raw_paper.get("corresponding_authors"), authors),
+        "co_first_authors": _normalize_author_roles(raw_paper.get("co_first_authors"), authors),
         "journal": raw_paper.get("journal") or parsed.paper.get("journal"),
         "volume": raw_paper.get("volume"),
         "pages": raw_paper.get("pages"),
@@ -858,6 +884,10 @@ def _normalize_draft(raw: dict[str, Any]) -> dict[str, Any]:
     return {
         "paper": paper,
         "material_states": material_states,
+        "structure_candidates": [
+            item for item in _as_list(raw.get("structure_candidates"))
+            if isinstance(item, dict)
+        ],
         "classification_reason": raw.get("classification_reason") or paper["rationale"],
         "classification_evidence": _as_list(raw.get("classification_evidence")),
         "sc_type": raw.get("sc_type") or "",
@@ -1022,22 +1052,76 @@ def process_upload_task(task_id: str) -> dict[str, Any]:
         all_chunks: list[tuple[dict[str, Any], Chunk]] = []
         combined_markdown: list[str] = []
         identities: list[dict[str, Any]] = []
+        structure_candidates: list[dict[str, Any]] = []
         for file_item in sources:
             _ensure_not_cancelled(task_id)
             file_source = Path(str(file_item.get("stored_path") or source))
             file_state = {**state, "file_kind": file_item.get("kind") or file_source.suffix.lstrip(".")}
             file_md = extracted_root / f"{file_item['file_id']}.md"
+            structure_format = _structure_format_for_file(file_item, file_source)
             if multi_file:
                 file_item["extraction_status"] = "processing"
                 update_state(task_id, files=sources)
             try:
-                if not multi_file and md_path.exists():
+                if structure_format:
+                    structure_ok = False
+                    source_info = {
+                        "file_id": file_item.get("file_id"),
+                        "filename": file_item.get("original_filename") or file_source.name,
+                        "role": file_item.get("role"),
+                        "page": None,
+                        "quote": None,
+                    }
+                    try:
+                        structure_text = file_source.read_text(encoding="utf-8")
+                        structure_candidates.append(build_structure_candidate(
+                            structure_format=structure_format,
+                            structure_text=structure_text,
+                            material_state_ref=f"unassigned:{file_item['file_id']}",
+                            source=source_info,
+                        ))
+                        structure_ok = True
+                    except (OSError, UnicodeDecodeError, StructureCandidateError) as structure_exc:
+                        structure_candidates.append({
+                            "candidate_id": f"blocked:{file_item['file_id']}",
+                            "material_state_ref": f"unassigned:{file_item['file_id']}",
+                            "source_kind": "attachment",
+                            "status": "blocked",
+                            "confirmation": "unreviewed",
+                            "original_format": structure_format,
+                            "original_text": None,
+                            "validation": {
+                                "ase_valid": False,
+                                "code": getattr(structure_exc, "code", "structure_read_failed"),
+                                "message": str(structure_exc),
+                            },
+                            "derivation": None,
+                            "representations": {},
+                            "sources": [source_info],
+                            "conflicts": [],
+                            "user_note": None,
+                        })
+                    markdown = (
+                        f"<!-- 结构附件 {file_item.get('original_filename') or file_source.name} 已通过 ASE 校验 -->"
+                        if structure_ok else
+                        f"<!-- 结构附件 {file_item.get('original_filename') or file_source.name} 校验失败，等待人工处理 -->"
+                    )
+                elif not multi_file and md_path.exists():
                     markdown = md_path.read_text(encoding="utf-8")
                 elif file_md.exists():
                     markdown = file_md.read_text(encoding="utf-8")
                 else:
                     markdown = _extract_markdown(file_state, file_source)
                     file_md.write_text(markdown, encoding="utf-8")
+                if not structure_format and str(file_item.get("kind") or file_state.get("file_kind") or "").lower() == "pdf":
+                    structure_candidates.extend(extract_structure_candidates(
+                        markdown,
+                        source={
+                            "file_id": file_item.get("file_id"),
+                            "filename": file_item.get("original_filename") or file_source.name,
+                            "role": file_item.get("role"),
+                        },
+                    ))
             except Exception as extraction_exc:
                 if multi_file:
                     file_item["extraction_status"] = "failed"
@@ -1052,8 +1136,9 @@ def process_upload_task(task_id: str) -> dict[str, Any]:
                 f"\n\n# 来源文件：{file_item.get('original_filename') or file_source.name}\n\n{markdown}"
             )
             identities.append(_lightweight_identity(file_item, markdown))
-            for chunk in _chunks_with_preamble(markdown):
-                all_chunks.append((file_item, chunk))
+            if not structure_format:
+                for chunk in _chunks_with_preamble(markdown):
+                    all_chunks.append((file_item, chunk))
         md_path.write_text("".join(combined_markdown), encoding="utf-8")
         update_state(task_id, consistency=compare_file_identities(identities))
         if not all_chunks:
@@ -1106,6 +1191,7 @@ def process_upload_task(task_id: str) -> dict[str, Any]:
             json.dumps(summary_candidates, ensure_ascii=False),
         )
         draft = _normalize_draft(raw_draft)
+        draft["structure_candidates"] = structure_candidates
         current_state = get_state(task_id) or state
         existing = _find_existing_paper(draft["paper"].get("doi")) or _find_existing_by_hash(current_state)
         if existing:
