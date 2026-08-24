@@ -367,18 +367,18 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
         <Box>
           <TextField fullWidth label="标题" value={draft.paper.title || ''}
             onChange={event => setPaperField('title', event.target.value)} />
-          <EvidenceNotes aiValue={aiPaper.title} />
+          <EvidenceNotes label="标题" aiValue={aiPaper.title} />
         </Box>
         <Box>
           <TextField fullWidth label="DOI" value={draft.paper.doi || ''}
             onChange={event => setPaperField('doi', event.target.value.trim())} />
-          <EvidenceNotes aiValue={aiPaper.doi} />
+          <EvidenceNotes label="DOI" aiValue={aiPaper.doi} />
         </Box>
         <Box>
           <TextField fullWidth label="作者（每行一位）" multiline minRows={2}
             value={toLines(draft.paper.authors)}
             onChange={event => setPaperField('authors', fromLines(event.target.value))} />
-          <EvidenceNotes aiValue={aiPaper.authors} />
+          <EvidenceNotes label="作者" aiValue={aiPaper.authors} />
         </Box>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: '2fr 1fr 1fr 1fr' }, gap: 1 }}>
           <TextField label="期刊" value={draft.paper.journal || ''}
@@ -390,7 +390,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
           <TextField label="页" value={draft.paper.pages || ''}
             onChange={event => setPaperField('pages', event.target.value)} />
           <Box sx={{ gridColumn: '1 / -1' }}>
-            <EvidenceNotes aiValue={[aiPaper.journal, aiPaper.year, aiPaper.volume, aiPaper.pages].filter(Boolean).join(' · ')} />
+            <EvidenceNotes label="期刊信息" aiValue={[aiPaper.journal, aiPaper.year, aiPaper.volume, aiPaper.pages].filter(Boolean).join(' · ')} />
           </Box>
         </Box>
       </Box>
@@ -402,7 +402,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
             onChange={event => setPaperField('paper_type', event.target.value)}>
             {PAPER_TYPE_OPTIONS.map(option => <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>)}
           </Select>
-          <EvidenceNotes aiValue={aiPaper.paper_type} evidence={classificationEvidence} />
+          <EvidenceNotes label="论文整体类型" aiValue={aiPaper.paper_type} evidence={classificationEvidence} />
         </FormControl>
         <FormControl fullWidth disabled={draft.paper.paper_type !== 'theoretical'}>
           <InputLabel>理论二级类型</InputLabel>
@@ -412,7 +412,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
             <MenuItem value="method">方法类</MenuItem>
             <MenuItem value="theory">理论模型与机制</MenuItem>
           </Select>
-          <EvidenceNotes aiValue={aiPaper.theoretical_subtype} />
+          <EvidenceNotes label="理论二级类型" aiValue={aiPaper.theoretical_subtype} />
         </FormControl>
         <Box>
           <TextField fullWidth label="超导材料类型（可输入自定义）" value={draft.sc_type || ''}
@@ -422,7 +422,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
           {draft.sc_type && !SC_TYPE_OPTIONS.includes(draft.sc_type) && (
             <Chip size="small" color="warning" label="新类型，待管理员确认" sx={{ mt: 0.75 }} />
           )}
-          <EvidenceNotes aiValue={ai.sc_type} evidence={classificationEvidence} />
+          <EvidenceNotes label="超导材料类型" aiValue={ai.sc_type} evidence={classificationEvidence} />
         </Box>
       </Box>
 
@@ -437,6 +437,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
               value={toLines(draft.paper[field as keyof UploadDraft['paper']] as string[] | undefined)}
               onChange={event => setPaperField(field as keyof UploadDraft['paper'], fromLines(event.target.value))} />
             <EvidenceNotes
+              label={label}
               aiValue={aiPaper[field as keyof typeof aiPaper]}
               evidence={draft.field_evidence?.[field]}
             />
@@ -453,7 +454,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
           <TextField fullWidth label={String(label)} multiline minRows={Number(rows)}
             value={String(draft.paper[field as keyof UploadDraft['paper']] || '')}
             onChange={event => setPaperField(field as keyof UploadDraft['paper'], event.target.value)} />
-          <EvidenceNotes aiValue={aiPaper[field as keyof typeof aiPaper]} />
+          <EvidenceNotes label={String(label)} aiValue={aiPaper[field as keyof typeof aiPaper]} />
         </Box>
       ))}
 
@@ -461,7 +462,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
         <TextField fullWidth label="分类理由" multiline minRows={3}
           value={draft.classification_reason || ''}
           onChange={event => setDraftField('classification_reason', event.target.value)} />
-        <EvidenceNotes aiValue={ai.classification_reason} evidence={classificationEvidence} />
+        <EvidenceNotes label="分类理由" aiValue={ai.classification_reason} evidence={classificationEvidence} />
       </Box>
 
       <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -520,6 +521,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
                     slotProps={{ htmlInput: { min: 0, step: 'any' } }} />
                 </Box>
                 <EvidenceNotes
+                  label={`材料状态 #${index + 1}`}
                   aiValue={aiState ? `${aiState.material || ''} ${aiState.pressure_value_gpa ?? ''} GPa`.trim() : undefined}
                   evidence={state.space_group_evidence || aiState?.space_group_evidence}
                 />
