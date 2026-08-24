@@ -618,7 +618,11 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
           const aiState = ai.material_states?.[index]
           const stateCandidates = (draft.structure_candidates || []).filter(candidate => candidate.material_state_ref === `material_states[${index}]` && candidate.confirmation !== 'excluded')
           const stateStructure = [...stateCandidates].reverse().find(candidate => candidate.status === 'valid' || candidate.status === 'confirmed')
-          const statePreview = stateStructure?.representations?.conventional?.cif?.text || stateStructure?.representations?.conventional?.poscar?.text
+          const statePreview = stateStructure?.representations?.conventional?.cif?.text
+            ? { text: stateStructure.representations.conventional.cif.text, format: 'cif' }
+            : stateStructure?.representations?.conventional?.poscar?.text
+              ? { text: stateStructure.representations.conventional.poscar.text, format: 'vasp' }
+              : null
           return (
             <Card key={index} variant="outlined">
               <CardContent>
@@ -683,7 +687,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
                   </Box>
                   {stateStructure && (
                     <Box sx={{ mt: 1.5 }}>
-                      {statePreview ? <StructureViewer3D data={statePreview} format="cif" height={220} /> : <Alert severity="warning">结构已通过基础校验，但暂无可用预览数据。</Alert>}
+                      {statePreview ? <StructureViewer3D data={statePreview.text} format={statePreview.format} height={220} /> : <Alert severity="warning">结构已通过基础校验，但暂无可用预览数据。</Alert>}
                       <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, overflowWrap: 'anywhere' }}>
                         {stateStructure.sources?.map(source => String(source.filename || '')).filter(Boolean).join('、') || '结构附件'} · {stateStructure.validation?.atom_count ?? '未提供'} 个原子 · {stateStructure.confirmation === 'confirmed' ? '已确认' : '待确认'}
                       </Typography>

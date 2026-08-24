@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import re
 import shutil
 import time
+import uuid
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
@@ -637,6 +639,104 @@ async def put_upload_draft(
     _draft_values(normalized)
     saved = save_draft(task_id, normalized)
     return {"ok": True, "data": saved, "saved_at": int(time.time())}
+
+
+@router.post("/upload-tasks/{task_id}/structure-candidates")
+async def upload_structure_candidate(
+    task_id: str,
+    material_state_index: int = Form(..., ge=0),
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    """Append a CIF/POSCAR after parsing and attach it to one material state."""
+    from backend.ingest.upload_jobs import _normalize_draft
+    from backend.ingest.upload_tasks import get_draft, save_draft, task_directory, update_state
+    from backend.services.structure_candidates import StructureCandidateError, build_structure_candidate
+
+    state = _task_for_user(task_id, current_user)
+    if state.get("paper_id"):
+        raise _upload_error(409, "draft_already_submitted", "该草稿已经提交审核")
+    if state.get("status") != "ready":
+        raise _upload_error(409, "draft_not_ready", "解析完成后才能上传结构附件")
+
+    filename = Path(file.filename or "structure.cif").name
+    normalized_name = filename.upper()
+    suffix = Path(filename).suffix.lower()
+    if normalized_name in {"POSCAR", "CONTCAR"} or suffix == ".poscar":
+        structure_format = "poscar"
+    elif suffix == ".cif":
+        structure_format = "cif"
+    else:
+        raise _upload_error(400, "unsupported_structure_type", "只支持 CIF、POSCAR 或 CONTCAR 文件")
+
+    raw = await file.read()
+    await file.close()
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise _upload_error(413, "file_too_large", "结构文件超过 50 MB 限制")
+    try:
+        structure_text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise _upload_error(400, "structure_encoding_invalid", "结构文件必须使用 UTF-8 编码") from exc
+
+    draft = get_draft(task_id)
+    if draft is None:
+        raise _upload_error(409, "draft_not_ready", "草稿尚未生成")
+    normalized_draft = _normalize_draft(draft)
+    material_states = normalized_draft.get("material_states") or []
+    if material_state_index >= len(material_states):
+        raise _upload_error(400, "material_state_not_found", "指定材料状态不存在")
+
+    file_id = uuid.uuid4().hex
+    source_info = {
+        "file_id": file_id,
+        "filename": filename,
+        "role": "attachment",
+        "page": None,
+        "quote": None,
+    }
+    try:
+        candidate = build_structure_candidate(
+            structure_format=structure_format,
+            structure_text=structure_text,
+            source=source_info,
+            material_state_ref=f"material_states[{material_state_index}]",
+        )
+    except (StructureCandidateError, ValueError) as exc:
+        raise _upload_error(400, "structure_validation_failed", str(exc)) from exc
+
+    destination = task_directory(task_id) / f"{file_id}{Path(filename).suffix or '.POSCAR'}"
+    destination.write_bytes(raw)
+    files = list(state.get("files") or [])
+    previous_files = list(files)
+    files.append({
+        "file_id": file_id,
+        "role": "attachment",
+        "original_filename": filename,
+        "media_type": file.content_type,
+        "kind": structure_format,
+        "size": len(raw),
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "sort_order": len(files),
+        "upload_status": "completed",
+        "extraction_status": "completed",
+        "error": None,
+        "stored_path": str(destination),
+        "source_file_path": f"upload_PDFs/{task_id}/{destination.name}",
+    })
+    candidates = [item for item in normalized_draft.get("structure_candidates") or [] if isinstance(item, dict)]
+    candidates.append(candidate)
+    normalized_draft["structure_candidates"] = candidates
+    try:
+        update_state(task_id, files=files)
+        save_draft(task_id, normalized_draft)
+    except Exception:
+        try:
+            update_state(task_id, files=previous_files)
+        except Exception:
+            pass
+        destination.unlink(missing_ok=True)
+        raise
+    return {"ok": True, "data": candidate}
 
 
 @router.post("/upload-tasks/{task_id}/retry")
