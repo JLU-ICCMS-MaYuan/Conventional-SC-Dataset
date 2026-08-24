@@ -10,7 +10,7 @@ from typing import Any, Iterable
 from sqlalchemy.orm import Session
 
 from backend import models
-from backend.db_helpers import build_system_key, normalize_formula
+from backend.db_helpers import build_composition_key, build_system_key, normalize_formula
 
 
 def _json_number(value: Decimal) -> int | float:
@@ -50,6 +50,7 @@ def get_or_create_superconductor(db: Session, chemical_formula: str) -> models.S
         chemical_system_id=system.id,
         chemical_formula=chemical_formula,
         formula_normalized=normalized,
+        composition_key=build_composition_key(composition),
         display_name=chemical_formula,
         elements_list=elements,
         composition=_json_decimal_mapping(composition),

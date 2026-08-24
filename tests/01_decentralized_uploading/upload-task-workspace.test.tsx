@@ -125,7 +125,10 @@ describe('论文上传工作区', () => {
             summary: { status: 'completed', completed: 1, total: 1 }, next_poll_ms: null,
           }
         : {
-            paper: { title: 'Hydride study', authors: [], research_materials: ['LaH10'] },
+            paper: {
+              title: 'Hydride study', authors: [], research_materials: ['LaH10'],
+              referenced_materials: ['H3S'],
+            },
             key_properties: [], sc_type: 'hydride', classification_evidence: [], field_evidence: {},
           }
       return new Response(JSON.stringify({ ok: true, data }), {
@@ -136,7 +139,76 @@ describe('论文上传工作区', () => {
     render(<UploadParsingDetail taskId={'d'.repeat(32)} onSubmitted={vi.fn()} />)
 
     expect(await screen.findByRole('textbox', { name: '标题' })).toHaveValue('Hydride study')
+    expect(screen.queryByRole('textbox', { name: '引用材料（每行一个）' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '提交审核' })).toBeVisible()
+  })
+
+  it('按材料状态显示压力、空间群和电子声子参数，并以新契约保存', async () => {
+    const savedBodies: unknown[] = []
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (init?.method === 'PUT') {
+        savedBodies.push(JSON.parse(String(init.body)))
+        return new Response(JSON.stringify({ ok: true, data: JSON.parse(String(init.body)) }), {
+          status: 200, headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      const data = url.endsWith('/parsing')
+        ? {
+            status: 'ready', stage: 'ready', files: [], chunks: [],
+            form_preview: { status: 'ready', read_only: false, groups: [] },
+            summary: { status: 'completed', completed: 1, total: 1 }, next_poll_ms: null,
+          }
+        : {
+            paper: {
+              title: 'Li2MgH16 study', authors: [], paper_type: 'theoretical',
+              theoretical_subtype: 'calculation', research_materials: ['Li2MgH16'],
+            },
+            material_states: [{
+              material: 'Li2MgH16',
+              pressure_value_gpa: 300,
+              pressure_raw: '300',
+              pressure_unit_raw: 'GPa',
+              state_kind: 'theoretical',
+              reported_space_group_symbol: 'Fd-3m',
+              reported_space_group_number: 227,
+              calculation_context: {
+                phonon_nuclear_treatment: 'unknown',
+                lambda_ep: 3.35,
+                omega_log_k: null,
+              },
+              experimental_context: null,
+              tc_results: [],
+              properties: [],
+            }],
+            sc_type: '高压氢化物', classification_evidence: [], field_evidence: {},
+          }
+      return new Response(JSON.stringify({ ok: true, data }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      })
+    }))
+
+    render(<UploadParsingDetail taskId={'f'.repeat(32)} onSubmitted={vi.fn()} />)
+
+    expect(await screen.findByRole('textbox', { name: '材料' })).toHaveValue('Li2MgH16')
+    expect(screen.getByRole('spinbutton', { name: '压力 (GPa)' })).toHaveValue(300)
+    expect(screen.getByRole('textbox', { name: '空间群符号' })).toHaveValue('Fd-3m')
+    expect(screen.getByRole('spinbutton', { name: '空间群号' })).toHaveValue(227)
+    expect(screen.getByRole('spinbutton', { name: '电声耦合强度 λ' })).toHaveValue(3.35)
+    expect(screen.getByRole('spinbutton', { name: '对数声子频率 ωlog (K)' })).toHaveValue(null)
+
+    fireEvent.click(screen.getByRole('button', { name: '立即保存' }))
+    await waitFor(() => expect(savedBodies).toHaveLength(1))
+    expect(savedBodies[0]).toMatchObject({
+      material_states: [{
+        material: 'Li2MgH16',
+        pressure_value_gpa: 300,
+        reported_space_group_symbol: 'Fd-3m',
+        reported_space_group_number: 227,
+        calculation_context: { lambda_ep: 3.35, omega_log_k: null },
+      }],
+    })
+    expect(savedBodies[0]).not.toHaveProperty('key_properties')
   })
 
   it('临时表单并列显示冲突候选及其文件来源', async () => {

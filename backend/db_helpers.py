@@ -98,3 +98,11 @@ def normalize_formula(formula: str) -> tuple[str, list[str], dict[str, Decimal],
         amount = composition[symbol]
         normalized_parts.append(symbol if amount == 1 else f"{symbol}{_format_formula_amount(amount)}")
     return "".join(normalized_parts), elements, composition, ratios
+
+
+def build_composition_key(composition: dict[str, Decimal]) -> str:
+    """Build the stable, isotope-free composition identity used by the core schema."""
+    return "|".join(
+        f"{symbol}:{_format_formula_amount(composition[symbol])}"
+        for symbol in sorted(composition)
+    )

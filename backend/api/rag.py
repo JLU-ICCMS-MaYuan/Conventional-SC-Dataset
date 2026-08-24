@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
-from backend.models import KeyProperty, Paper, PaperChunk, PaperEvidence, PaperFile, User
+from backend.models import Paper, PaperChunk, PaperEvidence, PaperFile, User
 from backend.rag import service
 from backend.security import get_current_admin, get_current_user
 
@@ -115,14 +115,14 @@ async def _save_task_upload(file: UploadFile, user: User, file_kind: str) -> dic
 
 def _draft_values(draft: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     paper = draft.get("paper")
-    properties = draft.get("key_properties")
-    if not isinstance(paper, dict) or not isinstance(properties, list):
+    material_states = draft.get("material_states")
+    if not isinstance(paper, dict) or not isinstance(material_states, list):
         raise _upload_error(400, "invalid_draft", "草稿结构不完整")
-    return paper, [item for item in properties if isinstance(item, dict)]
+    return paper, [item for item in material_states if isinstance(item, dict)]
 
 
 def _validate_draft(draft: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    paper, properties = _draft_values(draft)
+    paper, material_states = _draft_values(draft)
     if not str(paper.get("title") or "").strip():
         raise _upload_error(400, "title_required", "论文标题不能为空")
 
@@ -144,20 +144,44 @@ def _validate_draft(draft: dict[str, Any]) -> tuple[dict[str, Any], list[dict[st
     suggested_sc_type = str(draft.get("sc_type") or "")
     if len(suggested_sc_type) > 20:
         raise _upload_error(400, "sc_type_too_long", "超导材料类型最多 20 个字符")
-    for index, item in enumerate(properties):
-        if not str(item.get("material") or "").strip():
-            raise _upload_error(400, "property_material_required", f"第 {index + 1} 条物性缺少材料")
-        if not str(item.get("name") or item.get("name_raw") or "").strip():
-            raise _upload_error(400, "property_name_required", f"第 {index + 1} 条物性缺少名称")
-        has_value = any(item.get(key) not in (None, "") for key in ("value", "value_min", "value_max", "value_raw"))
-        if not has_value:
-            raise _upload_error(400, "property_value_required", f"第 {index + 1} 条物性缺少数值或原始文本")
-        if item.get("article_type") not in {"e", "t"}:
-            raise _upload_error(400, "property_article_type_required", f"第 {index + 1} 条物性必须标记实验值或理论值")
-        sc_type = str(item.get("superconductor_type") or suggested_sc_type)
-        if len(sc_type) > 20:
-            raise _upload_error(400, "sc_type_too_long", f"第 {index + 1} 条物性的材料类型最多 20 个字符")
-    return paper, properties
+    if paper_type != "review" and not material_states:
+        raise _upload_error(400, "material_state_required", "非综述论文至少需要一个材料状态")
+    for state_index, state in enumerate(material_states):
+        if not str(state.get("material") or "").strip():
+            raise _upload_error(400, "state_material_required", f"第 {state_index + 1} 个材料状态缺少材料")
+        group_number = state.get("reported_space_group_number")
+        if group_number not in (None, ""):
+            try:
+                valid_group_number = 1 <= int(group_number) <= 230
+            except (TypeError, ValueError):
+                valid_group_number = False
+            if not valid_group_number:
+                raise _upload_error(400, "invalid_space_group_number", f"第 {state_index + 1} 个材料状态的空间群号必须为 1–230")
+        calculation = state.get("calculation_context")
+        if isinstance(calculation, dict):
+            for field, label in (("lambda_ep", "λ"), ("omega_log_k", "ωlog")):
+                value = _number(calculation.get(field))
+                if value is not None and value < 0:
+                    raise _upload_error(400, "invalid_calculation_parameter", f"第 {state_index + 1} 个材料状态的 {label} 不能为负数")
+        for tc_index, item in enumerate(state.get("tc_results") or []):
+            if not isinstance(item, dict):
+                continue
+            kind = item.get("result_kind")
+            if kind not in {"theoretical", "experimental"}:
+                raise _upload_error(400, "invalid_tc_result_kind", f"第 {state_index + 1} 个材料状态的第 {tc_index + 1} 条 Tc 缺少结果类型")
+            if not any(item.get(key) not in (None, "") for key in ("tc_value_k", "tc_min_k", "tc_max_k", "value_raw")):
+                raise _upload_error(400, "tc_value_required", f"第 {state_index + 1} 个材料状态的第 {tc_index + 1} 条 Tc 缺少数值")
+        for property_index, item in enumerate(state.get("properties") or []):
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name") or item.get("name_raw") or "").strip()
+            if not name:
+                raise _upload_error(400, "property_name_required", f"第 {state_index + 1} 个材料状态的第 {property_index + 1} 条普通物性缺少名称")
+            if name.lower() in {"tc", "critical_temperature", "electron_phonon_coupling", "omega_log", "space_group"}:
+                raise _upload_error(400, "dedicated_property_required", f"{name} 必须填写到专用字段")
+            if not any(item.get(key) not in (None, "") for key in ("value", "value_min", "value_max", "value_raw")):
+                raise _upload_error(400, "property_value_required", f"第 {state_index + 1} 个材料状态的第 {property_index + 1} 条普通物性缺少数值")
+    return paper, material_states
 
 
 def _number(value: Any) -> float | None:
@@ -669,12 +693,16 @@ async def _create_pending_paper(
     draft: dict[str, Any],
 ) -> int:
     from backend.ingest.chunker import chunk_paper
-    from backend.ingest.prop_names import normalize_prop_name
-    from backend.ingest.upload_jobs import normalize_doi
+    from backend.ingest.scientific_drafts import (
+        add_scientific_evidence_link,
+        persist_scientific_draft,
+    )
+    from backend.ingest.upload_jobs import _normalize_draft, normalize_doi
     from backend.ingest.upload_tasks import markdown_path
     from backend.rag.database import async_session_factory
 
-    paper_data, properties = _validate_draft(draft)
+    draft = _normalize_draft(draft)
+    paper_data, material_states = _validate_draft(draft)
     doi = normalize_doi(paper_data.get("doi"))
     md_path = markdown_path(task_id)
     markdown = md_path.read_text(encoding="utf-8") if md_path.exists() else ""
@@ -720,7 +748,6 @@ async def _create_pending_paper(
                     key_finding=paper_data.get("key_finding"),
                     rationale=draft.get("classification_reason") or paper_data.get("rationale"),
                     research_materials=paper_data.get("research_materials") or [],
-                    referenced_materials=paper_data.get("referenced_materials") or [],
                     material_relations=paper_data.get("material_relations") or [],
                     builds_on=paper_data.get("builds_on") or [],
                     review_status="pending",
@@ -757,34 +784,7 @@ async def _create_pending_paper(
                     await session.flush()
                     paper_files[str(source.get("file_id") or index)] = paper_file
 
-                for item in properties:
-                    name_raw = str(item.get("name_raw") or item.get("name") or "").strip()
-                    name, _matched = normalize_prop_name(str(item.get("name") or name_raw))
-                    value_min, value_max, value_raw = _property_values(item)
-                    condition = item.get("condition") if isinstance(item.get("condition"), dict) else {}
-                    session.add(
-                        KeyProperty(
-                            paper_id=paper.id,
-                            material=str(item.get("material")).strip(),
-                            name=name[:100],
-                            name_raw=name_raw[:255],
-                            name_note=item.get("name_note"),
-                            value_min=value_min,
-                            value_max=value_max,
-                            value_raw=value_raw,
-                            unit=item.get("unit"),
-                            pressure_gpa=_number(item.get("pressure_gpa") or condition.get("pressure")),
-                            temperature_k=_number(item.get("temperature_k") or condition.get("temperature")),
-                            condition_json=condition or None,
-                            condition_note=item.get("condition_note"),
-                            is_primary=bool(item.get("is_primary")),
-                            superconductor_type=item.get("superconductor_type") or draft.get("sc_type") or None,
-                            article_type=item.get("article_type"),
-                            source_label="upload",
-                            structure_text=item.get("structure_text"),
-                            structure_format=item.get("structure_format"),
-                        )
-                    )
+                scientific_targets = await persist_scientific_draft(session, paper, draft)
 
                 extracted_root = md_path.parent / task_id
                 if source_files and extracted_root.is_dir():
@@ -826,12 +826,9 @@ async def _create_pending_paper(
 
                 evidence_groups = [
                     ("classification", draft.get("classification_evidence") or []),
-                    *[
-                        (f"key_properties[{index}]", [item.get("evidence")])
-                        for index, item in enumerate(properties)
-                        if isinstance(item.get("evidence"), dict)
-                    ],
+                    *[(target.field_path, [target.evidence]) for target in scientific_targets],
                 ]
+                targets_by_path = {target.field_path: target for target in scientific_targets}
                 for field_path, evidences in evidence_groups:
                     for evidence in evidences:
                         if not isinstance(evidence, dict) or not str(evidence.get("quote") or "").strip():
@@ -862,7 +859,7 @@ async def _create_pending_paper(
                                 paper_chunk = matches[0]
                         if paper_chunk is None:
                             continue
-                        session.add(PaperEvidence(
+                        paper_evidence = PaperEvidence(
                             paper_id=paper.id,
                             paper_revision=paper.content_revision,
                             paper_chunk_id=paper_chunk.id,
@@ -871,11 +868,16 @@ async def _create_pending_paper(
                             page_start=page,
                             page_end=evidence.get("page_end") or page,
                             quote=str(evidence["quote"]),
-                        ))
+                        )
+                        session.add(paper_evidence)
+                        await session.flush()
+                        target = targets_by_path.get(field_path)
+                        if target is not None:
+                            add_scientific_evidence_link(session, target, paper_evidence)
                 paper_id = paper.id
         return paper_id
     except IntegrityError as exc:
-        raise _upload_error(409, "duplicate_doi", "该论文已经存在") from exc
+        raise _upload_error(409, "scientific_data_integrity_error", "科学数据不满足完整性约束") from exc
 
 
 async def _submitted_paper_for_task(task_id: str) -> dict[str, Any] | None:

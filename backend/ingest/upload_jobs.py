@@ -12,6 +12,7 @@ from typing import Any
 from sqlalchemy import and_, func
 
 from backend.database import SessionLocal
+from backend.db_helpers import normalize_formula
 from backend.ingest.chunker import Chunk, chunk_paper
 from backend.ingest.extractor import _parse_result
 from backend.ingest.pdf_extractor import extract_text_from_pdf
@@ -37,6 +38,10 @@ CHUNK_SYSTEM_PROMPT = """你是超导论文证据提取助手。只根据给出�
 referenced_work 表示前人研究、引用论文或领域背景。同一分段同时含两类陈述时分别输出。
 前人实验、理论预测或综述叙述不能作为本文自身类型证据。材料类型 value 允许自由文本，但必须描述
 材料家族或体系，不能用临界温度高低、配对机制或计算方法代替材料类型。
+referenced_materials 仅作为后台排除误判的临时候选，不进入用户界面、最终草稿或正式论文数据。
+每个压力条件单独建立 material_state；压力同时保留换算后的 GPa 数值和论文原始文本/单位。
+空间群必须拆为 Hermann–Mauguin 符号与国际群号。λ 写入 lambda_ep，ωlog 写入 omega_log_k（K）；
+原文未报告的字段必须为 null。Tc 写入 tc_results，不得混入普通 properties。
 
 返回结构：
 {
@@ -45,17 +50,26 @@ referenced_work 表示前人研究、引用论文或领域背景。同一分段�
   "research_materials": [],
   "referenced_materials": [],
   "material_relations": [{"material": "", "relation": "discovers|investigates|predicts", "page": 1, "quote": ""}],
-  "key_properties": [{"material": "", "name": "", "value": null, "unit": null, "condition": {}, "is_primary": false, "article_type": "e|t", "page": 1, "quote": ""}],
+  "material_states": [{
+    "material": "", "phase_label": null,
+    "pressure_value_gpa": null, "pressure_min_gpa": null, "pressure_max_gpa": null,
+    "pressure_raw": null, "pressure_unit_raw": null,
+    "state_kind": "theoretical|experimental|mixed|unknown",
+    "reported_space_group_symbol": null, "reported_space_group_number": null,
+    "calculation_context": {"lambda_ep": null, "omega_log_k": null, "mu_star": null},
+    "tc_results": [], "properties": [],
+    "evidence": {"page": 1, "quote": "原文"}
+  }],
   "methodology": [],
   "key_findings": [],
   "sc_type_candidates": [{"value": "自由材料类型", "scope": "current_paper|referenced_work", "page": 1, "quote": ""}]
 }"""
 
-CHUNK_RESULT_SCHEMA_VERSION = 2
+CHUNK_RESULT_SCHEMA_VERSION = 3
 
 PUBLIC_CHUNK_RESULT_FIELDS = {
-    "metadata", "paper_type_evidence", "research_materials", "referenced_materials",
-    "material_relations", "key_properties", "methodology", "key_findings",
+    "metadata", "paper_type_evidence", "research_materials",
+    "material_relations", "material_states", "methodology", "key_findings",
     "sc_type_candidates", "_source",
 }
 
@@ -73,16 +87,16 @@ FORM_PREVIEW_GROUPS = (
         ("paper.summary", "全文摘要"), ("paper.keywords_tags", "关键词"),
         ("paper.methodology", "研究方法"), ("paper.key_finding", "主要结论"),
         ("paper.rationale", "判断依据"), ("paper.research_materials", "研究材料"),
-        ("paper.referenced_materials", "引用材料"), ("paper.material_relations", "材料关系"),
+        ("paper.material_relations", "材料关系"),
         ("paper.builds_on", "工作脉络"),
     )),
-    ("properties", "关键物性", (("key_properties", "物性数据"),)),
+    ("properties", "关键物性", (("material_states", "材料状态与物性数据"),)),
 )
 
 FORM_PREVIEW_MULTI_FIELDS = {
     "paper.authors", "paper.keywords_tags", "paper.methodology", "paper.key_finding",
-    "paper.research_materials", "paper.referenced_materials", "paper.material_relations",
-    "paper.builds_on", "key_properties",
+    "paper.research_materials", "paper.material_relations",
+    "paper.builds_on", "material_states",
 }
 
 FORM_PREVIEW_CLASSIFICATION_FIELDS = {
@@ -104,8 +118,12 @@ SUMMARY_SYSTEM_PROMPT = """你是超导材料论文分类与结构化提取专�
 材料超导类型必须综合全文判断，可以使用已有类型，也可以提出自由文本新类型，不能只凭化学式猜测。
 分段证据中的 scope 表示证据主体；只有 scope=current_paper 的候选可以决定本文 paper_type 和 sc_type，
 scope=referenced_work 或缺少 scope 的候选只能作为背景，不能参与本文分类。
+referenced_materials 仅用于帮助区分本文对象与背景对象，最终草稿不要返回该字段。
 论文整体 paper_type 与每条物性的 article_type 必须分别判断，article_type 只允许 e 或 t。
 每个关键分类和物性保留 section/page/quote 证据；无法确定就返回 unknown 或空值，不要编造。
+按材料、物相和压力合并 material_states。空间群符号与群号必须分开；λ、ωlog 只写入
+calculation_context，Tc 只写入 tc_results。压力优先换算为 GPa，同时保留 pressure_raw 和
+pressure_unit_raw；无法可靠换算或原文没有报告时保留原文并将规范数值设为 null。
 
 返回结构：
 {
@@ -113,13 +131,28 @@ scope=referenced_work 或缺少 scope 的候选只能作为背景，不能参与
     "title": "", "doi": null, "authors": [], "journal": null, "volume": null, "pages": null,
     "year": null, "abstract": null, "summary": "", "paper_type": "theoretical|experimental|review|unknown",
     "theoretical_subtype": null, "keywords_tags": [], "methodology": [], "key_finding": "",
-    "rationale": "", "research_materials": [], "referenced_materials": [], "material_relations": [], "builds_on": []
+    "rationale": "", "research_materials": [], "material_relations": [], "builds_on": []
   },
-  "key_properties": [{
-    "material": "", "name": "", "name_raw": "", "value": null, "unit": null,
-    "condition": {}, "condition_note": null, "is_primary": false,
-    "superconductor_type": "", "article_type": "e|t",
-    "evidence": {"section": "", "page": null, "quote": ""}
+  "material_states": [{
+    "material": "", "phase_label": null,
+    "pressure_value_gpa": null, "pressure_min_gpa": null, "pressure_max_gpa": null,
+    "pressure_raw": null, "pressure_unit_raw": null,
+    "state_kind": "theoretical|experimental|mixed|unknown",
+    "reported_space_group_symbol": null, "reported_space_group_number": null,
+    "space_group_evidence": {"section": "", "page": null, "quote": ""},
+    "structure": null,
+    "calculation_context": {
+      "phonon_nuclear_treatment": "unknown", "lambda_ep": null,
+      "omega_log_k": null, "mu_star": null,
+      "evidence": {"section": "", "page": null, "quote": ""}
+    },
+    "experimental_context": null,
+    "tc_results": [{
+      "result_kind": "theoretical|experimental", "tc_method": "unknown|experimental|allen_dynes|mcmillan|isotropic_eliashberg|anisotropic_eliashberg",
+      "tc_value_k": null, "tc_min_k": null, "tc_max_k": null,
+      "value_raw": "", "unit_raw": "K", "evidence": {"section": "", "page": null, "quote": ""}
+    }],
+    "properties": []
   }],
   "classification_reason": "",
   "classification_evidence": [{"section": "", "page": null, "quote": ""}],
@@ -355,7 +388,7 @@ def _build_form_preview(chunks: list[dict[str, Any]], state: dict[str, Any]) -> 
     def add(path: str, value: Any, chunk: dict[str, Any], evidence: Any = None) -> None:
         if value in (None, "", [], {}):
             return
-        if path == "key_properties" and isinstance(value, dict):
+        if path == "material_states" and isinstance(value, dict):
             value = {
                 key: item for key, item in value.items()
                 if key not in {"page", "quote", "evidence", "_source"}
@@ -384,15 +417,14 @@ def _build_form_preview(chunks: list[dict[str, Any]], state: dict[str, Any]) -> 
                 add("sc_type", _preview_item_value(item, "value", "candidate"), chunk, item)
         for result_key, path, keys in (
             ("research_materials", "paper.research_materials", ("value", "material", "name")),
-            ("referenced_materials", "paper.referenced_materials", ("value", "material", "name")),
             ("methodology", "paper.methodology", ("value", "method", "name")),
             ("key_findings", "paper.key_finding", ("value", "finding", "text")),
             ("material_relations", "paper.material_relations", ()),
         ):
             for item in result.get(result_key) or []:
                 add(path, _preview_item_value(item, *keys) if keys else item, chunk, item)
-        for item in result.get("key_properties") or []:
-            add("key_properties", item, chunk, item)
+        for item in result.get("material_states") or []:
+            add("material_states", item, chunk, item)
 
     task_status = state.get("status")
     classification_pending = task_status in {"reading", "summarizing"}
@@ -529,6 +561,235 @@ def _flatten_properties(value: Any) -> list[dict[str, Any]]:
     return rows
 
 
+SPACE_GROUP_NUMBERS = {
+    "Fd-3m": 227,
+    "P-3m1": 164,
+}
+
+
+def _formula_from_material(value: Any) -> str:
+    text = str(value or "").strip()
+    try:
+        normalize_formula(text)
+        return text
+    except ValueError:
+        pass
+    candidates = [
+        token
+        for token in re.split(r"[^A-Za-z0-9.]+", text)
+        if re.fullmatch(r"(?:[A-Z][a-z]?(?:\d+(?:\.\d+)?)?)+", token or "")
+    ]
+    for candidate in sorted(candidates, key=len, reverse=True):
+        try:
+            normalize_formula(candidate)
+            return candidate
+        except ValueError:
+            continue
+    return text
+
+
+def _condition_pressure(item: dict[str, Any]) -> tuple[float | None, float | None, float | None, str | None, str | None]:
+    condition = item.get("condition") if isinstance(item.get("condition"), dict) else {}
+    raw = item.get("pressure_gpa")
+    unit = "GPa" if raw not in (None, "") else None
+    if raw in (None, ""):
+        raw = condition.get("pressure")
+        unit = condition.get("pressure_unit")
+    if isinstance(raw, dict):
+        unit = raw.get("unit") or unit
+        raw = raw.get("value")
+    if raw in (None, ""):
+        return None, None, None, None, unit
+    raw_text = str(raw).strip()
+    numbers = [
+        float(match)
+        for match in re.findall(r"[-+]?\d+(?:\.\d+)?", raw_text)
+    ]
+    if not numbers:
+        return None, None, None, raw_text, unit
+    if unit and str(unit).strip().lower() != "gpa":
+        return None, None, None, raw_text, str(unit)
+    if len(numbers) >= 2 and re.search(r"[-–—~～]|\bto\b", raw_text, re.IGNORECASE):
+        return None, min(numbers[0], numbers[1]), max(numbers[0], numbers[1]), raw_text, unit or "GPa"
+    value = numbers[0]
+    return value, None, None, raw_text, unit or "GPa"
+
+
+def _numeric_value(value: Any) -> float | None:
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    match = re.search(r"[-+]?\d+(?:\.\d+)?", str(value or ""))
+    return float(match.group()) if match else None
+
+
+def _numeric_range(value: Any) -> tuple[float | None, float | None, float | None]:
+    text = str(value or "").strip()
+    numbers = [float(item) for item in re.findall(r"[-+]?\d+(?:\.\d+)?", text)]
+    if len(numbers) >= 2 and re.search(r"[-–—~～]|\bto\b", text, re.IGNORECASE):
+        return None, min(numbers[0], numbers[1]), max(numbers[0], numbers[1])
+    return (numbers[0], None, None) if numbers else (None, None, None)
+
+
+def _legacy_properties_to_material_states(properties: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    states: dict[tuple[Any, ...], dict[str, Any]] = {}
+    for item in properties:
+        material = _formula_from_material(item.get("material"))
+        pressure_value, pressure_min, pressure_max, pressure_raw, pressure_unit = _condition_pressure(item)
+        article_type = item.get("article_type")
+        state_kind = "theoretical" if article_type == "t" else "experimental" if article_type == "e" else "unknown"
+        key = (material, pressure_value, pressure_min, pressure_max, state_kind)
+        state = states.setdefault(key, {
+            "material": material,
+            "phase_label": None,
+            "pressure_value_gpa": pressure_value,
+            "pressure_min_gpa": pressure_min,
+            "pressure_max_gpa": pressure_max,
+            "pressure_raw": pressure_raw,
+            "pressure_unit_raw": pressure_unit,
+            "state_kind": state_kind,
+            "reported_space_group_symbol": None,
+            "reported_space_group_number": None,
+            "structure": None,
+            "calculation_context": {
+                "phonon_nuclear_treatment": "unknown",
+                "lambda_ep": None,
+                "omega_log_k": None,
+                "mu_star": None,
+            } if state_kind == "theoretical" else None,
+            "experimental_context": {
+                "tc_criterion": "unknown",
+            } if state_kind == "experimental" else None,
+            "tc_results": [],
+            "properties": [],
+        })
+
+        raw_name = str(item.get("name_raw") or item.get("name") or "").strip()
+        name = str(item.get("name") or raw_name).strip()
+        lowered = f"{name} {raw_name}".lower()
+        value = item.get("value_raw") if item.get("value_raw") not in (None, "") else item.get("value")
+        evidence = item.get("evidence")
+
+        if "space group" in lowered or name.lower() == "crystal structure":
+            symbol = str(value or "").strip()
+            if symbol:
+                state["reported_space_group_symbol"] = symbol
+                state["reported_space_group_number"] = SPACE_GROUP_NUMBERS.get(symbol)
+                state["space_group_evidence"] = evidence
+            continue
+        if "electron-phonon coupling" in lowered or raw_name == "λ" or name == "electron_phonon_coupling":
+            if state["calculation_context"] is None:
+                state["calculation_context"] = {
+                    "phonon_nuclear_treatment": "unknown",
+                    "lambda_ep": None,
+                    "omega_log_k": None,
+                    "mu_star": None,
+                }
+            state["calculation_context"]["lambda_ep"] = _numeric_value(value)
+            state["calculation_context"]["evidence"] = evidence
+            continue
+        if "omega_log" in lowered or "ω_log" in lowered or "ωlog" in lowered:
+            if state["calculation_context"] is None:
+                state["calculation_context"] = {
+                    "phonon_nuclear_treatment": "unknown",
+                    "lambda_ep": None,
+                    "omega_log_k": None,
+                    "mu_star": None,
+                }
+            state["calculation_context"]["omega_log_k"] = _numeric_value(value)
+            state["calculation_context"]["evidence"] = evidence
+            continue
+        if (
+            "critical temperature" in lowered
+            or "transition temperature" in lowered
+            or name.lower() == "critical_temperature"
+            or raw_name.lower() == "tc"
+        ):
+            tc_value, tc_min, tc_max = _numeric_range(value)
+            state["tc_results"].append({
+                "result_kind": state_kind if state_kind in {"theoretical", "experimental"} else "theoretical",
+                "tc_method": "experimental" if state_kind == "experimental" else "unknown",
+                "tc_value_k": tc_value,
+                "tc_min_k": tc_min,
+                "tc_max_k": tc_max,
+                "value_raw": str(value or ""),
+                "unit_raw": str(item.get("unit") or "K"),
+                "is_representative": bool(item.get("is_primary")),
+                "evidence": evidence,
+            })
+            continue
+
+        property_item = dict(item)
+        property_item["material"] = material
+        property_item.setdefault("value_raw", str(value or ""))
+        state["properties"].append(property_item)
+    return list(states.values())
+
+
+def _normalize_material_states(value: Any) -> list[dict[str, Any]]:
+    states = []
+    for raw in _as_list(value):
+        if not isinstance(raw, dict):
+            continue
+        state = dict(raw)
+        state["material"] = _formula_from_material(state.get("material"))
+        state.setdefault("phase_label", None)
+        pressure_value, pressure_min, pressure_max, pressure_raw, pressure_unit = _condition_pressure(state)
+        state["pressure_value_gpa"] = _numeric_value(state.get("pressure_value_gpa")) if state.get("pressure_value_gpa") not in (None, "") else pressure_value
+        state["pressure_min_gpa"] = _numeric_value(state.get("pressure_min_gpa")) if state.get("pressure_min_gpa") not in (None, "") else pressure_min
+        state["pressure_max_gpa"] = _numeric_value(state.get("pressure_max_gpa")) if state.get("pressure_max_gpa") not in (None, "") else pressure_max
+        state["pressure_raw"] = state.get("pressure_raw") or pressure_raw
+        state["pressure_unit_raw"] = state.get("pressure_unit_raw") or pressure_unit
+        if state["pressure_raw"] in (None, "") and state["pressure_value_gpa"] is not None:
+            state["pressure_raw"] = str(state["pressure_value_gpa"])
+            state["pressure_unit_raw"] = state["pressure_unit_raw"] or "GPa"
+        state.setdefault("state_kind", "unknown")
+        state.setdefault("reported_space_group_symbol", None)
+        if state.get("reported_space_group_number") in (None, ""):
+            state["reported_space_group_number"] = SPACE_GROUP_NUMBERS.get(
+                str(state.get("reported_space_group_symbol") or "")
+            )
+        else:
+            state["reported_space_group_number"] = int(state["reported_space_group_number"])
+        state.setdefault("structure", None)
+        calculation = state.get("calculation_context")
+        if isinstance(calculation, dict):
+            calculation = dict(calculation)
+            calculation.setdefault("phonon_nuclear_treatment", "unknown")
+            calculation["lambda_ep"] = _numeric_value(
+                calculation.get("lambda_ep", calculation.get("lambda"))
+            )
+            calculation["omega_log_k"] = _numeric_value(
+                calculation.get("omega_log_k", calculation.get("wlog"))
+            )
+            calculation["mu_star"] = _numeric_value(calculation.get("mu_star"))
+            state["calculation_context"] = calculation
+        else:
+            state["calculation_context"] = None
+        state.setdefault("experimental_context", None)
+        tc_results = []
+        for item in _as_list(state.get("tc_results")):
+            if not isinstance(item, dict):
+                continue
+            result = dict(item)
+            raw_value = result.get("value_raw") or result.get("value") or result.get("tc_value_k")
+            parsed_value, parsed_min, parsed_max = _numeric_range(raw_value)
+            result["tc_value_k"] = _numeric_value(result.get("tc_value_k")) if result.get("tc_value_k") not in (None, "") else parsed_value
+            result["tc_min_k"] = _numeric_value(result.get("tc_min_k")) if result.get("tc_min_k") not in (None, "") else parsed_min
+            result["tc_max_k"] = _numeric_value(result.get("tc_max_k")) if result.get("tc_max_k") not in (None, "") else parsed_max
+            result["value_raw"] = str(raw_value or "")
+            result.setdefault("unit_raw", result.get("unit") or "K")
+            result.setdefault("result_kind", "theoretical" if state["state_kind"] == "theoretical" else "experimental" if state["state_kind"] == "experimental" else "theoretical")
+            result.setdefault("tc_method", "experimental" if result["result_kind"] == "experimental" else "unknown")
+            result.setdefault("is_representative", False)
+            tc_results.append(result)
+        state["tc_results"] = tc_results
+        state["properties"] = [
+            dict(item) for item in _as_list(state.get("properties")) if isinstance(item, dict)
+        ]
+        states.append(state)
+    return states
+
+
 def _normalize_draft(raw: dict[str, Any]) -> dict[str, Any]:
     parsed = _parse_result(raw)
     raw_paper = raw.get("paper") if isinstance(raw.get("paper"), dict) else raw
@@ -544,10 +805,6 @@ def _normalize_draft(raw: dict[str, Any]) -> dict[str, Any]:
     research_materials, research_evidence = _normalize_text_items(
         raw_paper.get("research_materials"), "material", "value", "name",
     )
-    referenced_materials, referenced_evidence = _normalize_text_items(
-        raw_paper.get("referenced_materials"), "material", "value", "name",
-    )
-
     paper = {
         "title": raw_paper.get("title") or parsed.paper.get("title") or "",
         "doi": raw_paper.get("doi") or parsed.paper.get("doi"),
@@ -565,7 +822,6 @@ def _normalize_draft(raw: dict[str, Any]) -> dict[str, Any]:
         "key_finding": raw_paper.get("key_finding") or "",
         "rationale": raw_paper.get("rationale") or raw.get("classification_reason") or "",
         "research_materials": research_materials,
-        "referenced_materials": referenced_materials,
         "material_relations": _as_list(raw_paper.get("material_relations")),
         "builds_on": _as_list(raw_paper.get("builds_on")),
     }
@@ -586,18 +842,22 @@ def _normalize_draft(raw: dict[str, Any]) -> dict[str, Any]:
         }
     existing_field_evidence = raw.get("field_evidence")
     field_evidence = dict(existing_field_evidence) if isinstance(existing_field_evidence, dict) else {}
+    field_evidence.pop("referenced_materials", None)
     for field, values in {
         "keywords_tags": keywords_evidence,
         "methodology": methodology_evidence,
         "research_materials": research_evidence,
-        "referenced_materials": referenced_evidence,
     }.items():
         if values:
             field_evidence[field] = values
 
+    material_states = _normalize_material_states(raw.get("material_states"))
+    if not material_states and properties:
+        material_states = _legacy_properties_to_material_states(properties)
+
     return {
         "paper": paper,
-        "key_properties": properties,
+        "material_states": material_states,
         "classification_reason": raw.get("classification_reason") or paper["rationale"],
         "classification_evidence": _as_list(raw.get("classification_evidence")),
         "sc_type": raw.get("sc_type") or "",
@@ -607,7 +867,7 @@ def _normalize_draft(raw: dict[str, Any]) -> dict[str, Any]:
 
 
 def empty_draft() -> dict[str, Any]:
-    return _normalize_draft({"paper": {"paper_type": "unknown"}, "key_properties": []})
+    return _normalize_draft({"paper": {"paper_type": "unknown"}, "material_states": []})
 
 
 def normalize_doi(value: Any) -> str | None:
@@ -862,7 +1122,20 @@ def process_upload_task(task_id: str) -> dict[str, Any]:
                     "user_values": None,
                     "evidence": {
                         "classification": draft.get("classification_evidence", []),
-                        "key_properties": [item.get("evidence") for item in draft["key_properties"]],
+                        "material_states": [
+                            {
+                                "space_group": item.get("space_group_evidence"),
+                                "calculation_context": (
+                                    item.get("calculation_context") or {}
+                                ).get("evidence"),
+                                "tc_results": [
+                                    result.get("evidence")
+                                    for result in item.get("tc_results") or []
+                                    if isinstance(result, dict)
+                                ],
+                            }
+                            for item in draft["material_states"]
+                        ],
                     },
                 },
                 ensure_ascii=False,

@@ -214,29 +214,31 @@ type Superconductor struct {
 
 // MaterialState 一篇论文当前 revision 中材料的条件化状态。
 type MaterialState struct {
-	ID                   uint64                   `gorm:"primaryKey;uniqueIndex:uq_material_states_identity_revision,priority:1" json:"id"`
-	PaperID              uint                     `gorm:"not null;index:ix_material_states_paper_revision,priority:1;uniqueIndex:uq_material_states_identity_revision,priority:2" json:"paper_id"`
-	PaperRevision        uint                     `gorm:"not null;index:ix_material_states_paper_revision,priority:2;uniqueIndex:uq_material_states_identity_revision,priority:3" json:"paper_revision"`
-	SuperconductorID     uint                     `gorm:"not null;index" json:"superconductor_id"`
-	PhaseLabel           *string                  `gorm:"size:255" json:"phase_label"`
-	PressureValueGPa     *float64                 `json:"pressure_value_gpa"`
-	PressureMinGPa       *float64                 `json:"pressure_min_gpa"`
-	PressureMaxGPa       *float64                 `json:"pressure_max_gpa"`
-	PressureRaw          *string                  `gorm:"size:255" json:"pressure_raw"`
-	PressureUnitRaw      *string                  `gorm:"size:50" json:"pressure_unit_raw"`
-	TemperatureValueK    *float64                 `json:"temperature_value_k"`
-	TemperatureRaw       *string                  `gorm:"size:255" json:"temperature_raw"`
-	TemperatureUnitRaw   *string                  `gorm:"size:50" json:"temperature_unit_raw"`
-	MagneticFieldT       *float64                 `json:"magnetic_field_t"`
-	StateKind            string                   `gorm:"size:20;not null;default:unknown" json:"state_kind"`
-	Note                 *string                  `json:"note"`
-	CreatedAt            time.Time                `json:"created_at"`
-	UpdatedAt            time.Time                `json:"updated_at"`
-	Structures           []StructureModel         `gorm:"foreignKey:MaterialStateID" json:"structures,omitempty"`
-	CalculationContexts  []CalculationContext     `gorm:"foreignKey:MaterialStateID" json:"calculation_contexts,omitempty"`
-	ExperimentalContexts []ExperimentalContext    `gorm:"foreignKey:MaterialStateID" json:"experimental_contexts,omitempty"`
-	TcResults            []TcResult               `gorm:"foreignKey:MaterialStateID" json:"tc_results,omitempty"`
-	Properties           []SuperconductorProperty `gorm:"foreignKey:MaterialStateID" json:"properties,omitempty"`
+	ID                       uint64                   `gorm:"primaryKey;uniqueIndex:uq_material_states_identity_revision,priority:1" json:"id"`
+	PaperID                  uint                     `gorm:"not null;index:ix_material_states_paper_revision,priority:1;uniqueIndex:uq_material_states_identity_revision,priority:2" json:"paper_id"`
+	PaperRevision            uint                     `gorm:"not null;index:ix_material_states_paper_revision,priority:2;uniqueIndex:uq_material_states_identity_revision,priority:3" json:"paper_revision"`
+	SuperconductorID         uint                     `gorm:"not null;index" json:"superconductor_id"`
+	PhaseLabel               *string                  `gorm:"size:255" json:"phase_label"`
+	PressureValueGPa         *float64                 `json:"pressure_value_gpa"`
+	PressureMinGPa           *float64                 `json:"pressure_min_gpa"`
+	PressureMaxGPa           *float64                 `json:"pressure_max_gpa"`
+	PressureRaw              *string                  `gorm:"size:255" json:"pressure_raw"`
+	PressureUnitRaw          *string                  `gorm:"size:50" json:"pressure_unit_raw"`
+	ReportedSpaceGroupSymbol *string                  `gorm:"size:100" json:"reported_space_group_symbol"`
+	ReportedSpaceGroupNumber *int16                   `json:"reported_space_group_number"`
+	TemperatureValueK        *float64                 `json:"temperature_value_k"`
+	TemperatureRaw           *string                  `gorm:"size:255" json:"temperature_raw"`
+	TemperatureUnitRaw       *string                  `gorm:"size:50" json:"temperature_unit_raw"`
+	MagneticFieldT           *float64                 `json:"magnetic_field_t"`
+	StateKind                string                   `gorm:"size:20;not null;default:unknown" json:"state_kind"`
+	Note                     *string                  `json:"note"`
+	CreatedAt                time.Time                `json:"created_at"`
+	UpdatedAt                time.Time                `json:"updated_at"`
+	Structures               []StructureModel         `gorm:"foreignKey:MaterialStateID" json:"structures,omitempty"`
+	CalculationContexts      []CalculationContext     `gorm:"foreignKey:MaterialStateID" json:"calculation_contexts,omitempty"`
+	ExperimentalContexts     []ExperimentalContext    `gorm:"foreignKey:MaterialStateID" json:"experimental_contexts,omitempty"`
+	TcResults                []TcResult               `gorm:"foreignKey:MaterialStateID" json:"tc_results,omitempty"`
+	Properties               []SuperconductorProperty `gorm:"foreignKey:MaterialStateID" json:"properties,omitempty"`
 }
 
 // StructureModel 论文内独立保存的一个结构模型。

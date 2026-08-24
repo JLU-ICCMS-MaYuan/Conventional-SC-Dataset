@@ -9,6 +9,7 @@ os.environ.setdefault("JWT_SECRET_KEY", "test-only-secret")
 
 from backend.ingest.upload_jobs import (
     CHUNK_SYSTEM_PROMPT,
+    PUBLIC_CHUNK_RESULT_FIELDS,
     SUMMARY_SYSTEM_PROMPT,
     _chunks_with_preamble,
     _normalize_draft,
@@ -48,7 +49,83 @@ def test_normalize_draft_flattens_evidenced_text_lists():
     assert draft["paper"]["methodology"] == ["Eliashberg equations"]
     assert draft["field_evidence"]["research_materials"] == [evidence]
     assert draft["field_evidence"]["methodology"] == [evidence]
-    assert draft["key_properties"][0]["value_raw"] == "42"
+    assert draft["material_states"][0]["tc_results"][0]["value_raw"] == "42"
+
+
+def test_referenced_materials_remain_internal_and_are_removed_from_final_draft():
+    evidence = {"section": "Introduction", "page": 1, "quote": "LaH10 was reported previously."}
+    draft = _normalize_draft({
+        "paper": {
+            "paper_type": "theoretical",
+            "research_materials": ["Li2MgH16"],
+            "referenced_materials": [{"material": "LaH10", "evidence": evidence}],
+        },
+        "field_evidence": {"referenced_materials": [evidence]},
+    })
+
+    assert "referenced_materials" in CHUNK_SYSTEM_PROMPT
+    assert "referenced_materials" not in PUBLIC_CHUNK_RESULT_FIELDS
+    assert "referenced_materials" not in draft["paper"]
+    assert "referenced_materials" not in draft["field_evidence"]
+
+
+def test_normalize_legacy_li2mgh16_properties_into_scientific_material_state():
+    evidence = {
+        "section": "Main text",
+        "page": 3,
+        "quote": "Clathrate structure of Li2MgH16 with the space group Fd-3m at 300 GPa",
+    }
+    draft = _normalize_draft({
+        "paper": {
+            "paper_type": "theoretical",
+            "theoretical_subtype": "calculation",
+            "research_materials": ["Li2MgH16"],
+        },
+        "key_properties": [
+            {
+                "material": "Fd-3m-Li2MgH16",
+                "name": "superconducting transition temperature",
+                "name_raw": "Tc",
+                "value": 351,
+                "unit": "K",
+                "condition": {"pressure": 300, "pressure_unit": "GPa"},
+                "article_type": "t",
+                "evidence": evidence,
+            },
+            {
+                "material": "Li2MgH16",
+                "name": "crystal structure",
+                "name_raw": "space group",
+                "value": "Fd-3m",
+                "condition": {"pressure": 300, "pressure_unit": "GPa"},
+                "article_type": "t",
+                "evidence": evidence,
+            },
+            {
+                "material": "Li2MgH16",
+                "name": "electron-phonon coupling parameter",
+                "name_raw": "λ",
+                "value": 3.35,
+                "condition": {"pressure": {"value": 300, "unit": "GPa"}},
+                "article_type": "t",
+                "evidence": evidence,
+            },
+        ],
+    })
+
+    assert "key_properties" not in draft
+    assert len(draft["material_states"]) == 1
+    state = draft["material_states"][0]
+    assert state["material"] == "Li2MgH16"
+    assert state["pressure_value_gpa"] == 300
+    assert state["pressure_raw"] == "300"
+    assert state["pressure_unit_raw"] == "GPa"
+    assert state["reported_space_group_symbol"] == "Fd-3m"
+    assert state["reported_space_group_number"] == 227
+    assert state["calculation_context"]["lambda_ep"] == 3.35
+    assert state["calculation_context"]["omega_log_k"] is None
+    assert state["tc_results"][0]["value_raw"] == "351"
+    assert state["tc_results"][0]["tc_value_k"] == 351
 
 
 def test_property_values_prefer_user_edited_raw_value():
@@ -80,6 +157,10 @@ def test_summary_prompt_defines_mixed_theory_experiment_tie_breaker():
     assert "理论和实验同等重要、无法分主次，也归 experimental" in SUMMARY_SYSTEM_PROMPT
     assert "新算法、新模型、新研究工具归 method" in SUMMARY_SYSTEM_PROMPT
     assert "不能只凭化学式猜测" in SUMMARY_SYSTEM_PROMPT
+    assert "reported_space_group_number" in SUMMARY_SYSTEM_PROMPT
+    assert "lambda_ep" in SUMMARY_SYSTEM_PROMPT
+    assert "omega_log_k" in SUMMARY_SYSTEM_PROMPT
+    assert "pressure_value_gpa" in SUMMARY_SYSTEM_PROMPT
 
 
 def test_chunk_prompt_defines_evidence_scope_without_restricting_material_vocabulary():

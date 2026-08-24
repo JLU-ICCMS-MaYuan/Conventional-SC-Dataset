@@ -711,6 +711,10 @@ class MaterialState(Base):
             """,
             name="ck_material_states_nonnegative",
         ),
+        CheckConstraint(
+            "reported_space_group_number IS NULL OR reported_space_group_number BETWEEN 1 AND 230",
+            name="ck_material_states_reported_space_group",
+        ),
         UniqueConstraint(
             "id",
             "paper_id",
@@ -749,6 +753,8 @@ class MaterialState(Base):
     pressure_max_gpa = Column(Numeric(14, 6))
     pressure_raw = Column(String(255))
     pressure_unit_raw = Column(String(50))
+    reported_space_group_symbol = Column(String(100))
+    reported_space_group_number = Column(SmallInteger)
     temperature_value_k = Column(Numeric(14, 6))
     temperature_raw = Column(String(255))
     temperature_unit_raw = Column(String(50))

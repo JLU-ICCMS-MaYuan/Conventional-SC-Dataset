@@ -57,7 +57,11 @@ interface ReviewArtifact {
   user: UploadDraft
   evidence: {
     classification?: SourceEvidence[]
-    key_properties?: Array<SourceEvidence | SourceEvidence[] | null>
+    material_states?: Array<{
+      space_group?: SourceEvidence | SourceEvidence[] | null
+      calculation_context?: SourceEvidence | SourceEvidence[] | null
+      tc_results?: Array<SourceEvidence | SourceEvidence[] | null>
+    }>
   }
 }
 
@@ -807,17 +811,19 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
                     </Typography>
                   </Box>
                 ))}
-                {reviewArtifact.user.key_properties.map((property, index) => (
+                {reviewArtifact.user.material_states.map((state, index) => (
                   <Box key={index} sx={{ p: 1.25, bgcolor: 'action.hover', borderRadius: 1 }}>
                     <Typography variant="caption" fontWeight={700} display="block">
-                      物性 #{index + 1}：{property.material || '-'} · {property.name || property.name_raw || '-'} · {property.value_raw || property.value_max || property.value_min || '-'} {property.unit || ''}
+                      材料状态 #{index + 1}：{state.material || '-'} · {state.pressure_value_gpa ?? state.pressure_raw ?? '-'} {state.pressure_unit_raw || 'GPa'}
                     </Typography>
-                    {(Array.isArray(reviewArtifact.evidence.key_properties?.[index])
-                      ? reviewArtifact.evidence.key_properties?.[index] as SourceEvidence[]
-                      : reviewArtifact.evidence.key_properties?.[index]
-                        ? [reviewArtifact.evidence.key_properties[index] as SourceEvidence]
-                        : Array.isArray(property.evidence) ? property.evidence : property.evidence ? [property.evidence] : []
-                    ).map((item, itemIndex) => (
+                    <Typography variant="caption" display="block">
+                      空间群：{state.reported_space_group_symbol || '-'}（#{state.reported_space_group_number ?? '-'}） · λ：{state.calculation_context?.lambda_ep ?? '-'} · ωlog：{state.calculation_context?.omega_log_k ?? '-'} K
+                    </Typography>
+                    {[
+                      state.space_group_evidence,
+                      state.calculation_context?.evidence,
+                      ...(state.tc_results || []).map(item => item.evidence),
+                    ].flatMap(value => Array.isArray(value) ? value : value ? [value] : []).map((item, itemIndex) => (
                       <Typography key={itemIndex} variant="caption" color="text.secondary" display="block">
                         {[item.section, item.page ? `第 ${item.page} 页` : ''].filter(Boolean).join(' · ') || '原文'}
                         {item.quote ? `：“${item.quote}”` : ''}

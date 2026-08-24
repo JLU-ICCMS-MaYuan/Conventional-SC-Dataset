@@ -45,6 +45,16 @@ def test_identity_and_state_fields_are_not_duplicated_across_levels():
     assert "material_state_id" in Base.metadata.tables["calculation_contexts"].c
 
 
+def test_reported_space_group_is_available_without_fabricating_a_structure_model():
+    states = Base.metadata.tables["material_states"]
+
+    assert "reported_space_group_symbol" in states.c
+    assert "reported_space_group_number" in states.c
+    assert "ck_material_states_reported_space_group" in _constraint_names(
+        states, CheckConstraint
+    )
+
+
 def test_tc_results_are_longitudinal_and_have_one_representative_per_method():
     tc_results = Base.metadata.tables["tc_results"]
 

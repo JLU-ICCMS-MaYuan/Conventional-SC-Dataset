@@ -38,6 +38,49 @@ export interface DraftKeyProperty {
   evidence?: SourceEvidence | SourceEvidence[] | null
 }
 
+export interface DraftTcResult {
+  result_kind?: 'theoretical' | 'experimental' | string
+  tc_method?: string
+  tc_value_k?: number | null
+  tc_min_k?: number | null
+  tc_max_k?: number | null
+  value_raw?: string
+  unit_raw?: string
+  is_representative?: boolean
+  evidence?: SourceEvidence | SourceEvidence[] | null
+}
+
+export interface DraftCalculationContext {
+  phonon_nuclear_treatment?: string
+  lambda_ep?: number | null
+  omega_log_k?: number | null
+  mu_star?: number | null
+  evidence?: SourceEvidence | SourceEvidence[] | null
+}
+
+export interface DraftExperimentalContext {
+  tc_criterion?: string
+}
+
+export interface DraftMaterialState {
+  material?: string
+  phase_label?: string | null
+  pressure_value_gpa?: number | null
+  pressure_min_gpa?: number | null
+  pressure_max_gpa?: number | null
+  pressure_raw?: string | null
+  pressure_unit_raw?: string | null
+  state_kind?: 'theoretical' | 'experimental' | 'mixed' | 'unknown' | string
+  reported_space_group_symbol?: string | null
+  reported_space_group_number?: number | null
+  structure?: Record<string, unknown> | null
+  calculation_context?: DraftCalculationContext | null
+  experimental_context?: DraftExperimentalContext | null
+  tc_results?: DraftTcResult[]
+  properties?: DraftKeyProperty[]
+  space_group_evidence?: SourceEvidence | SourceEvidence[] | null
+}
+
 export interface PaperDraftFields {
   title?: string
   doi?: string
@@ -55,14 +98,13 @@ export interface PaperDraftFields {
   key_finding?: string
   rationale?: string
   research_materials?: string[]
-  referenced_materials?: string[]
   material_relations?: unknown[]
   builds_on?: unknown[]
 }
 
 export interface UploadDraft {
   paper: PaperDraftFields
-  key_properties: DraftKeyProperty[]
+  material_states: DraftMaterialState[]
   classification_reason?: string
   classification_evidence?: SourceEvidence[]
   sc_type?: string
@@ -121,9 +163,9 @@ export function emptyUploadDraft(): UploadDraft {
       title: '', doi: '', authors: [], journal: '', volume: '', pages: '', year: null,
       abstract: '', summary: '', paper_type: 'unknown', theoretical_subtype: null,
       keywords_tags: [], methodology: [], key_finding: '', rationale: '',
-      research_materials: [], referenced_materials: [], material_relations: [], builds_on: [],
+      research_materials: [], material_relations: [], builds_on: [],
     },
-    key_properties: [],
+    material_states: [],
     classification_reason: '',
     classification_evidence: [],
     sc_type: '',
@@ -154,7 +196,10 @@ function embeddedEvidence(value: unknown): SourceEvidence[] {
 
 function normalizePaperFields(value: unknown): PaperDraftFields {
   const empty = emptyUploadDraft().paper
-  const paper = value && typeof value === 'object' ? value as PaperDraftFields : {}
+  const paper = value && typeof value === 'object'
+    ? { ...(value as PaperDraftFields & { referenced_materials?: unknown }) }
+    : {}
+  delete paper.referenced_materials
   return {
     ...empty,
     ...paper,
@@ -162,7 +207,6 @@ function normalizePaperFields(value: unknown): PaperDraftFields {
     keywords_tags: normalizeTextItems(paper.keywords_tags, ['keyword', 'value', 'name']),
     methodology: normalizeTextItems(paper.methodology, ['method', 'value', 'name']),
     research_materials: normalizeTextItems(paper.research_materials, ['material', 'value', 'name']),
-    referenced_materials: normalizeTextItems(paper.referenced_materials, ['material', 'value', 'name']),
   }
 }
 
@@ -175,7 +219,8 @@ export function normalizeUploadDraft(value: unknown): UploadDraft {
     ? raw.field_evidence
     : {}
   const fieldEvidence = { ...existingEvidence }
-  for (const field of ['keywords_tags', 'methodology', 'research_materials', 'referenced_materials']) {
+  delete fieldEvidence.referenced_materials
+  for (const field of ['keywords_tags', 'methodology', 'research_materials']) {
     if (!fieldEvidence[field]) {
       const evidence = embeddedEvidence(rawPaper[field as keyof PaperDraftFields])
       if (evidence.length) fieldEvidence[field] = evidence
@@ -185,9 +230,20 @@ export function normalizeUploadDraft(value: unknown): UploadDraft {
     ...empty,
     ...raw,
     paper: normalizePaperFields(rawPaper),
-    key_properties: Array.isArray(raw.key_properties) ? raw.key_properties.map(item => ({
-      ...item,
-      value_raw: item.value_raw ?? (item.value == null ? '' : String(item.value)),
+    material_states: Array.isArray(raw.material_states) ? raw.material_states.map(state => ({
+      ...state,
+      tc_results: Array.isArray(state.tc_results) ? state.tc_results : [],
+      properties: Array.isArray(state.properties) ? state.properties.map(item => ({
+        ...item,
+        value_raw: item.value_raw ?? (item.value == null ? '' : String(item.value)),
+      })) : [],
+      calculation_context: state.calculation_context ? {
+        phonon_nuclear_treatment: 'unknown',
+        lambda_ep: null,
+        omega_log_k: null,
+        mu_star: null,
+        ...state.calculation_context,
+      } : null,
     })) : [],
     classification_evidence: Array.isArray(raw.classification_evidence)
       ? raw.classification_evidence
@@ -196,10 +252,7 @@ export function normalizeUploadDraft(value: unknown): UploadDraft {
     ai_original: aiRaw ? {
       ...aiRaw,
       paper: normalizePaperFields(aiRaw.paper),
-      key_properties: Array.isArray(aiRaw.key_properties) ? aiRaw.key_properties.map(item => ({
-        ...item,
-        value_raw: item.value_raw ?? (item.value == null ? '' : String(item.value)),
-      })) : [],
+      material_states: Array.isArray(aiRaw.material_states) ? aiRaw.material_states : [],
     } : null,
   }
 }

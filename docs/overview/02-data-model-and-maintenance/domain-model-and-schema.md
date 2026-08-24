@@ -12,6 +12,7 @@
   `superconductor_records` 或 `superconductors_structures` 纳入 fresh Schema。
 - `MaterialState` 表达论文当前 revision 中的材料状态；`StructureModel`、
   `CalculationContext` 和 `ExperimentalContext` 分别表达结构、理论计算和实验测量上下文。
+- `MaterialState.reported_space_group_symbol/number` 保存论文报告但没有完整结构几何时的空间群事实；只有存在真实结构文本时才创建 `StructureModel`，不会为凑必填字段伪造 CIF/POSCAR。
 - `TcResult` 纵向保存每条 Tc；`PropertyDefinition` 和
   `SuperconductorProperty` 保存 Tc 之外的普通物性，表名为
   `superconductor_properties`，同时保留论文原文和可空规范值。
@@ -24,8 +25,7 @@
 
 ## 工作流程
 
-目标模型由 Alembic、SQLAlchemy 和 GORM 共同描述。当前完成范围是空库 Schema 和 ORM；
-Go/Python API、上传、搜索、RAG/Qdrant、图表、导入导出和网页还没有整体切换到目标表。
+目标模型由 Alembic、SQLAlchemy 和 GORM 共同描述。论文上传的 Python 提取、草稿编辑和提交事务已经切换到目标表；Go 搜索、RAG/Qdrant、图表、导入导出和公开网页仍未整体切换。
 
 ## 化学体系与具体材料的建模边界
 
@@ -105,12 +105,14 @@ fresh 目标 Schema 已落实以下边界：
   已完成 fresh Schema、SQLAlchemy/GORM 和隔离 MySQL 验证；API/UI 和历史迁移未完成。
 - [Feature #33：论文文件、证据与审核事件完整性收敛](../../specs/33-paper-lineage-integrity/spec.md)
   已完成 fresh Schema、SQLAlchemy/GORM 和隔离 MySQL 验证；RAG/Qdrant 编排和历史迁移未完成。
+- [Feature #46：论文上传科学数据结构化](../../specs/46-upload-scientific-data-pipeline/spec.md)
+  已完成上传草稿、编辑器和提交事务向条件化科学实体图的切换。
 
 ## 已知问题
 
 - 两个现有运行数据库尚未部署 fresh Schema，也不在本次范围内迁移；其
   `key_properties`、`superconductors_structures` 和历史数据继续保持原状。
-- 上传、搜索、RAG/Qdrant、图表、导入导出和网页仍可能依赖旧表或旧字段，不能在这些调用方
+- 搜索、RAG/Qdrant、图表、导入导出和部分网页仍可能依赖旧表或旧字段，不能在这些调用方
   完成切换前把 fresh Schema 部署到运行库。
 - 重新分块的单代事务和 Qdrant 删除后重建仅形成数据库契约，业务编排尚未实现。
 - 普通物性网页展示“论文原文优先、规范值补充”的契约尚未切换到前端。
