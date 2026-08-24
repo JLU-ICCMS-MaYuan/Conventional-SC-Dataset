@@ -594,7 +594,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: 'repeat(3, 1fr)' }, gap: 1.5 }}>
                   <TextField label="材料" value={state.material || ''}
                     onChange={event => updateMaterialState(index, 'material', event.target.value)} />
-                  <TextField label="压力 (GPa)" type="number" value={state.pressure_value_gpa ?? ''}
+                  <TextField label="压力 (GPa)" type="number" value={state.pressure_value_gpa ?? ''} helperText={state.pressure_value_gpa == null && state.pressure_raw ? '原文压力：' + state.pressure_raw + ' ' + (state.pressure_unit_raw || '') : undefined}
                     onChange={event => updateMaterialState(index, 'pressure_value_gpa', event.target.value ? Number(event.target.value) : null)} />
                   <TextField label="物相" value={state.phase_label || ''}
                     onChange={event => updateMaterialState(index, 'phase_label', event.target.value || null)} />

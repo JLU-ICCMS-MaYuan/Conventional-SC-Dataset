@@ -14,10 +14,10 @@
 
 **目的**：建立唯一的结构解析、校验、标准化、等价比较和导出边界。
 
-- [ ] T004 [P] [US1] 为 `backend/services/structure_candidates.py` 编写原生 CIF/POSCAR ASE 读取、元数据和文件级错误测试
-- [ ] T005 [P] [US4] 为 `backend/services/structure_candidates.py` 编写原胞/惯用胞派生、四种导出组合和周期性结构等价比较测试
-- [ ] T006 [US1] 实现 `backend/services/structure_candidates.py`：ASE 读写、pymatgen 标准化、固定容差、哈希、四种派生表示和错误语义
-- [ ] T007 [US2] 实现 `backend/ingest/structure_extractor.py`：PDF 结构字段、表格证据、坐标类型、占位和结构条件的候选 DTO
+- [x] T004 [P] [US1] 为 `backend/services/structure_candidates.py` 编写原生 CIF/POSCAR ASE 读取、元数据和文件级错误测试
+- [x] T005 [P] [US4] 为 `backend/services/structure_candidates.py` 编写原胞/惯用胞派生、四种导出组合和周期性结构等价比较测试
+- [x] T006 [US1] 实现 `backend/services/structure_candidates.py`：ASE 读写、pymatgen 标准化、固定容差、哈希、四种派生表示和错误语义
+- [x] T007 [US2] 实现 `backend/ingest/structure_extractor.py`：PDF 结构字段、表格证据、坐标类型、占位和结构条件的候选 DTO
 - [ ] T008 [US2] 在 `backend/ingest/structure_extractor.py` 接入 pymatgen 空间群确定性展开，并记录独立 Wyckoff 输入和推导标识
 
 ## 阶段 3：用户故事 1——直接上传结构附件（P1，MVP）
@@ -28,13 +28,13 @@
 
 ### 测试
 
-- [ ] T009 [P] [US1] 为 `backend/ingest/upload_contracts.py` 和 `backend/tests/test_upload_workflow.py` 增加 CIF/POSCAR 后缀、无扩展名 POSCAR 和多文件角色测试
+- [x] T009 [P] [US1] 为 `backend/ingest/upload_contracts.py` 和 `backend/tests/test_upload_workflow.py` 增加 CIF/POSCAR 后缀、无扩展名 POSCAR 和多文件角色测试
 - [ ] T010 [US1] 为 `backend/tests/test_upload_jobs.py` 增加附件提取、候选保存、单文件失败不影响其他文件的集成测试
 
 ### 实施
 
-- [ ] T011 [US1] 扩展 `backend/ingest/upload_contracts.py`、`frontend/src/components/MultiFileUploadPanel.tsx` 和上传 DTO，接受结构附件并保持一个正文约束
-- [ ] T012 [US1] 在 `backend/ingest/upload_jobs.py` 接入原生附件结构候选提取、来源哈希和草稿保存
+- [x] T011 [US1] 扩展 `backend/ingest/upload_contracts.py`、`frontend/src/components/MultiFileUploadPanel.tsx` 和上传 DTO，接受结构附件并保持一个正文约束
+- [x] T012 [US1] 在 `backend/ingest/upload_jobs.py` 接入原生附件结构候选提取、来源哈希和草稿保存
 
 ## 阶段 4：用户故事 2——从 PDF 正文与表格恢复全部结构（P1）
 
@@ -70,7 +70,7 @@
 
 - [ ] T022 [US3] 扩展 `backend/api/upload_tasks.py` 和 `backend/ingest/upload_contracts.py` 的候选读写、确认、排除和公开白名单契约
 - [ ] T023 [US3] 扩展 `backend/services/scientific_drafts.py`，只持久化已确认候选并在同一事务建立结构与 Evidence 连接
-- [ ] T024 [US3] 在 `frontend/src/components/UploadTaskEditor.tsx` 新增 `StructureCandidatePanel.tsx`，支持证据核对、修正、确认/排除和错误状态
+- [x] T024 [US3] 在 `frontend/src/components/UploadTaskEditor.tsx` 新增 `StructureCandidatePanel.tsx`，支持证据核对、修正、确认/排除和错误状态
 
 ## 阶段 6：用户故事 4——选择晶胞表示与导出格式（P2）
 
@@ -86,7 +86,7 @@
 ### 实施
 
 - [ ] T027 [US4] 在 `backend/api/papers.py` 或结构路由增加当前 revision 结构预览/导出接口，复用权限门并校验 `cell`/`format`
-- [ ] T028 [US4] 扩展 `frontend/src/components/StructureViewer3D.tsx` 和候选面板，默认加载惯用胞并提供导出选择
+- [x] T028 [US4] 扩展 `frontend/src/components/StructureViewer3D.tsx` 和候选面板，默认加载惯用胞并提供导出选择
 
 ## 阶段 7：用户故事 5——查看已审核的公开结构（P2）
 
