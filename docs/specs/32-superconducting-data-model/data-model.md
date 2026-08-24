@@ -66,7 +66,6 @@ AND approved_revision = content_revision
 | `id` | `BIGINT` | 主键 |
 | `paper_id`、`paper_revision` | `INT` | 必填 |
 | `superconductor_id` | `INT` | 必填，删除受限 |
-| `phase_label` | `VARCHAR(255)` | 可空，论文原始物相名 |
 | `pressure_value_gpa` | `DECIMAL(14,6)` | 可空规范单值 |
 | `pressure_min_gpa`、`pressure_max_gpa` | `DECIMAL(14,6)` | 可空范围 |
 | `pressure_raw`、`pressure_unit_raw` | `VARCHAR(255/50)` | 可空原文 |

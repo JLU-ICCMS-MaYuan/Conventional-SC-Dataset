@@ -193,7 +193,6 @@ async def persist_scientific_draft(
             paper_id=paper.id,
             paper_revision=paper.content_revision,
             superconductor_id=superconductor.id,
-            phase_label=state_data.get("phase_label"),
             pressure_value_gpa=_number(state_data.get("pressure_value_gpa")),
             pressure_min_gpa=_number(state_data.get("pressure_min_gpa")),
             pressure_max_gpa=_number(state_data.get("pressure_max_gpa")),

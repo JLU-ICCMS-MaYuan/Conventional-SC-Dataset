@@ -732,10 +732,11 @@ class MaterialState(Base):
             "pressure_value_gpa",
         ),
         Index(
-            "ix_material_states_paper_material_phase",
+            "ix_material_states_paper_material_space_group",
             "paper_id",
             "superconductor_id",
-            "phase_label",
+            "reported_space_group_symbol",
+            "reported_space_group_number",
         ),
     )
 
@@ -747,7 +748,6 @@ class MaterialState(Base):
         ForeignKey("superconductors.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    phase_label = Column(String(255))
     pressure_value_gpa = Column(Numeric(14, 6))
     pressure_min_gpa = Column(Numeric(14, 6))
     pressure_max_gpa = Column(Numeric(14, 6))

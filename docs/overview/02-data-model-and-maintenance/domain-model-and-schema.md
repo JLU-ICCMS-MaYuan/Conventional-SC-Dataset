@@ -13,6 +13,7 @@
 - `MaterialState` 表达论文当前 revision 中的材料状态；`StructureModel`、
   `CalculationContext` 和 `ExperimentalContext` 分别表达结构、理论计算和实验测量上下文。
 - `MaterialState.reported_space_group_symbol/number` 保存论文报告但没有完整结构几何时的空间群事实；只有存在真实结构文本时才创建 `StructureModel`，不会为凑必填字段伪造 CIF/POSCAR。
+- `MaterialState` 不再包含 `phase_label`；空间群不属于分类树，未来材料家族和结构家族分类采用独立的可审核扩展模型。
 - `TcResult` 纵向保存每条 Tc；`PropertyDefinition` 和
   `SuperconductorProperty` 保存 Tc 之外的普通物性，表名为
   `superconductor_properties`，同时保留论文原文和可空规范值。

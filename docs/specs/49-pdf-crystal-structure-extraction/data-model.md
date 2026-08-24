@@ -38,7 +38,7 @@
 
 正式提交使用 #32 的：
 
-- `material_states`：保存材料、压力、物相和论文报告空间群；没有完整几何时仍可存在。
+- `material_states`：保存材料、压力和论文报告空间群；没有完整几何时仍可存在；`phase_label` 已废弃。
 - `structure_models`：保存完整 `structure_format`、`structure_text`、哈希、生成方法、核处理和
   可选父结构；必须绑定同一 `paper_id + paper_revision + material_state_id`。
 - `paper_evidence`：保存来源文件、页码、章节/表格定位和原文证据。

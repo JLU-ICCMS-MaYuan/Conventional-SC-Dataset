@@ -42,7 +42,6 @@ def test_li2mgh16_draft_persists_conditioned_scientific_entity_graph():
     draft = {
         "material_states": [{
             "material": "Li2MgH16",
-            "phase_label": "clathrate",
             "pressure_value_gpa": 300,
             "pressure_raw": "300",
             "pressure_unit_raw": "GPa",
@@ -91,6 +90,7 @@ def test_li2mgh16_draft_persists_conditioned_scientific_entity_graph():
 
     assert superconductor.composition_key == "H:16|Li:2|Mg:1"
     assert float(state.pressure_value_gpa) == 300
+    assert not hasattr(state, "phase_label")
     assert state.reported_space_group_symbol == "Fd-3m"
     assert state.reported_space_group_number == 227
     assert not any(isinstance(item, models.StructureModel) for item in session.added)

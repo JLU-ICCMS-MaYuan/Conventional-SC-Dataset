@@ -65,6 +65,24 @@ def test_normalize_draft_preserves_structure_candidates_for_user_confirmation():
     assert draft["structure_candidates"] == [candidate]
 
 
+def test_normalize_draft_drops_phase_label_without_migrating_it_to_space_group():
+    draft = _normalize_draft({
+        "paper": {"paper_type": "theoretical", "research_materials": ["Li2MgH16"]},
+        "material_states": [{
+            "material": "Li2MgH16",
+            "phase_label": "clathrate",
+            "reported_space_group_symbol": None,
+            "reported_space_group_number": None,
+            "state_kind": "theoretical",
+        }],
+    })
+
+    state = draft["material_states"][0]
+    assert "phase_label" not in state
+    assert state["reported_space_group_symbol"] is None
+    assert state["reported_space_group_number"] is None
+
+
 def test_referenced_materials_remain_internal_and_are_removed_from_final_draft():
     evidence = {"section": "Introduction", "page": 1, "quote": "LaH10 was reported previously."}
     draft = _normalize_draft({
@@ -174,6 +192,7 @@ def test_summary_prompt_defines_mixed_theory_experiment_tie_breaker():
     assert "lambda_ep" in SUMMARY_SYSTEM_PROMPT
     assert "omega_log_k" in SUMMARY_SYSTEM_PROMPT
     assert "pressure_value_gpa" in SUMMARY_SYSTEM_PROMPT
+    assert "phase_label" not in SUMMARY_SYSTEM_PROMPT
 
 
 def test_chunk_prompt_defines_evidence_scope_without_restricting_material_vocabulary():

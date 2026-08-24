@@ -40,9 +40,12 @@ def test_identity_and_state_fields_are_not_duplicated_across_levels():
 
     assert "isotope_signature" in superconductors.c
     assert "isotope_signature" not in states.c
-    assert "phase_label" in states.c
+    assert "phase_label" not in states.c
     assert "phase_label" not in structures.c
     assert "material_state_id" in Base.metadata.tables["calculation_contexts"].c
+    assert "ix_material_states_paper_material_space_group" in {
+        index.name for index in states.indexes
+    }
 
 
 def test_reported_space_group_is_available_without_fabricating_a_structure_model():

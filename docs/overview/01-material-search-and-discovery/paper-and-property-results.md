@@ -7,6 +7,7 @@
 ## 当前行为
 
 - 新上传提交链路写入条件化目标模型：`material_states` 保存压力与论文报告的空间群，`calculation_contexts` 保存 λ/ωlog，`tc_results` 保存理论或实验 Tc，`superconductor_properties` 只保存 Tc 之外的普通物性。
+- 材料状态不再保存含义不清的 `phase_label`；空间群是结构事实，未来结构家族分类另行建模。
 - 当前结果主链路为 `papers` 与 `key_properties`：论文保存 DOI、标题、作者、年份、摘要、审核状态和 LLM 富化字段；关键物性保存材料名、规范物性名、数值范围、单位、压强、温度、超导类型、文章类型、结构文本和主图标记。
 - Go API `GET /api/papers/:id` 返回论文详情和 `key_properties`，并聚合论文中的最大临界温度为 `tc_max`。
 - Go API `POST /api/papers/search/records` 返回扁平列表行，包含 `record_id`、`paper_id`、`year`、`formula`、`type`、`pressure`、`tc`、`source`、`status`、`doi` 等字段。

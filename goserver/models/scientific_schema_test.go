@@ -64,7 +64,9 @@ func TestIdentityFieldsLiveAtOneScientificLevel(t *testing.T) {
 	structure := parseModel(t, &StructureModel{})
 
 	requireDBField(t, superconductor, "IsotopeSignature", "isotope_signature")
-	requireDBField(t, state, "PhaseLabel", "phase_label")
+	if field := state.LookUpField("PhaseLabel"); field != nil && field.DBName != "" {
+		t.Fatal("MaterialState must not expose phase_label")
+	}
 	if field := state.LookUpField("IsotopeSignature"); field != nil && field.DBName != "" {
 		t.Fatal("MaterialState must not duplicate isotope identity")
 	}

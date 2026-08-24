@@ -218,7 +218,6 @@ type MaterialState struct {
 	PaperID                  uint                     `gorm:"not null;index:ix_material_states_paper_revision,priority:1;uniqueIndex:uq_material_states_identity_revision,priority:2" json:"paper_id"`
 	PaperRevision            uint                     `gorm:"not null;index:ix_material_states_paper_revision,priority:2;uniqueIndex:uq_material_states_identity_revision,priority:3" json:"paper_revision"`
 	SuperconductorID         uint                     `gorm:"not null;index" json:"superconductor_id"`
-	PhaseLabel               *string                  `gorm:"size:255" json:"phase_label"`
 	PressureValueGPa         *float64                 `json:"pressure_value_gpa"`
 	PressureMinGPa           *float64                 `json:"pressure_min_gpa"`
 	PressureMaxGPa           *float64                 `json:"pressure_max_gpa"`

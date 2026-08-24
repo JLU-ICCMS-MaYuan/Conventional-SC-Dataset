@@ -58,7 +58,7 @@ equal contribution、contributed equally 等明确声明识别。证据不足时
   "referenced_materials": [],
   "material_relations": [{"material": "", "relation": "discovers|investigates|predicts", "page": 1, "quote": ""}],
   "material_states": [{
-    "material": "", "phase_label": null,
+    "material": "",
     "pressure_value_gpa": null, "pressure_min_gpa": null, "pressure_max_gpa": null,
     "pressure_raw": null, "pressure_unit_raw": null,
     "state_kind": "theoretical|experimental|mixed|unknown",
@@ -72,7 +72,7 @@ equal contribution、contributed equally 等明确声明识别。证据不足时
   "sc_type_candidates": [{"value": "自由材料类型", "scope": "current_paper|referenced_work", "page": 1, "quote": ""}]
 }"""
 
-CHUNK_RESULT_SCHEMA_VERSION = 3
+CHUNK_RESULT_SCHEMA_VERSION = 4
 
 PUBLIC_CHUNK_RESULT_FIELDS = {
     "metadata", "paper_type_evidence", "research_materials",
@@ -129,7 +129,7 @@ referenced_materials 仅用于帮助区分本文对象与背景对象，最终�
 论文整体 paper_type 与每条物性的 article_type 必须分别判断，article_type 只允许 e 或 t。
 每个关键分类和物性保留 section/page/quote 证据；无法确定就返回 unknown 或空值，不要编造。
 通讯作者和共同第一作者必须来自 authors；仅在分段候选包含明确声明时保留，不能根据作者顺序猜测。
-按材料、物相和压力合并 material_states。空间群符号与群号必须分开；λ、ωlog 只写入
+按材料、压力、state_kind 和报告空间群区分 material_states。空间群符号与群号必须分开；λ、ωlog 只写入
 calculation_context，Tc 只写入 tc_results。压力优先换算为 GPa，同时保留 pressure_raw 和
 pressure_unit_raw；无法可靠换算或原文没有报告时保留原文并将规范数值设为 null。
 
@@ -143,7 +143,7 @@ pressure_unit_raw；无法可靠换算或原文没有报告时保留原文并将
     "rationale": "", "research_materials": [], "material_relations": [], "builds_on": []
   },
   "material_states": [{
-    "material": "", "phase_label": null,
+    "material": "",
     "pressure_value_gpa": null, "pressure_min_gpa": null, "pressure_max_gpa": null,
     "pressure_raw": null, "pressure_unit_raw": null,
     "state_kind": "theoretical|experimental|mixed|unknown",
@@ -666,7 +666,6 @@ def _legacy_properties_to_material_states(properties: list[dict[str, Any]]) -> l
         key = (material, pressure_value, pressure_min, pressure_max, state_kind)
         state = states.setdefault(key, {
             "material": material,
-            "phase_label": None,
             "pressure_value_gpa": pressure_value,
             "pressure_min_gpa": pressure_min,
             "pressure_max_gpa": pressure_max,
@@ -758,7 +757,7 @@ def _normalize_material_states(value: Any) -> list[dict[str, Any]]:
             continue
         state = dict(raw)
         state["material"] = _formula_from_material(state.get("material"))
-        state.setdefault("phase_label", None)
+        state.pop("phase_label", None)
         pressure_value, pressure_min, pressure_max, pressure_raw, pressure_unit = _condition_pressure(state)
         state["pressure_value_gpa"] = _numeric_value(state.get("pressure_value_gpa")) if state.get("pressure_value_gpa") not in (None, "") else pressure_value
         state["pressure_min_gpa"] = _numeric_value(state.get("pressure_min_gpa")) if state.get("pressure_min_gpa") not in (None, "") else pressure_min
