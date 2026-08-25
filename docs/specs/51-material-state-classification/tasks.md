@@ -116,7 +116,7 @@
 - [ ] T037 对照 `quickstart.md` 运行 Python、Go、前端、Schema、构建和 `git diff --check`，只勾选真实通过的任务。
 - [ ] T038 使用浏览器在桌面和 390px 宽度验证候选 portal、键盘操作、错误/空状态、文本不溢出和管理员治理流程。
 - [x] T039 对照 FR-001–FR-024、SC-001–SC-008 和接口契约执行 converge，修正文档或追加收敛任务。
-- [ ] T040 按 AGENTS.md 检查工作树、仅暂存 #51 文件、使用规定多行提交消息自动 Git commit，并把提交和验证结果回写 Issue #51；不自动 push 或关闭 Issue。
+- [x] T040 按 AGENTS.md 检查工作树、仅暂存 #51 文件、使用规定多行提交消息自动 Git commit，并把提交和验证结果回写 Issue #51；不自动 push 或关闭 Issue。
 
 ## 依赖与执行顺序
 
