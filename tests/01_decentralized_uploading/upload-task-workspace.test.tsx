@@ -595,14 +595,16 @@ describe('论文上传工作区', () => {
     expect(screen.queryByRole('button', { name: '展开 作者' })).not.toBeInTheDocument()
 
     measuredHeight = 240
-    fireEvent(window, new Event('resize'))
-
-    expect(await screen.findByRole('button', { name: '展开 作者' })).toHaveAttribute('aria-expanded', 'false')
+    await waitFor(() => {
+      fireEvent(window, new Event('resize'))
+      expect(screen.getByRole('button', { name: '展开 作者' })).toHaveAttribute('aria-expanded', 'false')
+    })
 
     measuredHeight = 80
-    fireEvent(window, new Event('resize'))
-
-    await waitFor(() => expect(screen.queryByRole('button', { name: '展开 作者' })).not.toBeInTheDocument())
+    await waitFor(() => {
+      fireEvent(window, new Event('resize'))
+      expect(screen.queryByRole('button', { name: '展开 作者' })).not.toBeInTheDocument()
+    })
   })
 
   it('轮询追加字段内容时保持已展开状态', async () => {

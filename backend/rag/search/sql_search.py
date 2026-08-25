@@ -230,17 +230,20 @@ async def get_superconductor_records(
 
 
 async def get_paper_detail(session: AsyncSession, paper_id: int) -> dict | None:
-    """获取论文详情（含所有关联关键词）。"""
-    from sqlalchemy.orm import joinedload
-
+    """获取论文详情（含当前材料状态的物性记录数）。"""
     r = await session.execute(
         select(Paper)
         .where(Paper.id == paper_id, Paper.review_status == "approved")
-        .options(joinedload(Paper.key_properties))
     )
     paper = r.unique().scalar_one_or_none()
     if not paper:
         return None
+    record_count = await session.scalar(
+        select(func.count(KeyProperty.id)).where(
+            KeyProperty.paper_id == paper.id,
+            KeyProperty.paper_revision == paper.content_revision,
+        )
+    )
 
     return {
         "id": paper.id,
@@ -253,7 +256,7 @@ async def get_paper_detail(session: AsyncSession, paper_id: int) -> dict | None:
         "summary": paper.summary,
         "keywords_tags": json.loads(paper.keywords_tags) if paper.keywords_tags else [],
         "paper_type": paper.paper_type,
-        "record_count": len(paper.key_properties),
+        "record_count": int(record_count or 0),
     }
 
 

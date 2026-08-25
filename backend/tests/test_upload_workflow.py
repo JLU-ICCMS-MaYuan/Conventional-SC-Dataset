@@ -75,6 +75,7 @@ class FakeAsyncSession:
         self.scalar_value = scalar_value
         self.execute_values = execute_values or []
         self.statement = None
+        self.statements = []
 
     async def __aenter__(self):
         return self
@@ -84,10 +85,12 @@ class FakeAsyncSession:
 
     async def scalar(self, statement):
         self.statement = statement
+        self.statements.append(statement)
         return self.scalar_value
 
     async def execute(self, statement):
         self.statement = statement
+        self.statements.append(statement)
         return FakeResult(self.execute_values)
 
 
@@ -152,13 +155,13 @@ def test_candidate_attachment_listing_and_safe_lookup(tmp_path, monkeypatch):
 
 
 def test_public_sql_detail_requires_approved_and_hides_file_path():
-    paper = Paper(id=4, title="Approved", review_status="approved", source_file_path="private.pdf")
-    paper.key_properties = []
-    session = FakeAsyncSession(execute_values=[paper])
+    paper = Paper(id=4, title="Approved", review_status="approved")
+    session = FakeAsyncSession(scalar_value=0, execute_values=[paper])
 
     detail = asyncio.run(sql_search.get_paper_detail(session, 4))
 
-    assert "review_status" in str(session.statement)
+    assert any("review_status" in str(statement) for statement in session.statements)
+    assert any("paper_revision" in str(statement) for statement in session.statements)
     assert detail is not None and "source_file_path" not in detail
 
 
