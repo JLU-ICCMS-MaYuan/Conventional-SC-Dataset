@@ -8,17 +8,23 @@ import { api } from '../../frontend/src/lib/api'
 
 
 vi.mock('../../frontend/src/lib/api', () => ({
-  api: { get: vi.fn(), post: vi.fn() },
+  api: { get: vi.fn(), post: vi.fn(), patch: vi.fn() },
 }))
 
 vi.mock('../../frontend/src/lib/classifications', () => ({
   loadClassificationCatalogs: vi.fn(async () => ({
-    material_families: [{ id: 1, name: '氢基超导体', aliases: ['hydride'] }],
+    material_families: [
+      { id: 1, name: '氢基超导体', aliases: ['hydride'] },
+      { id: 3, name: '重费米子超导体', aliases: ['heavy fermion'] },
+    ],
     structure_families: [{ id: 2, name: '笼状结构', aliases: ['clathrate'] }],
     material_dimensionalities: [{ value: 'unknown', name: '未知' }],
   })),
   refreshClassificationCatalogs: vi.fn(async () => ({
-    material_families: [{ id: 1, name: '氢基超导体', aliases: ['hydride'] }],
+    material_families: [
+      { id: 1, name: '氢基超导体', aliases: ['hydride'] },
+      { id: 3, name: '重费米子超导体', aliases: ['heavy fermion'] },
+    ],
     structure_families: [{ id: 2, name: '笼状结构', aliases: ['clathrate'] }],
     material_dimensionalities: [{ value: 'unknown', name: '未知' }],
   })),
@@ -35,6 +41,7 @@ beforeEach(() => {
     throw new Error(`unexpected GET ${path}`)
   })
   mockedApi.post.mockResolvedValue({ message: 'ok' })
+  mockedApi.patch.mockResolvedValue({ message: 'ok' })
 })
 
 afterEach(() => {
@@ -71,5 +78,44 @@ describe('分类建议分级治理', () => {
     expect(screen.getByRole('option', { name: '创建正式目录项' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: '拒绝建议' })).toBeInTheDocument()
     expect(mockedApi.get).toHaveBeenCalledWith('/api/superadmin/classification-audits')
+  })
+
+  it('超级管理员可以重命名、停用和合并正式目录项', async () => {
+    render(<ClassificationGovernancePanel isSuper />)
+
+    fireEvent.click(await screen.findByRole('button', { name: '管理氢基超导体' }))
+    fireEvent.change(screen.getByLabelText('新的规范中文名'), { target: { value: '氢基高温超导体' } })
+    fireEvent.change(screen.getByLabelText('新的规范英文名'), { target: { value: 'Hydrogen-based superconductor' } })
+    fireEvent.change(screen.getByLabelText('修改原因'), { target: { value: '统一论文中的规范名称' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存目录项' }))
+
+    await waitFor(() => expect(mockedApi.patch).toHaveBeenCalledWith(
+      '/api/superadmin/classification-catalogs/material_family/1',
+      {
+        name: '氢基高温超导体',
+        name_en: 'Hydrogen-based superconductor',
+        reason: '统一论文中的规范名称',
+      },
+    ))
+
+    fireEvent.click(await screen.findByRole('button', { name: '管理氢基超导体' }))
+    fireEvent.change(screen.getByLabelText('修改原因'), { target: { value: '暂停新论文选用' } })
+    fireEvent.click(screen.getByRole('button', { name: '停用目录项' }))
+
+    await waitFor(() => expect(mockedApi.patch).toHaveBeenCalledWith(
+      '/api/superadmin/classification-catalogs/material_family/1',
+      { is_active: false, reason: '暂停新论文选用' },
+    ))
+
+    fireEvent.click(await screen.findByRole('button', { name: '管理氢基超导体' }))
+    fireEvent.mouseDown(screen.getByLabelText('合并到'))
+    fireEvent.click(await screen.findByRole('option', { name: '重费米子超导体' }))
+    fireEvent.change(screen.getByLabelText('修改原因'), { target: { value: '清理重复目录项' } })
+    fireEvent.click(screen.getByRole('button', { name: '合并目录项' }))
+
+    await waitFor(() => expect(mockedApi.post).toHaveBeenCalledWith(
+      '/api/superadmin/classification-catalogs/material_family/1/merge',
+      { target_id: 3, reason: '清理重复目录项' },
+    ))
   })
 })

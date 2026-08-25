@@ -338,7 +338,10 @@ func RecommendClassificationProposal(c *gin.Context) {
 	classificationProposalResponse(c, err)
 }
 
-var errProposalResolved = errors.New("classification proposal already resolved")
+var (
+	errProposalResolved = errors.New("classification proposal already resolved")
+	errAliasConflict    = errors.New("classification alias conflicts with an existing canonical name or alias")
+)
 
 func classificationProposalResponse(c *gin.Context, err error) {
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -347,6 +350,10 @@ func classificationProposalResponse(c *gin.Context, err error) {
 	}
 	if errors.Is(err, errProposalResolved) {
 		c.JSON(http.StatusConflict, gin.H{"code": "proposal_already_resolved", "error": "该建议已进入终态"})
+		return
+	}
+	if errors.Is(err, errAliasConflict) {
+		c.JSON(http.StatusConflict, gin.H{"code": "alias_conflict", "error": "分类名称或别名与现有目录冲突"})
 		return
 	}
 	if errors.Is(err, gorm.ErrInvalidData) {
@@ -380,14 +387,22 @@ func CreateClassificationCatalogTerm(c *gin.Context) {
 	}
 	err := database.DB.Transaction(func(tx *gorm.DB) error {
 		if c.Param("dimension") == "material_family" {
-			term := models.MaterialFamily{Code: strings.TrimSpace(body.Code), NameZH: strings.TrimSpace(body.NameZH), NameEN: strings.TrimSpace(body.NameEN), NormalizedName: normalizeClassificationName(body.NameZH), IsActive: true, CreatedByUserID: &actor.ID}
+			normalizedName := normalizeClassificationName(body.NameZH)
+			if err := ensureCanonicalNameAvailable(tx, "material_family", normalizedName, 0); err != nil {
+				return err
+			}
+			term := models.MaterialFamily{Code: strings.TrimSpace(body.Code), NameZH: strings.TrimSpace(body.NameZH), NameEN: strings.TrimSpace(body.NameEN), NormalizedName: normalizedName, IsActive: true, CreatedByUserID: &actor.ID}
 			if err := tx.Create(&term).Error; err != nil {
 				return err
 			}
 			return createClassificationAudit(tx, actor.ID, "material_family", "term", uint64(term.ID), "created", body.Reason, nil, term)
 		}
 		if c.Param("dimension") == "structure_family" {
-			term := models.StructureFamily{Code: strings.TrimSpace(body.Code), NameZH: strings.TrimSpace(body.NameZH), NameEN: strings.TrimSpace(body.NameEN), NormalizedName: normalizeClassificationName(body.NameZH), IsActive: true, CreatedByUserID: &actor.ID}
+			normalizedName := normalizeClassificationName(body.NameZH)
+			if err := ensureCanonicalNameAvailable(tx, "structure_family", normalizedName, 0); err != nil {
+				return err
+			}
+			term := models.StructureFamily{Code: strings.TrimSpace(body.Code), NameZH: strings.TrimSpace(body.NameZH), NameEN: strings.TrimSpace(body.NameEN), NormalizedName: normalizedName, IsActive: true, CreatedByUserID: &actor.ID}
 			if err := tx.Create(&term).Error; err != nil {
 				return err
 			}
@@ -434,6 +449,11 @@ func updateCatalogTerm(dimension, id string, actorID uint, reason string, update
 				return err
 			}
 			before := term
+			if normalizedName, ok := updates["normalized_name"].(string); ok {
+				if err := ensureCanonicalNameAvailable(tx, dimension, normalizedName, term.ID); err != nil {
+					return err
+				}
+			}
 			if err := tx.Model(&term).Updates(updates).Error; err != nil {
 				return err
 			}
@@ -445,6 +465,11 @@ func updateCatalogTerm(dimension, id string, actorID uint, reason string, update
 				return err
 			}
 			before := term
+			if normalizedName, ok := updates["normalized_name"].(string); ok {
+				if err := ensureCanonicalNameAvailable(tx, dimension, normalizedName, term.ID); err != nil {
+					return err
+				}
+			}
 			if err := tx.Model(&term).Updates(updates).Error; err != nil {
 				return err
 			}
@@ -484,6 +509,15 @@ func MergeClassificationCatalogTerm(c *gin.Context) {
 			if err := tx.Model(&models.MaterialState{}).Where("material_family_id = ?", source.ID).Update("material_family_id", target.ID).Error; err != nil {
 				return err
 			}
+			if err := tx.Model(&models.MaterialFamilyAlias{}).Where("material_family_id = ?", source.ID).Update("material_family_id", target.ID).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&models.ClassificationProposal{}).Where("material_family_id = ?", source.ID).Update("material_family_id", target.ID).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&models.ClassificationEvidence{}).Where("material_family_id = ?", source.ID).Update("material_family_id", target.ID).Error; err != nil {
+				return err
+			}
 			if err := tx.Model(&source).Updates(map[string]interface{}{"is_active": false, "merged_into_id": target.ID}).Error; err != nil {
 				return err
 			}
@@ -497,7 +531,16 @@ func MergeClassificationCatalogTerm(c *gin.Context) {
 			if err := tx.Where("id = ? AND is_active = ?", body.TargetID, true).First(&target).Error; err != nil {
 				return err
 			}
-			if err := tx.Model(&models.MaterialStateStructureFamily{}).Where("structure_family_id = ?", source.ID).Update("structure_family_id", target.ID).Error; err != nil {
+			if err := mergeStructureFamilyLinks(tx, source.ID, target.ID); err != nil {
+				return err
+			}
+			if err := tx.Model(&models.StructureFamilyAlias{}).Where("structure_family_id = ?", source.ID).Update("structure_family_id", target.ID).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&models.ClassificationProposal{}).Where("structure_family_id = ?", source.ID).Update("structure_family_id", target.ID).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&models.ClassificationEvidence{}).Where("structure_family_id = ?", source.ID).Update("structure_family_id", target.ID).Error; err != nil {
 				return err
 			}
 			if err := tx.Model(&source).Updates(map[string]interface{}{"is_active": false, "merged_into_id": target.ID}).Error; err != nil {
@@ -508,6 +551,38 @@ func MergeClassificationCatalogTerm(c *gin.Context) {
 		return gorm.ErrInvalidData
 	})
 	catalogMutationResponse(c, err)
+}
+
+func mergeStructureFamilyLinks(tx *gorm.DB, sourceID, targetID uint) error {
+	var sourceLinks []models.MaterialStateStructureFamily
+	if err := tx.Where("structure_family_id = ?", sourceID).Find(&sourceLinks).Error; err != nil {
+		return err
+	}
+	for _, sourceLink := range sourceLinks {
+		var targetLink models.MaterialStateStructureFamily
+		err := tx.Where(
+			"material_state_id = ? AND structure_family_id = ?",
+			sourceLink.MaterialStateID, targetID,
+		).First(&targetLink).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			if err := tx.Model(&sourceLink).Update("structure_family_id", targetID).Error; err != nil {
+				return err
+			}
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if err := tx.Delete(&sourceLink).Error; err != nil {
+			return err
+		}
+		if sourceLink.IsPrimary && !targetLink.IsPrimary {
+			if err := tx.Model(&targetLink).Update("is_primary", true).Error; err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func ResolveClassificationProposal(c *gin.Context) {
@@ -603,13 +678,21 @@ func resolveProposalTarget(tx *gorm.DB, actorID uint, proposal *models.Classific
 			return gorm.ErrInvalidData
 		}
 		if proposal.Dimension == "material_family" {
-			term := models.MaterialFamily{Code: strings.TrimSpace(body.Code), NameZH: strings.TrimSpace(body.Name), NameEN: strings.TrimSpace(body.NameEN), NormalizedName: normalizeClassificationName(body.Name), IsActive: true, CreatedByUserID: &actorID}
+			normalizedName := normalizeClassificationName(body.Name)
+			if err := ensureCanonicalNameAvailable(tx, "material_family", normalizedName, 0); err != nil {
+				return err
+			}
+			term := models.MaterialFamily{Code: strings.TrimSpace(body.Code), NameZH: strings.TrimSpace(body.Name), NameEN: strings.TrimSpace(body.NameEN), NormalizedName: normalizedName, IsActive: true, CreatedByUserID: &actorID}
 			if err := tx.Create(&term).Error; err != nil {
 				return err
 			}
 			body.TargetID = term.ID
 		} else {
-			term := models.StructureFamily{Code: strings.TrimSpace(body.Code), NameZH: strings.TrimSpace(body.Name), NameEN: strings.TrimSpace(body.NameEN), NormalizedName: normalizeClassificationName(body.Name), IsActive: true, CreatedByUserID: &actorID}
+			normalizedName := normalizeClassificationName(body.Name)
+			if err := ensureCanonicalNameAvailable(tx, "structure_family", normalizedName, 0); err != nil {
+				return err
+			}
+			term := models.StructureFamily{Code: strings.TrimSpace(body.Code), NameZH: strings.TrimSpace(body.Name), NameEN: strings.TrimSpace(body.NameEN), NormalizedName: normalizedName, IsActive: true, CreatedByUserID: &actorID}
 			if err := tx.Create(&term).Error; err != nil {
 				return err
 			}
@@ -625,7 +708,11 @@ func resolveProposalTarget(tx *gorm.DB, actorID uint, proposal *models.Classific
 			return err
 		}
 		if body.ResolutionKind == "alias_created" {
-			alias := models.MaterialFamilyAlias{MaterialFamilyID: term.ID, Alias: proposal.RawName, NormalizedAlias: normalizeClassificationName(proposal.RawName), Language: "other", CreatedByUserID: &actorID}
+			normalizedAlias := normalizeClassificationName(proposal.RawName)
+			if err := ensureAliasAvailable(tx, "material_family", normalizedAlias, term.ID); err != nil {
+				return err
+			}
+			alias := models.MaterialFamilyAlias{MaterialFamilyID: term.ID, Alias: proposal.RawName, NormalizedAlias: normalizedAlias, Language: "other", CreatedByUserID: &actorID}
 			if err := tx.Create(&alias).Error; err != nil {
 				return err
 			}
@@ -638,7 +725,11 @@ func resolveProposalTarget(tx *gorm.DB, actorID uint, proposal *models.Classific
 		return err
 	}
 	if body.ResolutionKind == "alias_created" {
-		alias := models.StructureFamilyAlias{StructureFamilyID: term.ID, Alias: proposal.RawName, NormalizedAlias: normalizeClassificationName(proposal.RawName), Language: "other", CreatedByUserID: &actorID}
+		normalizedAlias := normalizeClassificationName(proposal.RawName)
+		if err := ensureAliasAvailable(tx, "structure_family", normalizedAlias, term.ID); err != nil {
+			return err
+		}
+		alias := models.StructureFamilyAlias{StructureFamilyID: term.ID, Alias: proposal.RawName, NormalizedAlias: normalizedAlias, Language: "other", CreatedByUserID: &actorID}
 		if err := tx.Create(&alias).Error; err != nil {
 			return err
 		}
@@ -646,6 +737,70 @@ func resolveProposalTarget(tx *gorm.DB, actorID uint, proposal *models.Classific
 	updates["structure_family_id"] = term.ID
 	link := models.MaterialStateStructureFamily{MaterialStateID: proposal.MaterialStateID, StructureFamilyID: term.ID}
 	return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&link).Error
+}
+
+func ensureCanonicalNameAvailable(tx *gorm.DB, dimension, normalizedName string, excludeID uint) error {
+	if normalizedName == "" {
+		return gorm.ErrInvalidData
+	}
+	var canonicalCount, aliasCount int64
+	if dimension == "material_family" {
+		query := tx.Model(&models.MaterialFamily{}).Where("normalized_name = ?", normalizedName)
+		if excludeID != 0 {
+			query = query.Where("id <> ?", excludeID)
+		}
+		if err := query.Count(&canonicalCount).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&models.MaterialFamilyAlias{}).Where("normalized_alias = ?", normalizedName).Count(&aliasCount).Error; err != nil {
+			return err
+		}
+	} else if dimension == "structure_family" {
+		query := tx.Model(&models.StructureFamily{}).Where("normalized_name = ?", normalizedName)
+		if excludeID != 0 {
+			query = query.Where("id <> ?", excludeID)
+		}
+		if err := query.Count(&canonicalCount).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&models.StructureFamilyAlias{}).Where("normalized_alias = ?", normalizedName).Count(&aliasCount).Error; err != nil {
+			return err
+		}
+	} else {
+		return gorm.ErrInvalidData
+	}
+	if canonicalCount > 0 || aliasCount > 0 {
+		return errAliasConflict
+	}
+	return nil
+}
+
+func ensureAliasAvailable(tx *gorm.DB, dimension, normalizedAlias string, targetID uint) error {
+	if normalizedAlias == "" || targetID == 0 {
+		return gorm.ErrInvalidData
+	}
+	var canonicalCount, aliasCount int64
+	if dimension == "material_family" {
+		if err := tx.Model(&models.MaterialFamily{}).Where("normalized_name = ? AND id <> ?", normalizedAlias, targetID).Count(&canonicalCount).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&models.MaterialFamilyAlias{}).Where("normalized_alias = ?", normalizedAlias).Count(&aliasCount).Error; err != nil {
+			return err
+		}
+	} else if dimension == "structure_family" {
+		if err := tx.Model(&models.StructureFamily{}).Where("normalized_name = ? AND id <> ?", normalizedAlias, targetID).Count(&canonicalCount).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&models.StructureFamilyAlias{}).Where("normalized_alias = ?", normalizedAlias).Count(&aliasCount).Error; err != nil {
+			return err
+		}
+	} else {
+		return gorm.ErrInvalidData
+	}
+	if canonicalCount > 0 || aliasCount > 0 {
+		return errAliasConflict
+	}
+	return nil
 }
 
 func ListClassificationAudits(c *gin.Context) {
@@ -675,6 +830,10 @@ func catalogMutationResponse(c *gin.Context, err error) {
 	}
 	if errors.Is(err, gorm.ErrInvalidData) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "分类目录请求无效"})
+		return
+	}
+	if errors.Is(err, errAliasConflict) {
+		c.JSON(http.StatusConflict, gin.H{"code": "alias_conflict", "error": "分类名称或别名与现有目录冲突"})
 		return
 	}
 	if err != nil {

@@ -675,8 +675,9 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
                     slotProps={{ htmlInput: { readOnly: true } }}
                   />
                   <FormControl fullWidth>
-                    <InputLabel>材料维度</InputLabel>
+                    <InputLabel id={`material-dimensionality-${index}-label`}>材料维度</InputLabel>
                     <Select
+                      labelId={`material-dimensionality-${index}-label`}
                       label="材料维度"
                       value={state.material_dimensionality || 'unknown'}
                       onChange={event => updateMaterialState(index, 'material_dimensionality', event.target.value)}
@@ -713,8 +714,9 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
                     renderInput={params => <TextField {...params} label="结构家族（可多选）" error={Boolean(catalogError)} />}
                   />
                   <FormControl fullWidth disabled={!state.structure_families?.length}>
-                    <InputLabel>主结构家族</InputLabel>
+                    <InputLabel id={`primary-structure-family-${index}-label`}>主结构家族</InputLabel>
                     <Select
+                      labelId={`primary-structure-family-${index}-label`}
                       label="主结构家族"
                       value={(state.structure_families || []).find(item => item.is_primary)?.name || ''}
                       onChange={event => updateMaterialState(index, 'structure_families', (state.structure_families || []).map(item => ({

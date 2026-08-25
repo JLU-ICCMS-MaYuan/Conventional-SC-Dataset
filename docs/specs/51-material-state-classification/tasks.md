@@ -30,7 +30,7 @@
 
 ### 测试
 
-- [ ] T008 [P] [US1] 在 `goserver/handlers/classifications_test.go` 编写公开目录仅返回启用中文项及别名的失败测试。
+- [x] T008 [P] [US1] 在 `tests/01_decentralized_uploading/issue51_classification_api_test.go` 编写公开目录仅返回启用中文项及别名的 API 集成测试。
 - [x] T009 [P] [US1] 在 `tests/01_decentralized_uploading/upload-task-classification.test.tsx` 编写候选展开、别名定位、待确认、加载失败和无 datalist 的失败测试。
 - [x] T010 [P] [US1] 在 `backend/tests/test_upload_jobs.py` 编写 LLM 材料家族候选按作用域归一到材料状态的失败测试。
 
@@ -49,8 +49,8 @@
 
 ### 测试
 
-- [ ] T015 [P] [US2] 在 `backend/tests/test_upload_workflow.py` 编写正式目录、待确认建议、结构多选、元素数和分类证据的事务失败测试。
-- [ ] T016 [P] [US2] 在 `tests/01_decentralized_uploading/upload-task-classification.test.tsx` 编写材料维度、结构家族多选/主项和元素数只读显示测试。
+- [x] T015 [P] [US2] 在 `tests/01_decentralized_uploading/test_issue51_classification_workflow.py` 编写正式目录、待确认建议、结构多选、元素数和分类证据的真实 SQLite 事务测试。
+- [x] T016 [P] [US2] 在 `tests/01_decentralized_uploading/upload-task-editor-classification.test.tsx` 编写材料维度、结构家族多选/主项、元素数只读和同材料应用测试。
 
 ### 实施
 
@@ -66,7 +66,7 @@
 
 ### 测试
 
-- [ ] T020 [P] [US5] 在 `backend/tests/test_upload_jobs.py` 和 `backend/tests/test_upload_workflow.py` 增加普通 DTO 零引用字段、管理员证据保留 scope 的回归测试。
+- [x] T020 [P] [US5] 在 `tests/01_decentralized_uploading/test_issue51_classification_workflow.py` 增加普通正式数据零引用字段、管理员快照保留 `classification_scope` 的回归测试。
 - [x] T021 [P] [US5] 在 `tests/01_decentralized_uploading/upload-task-classification.test.tsx` 增加界面不渲染“引用材料”的回归测试。
 
 ### 实施
@@ -82,8 +82,8 @@
 
 ### 测试
 
-- [ ] T024 [P] [US3] 在 `goserver/handlers/classifications_test.go` 编写建议映射、权限、别名冲突、终态幂等、合并审计和论文批准门失败测试。
-- [ ] T025 [P] [US3] 在 `tests/01_decentralized_uploading/admin-classification-governance.test.tsx` 编写管理员建议处理和超级管理员目录治理交互测试。
+- [x] T024 [P] [US3] 在 `tests/01_decentralized_uploading/issue51_classification_api_test.go` 编写权限、别名冲突、终态幂等、合并审计和论文批准门 API 集成测试。
+- [x] T025 [P] [US3] 在 `tests/01_decentralized_uploading/admin-classification-governance.test.tsx` 编写管理员建议处理和超级管理员目录治理交互测试。
 
 ### 实施
 
@@ -91,7 +91,7 @@
 - [x] T027 [US3] 修改 `goserver/handlers/admin.go`，删除旧 `superconductor_type` 写路径、预加载当前材料状态分类并在批准事务执行完整性检查。
 - [x] T028 [US3] 修改 `goserver/main.go`，按管理员/超级管理员权限注册分类治理路由。
 - [x] T029 [US3] 在 `frontend/src/pages/AdminPage.tsx` 接入材料状态分类和建议处理，移除 KeyProperty 类型编辑。
-- [ ] T030 [US3] 在 `frontend/src/components/ClassificationGovernancePanel.tsx` 和 `frontend/src/pages/SuperAdminPage.tsx` 增加目录、别名、建议与审计治理面板。
+- [x] T030 [US3] 在 `frontend/src/components/ClassificationGovernancePanel.tsx` 增加目录创建、重命名、停用、合并、建议与审计治理面板。
 - [x] T031 [US3] 修改 `frontend/src/components/PaperEditView.tsx`，按新材料状态契约显示规范分类并移除旧英文 Select。
 
 ## 阶段 7：用户故事 4——一次性兼容与确定性迁移（P2）
@@ -102,7 +102,7 @@
 
 ### 测试
 
-- [ ] T032 [P] [US4] 在 `backend/tests/test_classification_catalog.py` 和 `backend/tests/test_upload_workflow.py` 编写旧草稿一次性转换及新 PUT 拒绝旧字段测试。
+- [x] T032 [P] [US4] 在 `tests/01_decentralized_uploading/test_issue51_legacy_contract.py` 编写旧草稿 GET 一次性转换及新 PUT/submit 逐字段拒绝测试。
 - [x] T033 [P] [US4] 在 `tests/02_maintenance_and_verification/test_issue51_classification_migration.py` 编写旧数据库唯一匹配、歧义、冲突和 dry-run 零写入测试。
 
 ### 实施
@@ -150,9 +150,9 @@
 
 ## 阶段 9：收敛补项
 
-- [ ] T041 [US3] [missing] 在 `goserver/handlers/classifications_test.go` 补齐目录仅返回启用项、角色权限、别名跨规范名冲突、建议终态幂等、合并迁移和审计事务的 API 集成测试，覆盖 T008/T024 未证明的真实边界。
-- [ ] T042 [US2] [partial] 在 `backend/tests/test_upload_workflow.py` 使用真实测试数据库补齐正式目录、待确认建议、结构多选、元素数、审核证据和 `referenced_work` 管理员快照的提交事务测试，覆盖 T015/T020。
-- [ ] T043 [US2] [partial] 在 `tests/01_decentralized_uploading/upload-task-classification.test.tsx` 补齐材料维度、结构家族多选/唯一主项、元素种类数只读和同材料批量应用交互，覆盖 T016。
-- [ ] T044 [US3] [partial] 在 `frontend/src/components/ClassificationGovernancePanel.tsx` 增加正式目录重命名、停用和合并操作，并在 `tests/01_decentralized_uploading/admin-classification-governance.test.tsx` 覆盖超级管理员交互，完成 T030。
-- [ ] T045 [US4] [partial] 在 `backend/tests/test_upload_workflow.py` 补齐旧草稿 GET 一次性转换及 PUT/submit 拒绝旧字段的接口测试，完成 T032。
+- [x] T041 [US3] 在 `tests/01_decentralized_uploading/issue51_classification_api_test.go` 补齐目录仅返回启用项、角色权限、别名跨规范名冲突、建议终态幂等、合并迁移和审计事务的 API 集成测试，覆盖 T008/T024 的真实边界。
+- [x] T042 [US2] 在 `tests/01_decentralized_uploading/test_issue51_classification_workflow.py` 使用真实 SQLite 测试数据库补齐正式目录、待确认建议、结构多选、元素数、审核证据和 `referenced_work` 管理员快照的提交事务测试，覆盖 T015/T020。
+- [x] T043 [US2] 在 `tests/01_decentralized_uploading/upload-task-editor-classification.test.tsx` 补齐材料维度、结构家族多选/唯一主项、元素种类数只读和同材料批量应用交互，覆盖 T016。
+- [x] T044 [US3] 在 `frontend/src/components/ClassificationGovernancePanel.tsx` 增加正式目录重命名、停用和合并操作，并在 `tests/01_decentralized_uploading/admin-classification-governance.test.tsx` 覆盖超级管理员交互，完成 T030。
+- [x] T045 [US4] 在 `tests/01_decentralized_uploading/test_issue51_legacy_contract.py` 补齐旧草稿 GET 一次性转换及 PUT/submit 拒绝旧字段的接口测试，完成 T032。
 - [ ] T046 [US1] [partial] 使用 fresh MySQL 和普通管理员/超级管理员测试账户执行 `quickstart.md`，完成桌面与 390px 登录态浏览器验收、目录 portal/键盘/失败状态检查及生产迁移前验证，覆盖 T037/T038；不得运行生产迁移。

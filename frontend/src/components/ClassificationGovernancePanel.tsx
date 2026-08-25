@@ -7,6 +7,7 @@ import AddIcon from '@mui/icons-material/Add'
 import { api } from '../lib/api'
 import {
   ClassificationCatalogs,
+  ClassificationTerm,
   loadClassificationCatalogs,
   refreshClassificationCatalogs,
 } from '../lib/classifications'
@@ -19,6 +20,11 @@ interface ClassificationProposal {
 }
 
 type ResolutionKind = 'mapped_existing' | 'alias_created' | 'formal_created' | 'rejected'
+type CatalogDimension = 'material_family' | 'structure_family'
+
+interface ManagedCatalogTerm extends ClassificationTerm {
+  dimension: CatalogDimension
+}
 
 interface ClassificationAudit {
   id: number
@@ -37,7 +43,7 @@ const ClassificationGovernancePanel: React.FC<ClassificationGovernancePanelProps
   const [proposals, setProposals] = useState<ClassificationProposal[]>([])
   const [audits, setAudits] = useState<ClassificationAudit[]>([])
   const [error, setError] = useState('')
-  const [dimension, setDimension] = useState<'material_family' | 'structure_family'>('material_family')
+  const [dimension, setDimension] = useState<CatalogDimension>('material_family')
   const [code, setCode] = useState('')
   const [name, setName] = useState('')
   const [nameEn, setNameEn] = useState('')
@@ -49,6 +55,11 @@ const ClassificationGovernancePanel: React.FC<ClassificationGovernancePanelProps
   const [resolutionCode, setResolutionCode] = useState('')
   const [resolutionName, setResolutionName] = useState('')
   const [resolutionNameEn, setResolutionNameEn] = useState('')
+  const [selectedTerm, setSelectedTerm] = useState<ManagedCatalogTerm | null>(null)
+  const [termName, setTermName] = useState('')
+  const [termNameEn, setTermNameEn] = useState('')
+  const [termReason, setTermReason] = useState('')
+  const [mergeTargetId, setMergeTargetId] = useState<number | ''>('')
 
   const load = useCallback(async () => {
     try {
@@ -84,6 +95,54 @@ const ClassificationGovernancePanel: React.FC<ClassificationGovernancePanelProps
       setError('')
     } catch (cause) {
       setError((cause as Error).message || '分类目录创建失败')
+    }
+  }
+
+  const refreshCatalogs = async () => {
+    const nextCatalogs = await refreshClassificationCatalogs()
+    setCatalogs(nextCatalogs)
+  }
+
+  const openTerm = (term: ClassificationTerm, termDimension: CatalogDimension) => {
+    setSelectedTerm({ ...term, dimension: termDimension })
+    setTermName(term.name)
+    setTermNameEn('')
+    setTermReason('')
+    setMergeTargetId('')
+  }
+
+  const closeTerm = () => {
+    setMergeTargetId('')
+    setSelectedTerm(null)
+  }
+
+  const updateTerm = async (changes: Record<string, unknown>) => {
+    if (!selectedTerm) return
+    try {
+      await api.patch(`/api/superadmin/classification-catalogs/${selectedTerm.dimension}/${selectedTerm.id}`, {
+        ...changes,
+        reason: termReason,
+      })
+      await refreshCatalogs()
+      closeTerm()
+      setError('')
+    } catch (cause) {
+      setError((cause as Error).message || '分类目录修改失败')
+    }
+  }
+
+  const mergeTerm = async () => {
+    if (!selectedTerm || !mergeTargetId) return
+    try {
+      await api.post(`/api/superadmin/classification-catalogs/${selectedTerm.dimension}/${selectedTerm.id}/merge`, {
+        target_id: mergeTargetId,
+        reason: termReason,
+      })
+      await refreshCatalogs()
+      closeTerm()
+      setError('')
+    } catch (cause) {
+      setError((cause as Error).message || '分类目录合并失败')
     }
   }
 
@@ -141,9 +200,12 @@ const ClassificationGovernancePanel: React.FC<ClassificationGovernancePanelProps
           <CardContent>
             <Typography variant="subtitle1" fontWeight={700} gutterBottom>材料家族目录</Typography>
             {(catalogs?.material_families || []).map(item => (
-              <Typography key={item.id} variant="body2">
-                {item.name}{item.aliases.length ? `（别名：${item.aliases.join('、')}）` : ''}
-              </Typography>
+              <Box key={item.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                <Typography variant="body2">
+                  {item.name}{item.aliases.length ? `（别名：${item.aliases.join('、')}）` : ''}
+                </Typography>
+                <Button size="small" aria-label={`管理${item.name}`} onClick={() => openTerm(item, 'material_family')}>管理</Button>
+              </Box>
             ))}
           </CardContent>
         </Card>
@@ -151,9 +213,12 @@ const ClassificationGovernancePanel: React.FC<ClassificationGovernancePanelProps
           <CardContent>
             <Typography variant="subtitle1" fontWeight={700} gutterBottom>结构家族目录</Typography>
             {(catalogs?.structure_families || []).map(item => (
-              <Typography key={item.id} variant="body2">
-                {item.name}{item.aliases.length ? `（别名：${item.aliases.join('、')}）` : ''}
-              </Typography>
+              <Box key={item.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                <Typography variant="body2">
+                  {item.name}{item.aliases.length ? `（别名：${item.aliases.join('、')}）` : ''}
+                </Typography>
+                <Button size="small" aria-label={`管理${item.name}`} onClick={() => openTerm(item, 'structure_family')}>管理</Button>
+              </Box>
             ))}
           </CardContent>
         </Card>
@@ -240,6 +305,43 @@ const ClassificationGovernancePanel: React.FC<ClassificationGovernancePanelProps
             onClick={() => void resolveProposal()}
           >
             确认处理
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={Boolean(selectedTerm)} onClose={closeTerm} fullWidth maxWidth="sm">
+        <DialogTitle>管理正式目录项</DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '12px !important' }}>
+          <Typography variant="body2">当前目录项：{selectedTerm?.name}</Typography>
+          <TextField size="small" label="新的规范中文名" value={termName} onChange={event => setTermName(event.target.value)} />
+          <TextField size="small" label="新的规范英文名" value={termNameEn} onChange={event => setTermNameEn(event.target.value)} />
+          <FormControl size="small">
+            <InputLabel id="classification-merge-target-label">合并到</InputLabel>
+            <Select
+              labelId="classification-merge-target-label"
+              label="合并到"
+              value={mergeTargetId}
+              onChange={event => setMergeTargetId(Number(event.target.value))}
+            >
+              {(selectedTerm?.dimension === 'material_family'
+                ? catalogs?.material_families || []
+                : catalogs?.structure_families || [])
+                .filter(item => item.id !== selectedTerm?.id)
+                .map(item => <MenuItem key={item.id} value={item.id}>{item.name}</MenuItem>)}
+            </Select>
+          </FormControl>
+          <TextField size="small" label="修改原因" multiline minRows={2} value={termReason} onChange={event => setTermReason(event.target.value)} />
+        </DialogContent>
+        <DialogActions sx={{ flexWrap: 'wrap' }}>
+          <Button onClick={closeTerm}>取消</Button>
+          <Button color="warning" disabled={!termReason} onClick={() => void updateTerm({ is_active: false })}>停用目录项</Button>
+          <Button color="warning" disabled={!termReason || !mergeTargetId} onClick={() => void mergeTerm()}>合并目录项</Button>
+          <Button
+            variant="contained"
+            disabled={!termName || !termNameEn || !termReason}
+            onClick={() => void updateTerm({ name: termName, name_en: termNameEn })}
+          >
+            保存目录项
           </Button>
         </DialogActions>
       </Dialog>

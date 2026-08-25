@@ -31,6 +31,7 @@ USERNAME_TYPE = String(32).with_variant(
     "mysql",
 )
 LONG_TEXT = Text().with_variant(mysql.LONGTEXT(), "mysql")
+BIGINT_ID = BigInteger().with_variant(Integer, "sqlite")
 
 
 class PeriodicTableElement(Base):
@@ -882,7 +883,7 @@ class MaterialState(Base):
         ),
     )
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(BIGINT_ID, primary_key=True, autoincrement=True)
     paper_id = Column(Integer, nullable=False)
     paper_revision = Column(Integer, nullable=False)
     superconductor_id = Column(
@@ -1013,7 +1014,7 @@ class ClassificationProposal(Base):
         ),
     )
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(BIGINT_ID, primary_key=True, autoincrement=True)
     material_state_id = Column(
         BigInteger,
         ForeignKey("material_states.id", ondelete="CASCADE"),
@@ -1077,7 +1078,7 @@ class ClassificationEvidence(Base):
         ),
     )
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(BIGINT_ID, primary_key=True, autoincrement=True)
     paper_id = Column(Integer, nullable=False)
     paper_revision = Column(Integer, nullable=False)
     material_state_id = Column(BigInteger, nullable=False)
