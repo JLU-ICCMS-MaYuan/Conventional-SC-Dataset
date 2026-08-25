@@ -364,7 +364,7 @@ describe('论文上传工作区', () => {
             ],
             structure_candidates: [{
               candidate_id: 'structure-state-1', material_state_ref: 'material_states[0]',
-              status: 'valid', confirmation: 'pending',
+              status: 'valid', confirmation: 'unreviewed',
               sources: [{ filename: 'Li2MgH16.vasp' }],
               validation: { atom_count: 2, elements: ['Li', 'H'], volume: 20 },
               representations: {
@@ -394,7 +394,27 @@ describe('论文上传工作区', () => {
     expect(screen.getByTestId('material-states-list')).toHaveStyle({ width: '100%' })
     expect(screen.queryByRole('heading', { name: '晶体结构' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '下载结构' })).toBeVisible()
-    expect(screen.getByRole('button', { name: '确认' })).toBeVisible()
+    expect(screen.getByText('当前显示：惯用胞 · CIF')).toBeVisible()
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: '晶胞表示' }))
+    fireEvent.click(screen.getByRole('option', { name: '原胞' }))
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: '结构格式' }))
+    fireEvent.click(screen.getByRole('option', { name: 'POSCAR' }))
+
+    expect(screen.getByTestId('structure-viewer')).toHaveTextContent('primitive POSCAR')
+    expect(screen.getByTestId('structure-viewer')).toHaveAttribute('data-format', 'vasp')
+    expect(screen.getByText('当前显示：原胞 · POSCAR')).toBeVisible()
+
+    fireEvent.click(screen.getByRole('button', { name: '采用此结构' }))
+    expect(screen.getByText('已采用')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: '恢复为待确认' }))
+    expect(screen.getByText('待确认')).toBeVisible()
+
+    fireEvent.click(screen.getByRole('button', { name: '不采用' }))
+    expect(screen.getByText('已不采用')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: '恢复为待确认' }))
+    expect(screen.getByRole('button', { name: '采用此结构' })).toBeVisible()
+    expect(screen.getByRole('button', { name: '不采用' })).toBeVisible()
   })
 
   it('临时表单并列显示冲突候选及其文件来源', async () => {

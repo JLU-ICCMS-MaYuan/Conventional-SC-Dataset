@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Box, Button, Chip, CircularProgress, Divider, MenuItem, Select, Stack, Typography } from '@mui/material'
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { Alert, Box, Button, Chip, CircularProgress, Divider, FormControl, InputLabel, MenuItem, Select, Stack, Typography } from '@mui/material'
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
 import DownloadIcon from '@mui/icons-material/Download'
 import BlockIcon from '@mui/icons-material/Block'
+import RestoreIcon from '@mui/icons-material/Restore'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
 import StructureViewer3D from './StructureViewer3D'
 import { StructureCandidate } from '../lib/paperProcessing'
@@ -25,6 +26,8 @@ const StructureCandidatePanel: React.FC<Props> = ({ candidates, uploading, onUpl
   const [selectedCandidateId, setSelectedCandidateId] = useState(preferredCandidate?.candidate_id || '')
   const [cell, setCell] = useState<CellKind>('conventional')
   const [format, setFormat] = useState<StructureFormat>('cif')
+  const cellLabelId = useId()
+  const formatLabelId = useId()
   const previousCandidateCount = useRef(candidates.length)
 
   useEffect(() => {
@@ -51,22 +54,23 @@ const StructureCandidatePanel: React.FC<Props> = ({ candidates, uploading, onUpl
   }
 
   const representation = candidate?.representations?.[cell]?.[format]
-  const preview = candidate?.representations?.conventional?.cif?.text
-    ? { text: candidate.representations.conventional.cif.text, format: 'cif' }
-    : candidate?.representations?.conventional?.poscar?.text
-      ? { text: candidate.representations.conventional.poscar.text, format: 'vasp' }
-      : null
+  const preview = representation?.text
+    ? { text: representation.text, format: format === 'poscar' ? 'vasp' : 'cif' }
+    : null
   const blocked = candidate?.status === 'blocked'
+  const decided = candidate?.confirmation === 'confirmed' || candidate?.confirmation === 'excluded'
   const filename = candidate?.sources?.map(source => String(source.filename || '')).filter(Boolean).join('、')
   const statusLabel = blocked
     ? '需要人工处理'
     : candidate?.confirmation === 'confirmed'
-      ? '已确认'
+      ? '已采用'
       : candidate?.confirmation === 'excluded'
-        ? '已排除'
+        ? '已不采用'
         : candidate?.status === 'valid'
-          ? '可确认'
+          ? '待确认'
           : '待核对'
+  const cellLabel = cell === 'conventional' ? '惯用胞' : '原胞'
+  const formatLabel = format === 'cif' ? 'CIF' : 'POSCAR'
 
   return (
     <Box sx={{ mt: 2, p: { xs: 1.5, sm: 2 }, borderRadius: 1, bgcolor: 'action.hover' }}>
@@ -110,8 +114,15 @@ const StructureCandidatePanel: React.FC<Props> = ({ candidates, uploading, onUpl
           {blocked
             ? <Alert severity="error" sx={{ mt: 1.5 }}>{candidate.validation?.message || '结构无法通过确定性校验'}</Alert>
             : preview
-              ? <Box sx={{ mt: 1.5 }}><StructureViewer3D data={preview.text} format={preview.format} height={320} /></Box>
-              : <Alert severity="info" sx={{ mt: 1.5 }}>结构文本缺失，暂不生成三维预览。</Alert>}
+              ? (
+                  <Box sx={{ mt: 1.5 }}>
+                    <StructureViewer3D data={preview.text} format={preview.format} height={320} />
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75 }}>
+                      当前显示：{cellLabel} · {formatLabel}
+                    </Typography>
+                  </Box>
+                )
+              : <Alert severity="info" sx={{ mt: 1.5 }}>当前结构缺少{cellLabel} {formatLabel} 数据，无法预览或下载。</Alert>}
 
           {!blocked && (
             <>
@@ -126,17 +137,33 @@ const StructureCandidatePanel: React.FC<Props> = ({ candidates, uploading, onUpl
                 </Box>
               </Box>
               <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 1.5 }}>
-                <Select size="small" value={cell} aria-label="晶胞表示" onChange={event => setCell(event.target.value as CellKind)}>
-                  <MenuItem value="conventional">惯用胞</MenuItem>
-                  <MenuItem value="primitive">原胞</MenuItem>
-                </Select>
-                <Select size="small" value={format} aria-label="结构导出格式" onChange={event => setFormat(event.target.value as StructureFormat)}>
-                  <MenuItem value="cif">CIF</MenuItem>
-                  <MenuItem value="poscar">POSCAR</MenuItem>
-                </Select>
+                <FormControl size="small">
+                  <InputLabel id={cellLabelId}>晶胞表示</InputLabel>
+                  <Select labelId={cellLabelId} label="晶胞表示" value={cell} onChange={event => setCell(event.target.value as CellKind)}>
+                    <MenuItem value="conventional">惯用胞</MenuItem>
+                    <MenuItem value="primitive">原胞</MenuItem>
+                  </Select>
+                </FormControl>
+                <FormControl size="small">
+                  <InputLabel id={formatLabelId}>结构格式</InputLabel>
+                  <Select labelId={formatLabelId} label="结构格式" value={format} onChange={event => setFormat(event.target.value as StructureFormat)}>
+                    <MenuItem value="cif">CIF</MenuItem>
+                    <MenuItem value="poscar">POSCAR</MenuItem>
+                  </Select>
+                </FormControl>
                 <Button startIcon={<DownloadIcon />} variant="outlined" disabled={!representation?.text} onClick={() => download(candidate, cell, format)}>下载结构</Button>
-                <Button startIcon={<CheckCircleOutlineIcon />} variant="contained" color="success" disabled={candidate.status !== 'valid'} onClick={() => onChange(candidate.candidate_id, { confirmation: 'confirmed', status: 'confirmed' })}>确认</Button>
-                <Button startIcon={<BlockIcon />} color="inherit" disabled={candidate.confirmation === 'excluded'} onClick={() => onChange(candidate.candidate_id, { confirmation: 'excluded', status: 'excluded' })}>排除</Button>
+                {decided
+                  ? (
+                      <Button startIcon={<RestoreIcon />} color="inherit" onClick={() => onChange(candidate.candidate_id, { confirmation: 'unreviewed', status: 'valid' })}>
+                        恢复为待确认
+                      </Button>
+                    )
+                  : (
+                      <>
+                        <Button startIcon={<CheckCircleOutlineIcon />} variant="contained" color="success" disabled={candidate.status !== 'valid'} onClick={() => onChange(candidate.candidate_id, { confirmation: 'confirmed', status: 'confirmed' })}>采用此结构</Button>
+                        <Button startIcon={<BlockIcon />} color="inherit" onClick={() => onChange(candidate.candidate_id, { confirmation: 'excluded', status: 'excluded' })}>不采用</Button>
+                      </>
+                    )}
               </Stack>
             </>
           )}
