@@ -29,8 +29,6 @@ wheels/
 !.agents/skills/big-project-overview-maintainer/**
 !.agents/skills/big-project-issue-manager/
 !.agents/skills/big-project-issue-manager/**
-!.agents/skills/big-project-spec/
-!.agents/skills/big-project-spec/**
 !.agents/skills/big-project-spec-runner/
 !.agents/skills/big-project-spec-runner/**
 !.agents/skills/big-project-planer/
@@ -86,6 +84,7 @@ hydride_literature_image_ai.db
 docs/local-mysql-import.md
 
 # React 构建产物
+/.vite/
 frontend_build/
 frontend/static/assets/
 frontend/*.tsbuildinfo
@@ -104,3 +103,4 @@ frontend/static/
 
 # Docker 部署产物（大文件 + 冗余副本）
 /docker
+/demo/
