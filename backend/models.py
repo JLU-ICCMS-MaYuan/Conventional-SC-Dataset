@@ -365,7 +365,6 @@ class Paper(Base):
     key_finding = Column(Text)
     rationale = Column(Text)
     research_materials = Column(JSON)
-    referenced_materials = Column(JSON)
     material_relations = Column(JSON)
     builds_on = Column(JSON)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -677,6 +676,135 @@ class PaperReviewEvent(Base):
     reviewer = relationship("User", back_populates="review_events")
 
 
+class MaterialFamily(Base):
+    __tablename__ = "material_families"
+    __table_args__ = (
+        UniqueConstraint("code", name="uq_material_families_code"),
+        UniqueConstraint("name_zh", name="uq_material_families_name_zh"),
+        UniqueConstraint("normalized_name", name="uq_material_families_normalized_name"),
+        CheckConstraint(
+            "merged_into_id IS NULL OR merged_into_id <> id",
+            name="ck_material_families_not_self_merged",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    code = Column(String(64), nullable=False)
+    name_zh = Column(String(100), nullable=False)
+    name_en = Column(String(160), nullable=False)
+    normalized_name = Column(String(160), nullable=False)
+    is_active = Column(Boolean, nullable=False, default=True, server_default="1")
+    merged_into_id = Column(
+        Integer,
+        ForeignKey("material_families.id", ondelete="RESTRICT"),
+    )
+    created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="RESTRICT"))
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    aliases = relationship("MaterialFamilyAlias", back_populates="material_family")
+    material_states = relationship("MaterialState", back_populates="material_family")
+    merged_into = relationship("MaterialFamily", remote_side=[id])
+
+
+class MaterialFamilyAlias(Base):
+    __tablename__ = "material_family_aliases"
+    __table_args__ = (
+        UniqueConstraint(
+            "normalized_alias",
+            name="uq_material_family_alias_normalized",
+        ),
+        CheckConstraint(
+            "language IN ('zh', 'en', 'code', 'other')",
+            name="ck_material_family_alias_language",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    material_family_id = Column(
+        Integer,
+        ForeignKey("material_families.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    alias = Column(String(160), nullable=False)
+    normalized_alias = Column(String(160), nullable=False)
+    language = Column(String(10), nullable=False, default="other", server_default="other")
+    created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="RESTRICT"))
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    material_family = relationship("MaterialFamily", back_populates="aliases")
+
+
+class StructureFamily(Base):
+    __tablename__ = "structure_families"
+    __table_args__ = (
+        UniqueConstraint("code", name="uq_structure_families_code"),
+        UniqueConstraint("name_zh", name="uq_structure_families_name_zh"),
+        UniqueConstraint("normalized_name", name="uq_structure_families_normalized_name"),
+        CheckConstraint(
+            "merged_into_id IS NULL OR merged_into_id <> id",
+            name="ck_structure_families_not_self_merged",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    code = Column(String(64), nullable=False)
+    name_zh = Column(String(100), nullable=False)
+    name_en = Column(String(160), nullable=False)
+    normalized_name = Column(String(160), nullable=False)
+    is_active = Column(Boolean, nullable=False, default=True, server_default="1")
+    merged_into_id = Column(
+        Integer,
+        ForeignKey("structure_families.id", ondelete="RESTRICT"),
+    )
+    created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="RESTRICT"))
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    aliases = relationship("StructureFamilyAlias", back_populates="structure_family")
+    merged_into = relationship("StructureFamily", remote_side=[id])
+
+
+class StructureFamilyAlias(Base):
+    __tablename__ = "structure_family_aliases"
+    __table_args__ = (
+        UniqueConstraint(
+            "normalized_alias",
+            name="uq_structure_family_alias_normalized",
+        ),
+        CheckConstraint(
+            "language IN ('zh', 'en', 'code', 'other')",
+            name="ck_structure_family_alias_language",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    structure_family_id = Column(
+        Integer,
+        ForeignKey("structure_families.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    alias = Column(String(160), nullable=False)
+    normalized_alias = Column(String(160), nullable=False)
+    language = Column(String(10), nullable=False, default="other", server_default="other")
+    created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="RESTRICT"))
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    structure_family = relationship("StructureFamily", back_populates="aliases")
+
+
 class MaterialState(Base):
     __tablename__ = "material_states"
     __table_args__ = (
@@ -715,6 +843,20 @@ class MaterialState(Base):
             "reported_space_group_number IS NULL OR reported_space_group_number BETWEEN 1 AND 230",
             name="ck_material_states_reported_space_group",
         ),
+        CheckConstraint(
+            "element_count IS NULL OR element_count BETWEEN 1 AND 118",
+            name="ck_material_states_element_count",
+        ),
+        CheckConstraint(
+            """
+            material_dimensionality IN (
+                'zero_dimensional', 'one_dimensional', 'two_dimensional',
+                'three_dimensional', 'quasi_one_dimensional',
+                'quasi_two_dimensional', 'unknown'
+            )
+            """,
+            name="ck_material_states_dimensionality",
+        ),
         UniqueConstraint(
             "id",
             "paper_id",
@@ -748,6 +890,18 @@ class MaterialState(Base):
         ForeignKey("superconductors.id", ondelete="RESTRICT"),
         nullable=False,
     )
+    material_family_id = Column(
+        Integer,
+        ForeignKey("material_families.id", ondelete="RESTRICT"),
+        index=True,
+    )
+    element_count = Column(SmallInteger)
+    material_dimensionality = Column(
+        String(32),
+        nullable=False,
+        default="unknown",
+        server_default="unknown",
+    )
     pressure_value_gpa = Column(Numeric(14, 6))
     pressure_min_gpa = Column(Numeric(14, 6))
     pressure_max_gpa = Column(Numeric(14, 6))
@@ -780,6 +934,213 @@ class MaterialState(Base):
 
     paper = relationship("Paper", back_populates="material_states")
     superconductor = relationship("Superconductor", back_populates="material_states")
+    material_family = relationship("MaterialFamily", back_populates="material_states")
+    structure_family_links = relationship(
+        "MaterialStateStructureFamily",
+        back_populates="material_state",
+    )
+    classification_proposals = relationship(
+        "ClassificationProposal",
+        back_populates="material_state",
+    )
+    classification_evidences = relationship(
+        "ClassificationEvidence",
+        back_populates="material_state",
+    )
+
+
+class MaterialStateStructureFamily(Base):
+    __tablename__ = "material_state_structure_families"
+    __table_args__ = (
+        UniqueConstraint(
+            "primary_marker",
+            name="uq_material_state_structure_primary",
+        ),
+    )
+
+    material_state_id = Column(
+        BigInteger,
+        ForeignKey("material_states.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    structure_family_id = Column(
+        Integer,
+        ForeignKey("structure_families.id", ondelete="RESTRICT"),
+        primary_key=True,
+    )
+    is_primary = Column(Boolean, nullable=False, default=False, server_default="0")
+    primary_marker = Column(
+        BigInteger,
+        Computed(
+            "CASE WHEN is_primary = 1 THEN material_state_id ELSE NULL END",
+            persisted=True,
+        ),
+    )
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    material_state = relationship("MaterialState", back_populates="structure_family_links")
+    structure_family = relationship("StructureFamily")
+
+
+class ClassificationProposal(Base):
+    __tablename__ = "classification_proposals"
+    __table_args__ = (
+        CheckConstraint(
+            "dimension IN ('material_family', 'structure_family')",
+            name="ck_classification_proposals_dimension",
+        ),
+        CheckConstraint(
+            "status IN ('proposed', 'under_review', 'resolved', 'rejected')",
+            name="ck_classification_proposals_status",
+        ),
+        CheckConstraint(
+            "source_kind IN ('ai', 'user', 'admin', 'migration')",
+            name="ck_classification_proposals_source",
+        ),
+        CheckConstraint(
+            """
+            resolution_kind IS NULL OR resolution_kind IN (
+                'mapped_existing', 'alias_created', 'formal_created', 'rejected'
+            )
+            """,
+            name="ck_classification_proposals_resolution",
+        ),
+        Index(
+            "ix_classification_proposals_queue",
+            "status",
+            "dimension",
+            "created_at",
+        ),
+    )
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    material_state_id = Column(
+        BigInteger,
+        ForeignKey("material_states.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    dimension = Column(String(32), nullable=False)
+    raw_name = Column(String(255), nullable=False)
+    normalized_name = Column(String(255), nullable=False)
+    status = Column(String(20), nullable=False, default="proposed", server_default="proposed")
+    source_kind = Column(String(20), nullable=False)
+    resolution_kind = Column(String(32))
+    material_family_id = Column(
+        Integer,
+        ForeignKey("material_families.id", ondelete="RESTRICT"),
+    )
+    structure_family_id = Column(
+        Integer,
+        ForeignKey("structure_families.id", ondelete="RESTRICT"),
+    )
+    proposed_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="RESTRICT"))
+    reviewed_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="RESTRICT"))
+    review_note = Column(Text)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+    resolved_at = Column(DateTime(timezone=True))
+
+    material_state = relationship("MaterialState", back_populates="classification_proposals")
+
+
+class ClassificationEvidence(Base):
+    __tablename__ = "classification_evidences"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["material_state_id", "paper_id", "paper_revision"],
+            ["material_states.id", "material_states.paper_id", "material_states.paper_revision"],
+            name="fk_classification_evidences_state_revision",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint(
+            "dimension IN ('material_family', 'structure_family', 'element_count', 'material_dimensionality')",
+            name="ck_classification_evidences_dimension",
+        ),
+        CheckConstraint(
+            "source_kind IN ('reported', 'derived', 'reviewed')",
+            name="ck_classification_evidences_source",
+        ),
+        CheckConstraint(
+            "scope IN ('current_paper', 'referenced_work')",
+            name="ck_classification_evidences_scope",
+        ),
+        Index(
+            "ix_classification_evidences_paper_revision",
+            "paper_id",
+            "paper_revision",
+        ),
+    )
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    paper_id = Column(Integer, nullable=False)
+    paper_revision = Column(Integer, nullable=False)
+    material_state_id = Column(BigInteger, nullable=False)
+    dimension = Column(String(32), nullable=False)
+    material_family_id = Column(
+        Integer,
+        ForeignKey("material_families.id", ondelete="RESTRICT"),
+    )
+    structure_family_id = Column(
+        Integer,
+        ForeignKey("structure_families.id", ondelete="RESTRICT"),
+    )
+    proposal_id = Column(
+        BigInteger,
+        ForeignKey("classification_proposals.id", ondelete="SET NULL"),
+    )
+    source_kind = Column(String(20), nullable=False)
+    scope = Column(String(20), nullable=False, default="current_paper", server_default="current_paper")
+    raw_value = Column(String(255))
+    section = Column(String(500))
+    page_start = Column(Integer)
+    page_end = Column(Integer)
+    quote = Column(Text)
+    reviewed_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="RESTRICT"))
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    material_state = relationship("MaterialState", back_populates="classification_evidences")
+
+
+class ClassificationAuditEvent(Base):
+    __tablename__ = "classification_audit_events"
+    __table_args__ = (
+        CheckConstraint(
+            "dimension IN ('material_family', 'structure_family')",
+            name="ck_classification_audits_dimension",
+        ),
+        CheckConstraint(
+            "entity_kind IN ('term', 'alias', 'proposal')",
+            name="ck_classification_audits_entity_kind",
+        ),
+        Index(
+            "ix_classification_audits_entity_time",
+            "dimension",
+            "entity_kind",
+            "entity_id",
+            "created_at",
+        ),
+    )
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    actor_user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    dimension = Column(String(32), nullable=False)
+    entity_kind = Column(String(20), nullable=False)
+    entity_id = Column(BigInteger, nullable=False)
+    action = Column(String(32), nullable=False)
+    reason = Column(Text, nullable=False)
+    before_json = Column(JSON)
+    after_json = Column(JSON)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
 class StructureModel(Base):

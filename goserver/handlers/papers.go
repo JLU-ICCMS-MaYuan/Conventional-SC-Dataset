@@ -31,7 +31,12 @@ func GetPaper(c *gin.Context) {
 	}
 
 	var paper models.Paper
-	if err := database.DB.Preload("KeyProperties").First(&paper, uint(id)).Error; err != nil {
+	if err := database.DB.
+		Preload("KeyProperties").
+		Preload("MaterialStates.Superconductor").
+		Preload("MaterialStates.MaterialFamily").
+		Preload("MaterialStates.StructureFamilyLinks.StructureFamily").
+		First(&paper, uint(id)).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "论文不存在"})
 		return
 	}
@@ -149,7 +154,7 @@ func PatchPaper(c *gin.Context) {
 		"pages": true, "year": true, "abstract": true, "summary": true,
 		"paper_type": true, "theoretical_subtype": true, "keywords_tags": true,
 		"methodology": true, "key_finding": true, "rationale": true,
-		"research_materials": true, "referenced_materials": true,
+		"research_materials": true,
 		"material_relations": true, "builds_on": true,
 	}
 	updates := map[string]interface{}{}
@@ -477,7 +482,32 @@ func paperToDict(p models.Paper) gin.H {
 		"updated_at":          p.UpdatedAt,
 		"tc_max":              tcMax,
 		"key_properties":      keyPropertiesToDict(p.KeyProperties),
+		"material_states":     materialStatesToDict(p.MaterialStates),
 	}
+}
+
+func materialStatesToDict(states []models.MaterialState) []gin.H {
+	result := make([]gin.H, 0, len(states))
+	for _, state := range states {
+		var family interface{}
+		if state.MaterialFamily != nil {
+			family = gin.H{"id": state.MaterialFamily.ID, "name": state.MaterialFamily.NameZH, "status": "confirmed"}
+		}
+		structures := make([]gin.H, 0, len(state.StructureFamilyLinks))
+		for _, link := range state.StructureFamilyLinks {
+			structures = append(structures, gin.H{
+				"id": link.StructureFamilyID, "name": link.StructureFamily.NameZH,
+				"status": "confirmed", "is_primary": link.IsPrimary,
+			})
+		}
+		result = append(result, gin.H{
+			"id": state.ID, "material": state.Superconductor.ChemicalFormula,
+			"material_family": family, "structure_families": structures,
+			"element_count": state.ElementCount, "material_dimensionality": state.MaterialDimensionality,
+			"pressure_value_gpa": state.PressureValueGPa,
+		})
+	}
+	return result
 }
 
 func keyPropertiesToDict(kps []models.KeyProperty) []gin.H {

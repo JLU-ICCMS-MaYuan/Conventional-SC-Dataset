@@ -9,6 +9,9 @@
 - 管理后台可按状态、关键词、材料和年份筛选论文列表，并分页展示。
 - 管理员可编辑论文基础字段、摘要、LLM 富化字段和 `key_properties`；关键物性支持新增、修改、标记删除、主记录标记、结构文本和结构格式编辑。
 - 管理员可查看、编辑、单篇审核和批量审核论文；论文删除与批量删除只允许超级管理员。
+- 管理员审核材料状态时从数据库目录选择规范中文材料家族，可把待审核建议映射到已有项；旧 `key_properties.superconductor_type` 不再参与管理员写入。
+- 超级管理员可以创建、重命名、停用和合并材料/结构家族目录；治理原因和前后快照写入分类审计。
+- 批准论文前检查当前 revision 的材料家族、元素种类数和未解决材料家族建议；不完整时返回 `409 classification_incomplete`，论文状态不改变。
 - 同一审核人每次实际提交单篇或批量论文审核都会写入一条不可变审核事件，即使论文状态和意见与上次相同；相同 `review_request_id` 的网络重试保持幂等，不重复计数。
 - Go 统一承载 `/api/papers` 列表、`/api/papers/{id}` 详情和白名单 PATCH：匿名仅查看 approved；登录用户可查看 approved 与 pending；上传者额外可查看自己的 rejected 和 `review_comment`；管理员可查看全部及 `admin_internal_note`。
 - 无权查看的已存在 rejected 论文返回 403，不再伪装成 404。普通用户不能修改审核状态、文件路径、上传者、审核者或内部备注。
@@ -31,6 +34,7 @@
 
 - `goserver/handlers/admin.go`
 - `goserver/handlers/papers.go`
+- `goserver/handlers/classifications.go`
 - `goserver/handlers/news.go`
 - `goserver/handlers/chart_groups.go`
 - `backend/models.py`

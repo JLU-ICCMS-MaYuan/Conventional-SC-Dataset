@@ -9,6 +9,15 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import SaveIcon from '@mui/icons-material/Save'
 import SendIcon from '@mui/icons-material/Send'
 import { api, ApiError } from '../lib/api'
+import {
+  ClassificationCatalogs,
+  ClassificationTerm,
+  DEFAULT_MATERIAL_DIMENSIONALITIES,
+  loadClassificationCatalogs,
+  pendingSelection,
+  selectionForTerm,
+} from '../lib/classifications'
+import ClassificationAutocomplete from './ClassificationAutocomplete'
 import StructureCandidatePanel from './StructureCandidatePanel'
 import {
   DraftKeyProperty, DraftMaterialState, DraftTcResult, SourceEvidence, StructureCandidate, UploadDraft, evidenceList,
@@ -33,10 +42,6 @@ const PAPER_TYPE_OPTIONS = [
   { value: 'experimental', label: '实验文章' },
   { value: 'review', label: '综述文章' },
   { value: 'unknown', label: '暂不确定' },
-]
-
-const SC_TYPE_OPTIONS = [
-  'hydride', 'cuprate', 'iron_based', 'nickel_based', 'carbon', 'organic', 'others',
 ]
 
 const toLines = (value: string[] | undefined) => (value || []).join('\n')
@@ -157,7 +162,28 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
   const [authorMenu, setAuthorMenu] = useState<{ author: string; anchorEl: HTMLElement } | null>(null)
   const [structureUploading, setStructureUploading] = useState<Record<number, boolean>>({})
   const [authorInput, setAuthorInput] = useState('')
+  const [catalogs, setCatalogs] = useState<ClassificationCatalogs | null>(null)
+  const [catalogLoading, setCatalogLoading] = useState(true)
+  const [catalogError, setCatalogError] = useState('')
   const revisionRef = useRef(0)
+
+  useEffect(() => {
+    let active = true
+    setCatalogLoading(true)
+    loadClassificationCatalogs()
+      .then(value => {
+        if (!active) return
+        setCatalogs(value)
+        setCatalogError('')
+      })
+      .catch((reason: Error) => {
+        if (active) setCatalogError(reason.message || '分类目录加载失败')
+      })
+      .finally(() => {
+        if (active) setCatalogLoading(false)
+      })
+    return () => { active = false }
+  }, [])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -227,20 +253,33 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
     changeDraft(current => ({ ...current, [field]: value }))
   }
 
-  const setSuperconductorType = (value: string) => {
-    changeDraft(current => ({
-      ...current,
-      sc_type: value,
-      sc_type_review_status: value && !SC_TYPE_OPTIONS.includes(value) ? 'pending' : 'none',
-    }))
-  }
-
   const updateMaterialState = (index: number, field: keyof DraftMaterialState, value: unknown) => {
     changeDraft(current => ({
       ...current,
       material_states: current.material_states.map((item, itemIndex) =>
         itemIndex === index ? { ...item, [field]: value } : item),
     }))
+  }
+
+  const applyClassificationToSameMaterial = (sourceIndex: number) => {
+    changeDraft(current => {
+      const source = current.material_states[sourceIndex]
+      const material = source.material?.trim().toLocaleLowerCase()
+      if (!material) return current
+      return {
+        ...current,
+        material_states: current.material_states.map((state, index) => (
+          index !== sourceIndex && state.material?.trim().toLocaleLowerCase() === material
+            ? {
+                ...state,
+                material_family: source.material_family ? { ...source.material_family } : null,
+                structure_families: (source.structure_families || []).map(item => ({ ...item })),
+                material_dimensionality: source.material_dimensionality || 'unknown',
+              }
+            : state
+        )),
+      }
+    })
   }
 
   const uploadStructureForState = async (stateIndex: number, file: File) => {
@@ -510,7 +549,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
         </Box>
       </Box>
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 1fr' }, gap: 2, mt: 2, '& > *': { minWidth: 0 } }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mt: 2, '& > *': { minWidth: 0 } }}>
         <FormControl fullWidth>
           <InputLabel>论文整体类型</InputLabel>
           <Select label="论文整体类型" value={draft.paper.paper_type || 'unknown'}
@@ -529,16 +568,6 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
           </Select>
           <EvidenceNotes label="理论二级类型" aiValue={aiPaper.theoretical_subtype} />
         </FormControl>
-        <Box>
-          <TextField fullWidth label="超导材料类型（可输入自定义）" value={draft.sc_type || ''}
-            slotProps={{ htmlInput: { list: 'sc-type-options' } }}
-            onChange={event => setSuperconductorType(event.target.value)} />
-          <datalist id="sc-type-options">{SC_TYPE_OPTIONS.map(value => <option key={value} value={value} />)}</datalist>
-          {draft.sc_type && !SC_TYPE_OPTIONS.includes(draft.sc_type) && (
-            <Chip size="small" color="warning" label="新类型，待管理员确认" sx={{ mt: 0.75 }} />
-          )}
-          <EvidenceNotes label="超导材料类型" aiValue={ai.sc_type} evidence={classificationEvidence} />
-        </Box>
       </Box>
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mt: 2, '& > *': { minWidth: 0 } }}>
@@ -587,6 +616,10 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
           ...current,
           material_states: [...current.material_states, {
             material: '',
+            material_family: null,
+            structure_families: [],
+            element_count: null,
+            material_dimensionality: 'unknown',
             pressure_value_gpa: null,
             state_kind: current.paper.paper_type === 'experimental' ? 'experimental' : 'theoretical',
             reported_space_group_symbol: null,
@@ -611,6 +644,12 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
                   <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                     <Typography variant="subtitle2" fontWeight={700}>材料状态 #{index + 1}</Typography>
+                    {state.material_family && draft.material_states.some((item, itemIndex) => (
+                      itemIndex !== index
+                      && item.material?.trim().toLocaleLowerCase() === state.material?.trim().toLocaleLowerCase()
+                    )) && (
+                      <Button size="small" onClick={() => applyClassificationToSameMaterial(index)}>应用到同材料</Button>
+                    )}
                   </Box>
                   <Button size="small" color="error" startIcon={<DeleteIcon />}
                     onClick={() => changeDraft(current => ({
@@ -621,6 +660,73 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: 'repeat(3, 1fr)' }, gap: 1.5 }}>
                   <TextField label="材料" value={state.material || ''}
                     onChange={event => updateMaterialState(index, 'material', event.target.value)} />
+                  <ClassificationAutocomplete
+                    label="材料家族"
+                    options={catalogs?.material_families || []}
+                    value={state.material_family}
+                    loading={catalogLoading}
+                    error={catalogError}
+                    onChange={value => updateMaterialState(index, 'material_family', value)}
+                  />
+                  <TextField
+                    label="不同元素种类数"
+                    value={state.element_count ?? ''}
+                    helperText="由服务器根据化学式计算"
+                    slotProps={{ htmlInput: { readOnly: true } }}
+                  />
+                  <FormControl fullWidth>
+                    <InputLabel>材料维度</InputLabel>
+                    <Select
+                      label="材料维度"
+                      value={state.material_dimensionality || 'unknown'}
+                      onChange={event => updateMaterialState(index, 'material_dimensionality', event.target.value)}
+                    >
+                      {(catalogs?.material_dimensionalities || DEFAULT_MATERIAL_DIMENSIONALITIES).map(option => (
+                        <MenuItem key={option.value} value={option.value}>{option.name}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <Autocomplete<ClassificationTerm | string, true, false, true>
+                    multiple
+                    freeSolo
+                    options={catalogs?.structure_families || []}
+                    loading={catalogLoading}
+                    value={(state.structure_families || []).map(selection => (
+                      selection.id == null
+                        ? selection.name
+                        : catalogs?.structure_families.find(option => option.id === selection.id) || selection.name
+                    ))}
+                    getOptionLabel={option => typeof option === 'string' ? option : option.name}
+                    isOptionEqualToValue={(option, value) => (
+                      typeof option !== 'string' && typeof value !== 'string' && option.id === value.id
+                    )}
+                    onChange={(_, values) => {
+                      const previous = state.structure_families || []
+                      updateMaterialState(index, 'structure_families', values.map(value => {
+                        const selection = typeof value === 'string' ? pendingSelection(value) : selectionForTerm(value)
+                        const wasPrimary = previous.some(item => (
+                          item.is_primary && (selection?.id != null ? item.id === selection.id : item.name === selection?.name)
+                        ))
+                        return selection ? { ...selection, is_primary: wasPrimary } : null
+                      }).filter(Boolean))
+                    }}
+                    renderInput={params => <TextField {...params} label="结构家族（可多选）" error={Boolean(catalogError)} />}
+                  />
+                  <FormControl fullWidth disabled={!state.structure_families?.length}>
+                    <InputLabel>主结构家族</InputLabel>
+                    <Select
+                      label="主结构家族"
+                      value={(state.structure_families || []).find(item => item.is_primary)?.name || ''}
+                      onChange={event => updateMaterialState(index, 'structure_families', (state.structure_families || []).map(item => ({
+                        ...item,
+                        is_primary: item.name === event.target.value,
+                      })))}
+                    >
+                      {(state.structure_families || []).map(item => (
+                        <MenuItem key={`${item.id ?? 'pending'}:${item.name}`} value={item.name}>{item.name}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
                   <TextField label="压力 (GPa)" type="number" value={state.pressure_value_gpa ?? ''} helperText={state.pressure_value_gpa == null && state.pressure_raw ? '原文压力：' + state.pressure_raw + ' ' + (state.pressure_unit_raw || '') : undefined}
                     onChange={event => updateMaterialState(index, 'pressure_value_gpa', event.target.value ? Number(event.target.value) : null)} />
                   <TextField label="空间群符号" value={state.reported_space_group_symbol || ''}

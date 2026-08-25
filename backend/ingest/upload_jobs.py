@@ -63,6 +63,10 @@ equal contribution、contributed equally 等明确声明识别。证据不足时
   "material_relations": [{"material": "", "relation": "discovers|investigates|predicts", "page": 1, "quote": ""}],
   "material_states": [{
     "material": "",
+    "scope": "current_paper|referenced_work",
+    "material_family": {"name": "自由材料家族名称", "scope": "current_paper|referenced_work", "page": 1, "quote": ""},
+    "structure_families": [{"name": "结构家族名称", "is_primary": true, "scope": "current_paper|referenced_work", "page": 1, "quote": ""}],
+    "material_dimensionality": "zero_dimensional|one_dimensional|two_dimensional|three_dimensional|quasi_one_dimensional|quasi_two_dimensional|unknown",
     "pressure_value_gpa": null, "pressure_min_gpa": null, "pressure_max_gpa": null,
     "pressure_raw": null, "pressure_unit_raw": null,
     "state_kind": "theoretical|experimental|mixed|unknown",
@@ -72,16 +76,14 @@ equal contribution、contributed equally 等明确声明识别。证据不足时
     "evidence": {"page": 1, "quote": "原文"}
   }],
   "methodology": [],
-  "key_findings": [],
-  "sc_type_candidates": [{"value": "自由材料类型", "scope": "current_paper|referenced_work", "page": 1, "quote": ""}]
+  "key_findings": []
 }"""
 
-CHUNK_RESULT_SCHEMA_VERSION = 4
+CHUNK_RESULT_SCHEMA_VERSION = 5
 
 PUBLIC_CHUNK_RESULT_FIELDS = {
     "metadata", "paper_type_evidence", "research_materials",
-    "material_relations", "material_states", "methodology", "key_findings",
-    "sc_type_candidates", "_source",
+    "material_relations", "material_states", "methodology", "key_findings", "_source",
 }
 
 FORM_PREVIEW_GROUPS = (
@@ -92,7 +94,7 @@ FORM_PREVIEW_GROUPS = (
     )),
     ("classification", "分类判断", (
         ("paper.paper_type", "论文类型"), ("paper.theoretical_subtype", "理论二级类型"),
-        ("sc_type", "超导材料类型"), ("classification_reason", "分类理由"),
+        ("classification_reason", "分类理由"),
     )),
     ("content", "研究内容", (
         ("paper.summary", "全文摘要"), ("paper.keywords_tags", "关键词"),
@@ -127,7 +129,7 @@ SUMMARY_SYSTEM_PROMPT = """你是超导材料论文分类与结构化提取专�
 - 以整理评价已有工作为主，归 review。
 理论二级类型只允许 calculation、method、theory。新算法、新模型、新研究工具归 method；使用已有计算方法研究具体问题归 calculation；解析推导、理论模型或机制研究归 theory。
 材料超导类型必须综合全文判断，可以使用已有类型，也可以提出自由文本新类型，不能只凭化学式猜测。
-分段证据中的 scope 表示证据主体；只有 scope=current_paper 的候选可以决定本文 paper_type 和 sc_type，
+分段证据中的 scope 表示证据主体；只有 scope=current_paper 的候选可以决定本文 paper_type 和材料状态分类，
 scope=referenced_work 或缺少 scope 的候选只能作为背景，不能参与本文分类。
 referenced_materials 仅用于帮助区分本文对象与背景对象，最终草稿不要返回该字段。
 论文整体 paper_type 与每条物性的 article_type 必须分别判断，article_type 只允许 e 或 t。
@@ -148,6 +150,10 @@ pressure_unit_raw；无法可靠换算或原文没有报告时保留原文并将
   },
   "material_states": [{
     "material": "",
+    "material_family": {"id": null, "name": "自由材料家族名称", "status": "pending", "evidence": {"section": "", "page": null, "quote": ""}},
+    "structure_families": [{"id": null, "name": "结构家族名称", "is_primary": true, "status": "pending", "evidence": {"section": "", "page": null, "quote": ""}}],
+    "element_count": null,
+    "material_dimensionality": "zero_dimensional|one_dimensional|two_dimensional|three_dimensional|quasi_one_dimensional|quasi_two_dimensional|unknown",
     "pressure_value_gpa": null, "pressure_min_gpa": null, "pressure_max_gpa": null,
     "pressure_raw": null, "pressure_unit_raw": null,
     "state_kind": "theoretical|experimental|mixed|unknown",
@@ -168,9 +174,7 @@ pressure_unit_raw；无法可靠换算或原文没有报告时保留原文并将
     "properties": []
   }],
   "classification_reason": "",
-  "classification_evidence": [{"section": "", "page": null, "quote": ""}],
-  "sc_type": "",
-  "sc_type_review_status": "none"
+  "classification_evidence": [{"section": "", "page": null, "quote": ""}]
 }"""
 
 
@@ -382,6 +386,56 @@ def _is_effective_paper_type_evidence(item: Any) -> bool:
     )
 
 
+def _current_paper_material_state(item: Any) -> dict[str, Any] | None:
+    if not _is_current_paper_evidence(item):
+        return None
+    state = json.loads(json.dumps(item, ensure_ascii=False))
+    family = state.get("material_family")
+    if isinstance(family, dict) and family.get("scope") != "current_paper":
+        state["material_family"] = None
+    state["structure_families"] = [
+        selection
+        for selection in state.get("structure_families") or []
+        if _is_current_paper_evidence(selection)
+    ]
+    return state
+
+
+def _classification_scope_evidence(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Flatten raw scoped candidates for the administrator-only review artifact."""
+    evidence: list[dict[str, Any]] = []
+
+    def add(dimension: str, raw_name: Any, item: Any, source: Any) -> None:
+        if not isinstance(item, dict) or item.get("scope") not in {"current_paper", "referenced_work"}:
+            return
+        entry = {
+            "dimension": dimension,
+            "raw_name": str(raw_name or "").strip(),
+            "scope": item["scope"],
+            **_preview_source(source if isinstance(source, dict) else {}, item),
+        }
+        evidence.append(entry)
+
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        for item in candidate.get("paper_type_evidence") or []:
+            add("paper_type", _preview_item_value(item, "candidate", "value"), item, candidate.get("_source"))
+        for item in candidate.get("sc_type_candidates") or []:
+            add("material_family", _preview_item_value(item, "value", "name"), item, candidate.get("_source"))
+        for state in candidate.get("material_states") or []:
+            if not isinstance(state, dict):
+                continue
+            add("material_state", state.get("material"), state, candidate.get("_source"))
+            family = state.get("material_family")
+            if isinstance(family, dict):
+                add("material_family", family.get("name") or family.get("value"), family, candidate.get("_source"))
+            for structure in state.get("structure_families") or []:
+                if isinstance(structure, dict):
+                    add("structure_family", structure.get("name") or structure.get("value"), structure, candidate.get("_source"))
+    return evidence
+
+
 def _summary_classification_candidates(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
     prepared = json.loads(json.dumps(candidates, ensure_ascii=False))
     for result in prepared:
@@ -394,6 +448,11 @@ def _summary_classification_candidates(candidates: list[dict[str, Any]]) -> list
             result["sc_type_candidates"] = [
                 item for item in result.get("sc_type_candidates") or []
                 if _is_current_paper_evidence(item)
+            ]
+        if "material_states" in result:
+            result["material_states"] = [
+                state for item in result.get("material_states") or []
+                if (state := _current_paper_material_state(item)) is not None
             ]
     return prepared
 
@@ -430,9 +489,6 @@ def _build_form_preview(chunks: list[dict[str, Any]], state: dict[str, Any]) -> 
         for item in result.get("paper_type_evidence") or []:
             if _is_effective_paper_type_evidence(item):
                 add("paper.paper_type", _preview_item_value(item, "candidate", "value"), chunk, item)
-        for item in result.get("sc_type_candidates") or []:
-            if _is_current_paper_evidence(item):
-                add("sc_type", _preview_item_value(item, "value", "candidate"), chunk, item)
         for result_key, path, keys in (
             ("research_materials", "paper.research_materials", ("value", "material", "name")),
             ("methodology", "paper.methodology", ("value", "method", "name")),
@@ -442,7 +498,8 @@ def _build_form_preview(chunks: list[dict[str, Any]], state: dict[str, Any]) -> 
             for item in result.get(result_key) or []:
                 add(path, _preview_item_value(item, *keys) if keys else item, chunk, item)
         for item in result.get("material_states") or []:
-            add("material_states", item, chunk, item)
+            if _is_current_paper_evidence(item):
+                add("material_states", item, chunk, item)
 
     task_status = state.get("status")
     classification_pending = task_status in {"reading", "summarizing"}
@@ -504,9 +561,15 @@ def public_parsing_detail(task_id: str) -> dict[str, Any]:
             )
             try:
                 result = json.loads(path.read_text(encoding="utf-8"))
-                public["result"] = {
+                public_result = {
                     key: result[key] for key in PUBLIC_CHUNK_RESULT_FIELDS if key in result
                 }
+                if "material_states" in public_result:
+                    public_result["material_states"] = [
+                        state for item in public_result["material_states"]
+                        if (state := _current_paper_material_state(item)) is not None
+                    ]
+                public["result"] = public_result
             except (OSError, json.JSONDecodeError):
                 public["status"] = "failed"
                 public["error"] = "分段结果不可读取"
@@ -752,9 +815,56 @@ def _normalize_material_states(value: Any) -> list[dict[str, Any]]:
     for raw in _as_list(value):
         if not isinstance(raw, dict):
             continue
+        if raw.get("scope") == "referenced_work":
+            continue
         state = dict(raw)
+        state.pop("scope", None)
         state["material"] = _formula_from_material(state.get("material"))
+        try:
+            _normalized_formula, elements, _composition, _ratios = normalize_formula(state["material"])
+            state["element_count"] = len(elements) or None
+        except ValueError:
+            state["element_count"] = None
         state.pop("phase_label", None)
+        family = state.get("material_family")
+        if isinstance(family, dict) and family.get("scope") == "referenced_work":
+            family = None
+        if isinstance(family, str):
+            family = {"id": None, "name": family.strip(), "status": "pending"}
+        elif isinstance(family, dict):
+            family = {
+                "id": family.get("id"),
+                "name": str(family.get("name") or family.get("value") or "").strip(),
+                "status": "confirmed" if family.get("id") not in (None, "") else "pending",
+                **({"evidence": family["evidence"]} if isinstance(family.get("evidence"), dict) else {}),
+            }
+        state["material_family"] = family if isinstance(family, dict) and family.get("name") else None
+        structure_families = []
+        for structure_family in _as_list(state.get("structure_families")):
+            if isinstance(structure_family, str):
+                structure_family = {"id": None, "name": structure_family.strip(), "status": "pending"}
+            if not isinstance(structure_family, dict):
+                continue
+            if structure_family.get("scope") == "referenced_work":
+                continue
+            name = str(structure_family.get("name") or structure_family.get("value") or "").strip()
+            if not name:
+                continue
+            structure_families.append({
+                "id": structure_family.get("id"),
+                "name": name,
+                "status": "confirmed" if structure_family.get("id") not in (None, "") else "pending",
+                "is_primary": bool(structure_family.get("is_primary")),
+                **({"evidence": structure_family["evidence"]} if isinstance(structure_family.get("evidence"), dict) else {}),
+            })
+        state["structure_families"] = structure_families
+        dimensionality = str(state.get("material_dimensionality") or "unknown")
+        if dimensionality not in {
+            "zero_dimensional", "one_dimensional", "two_dimensional", "three_dimensional",
+            "quasi_one_dimensional", "quasi_two_dimensional", "unknown",
+        }:
+            dimensionality = "unknown"
+        state["material_dimensionality"] = dimensionality
         pressure_value, pressure_min, pressure_max, pressure_raw, pressure_unit = _condition_pressure(state)
         state["pressure_value_gpa"] = _numeric_value(state.get("pressure_value_gpa")) if state.get("pressure_value_gpa") not in (None, "") else pressure_value
         state["pressure_min_gpa"] = _numeric_value(state.get("pressure_min_gpa")) if state.get("pressure_min_gpa") not in (None, "") else pressure_min
@@ -889,8 +999,6 @@ def _normalize_draft(raw: dict[str, Any]) -> dict[str, Any]:
         ],
         "classification_reason": raw.get("classification_reason") or paper["rationale"],
         "classification_evidence": _as_list(raw.get("classification_evidence")),
-        "sc_type": raw.get("sc_type") or "",
-        "sc_type_review_status": raw.get("sc_type_review_status") or "none",
         "field_evidence": field_evidence,
     }
 
@@ -1207,6 +1315,7 @@ def process_upload_task(task_id: str) -> dict[str, Any]:
                     "user_values": None,
                     "evidence": {
                         "classification": draft.get("classification_evidence", []),
+                        "classification_scope": _classification_scope_evidence(candidates),
                         "material_states": [
                             {
                                 "space_group": item.get("space_group_evidence"),

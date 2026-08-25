@@ -11,8 +11,10 @@ from backend.ingest.upload_jobs import (
     CHUNK_SYSTEM_PROMPT,
     PUBLIC_CHUNK_RESULT_FIELDS,
     SUMMARY_SYSTEM_PROMPT,
+    _classification_scope_evidence,
     _chunks_with_preamble,
     _normalize_draft,
+    _summary_classification_candidates,
 )
 from backend.api.rag import _property_values, _validate_draft
 
@@ -92,12 +94,56 @@ def test_referenced_materials_remain_internal_and_are_removed_from_final_draft()
             "referenced_materials": [{"material": "LaH10", "evidence": evidence}],
         },
         "field_evidence": {"referenced_materials": [evidence]},
+        "material_states": [
+            {"material": "Li2MgH16", "scope": "current_paper"},
+            {"material": "LaH10", "scope": "referenced_work"},
+        ],
     })
 
     assert "referenced_materials" in CHUNK_SYSTEM_PROMPT
     assert "referenced_materials" not in PUBLIC_CHUNK_RESULT_FIELDS
     assert "referenced_materials" not in draft["paper"]
     assert "referenced_materials" not in draft["field_evidence"]
+    assert [state["material"] for state in draft["material_states"]] == ["Li2MgH16"]
+    assert "scope" not in draft["material_states"][0]
+
+
+def test_referenced_classification_candidates_are_internal_only():
+    candidates = [{
+        "_source": {"file_id": "main", "section": "Results", "page_start": 3, "page_end": 3},
+        "material_states": [{
+            "material": "Li2MgH16",
+            "scope": "current_paper",
+            "material_family": {
+                "name": "氢基超导体", "scope": "referenced_work", "page": 1,
+                "quote": "LaH10 is a known hydride superconductor.",
+            },
+            "structure_families": [
+                {"name": "笼状结构", "scope": "current_paper", "page": 3, "quote": "We find a clathrate."},
+                {"name": "层状结构", "scope": "referenced_work", "page": 1, "quote": "Previous layered phases."},
+            ],
+        }, {
+            "material": "LaH10", "scope": "referenced_work", "page": 1,
+            "quote": "LaH10 was reported previously.",
+        }],
+    }]
+
+    summarized = _summary_classification_candidates(candidates)
+    assert [state["material"] for state in summarized[0]["material_states"]] == ["Li2MgH16"]
+    assert summarized[0]["material_states"][0]["material_family"] is None
+    assert [item["name"] for item in summarized[0]["material_states"][0]["structure_families"]] == ["笼状结构"]
+
+    evidence = _classification_scope_evidence(candidates)
+    assert {(item["raw_name"], item["scope"]) for item in evidence} == {
+        ("Li2MgH16", "current_paper"),
+        ("氢基超导体", "referenced_work"),
+        ("笼状结构", "current_paper"),
+        ("层状结构", "referenced_work"),
+        ("LaH10", "referenced_work"),
+    }
+    referenced = next(item for item in evidence if item["raw_name"] == "LaH10")
+    assert referenced["page_start"] == 1
+    assert referenced["quote"] == "LaH10 was reported previously."
 
 
 def test_normalize_legacy_li2mgh16_properties_into_scientific_material_state():
@@ -238,20 +284,17 @@ def test_legacy_chunk_cache_is_reread_with_scoped_evidence_contract(tmp_path, mo
     assert calls == [True]
 
 
-def test_submission_rejects_unknown_paper_type_but_accepts_custom_material_type():
+def test_submission_rejects_unknown_paper_type_but_accepts_pending_material_family():
     draft = _normalize_draft({
         "paper": {
             "title": "Example",
             "paper_type": "experimental",
             "research_materials": ["Example2H3"],
         },
-        "sc_type": "new_family",
-        "key_properties": [{
+        "material_states": [{
             "material": "Example2H3",
-            "name": "critical_temperature",
-            "value": 42,
-            "article_type": "e",
-            "superconductor_type": "new_family",
+            "material_family": {"id": None, "name": "new_family", "status": "pending"},
+            "tc_results": [{"tc_value_k": 42, "result_kind": "experimental"}],
         }],
     })
     _validate_draft(draft)

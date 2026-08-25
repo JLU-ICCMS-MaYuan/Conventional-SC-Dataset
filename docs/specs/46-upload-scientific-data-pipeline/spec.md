@@ -6,6 +6,8 @@
 
 **状态**：已确认，实施中
 
+> **后续修订（2026-08-25）**：Issue [#51](../51-material-state-classification/spec.md) 在本 Spec 的 `material_states` 主路径上增加材料家族、结构家族、元素种类数、材料维度、分类建议和证据，并删除新分类流程对顶层 `sc_type` 与旧 `key_properties.superconductor_type` 的依赖。本 Spec 的压力、空间群、计算上下文和 Tc/普通物性边界继续有效。
+
 ## 背景与目标
 
 论文上传已经能从全文提取 Tc、压力、空间群和电子-声子参数，但草稿仍使用扁平

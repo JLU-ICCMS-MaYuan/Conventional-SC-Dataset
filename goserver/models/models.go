@@ -107,17 +107,16 @@ type Paper struct {
 	CreatedAt         time.Time  `json:"created_at"`
 	UpdatedAt         time.Time  `json:"updated_at"`
 	// LLM 富化字段
-	Summary             *string `json:"summary"`
-	PaperType           *string `gorm:"size:20" json:"paper_type"`
-	TheoreticalSubtype  *string `gorm:"size:20" json:"theoretical_subtype"`
-	KeywordsTags        *string `json:"keywords_tags"`
-	Methodology         *string `json:"methodology"`
-	KeyFinding          *string `json:"key_finding"`
-	Rationale           *string `json:"rationale"`
-	ResearchMaterials   *string `json:"research_materials"`
-	ReferencedMaterials *string `json:"referenced_materials"`
-	MaterialRelations   *string `json:"material_relations"`
-	BuildsOn            *string `json:"builds_on"`
+	Summary            *string `json:"summary"`
+	PaperType          *string `gorm:"size:20" json:"paper_type"`
+	TheoreticalSubtype *string `gorm:"size:20" json:"theoretical_subtype"`
+	KeywordsTags       *string `json:"keywords_tags"`
+	Methodology        *string `json:"methodology"`
+	KeyFinding         *string `json:"key_finding"`
+	Rationale          *string `json:"rationale"`
+	ResearchMaterials  *string `json:"research_materials"`
+	MaterialRelations  *string `json:"material_relations"`
+	BuildsOn           *string `json:"builds_on"`
 
 	// 关联（GORM 预加载用）
 	Reviewer       *User              `gorm:"foreignKey:ReviewedBy" json:"-"`
@@ -212,32 +211,149 @@ type Superconductor struct {
 	MaterialStates    []MaterialState `gorm:"foreignKey:SuperconductorID" json:"material_states,omitempty"`
 }
 
+type MaterialFamily struct {
+	ID              uint                  `gorm:"primaryKey" json:"id"`
+	Code            string                `gorm:"size:64;not null;uniqueIndex" json:"-"`
+	NameZH          string                `gorm:"column:name_zh;size:100;not null;uniqueIndex" json:"name"`
+	NameEN          string                `gorm:"column:name_en;size:160;not null" json:"-"`
+	NormalizedName  string                `gorm:"size:160;not null;uniqueIndex" json:"-"`
+	IsActive        bool                  `gorm:"not null;default:true" json:"is_active"`
+	MergedIntoID    *uint                 `json:"merged_into_id,omitempty"`
+	CreatedByUserID *uint                 `json:"created_by_user_id,omitempty"`
+	CreatedAt       time.Time             `json:"created_at"`
+	UpdatedAt       time.Time             `json:"updated_at"`
+	Aliases         []MaterialFamilyAlias `gorm:"foreignKey:MaterialFamilyID" json:"aliases,omitempty"`
+}
+
+type MaterialFamilyAlias struct {
+	ID               uint      `gorm:"primaryKey" json:"id"`
+	MaterialFamilyID uint      `gorm:"not null;index" json:"material_family_id"`
+	Alias            string    `gorm:"size:160;not null" json:"alias"`
+	NormalizedAlias  string    `gorm:"size:160;not null;uniqueIndex" json:"-"`
+	Language         string    `gorm:"size:10;not null;default:other" json:"language"`
+	CreatedByUserID  *uint     `json:"created_by_user_id,omitempty"`
+	CreatedAt        time.Time `json:"created_at"`
+}
+
+type StructureFamily struct {
+	ID              uint                   `gorm:"primaryKey" json:"id"`
+	Code            string                 `gorm:"size:64;not null;uniqueIndex" json:"-"`
+	NameZH          string                 `gorm:"column:name_zh;size:100;not null;uniqueIndex" json:"name"`
+	NameEN          string                 `gorm:"column:name_en;size:160;not null" json:"-"`
+	NormalizedName  string                 `gorm:"size:160;not null;uniqueIndex" json:"-"`
+	IsActive        bool                   `gorm:"not null;default:true" json:"is_active"`
+	MergedIntoID    *uint                  `json:"merged_into_id,omitempty"`
+	CreatedByUserID *uint                  `json:"created_by_user_id,omitempty"`
+	CreatedAt       time.Time              `json:"created_at"`
+	UpdatedAt       time.Time              `json:"updated_at"`
+	Aliases         []StructureFamilyAlias `gorm:"foreignKey:StructureFamilyID" json:"aliases,omitempty"`
+}
+
+type StructureFamilyAlias struct {
+	ID                uint      `gorm:"primaryKey" json:"id"`
+	StructureFamilyID uint      `gorm:"not null;index" json:"structure_family_id"`
+	Alias             string    `gorm:"size:160;not null" json:"alias"`
+	NormalizedAlias   string    `gorm:"size:160;not null;uniqueIndex" json:"-"`
+	Language          string    `gorm:"size:10;not null;default:other" json:"language"`
+	CreatedByUserID   *uint     `json:"created_by_user_id,omitempty"`
+	CreatedAt         time.Time `json:"created_at"`
+}
+
 // MaterialState 一篇论文当前 revision 中材料的条件化状态。
 type MaterialState struct {
-	ID                       uint64                   `gorm:"primaryKey;uniqueIndex:uq_material_states_identity_revision,priority:1" json:"id"`
-	PaperID                  uint                     `gorm:"not null;index:ix_material_states_paper_revision,priority:1;uniqueIndex:uq_material_states_identity_revision,priority:2" json:"paper_id"`
-	PaperRevision            uint                     `gorm:"not null;index:ix_material_states_paper_revision,priority:2;uniqueIndex:uq_material_states_identity_revision,priority:3" json:"paper_revision"`
-	SuperconductorID         uint                     `gorm:"not null;index" json:"superconductor_id"`
-	PressureValueGPa         *float64                 `json:"pressure_value_gpa"`
-	PressureMinGPa           *float64                 `json:"pressure_min_gpa"`
-	PressureMaxGPa           *float64                 `json:"pressure_max_gpa"`
-	PressureRaw              *string                  `gorm:"size:255" json:"pressure_raw"`
-	PressureUnitRaw          *string                  `gorm:"size:50" json:"pressure_unit_raw"`
-	ReportedSpaceGroupSymbol *string                  `gorm:"size:100" json:"reported_space_group_symbol"`
-	ReportedSpaceGroupNumber *int16                   `json:"reported_space_group_number"`
-	TemperatureValueK        *float64                 `json:"temperature_value_k"`
-	TemperatureRaw           *string                  `gorm:"size:255" json:"temperature_raw"`
-	TemperatureUnitRaw       *string                  `gorm:"size:50" json:"temperature_unit_raw"`
-	MagneticFieldT           *float64                 `json:"magnetic_field_t"`
-	StateKind                string                   `gorm:"size:20;not null;default:unknown" json:"state_kind"`
-	Note                     *string                  `json:"note"`
-	CreatedAt                time.Time                `json:"created_at"`
-	UpdatedAt                time.Time                `json:"updated_at"`
-	Structures               []StructureModel         `gorm:"foreignKey:MaterialStateID" json:"structures,omitempty"`
-	CalculationContexts      []CalculationContext     `gorm:"foreignKey:MaterialStateID" json:"calculation_contexts,omitempty"`
-	ExperimentalContexts     []ExperimentalContext    `gorm:"foreignKey:MaterialStateID" json:"experimental_contexts,omitempty"`
-	TcResults                []TcResult               `gorm:"foreignKey:MaterialStateID" json:"tc_results,omitempty"`
-	Properties               []SuperconductorProperty `gorm:"foreignKey:MaterialStateID" json:"properties,omitempty"`
+	ID                       uint64                         `gorm:"primaryKey;uniqueIndex:uq_material_states_identity_revision,priority:1" json:"id"`
+	PaperID                  uint                           `gorm:"not null;index:ix_material_states_paper_revision,priority:1;uniqueIndex:uq_material_states_identity_revision,priority:2" json:"paper_id"`
+	PaperRevision            uint                           `gorm:"not null;index:ix_material_states_paper_revision,priority:2;uniqueIndex:uq_material_states_identity_revision,priority:3" json:"paper_revision"`
+	SuperconductorID         uint                           `gorm:"not null;index" json:"superconductor_id"`
+	MaterialFamilyID         *uint                          `gorm:"index" json:"material_family_id"`
+	ElementCount             *int16                         `json:"element_count"`
+	MaterialDimensionality   string                         `gorm:"size:32;not null;default:unknown" json:"material_dimensionality"`
+	PressureValueGPa         *float64                       `json:"pressure_value_gpa"`
+	PressureMinGPa           *float64                       `json:"pressure_min_gpa"`
+	PressureMaxGPa           *float64                       `json:"pressure_max_gpa"`
+	PressureRaw              *string                        `gorm:"size:255" json:"pressure_raw"`
+	PressureUnitRaw          *string                        `gorm:"size:50" json:"pressure_unit_raw"`
+	ReportedSpaceGroupSymbol *string                        `gorm:"size:100" json:"reported_space_group_symbol"`
+	ReportedSpaceGroupNumber *int16                         `json:"reported_space_group_number"`
+	TemperatureValueK        *float64                       `json:"temperature_value_k"`
+	TemperatureRaw           *string                        `gorm:"size:255" json:"temperature_raw"`
+	TemperatureUnitRaw       *string                        `gorm:"size:50" json:"temperature_unit_raw"`
+	MagneticFieldT           *float64                       `json:"magnetic_field_t"`
+	StateKind                string                         `gorm:"size:20;not null;default:unknown" json:"state_kind"`
+	Note                     *string                        `json:"note"`
+	CreatedAt                time.Time                      `json:"created_at"`
+	UpdatedAt                time.Time                      `json:"updated_at"`
+	Structures               []StructureModel               `gorm:"foreignKey:MaterialStateID" json:"structures,omitempty"`
+	CalculationContexts      []CalculationContext           `gorm:"foreignKey:MaterialStateID" json:"calculation_contexts,omitempty"`
+	ExperimentalContexts     []ExperimentalContext          `gorm:"foreignKey:MaterialStateID" json:"experimental_contexts,omitempty"`
+	TcResults                []TcResult                     `gorm:"foreignKey:MaterialStateID" json:"tc_results,omitempty"`
+	Properties               []SuperconductorProperty       `gorm:"foreignKey:MaterialStateID" json:"properties,omitempty"`
+	Superconductor           Superconductor                 `gorm:"foreignKey:SuperconductorID" json:"superconductor,omitempty"`
+	MaterialFamily           *MaterialFamily                `gorm:"foreignKey:MaterialFamilyID" json:"material_family,omitempty"`
+	StructureFamilyLinks     []MaterialStateStructureFamily `gorm:"foreignKey:MaterialStateID" json:"structure_families,omitempty"`
+	ClassificationProposals  []ClassificationProposal       `gorm:"foreignKey:MaterialStateID" json:"classification_proposals,omitempty"`
+	ClassificationEvidences  []ClassificationEvidence       `gorm:"foreignKey:MaterialStateID" json:"classification_evidences,omitempty"`
+}
+
+type MaterialStateStructureFamily struct {
+	MaterialStateID   uint64          `gorm:"primaryKey" json:"material_state_id"`
+	StructureFamilyID uint            `gorm:"primaryKey" json:"id"`
+	IsPrimary         bool            `gorm:"not null;default:false" json:"is_primary"`
+	PrimaryMarker     *uint64         `gorm:"->;uniqueIndex" json:"-"`
+	CreatedAt         time.Time       `json:"created_at"`
+	StructureFamily   StructureFamily `gorm:"foreignKey:StructureFamilyID" json:"structure_family"`
+}
+
+type ClassificationProposal struct {
+	ID                uint64     `gorm:"primaryKey" json:"id"`
+	MaterialStateID   uint64     `gorm:"not null;index" json:"material_state_id"`
+	Dimension         string     `gorm:"size:32;not null" json:"dimension"`
+	RawName           string     `gorm:"size:255;not null" json:"raw_name"`
+	NormalizedName    string     `gorm:"size:255;not null" json:"-"`
+	Status            string     `gorm:"size:20;not null;default:proposed" json:"status"`
+	SourceKind        string     `gorm:"size:20;not null" json:"source_kind"`
+	ResolutionKind    *string    `gorm:"size:32" json:"resolution_kind,omitempty"`
+	MaterialFamilyID  *uint      `json:"material_family_id,omitempty"`
+	StructureFamilyID *uint      `json:"structure_family_id,omitempty"`
+	ProposedByUserID  *uint      `json:"proposed_by_user_id,omitempty"`
+	ReviewedByUserID  *uint      `json:"reviewed_by_user_id,omitempty"`
+	ReviewNote        *string    `json:"review_note,omitempty"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
+	ResolvedAt        *time.Time `json:"resolved_at,omitempty"`
+}
+
+type ClassificationEvidence struct {
+	ID                uint64    `gorm:"primaryKey" json:"id"`
+	PaperID           uint      `gorm:"not null;index:ix_classification_evidences_paper_revision,priority:1" json:"paper_id"`
+	PaperRevision     uint      `gorm:"not null;index:ix_classification_evidences_paper_revision,priority:2" json:"paper_revision"`
+	MaterialStateID   uint64    `gorm:"not null;index" json:"material_state_id"`
+	Dimension         string    `gorm:"size:32;not null" json:"dimension"`
+	MaterialFamilyID  *uint     `json:"material_family_id,omitempty"`
+	StructureFamilyID *uint     `json:"structure_family_id,omitempty"`
+	ProposalID        *uint64   `json:"proposal_id,omitempty"`
+	SourceKind        string    `gorm:"size:20;not null" json:"source_kind"`
+	Scope             string    `gorm:"size:20;not null;default:current_paper" json:"scope"`
+	RawValue          *string   `gorm:"size:255" json:"raw_value,omitempty"`
+	Section           *string   `gorm:"size:500" json:"section,omitempty"`
+	PageStart         *int      `json:"page_start,omitempty"`
+	PageEnd           *int      `json:"page_end,omitempty"`
+	Quote             *string   `json:"quote,omitempty"`
+	ReviewedByUserID  *uint     `json:"reviewed_by_user_id,omitempty"`
+	CreatedAt         time.Time `json:"created_at"`
+}
+
+type ClassificationAuditEvent struct {
+	ID          uint64          `gorm:"primaryKey" json:"id"`
+	ActorUserID uint            `gorm:"not null" json:"actor_user_id"`
+	Dimension   string          `gorm:"size:32;not null" json:"dimension"`
+	EntityKind  string          `gorm:"size:20;not null" json:"entity_kind"`
+	EntityID    uint64          `gorm:"not null" json:"entity_id"`
+	Action      string          `gorm:"size:32;not null" json:"action"`
+	Reason      string          `gorm:"type:text;not null" json:"reason"`
+	BeforeJSON  json.RawMessage `gorm:"type:json" json:"before,omitempty"`
+	AfterJSON   json.RawMessage `gorm:"type:json" json:"after,omitempty"`
+	CreatedAt   time.Time       `json:"created_at"`
 }
 
 // StructureModel 论文内独立保存的一个结构模型。

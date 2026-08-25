@@ -31,12 +31,12 @@ var (
 	paperUpdateFields = []string{
 		"doi", "title", "authors", "journal", "volume", "pages", "year", "abstract",
 		"summary", "paper_type", "theoretical_subtype", "keywords_tags",
-		"methodology", "key_finding", "rationale", "research_materials", "referenced_materials",
+		"methodology", "key_finding", "rationale", "research_materials",
 		"material_relations", "builds_on",
 	}
 	keyPropertyUpdateFields = []string{
 		"material", "name", "name_raw", "name_note", "value_min", "value_max", "value_raw", "unit",
-		"pressure_gpa", "temperature_k", "is_primary", "superconductor_type", "article_type",
+		"pressure_gpa", "temperature_k", "is_primary", "article_type",
 		"condition_json", "condition_note", "structure_text", "structure_format",
 	}
 	errKeyPropertyNotFound = errors.New("物性记录不存在或不属于当前论文")
@@ -102,7 +102,12 @@ func GetPaperDetail(c *gin.Context) {
 	id := c.Param("id")
 	var paper models.Paper
 	// First = SELECT ... LIMIT 1
-	if err := database.DB.Preload("KeyProperties").First(&paper, id).Error; err != nil {
+	if err := database.DB.
+		Preload("KeyProperties").
+		Preload("MaterialStates.Superconductor").
+		Preload("MaterialStates.MaterialFamily").
+		Preload("MaterialStates.StructureFamilyLinks.StructureFamily").
+		First(&paper, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "论文不存在"})
 		return
 	}
@@ -269,7 +274,6 @@ func newKeyProperty(paperID uint, values map[string]interface{}) models.KeyPrope
 	assignFloatPointer(values, "temperature_k", &kp.TemperatureK)
 	assignStringPointer(values, "condition_json", &kp.ConditionJSON)
 	assignStringPointer(values, "condition_note", &kp.ConditionNote)
-	assignStringPointer(values, "superconductor_type", &kp.SuperconductorType)
 	assignStringPointer(values, "article_type", &kp.ArticleType)
 	assignStringPointer(values, "structure_text", &kp.StructureText)
 	assignStringPointer(values, "structure_format", &kp.StructureFormat)
@@ -410,6 +414,11 @@ func ReviewPaper(c *gin.Context) {
 
 	now := time.Now()
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		if body.Status == reviewStatusApproved {
+			if err := validatePaperClassificationComplete(tx, &paper); err != nil {
+				return err
+			}
+		}
 		_, err := applyPaperReview(tx, &paper, user.ID, body.Status, body.Comment, body.ReviewRequestID, "single", now)
 		if err != nil {
 			return err
@@ -419,6 +428,15 @@ func ReviewPaper(c *gin.Context) {
 		}
 		return nil
 	}); err != nil {
+		var incomplete *classificationIncompleteError
+		if errors.As(err, &incomplete) {
+			c.JSON(http.StatusConflict, gin.H{
+				"code":               "classification_incomplete",
+				"error":              "材料分类尚未完成，不能批准论文",
+				"material_state_ids": incomplete.MaterialStateIDs,
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "审核操作失败"})
 		return
 	}
@@ -439,6 +457,57 @@ func ReviewPaper(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "审核完成", "paper": paper})
+}
+
+type classificationIncompleteError struct {
+	MaterialStateIDs []uint64
+}
+
+func (err *classificationIncompleteError) Error() string {
+	return "材料分类尚未完成"
+}
+
+func validatePaperClassificationComplete(tx *gorm.DB, paper *models.Paper) error {
+	revision := paper.ContentRevision
+	if revision == 0 {
+		revision = 1
+	}
+	var states []models.MaterialState
+	if err := tx.Where("paper_id = ? AND paper_revision = ?", paper.ID, revision).Find(&states).Error; err != nil {
+		return err
+	}
+	if len(states) == 0 && paper.PaperType != nil && *paper.PaperType != "review" {
+		return &classificationIncompleteError{MaterialStateIDs: []uint64{}}
+	}
+	missing := make([]uint64, 0)
+	for _, state := range states {
+		if state.MaterialFamilyID == nil || state.ElementCount == nil || *state.ElementCount < 1 || *state.ElementCount > 118 {
+			missing = append(missing, state.ID)
+		}
+	}
+	var unresolvedStateIDs []uint64
+	if err := tx.Model(&models.ClassificationProposal{}).
+		Distinct("classification_proposals.material_state_id").
+		Joins("JOIN material_states ON material_states.id = classification_proposals.material_state_id").
+		Where("material_states.paper_id = ? AND material_states.paper_revision = ?", paper.ID, revision).
+		Where("classification_proposals.dimension = ? AND classification_proposals.status IN ?", "material_family", []string{"proposed", "under_review"}).
+		Pluck("classification_proposals.material_state_id", &unresolvedStateIDs).Error; err != nil {
+		return err
+	}
+	seen := make(map[uint64]bool)
+	for _, id := range missing {
+		seen[id] = true
+	}
+	for _, id := range unresolvedStateIDs {
+		if !seen[id] {
+			missing = append(missing, id)
+			seen[id] = true
+		}
+	}
+	if len(missing) > 0 {
+		return &classificationIncompleteError{MaterialStateIDs: missing}
+	}
+	return nil
 }
 
 func isValidReviewStatus(status string) bool {

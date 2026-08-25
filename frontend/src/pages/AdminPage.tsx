@@ -21,8 +21,11 @@ import {
 } from '@mui/icons-material'
 import { type User, useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
+import { ClassificationCatalogs, loadClassificationCatalogs } from '../lib/classifications'
 import { SourceEvidence, UploadDraft, normalizeUploadDraft, unwrapData } from '../lib/paperProcessing'
 import ChartGroupEditor from '../components/ChartGroupEditor'
+import ClassificationAutocomplete from '../components/ClassificationAutocomplete'
+import ClassificationGovernancePanel from '../components/ClassificationGovernancePanel'
 import NewsManager from '../components/NewsManager'
 import SuperAdminGovernance from '../components/SuperAdminGovernance'
 import UsernameField from '../components/UsernameField'
@@ -48,8 +51,7 @@ interface PaperRecord {
   uploader_name: string | null; created_at: string | null
   record_count: number; show_in_chart: boolean
   compound_symbols: string | null; article_types: string[]
-  superconductor_types: string[]
-  key_properties?: Array<{ superconductor_type?: string | null }>
+  key_properties?: Array<Record<string, unknown>>
 }
 
 interface ReviewArtifact {
@@ -57,6 +59,14 @@ interface ReviewArtifact {
   user: UploadDraft
   evidence: {
     classification?: SourceEvidence[]
+    classification_scope?: Array<{
+      dimension: string
+      raw_name: string
+      scope: 'current_paper' | 'referenced_work'
+      section?: string
+      page_start?: number
+      quote?: string
+    }>
     material_states?: Array<{
       space_group?: SourceEvidence | SourceEvidence[] | null
       calculation_context?: SourceEvidence | SourceEvidence[] | null
@@ -89,11 +99,6 @@ const STATUS_LABELS: Record<string, string> = {
 }
 const paperRecordCount = (paper?: PaperRecord | null) =>
   paper?.record_count ?? paper?.key_properties?.length ?? 0
-const paperSuperconductorTypes = (paper: PaperRecord) =>
-  paper.superconductor_types?.length
-    ? paper.superconductor_types
-    : [...new Set((paper.key_properties || []).map(item => item.superconductor_type).filter(Boolean) as string[])]
-
 /* ═══════════════════════════════════════════════ */
 interface AdminPageProps { mode?: 'admin' | 'superadmin' }
 
@@ -103,6 +108,14 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
 
   const [tab, setTab] = useState(0)
   const [snackbar, setSnackbar] = useState('')
+  const [classificationCatalogs, setClassificationCatalogs] = useState<ClassificationCatalogs | null>(null)
+  const [classificationCatalogError, setClassificationCatalogError] = useState('')
+
+  useEffect(() => {
+    loadClassificationCatalogs()
+      .then(setClassificationCatalogs)
+      .catch((reason: Error) => setClassificationCatalogError(reason.message || '分类目录加载失败'))
+  }, [])
 
   /* ── Dashboard ──────────────────────────────── */
   const [stats, setStats] = useState<{users:number,papers:number,pending:number} | null>(null)
@@ -255,13 +268,16 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
   const handleReview = async () => {
     if (!reviewDlg.paper) return
     try {
-      if (Array.isArray(reviewDetail?.key_properties)) {
-        await api.put(`/api/admin/papers/${reviewDlg.paper.id}`, {
-          key_properties: reviewDetail.key_properties.map((property: any) => ({
-            id: property.id,
-            material: property.material,
-            name: property.name,
-            superconductor_type: property.superconductor_type || null,
+      if (Array.isArray(reviewDetail?.material_states) && reviewDetail.material_states.length > 0) {
+        await api.put(`/api/admin/papers/${reviewDlg.paper.id}/material-classifications`, {
+          material_states: reviewDetail.material_states.map((state: any) => ({
+            id: state.id,
+            material_family_id: state.material_family?.id || state.material_family_id,
+            material_dimensionality: state.material_dimensionality || 'unknown',
+            structure_families: (state.structure_families || []).map((item: any) => ({
+              id: item.id || item.structure_family_id,
+              is_primary: Boolean(item.is_primary),
+            })),
           })),
         })
       }
@@ -298,7 +314,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
           name_note: kp.name_note, value_min: kp.value_min, value_max: kp.value_max,
           value_raw: kp.value_raw, unit: kp.unit, pressure_gpa: kp.pressure_gpa,
           temperature_k: kp.temperature_k, is_primary: kp.is_primary,
-          superconductor_type: kp.superconductor_type, article_type: kp.article_type,
+          article_type: kp.article_type,
           condition_note: kp.condition_note,
         }))
       }
@@ -437,6 +453,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
       <Tabs value={tab} onChange={(_,v)=>setTab(v)} variant="scrollable" allowScrollButtonsMobile sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}>
         <Tab label="概览" />
         <Tab label={`论文审核${papersStatus === 'pending' ? ` (${papersTotal})` : ''}`} />
+        <Tab label={isSuper ? '分类目录' : '分类建议'} />
         {isSuper && <Tab label="用户与权限" icon={<AdminIcon fontSize="small" />} iconPosition="start" />}
         {isSuper && <Tab label="图表管理" />}
         {isSuper && <Tab label="快讯管理" />}
@@ -536,7 +553,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
                   <TableCell sx={{ width: 80 }}>年份</TableCell>
                   <TableCell sx={{ width: 100 }}>上传者</TableCell>
                   <TableCell sx={{ width: 80 }}>状态</TableCell>
-                  <TableCell sx={{ width: 100 }}>类型</TableCell>
+                  <TableCell sx={{ width: 100 }}>记录</TableCell>
                   <TableCell sx={{ width: 120 }} align="right">操作</TableCell>
                 </TableRow>
               </TableHead>
@@ -564,11 +581,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
                         color={STATUS_COLORS[p.review_status] || 'default'} />
                     </TableCell>
                     <TableCell>
-                      <Box sx={{ display: 'flex', gap: 0.25, flexWrap: 'wrap' }}>
-                        {paperSuperconductorTypes(p).slice(0,2).map(t=>(
-                          <Chip key={t} label={t} size="small" variant="outlined" sx={{fontSize:10,height:18}} />
-                        ))}
-                      </Box>
+                      {paperRecordCount(p)}
                     </TableCell>
                     <TableCell align="right">
                       <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
@@ -604,8 +617,9 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
       {/* ═══════════════════════════════════════════ */}
       {/* TAB 2: User Management (superadmin only) */}
       {/* ═══════════════════════════════════════════ */}
-      {tab === 2 && isSuper && <SuperAdminGovernance />}
-      {false && tab === 2 && isSuper && (
+      {tab === 2 && <ClassificationGovernancePanel isSuper={isSuper} />}
+      {tab === 3 && isSuper && <SuperAdminGovernance />}
+      {false && tab === 3 && isSuper && (
         <Box>
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
             <Button variant="outlined" size="small" startIcon={<HistoryIcon />} onClick={() => void openUsernameAudit()}>
@@ -685,13 +699,13 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
       {/* ═══════════════════════════════════════════ */}
       {/* TAB: Chart Groups */}
       {/* ═══════════════════════════════════════════ */}
-      {isSuper && tab === 4 && (
+      {isSuper && tab === 5 && (
         /* ── News Management ── */
         <Box>
           <NewsManager />
         </Box>
       )}
-      {isSuper && tab === 3 && (
+      {isSuper && tab === 4 && (
         <Box>
           <Box sx={{ display: 'flex', gap: 1, mb: 2, alignItems: 'center' }}>
             <Typography variant="h6" fontWeight={600} sx={{ flex: 1 }}>图表组合管理</Typography>
@@ -794,7 +808,6 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
                 {[
                   ['论文类型', reviewArtifact.ai.paper.paper_type, reviewDetail?.paper_type || reviewArtifact.user.paper.paper_type],
                   ['理论二级类型', reviewArtifact.ai.paper.theoretical_subtype, reviewDetail?.theoretical_subtype || reviewArtifact.user.paper.theoretical_subtype],
-                  ['超导材料类型', reviewArtifact.ai.sc_type, reviewArtifact.user.sc_type],
                   ['分类理由', reviewArtifact.ai.classification_reason, reviewArtifact.user.classification_reason],
                 ].map(([label, aiValue, userValue]) => (
                   <Box key={String(label)} sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '120px 1fr 1fr' }, gap: 1 }}>
@@ -804,9 +817,20 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
                   </Box>
                 ))}
                 {(reviewArtifact.evidence.classification || reviewArtifact.user.classification_evidence || []).map((item, index) => (
-                  <Box key={index} sx={{ pl: 1.25, borderLeft: '3px solid', borderColor: 'info.light' }}>
+                  <Box key={index} sx={{ px: 1.25, py: 0.5, bgcolor: 'action.hover', borderRadius: 1 }}>
                     <Typography variant="caption" color="text.secondary">
                       {[item.section, item.page ? `第 ${item.page} 页` : ''].filter(Boolean).join(' · ') || '原文'}
+                      {item.quote ? `：“${item.quote}”` : ''}
+                    </Typography>
+                  </Box>
+                ))}
+                {(reviewArtifact.evidence.classification_scope || []).map((item, index) => (
+                  <Box key={`scope-${index}`} sx={{ px: 1.25, py: 0.5, bgcolor: 'action.hover', borderRadius: 1 }}>
+                    <Typography variant="caption" fontWeight={700} display="block">
+                      {item.scope === 'current_paper' ? '本文工作' : '引用工作'} · {item.raw_name || '未命名候选'}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {[item.section, item.page_start ? `第 ${item.page_start} 页` : ''].filter(Boolean).join(' · ') || '原文'}
                       {item.quote ? `：“${item.quote}”` : ''}
                     </Typography>
                   </Box>
@@ -834,20 +858,30 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
               </Box>
             )}
           </Box>
-          {(reviewDetail?.key_properties || []).length > 0 && (
+          {(reviewDetail?.material_states || []).length > 0 && (
             <Box sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 2 }}>
-              <Typography variant="subtitle2" fontWeight={700} gutterBottom>确认最终材料类型</Typography>
+              <Typography variant="subtitle2" fontWeight={700} gutterBottom>确认材料状态分类</Typography>
+              {classificationCatalogError && <Alert severity="error" sx={{ mb: 1 }}>{classificationCatalogError}</Alert>}
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                {(reviewDetail?.key_properties || []).map((property: any, index: number) => (
-                  <TextField key={property.id || index} size="small" fullWidth
-                    label={property.material || `物性 #${index + 1}`}
-                    value={property.superconductor_type || ''}
-                    onChange={event => setReviewDetail(current => {
+                {(reviewDetail?.material_states || []).map((state: any, index: number) => (
+                  <ClassificationAutocomplete
+                    key={state.id || index}
+                    label={`${state.superconductor?.chemical_formula || `材料状态 #${index + 1}`} 的材料家族`}
+                    options={classificationCatalogs?.material_families || []}
+                    value={state.material_family || null}
+                    loading={!classificationCatalogs && !classificationCatalogError}
+                    error={classificationCatalogError}
+                    onChange={value => setReviewDetail(current => {
                       if (!current) return current
-                      const properties = [...(current.key_properties || [])]
-                      properties[index] = { ...properties[index], superconductor_type: event.target.value }
-                      return { ...current, key_properties: properties }
-                    })} />
+                      const materialStates = [...(current.material_states || [])]
+                      materialStates[index] = {
+                        ...materialStates[index],
+                        material_family: value,
+                        material_family_id: value?.id || null,
+                      }
+                      return { ...current, material_states: materialStates }
+                    })}
+                  />
                 ))}
               </Box>
             </Box>
@@ -1014,7 +1048,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
                         value={kp.name_raw || ''} onChange={e=>setKp('name_raw',e.target.value)} />
                     </Box>
                     {/* Row 3: 条件与分类 */}
-                    <Box sx={{ display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:1,mt:1 }}>
+                    <Box sx={{ display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:1,mt:1 }}>
                       <TextField label="压强 (pressure_gpa, GPa)" size="small" type="number"
                         value={kp.pressure_gpa ?? ''} onChange={e=>setKp('pressure_gpa',e.target.value?Number(e.target.value):null)} />
                       <TextField label="温度 (temperature_k, K)" size="small" type="number"
@@ -1026,20 +1060,6 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
                           <MenuItem value="">-</MenuItem>
                           <MenuItem value="e">e · 实验</MenuItem>
                           <MenuItem value="t">t · 理论</MenuItem>
-                        </Select>
-                      </FormControl>
-                      <FormControl size="small">
-                        <InputLabel>超导类型 (sc_type)</InputLabel>
-                        <Select value={kp.superconductor_type || ''} label="超导类型 (sc_type)"
-                          onChange={e=>setKp('superconductor_type',e.target.value)}>
-                          <MenuItem value="">-</MenuItem>
-                          <MenuItem value="hydride">hydride · 氢化物</MenuItem>
-                          <MenuItem value="cuprate">cuprate · 铜基</MenuItem>
-                          <MenuItem value="iron_based">iron_based · 铁基</MenuItem>
-                          <MenuItem value="nickel_based">nickel_based · 镍基</MenuItem>
-                          <MenuItem value="carbon">carbon · 碳基</MenuItem>
-                          <MenuItem value="organic">organic · 有机</MenuItem>
-                          <MenuItem value="others">others · 其他</MenuItem>
                         </Select>
                       </FormControl>
                     </Box>

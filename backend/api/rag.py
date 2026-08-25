@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
+from backend import models
 from backend.models import Paper, PaperChunk, PaperEvidence, PaperFile, User
 from backend.rag import service
 from backend.security import get_current_admin, get_current_user
@@ -123,6 +124,91 @@ def _draft_values(draft: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str,
     return paper, [item for item in material_states if isinstance(item, dict)]
 
 
+def _reject_legacy_classification_contract(draft: dict[str, Any]) -> None:
+    legacy_fields = {"sc_type", "sc_type_review_status", "type_code", "type_proposal_raw"}
+    present = sorted(field for field in legacy_fields if field in draft)
+    if present:
+        raise _upload_error(
+            400,
+            "legacy_classification_contract",
+            "草稿仍包含旧材料分类字段，请重新打开草稿完成一次性转换",
+            fields=present,
+        )
+
+
+async def _resolve_draft_classifications(session, draft: dict[str, Any]) -> None:
+    from backend.services.classification_catalog import (
+        MATERIAL_DIMENSIONALITIES,
+        resolve_material_family,
+        resolve_structure_family,
+    )
+
+    for state_index, state in enumerate(draft.get("material_states") or []):
+        if not isinstance(state, dict):
+            continue
+        dimensionality = str(state.get("material_dimensionality") or "unknown")
+        if dimensionality not in MATERIAL_DIMENSIONALITIES:
+            raise _upload_error(
+                400,
+                "invalid_material_dimensionality",
+                f"第 {state_index + 1} 个材料状态的材料维度无效",
+            )
+        state["material_dimensionality"] = dimensionality
+
+        family = state.get("material_family")
+        if isinstance(family, dict) and str(family.get("name") or "").strip():
+            term = None
+            if family.get("id") not in (None, ""):
+                try:
+                    term = await session.get(models.MaterialFamily, int(family["id"]))
+                except (TypeError, ValueError):
+                    term = None
+                if term is None:
+                    raise _upload_error(404, "classification_not_found", "材料家族目录项不存在")
+                if not term.is_active:
+                    raise _upload_error(409, "classification_inactive", "材料家族目录项已停用")
+            else:
+                term = await resolve_material_family(session, family.get("name"))
+            resolved_family = (
+                {"id": term.id, "name": term.name_zh, "status": "confirmed"}
+                if term is not None
+                else {"id": None, "name": str(family["name"]).strip(), "status": "pending"}
+            )
+            if isinstance(family.get("evidence"), dict):
+                resolved_family["evidence"] = family["evidence"]
+            state["material_family"] = resolved_family
+
+        resolved_structures = []
+        seen_ids: set[int] = set()
+        for selection in state.get("structure_families") or []:
+            if not isinstance(selection, dict) or not str(selection.get("name") or "").strip():
+                continue
+            term = None
+            if selection.get("id") not in (None, ""):
+                try:
+                    term = await session.get(models.StructureFamily, int(selection["id"]))
+                except (TypeError, ValueError):
+                    term = None
+                if term is None:
+                    raise _upload_error(404, "classification_not_found", "结构家族目录项不存在")
+                if not term.is_active:
+                    raise _upload_error(409, "classification_inactive", "结构家族目录项已停用")
+            else:
+                term = await resolve_structure_family(session, selection.get("name"))
+            if term is not None:
+                if term.id in seen_ids:
+                    continue
+                seen_ids.add(term.id)
+                resolved = {"id": term.id, "name": term.name_zh, "status": "confirmed"}
+            else:
+                resolved = {"id": None, "name": str(selection["name"]).strip(), "status": "pending"}
+            resolved["is_primary"] = bool(selection.get("is_primary"))
+            if isinstance(selection.get("evidence"), dict):
+                resolved["evidence"] = selection["evidence"]
+            resolved_structures.append(resolved)
+        state["structure_families"] = resolved_structures
+
+
 def _validate_draft(draft: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     paper, material_states = _draft_values(draft)
     if not str(paper.get("title") or "").strip():
@@ -143,14 +229,31 @@ def _validate_draft(draft: dict[str, Any]) -> tuple[dict[str, Any], list[dict[st
     if paper_type != "review" and not paper.get("research_materials"):
         raise _upload_error(400, "research_material_required", "非综述论文至少需要一个研究材料")
 
-    suggested_sc_type = str(draft.get("sc_type") or "")
-    if len(suggested_sc_type) > 20:
-        raise _upload_error(400, "sc_type_too_long", "超导材料类型最多 20 个字符")
     if paper_type != "review" and not material_states:
         raise _upload_error(400, "material_state_required", "非综述论文至少需要一个材料状态")
     for state_index, state in enumerate(material_states):
         if not str(state.get("material") or "").strip():
             raise _upload_error(400, "state_material_required", f"第 {state_index + 1} 个材料状态缺少材料")
+        family = state.get("material_family")
+        if paper_type != "review" and (
+            not isinstance(family, dict) or not str(family.get("name") or "").strip()
+        ):
+            raise _upload_error(
+                400,
+                "material_family_required",
+                f"第 {state_index + 1} 个材料状态缺少材料家族",
+            )
+        if isinstance(family, dict):
+            status = family.get("status")
+            if status not in {"confirmed", "pending"}:
+                raise _upload_error(400, "invalid_material_family", "材料家族状态无效")
+            if status == "confirmed" and family.get("id") in (None, ""):
+                raise _upload_error(400, "invalid_material_family", "已确认材料家族缺少目录 ID")
+            if status == "pending" and family.get("id") not in (None, ""):
+                raise _upload_error(400, "invalid_material_family", "待确认材料家族不能包含目录 ID")
+        structures = [item for item in state.get("structure_families") or [] if isinstance(item, dict)]
+        if sum(bool(item.get("is_primary")) for item in structures) > 1:
+            raise _upload_error(400, "multiple_primary_structure_families", "一个材料状态只能有一个主结构家族")
         group_number = state.get("reported_space_group_number")
         if group_number not in (None, ""):
             try:
@@ -593,6 +696,8 @@ async def get_upload_draft(
 ):
     from backend.ingest.upload_jobs import _normalize_draft
     from backend.ingest.upload_tasks import get_draft
+    from backend.rag.database import async_session_factory
+    from backend.services.classification_catalog import convert_legacy_draft
 
     state = _task_for_user(task_id, current_user)
     if state.get("duplicate"):
@@ -607,9 +712,23 @@ async def get_upload_draft(
         if state.get("processing_status") == "failed":
             raise _upload_error(409, "draft_not_ready", "解析失败，可重新解析或手动填写")
         raise _upload_error(409, "draft_not_ready", "AI 草稿尚未生成")
-    normalized = _normalize_draft(draft)
-    if isinstance(draft.get("ai_original"), dict):
-        normalized["ai_original"] = _normalize_draft(draft["ai_original"])
+    async with async_session_factory() as session:
+        result = await session.execute(select(models.MaterialFamily))
+        families_by_code = {
+            item.code: {"id": item.id, "name": item.name_zh}
+            for item in result.scalars().all()
+        }
+        converted = convert_legacy_draft(draft, families_by_code=families_by_code)
+        normalized = _normalize_draft(converted)
+        if converted.get("classification_migration_warnings"):
+            normalized["classification_migration_warnings"] = converted["classification_migration_warnings"]
+        await _resolve_draft_classifications(session, normalized)
+        if isinstance(draft.get("ai_original"), dict):
+            ai_converted = convert_legacy_draft(
+                draft["ai_original"], families_by_code=families_by_code,
+            )
+            normalized["ai_original"] = _normalize_draft(ai_converted)
+            await _resolve_draft_classifications(session, normalized["ai_original"])
     return {"ok": True, "data": normalized}
 
 
@@ -621,6 +740,7 @@ async def put_upload_draft(
 ):
     from backend.ingest.upload_jobs import _normalize_draft
     from backend.ingest.upload_tasks import get_draft, save_draft
+    from backend.rag.database import async_session_factory
 
     state = _task_for_user(task_id, current_user)
     if state.get("paper_id"):
@@ -632,11 +752,14 @@ async def put_upload_draft(
             "该论文已经存在",
             existing_paper_id=state.get("existing_paper_id"),
         )
+    _reject_legacy_classification_contract(draft)
     previous = get_draft(task_id) or {}
     normalized = _normalize_draft(draft)
     if isinstance(previous.get("ai_original"), dict):
         normalized["ai_original"] = _normalize_draft(previous["ai_original"])
-    _draft_values(normalized)
+    async with async_session_factory() as session:
+        await _resolve_draft_classifications(session, normalized)
+    _validate_draft(normalized)
     saved = save_draft(task_id, normalized)
     return {"ok": True, "data": saved, "saved_at": int(time.time())}
 
@@ -820,6 +943,7 @@ async def _create_pending_paper(
     from backend.ingest.upload_tasks import markdown_path
     from backend.rag.database import async_session_factory
 
+    _reject_legacy_classification_contract(draft)
     draft = _normalize_draft(draft)
     paper_data, material_states = _validate_draft(draft)
     doi = normalize_doi(paper_data.get("doi"))
@@ -829,6 +953,8 @@ async def _create_pending_paper(
     try:
         async with async_session_factory() as session:
             async with session.begin():
+                await _resolve_draft_classifications(session, draft)
+                paper_data, material_states = _validate_draft(draft)
                 if doi:
                     result = await session.execute(
                         select(Paper).where(func.lower(Paper.doi).contains(doi.lower()))

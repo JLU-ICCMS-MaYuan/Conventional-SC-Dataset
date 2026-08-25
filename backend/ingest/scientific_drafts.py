@@ -14,6 +14,11 @@ from sqlalchemy import select
 from backend import models
 from backend.db_helpers import build_composition_key, build_system_key, normalize_formula
 from backend.ingest.prop_names import normalize_prop_name
+from backend.services.classification_catalog import (
+    MATERIAL_DIMENSIONALITIES,
+    count_formula_elements,
+    normalize_classification_name,
+)
 from backend.services.structure_candidates import validate_structure_text
 
 
@@ -104,6 +109,17 @@ def _fingerprint(field_path: str, payload: dict[str, Any]) -> str:
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
+def _classification_evidence_values(value: Any) -> dict[str, Any]:
+    evidence = value if isinstance(value, dict) else {}
+    page = evidence.get("page") or evidence.get("page_start")
+    return {
+        "section": evidence.get("section"),
+        "page_start": page,
+        "page_end": evidence.get("page_end") or page,
+        "quote": evidence.get("quote"),
+    }
+
+
 async def _get_or_create_superconductor(session, chemical_formula: str):
     normalized, elements, composition, ratios = normalize_formula(chemical_formula)
     composition_key = build_composition_key(composition)
@@ -189,10 +205,23 @@ async def persist_scientific_draft(
     for state_index, state_data in enumerate(draft.get("material_states") or []):
         material = str(state_data.get("material") or "").strip()
         superconductor = await _get_or_create_superconductor(session, material)
+        family_selection = state_data.get("material_family")
+        material_family_id = None
+        if isinstance(family_selection, dict) and family_selection.get("id") not in (None, ""):
+            family = await session.get(models.MaterialFamily, int(family_selection["id"]))
+            if family is None or not family.is_active:
+                raise ValueError("材料家族目录项不存在或已停用")
+            material_family_id = family.id
+        dimensionality = str(state_data.get("material_dimensionality") or "unknown")
+        if dimensionality not in MATERIAL_DIMENSIONALITIES:
+            raise ValueError("材料维度无效")
         state = models.MaterialState(
             paper_id=paper.id,
             paper_revision=paper.content_revision,
             superconductor_id=superconductor.id,
+            material_family_id=material_family_id,
+            element_count=count_formula_elements(material),
+            material_dimensionality=dimensionality,
             pressure_value_gpa=_number(state_data.get("pressure_value_gpa")),
             pressure_min_gpa=_number(state_data.get("pressure_min_gpa")),
             pressure_max_gpa=_number(state_data.get("pressure_max_gpa")),
@@ -211,6 +240,96 @@ async def persist_scientific_draft(
         await session.flush()
 
         state_path = f"material_states[{state_index}]"
+        family_proposal = None
+        if (
+            isinstance(family_selection, dict)
+            and family_selection.get("id") in (None, "")
+            and str(family_selection.get("name") or "").strip()
+        ):
+            family_proposal = models.ClassificationProposal(
+                material_state_id=state.id,
+                dimension="material_family",
+                raw_name=str(family_selection["name"]).strip(),
+                normalized_name=normalize_classification_name(family_selection["name"]),
+                source_kind="user",
+                proposed_by_user_id=paper.uploaded_by_user_id,
+            )
+            session.add(family_proposal)
+            await session.flush()
+        if isinstance(family_selection, dict):
+            session.add(models.ClassificationEvidence(
+                paper_id=paper.id,
+                paper_revision=paper.content_revision,
+                material_state_id=state.id,
+                dimension="material_family",
+                material_family_id=material_family_id,
+                proposal_id=family_proposal.id if family_proposal is not None else None,
+                source_kind="reported",
+                scope="current_paper",
+                raw_value=str(family_selection.get("name") or "").strip() or None,
+                **_classification_evidence_values(family_selection.get("evidence")),
+            ))
+
+        structure_selections = [
+            item for item in state_data.get("structure_families") or []
+            if isinstance(item, dict) and str(item.get("name") or "").strip()
+        ]
+        if sum(bool(item.get("is_primary")) for item in structure_selections) > 1:
+            raise ValueError("一个材料状态只能有一个主结构家族")
+        for selection in structure_selections:
+            structure_family_id = None
+            structure_proposal = None
+            if selection.get("id") not in (None, ""):
+                structure_family = await session.get(models.StructureFamily, int(selection["id"]))
+                if structure_family is None or not structure_family.is_active:
+                    raise ValueError("结构家族目录项不存在或已停用")
+                structure_family_id = structure_family.id
+                session.add(models.MaterialStateStructureFamily(
+                    material_state_id=state.id,
+                    structure_family_id=structure_family_id,
+                    is_primary=bool(selection.get("is_primary")),
+                ))
+            else:
+                structure_proposal = models.ClassificationProposal(
+                    material_state_id=state.id,
+                    dimension="structure_family",
+                    raw_name=str(selection["name"]).strip(),
+                    normalized_name=normalize_classification_name(selection["name"]),
+                    source_kind="user",
+                    proposed_by_user_id=paper.uploaded_by_user_id,
+                )
+                session.add(structure_proposal)
+                await session.flush()
+            session.add(models.ClassificationEvidence(
+                paper_id=paper.id,
+                paper_revision=paper.content_revision,
+                material_state_id=state.id,
+                dimension="structure_family",
+                structure_family_id=structure_family_id,
+                proposal_id=structure_proposal.id if structure_proposal is not None else None,
+                source_kind="reported",
+                scope="current_paper",
+                raw_value=str(selection.get("name") or "").strip(),
+                **_classification_evidence_values(selection.get("evidence")),
+            ))
+        session.add(models.ClassificationEvidence(
+            paper_id=paper.id,
+            paper_revision=paper.content_revision,
+            material_state_id=state.id,
+            dimension="element_count",
+            source_kind="derived",
+            scope="current_paper",
+            raw_value=material,
+        ))
+        session.add(models.ClassificationEvidence(
+            paper_id=paper.id,
+            paper_revision=paper.content_revision,
+            material_state_id=state.id,
+            dimension="material_dimensionality",
+            source_kind="reported",
+            scope="current_paper",
+            raw_value=dimensionality,
+        ))
         space_group_evidence = state_data.get("space_group_evidence")
         if isinstance(space_group_evidence, dict):
             targets.append(ScientificEvidenceTarget(

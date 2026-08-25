@@ -90,6 +90,17 @@ fresh 目标 Schema 已落实以下边界：
 - 可推导字段采用“上传时生成、入库前人工复核、读取时直接使用”的策略；不以运行时重复计算替代持久化字段。
 - 一致性校验用于发现和提示差异，不自动覆盖人工确认的数据。
 
+## 材料状态多维分类
+
+材料分类现在属于 `material_states`，不再属于整篇论文或旧 `key_properties`。每个状态分别保存
+`material_family_id`、由规范化化学式计算的 `element_count`、`material_dimensionality`、压力和结构家族关联。
+材料家族单选；结构家族可多选，并通过生成列唯一约束保证最多一个主结构家族。
+
+`material_families`、`structure_families` 及各自别名表提供确定性目录。普通接口只返回目录 ID、规范中文名和
+审核别名，不暴露内部 `code`。未知名称进入 `classification_proposals`；本文正式分类原文进入
+`classification_evidences`，引用工作的原始名称和作用域只保留在管理员审核快照；目录治理写入只追加的
+`classification_audit_events`。`papers.referenced_materials` 已从目标 Schema 删除。
+
 ## 代码与测试
 
 - `backend/models.py`
@@ -108,6 +119,8 @@ fresh 目标 Schema 已落实以下边界：
   已完成 fresh Schema、SQLAlchemy/GORM 和隔离 MySQL 验证；RAG/Qdrant 编排和历史迁移未完成。
 - [Feature #46：论文上传科学数据结构化](../../specs/46-upload-scientific-data-pipeline/spec.md)
   已完成上传草稿、编辑器和提交事务向条件化科学实体图的切换。
+- [Feature #51：材料状态多维分类目录](../../specs/51-material-state-classification/spec.md)
+  建立数据库目录、确定性别名映射、材料状态级分类、审核建议和旧数据 dry-run 迁移。
 
 ## 已知问题
 

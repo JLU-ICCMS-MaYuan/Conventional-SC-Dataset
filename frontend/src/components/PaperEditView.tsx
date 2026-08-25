@@ -105,7 +105,7 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paperId, onBack }) => {
       material: '', name: 'critical_temperature', name_raw: '', name_note: '',
       value_min: null, value_max: null, value_raw: '', unit: 'K',
       pressure_gpa: null, temperature_k: null, condition_note: '',
-      is_primary: false, superconductor_type: '', article_type: '',
+      is_primary: false, article_type: '',
       structure_text: '', structure_format: 'cif',
     }])
   }
@@ -210,6 +210,28 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paperId, onBack }) => {
               </Box>
             </Box>
 
+            {(paper.material_states || []).length > 0 && (
+              <Box component="details" open sx={{
+                border: '1px solid', borderColor: 'divider', borderRadius: 2, mb: 1.5, overflow: 'hidden',
+              }}>
+                <Box component="summary" sx={{ cursor: 'pointer', p: 2, fontSize: 18, fontWeight: 800 }}>
+                  材料状态分类
+                </Box>
+                <Box sx={{ px: 2, pb: 2, borderTop: '1px solid', borderColor: 'divider', display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  {(paper.material_states || []).map((state: any, index: number) => (
+                    <Box key={state.id || index} sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <Typography variant="body2" fontWeight={700}>{state.material || `材料状态 #${index + 1}`}</Typography>
+                      <Chip size="small" label={state.material_family?.name || '材料家族待确认'} color={state.material_family ? 'primary' : 'warning'} />
+                      <Chip size="small" variant="outlined" label={`不同元素种类数: ${state.element_count ?? '未知'}`} />
+                      {(state.structure_families || []).map((family: any) => (
+                        <Chip key={family.id || family.name} size="small" variant="outlined" label={`${family.name}${family.is_primary ? '（主）' : ''}`} />
+                      ))}
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+            )}
+
             {/* 关键物性 */}
             <Box component="details" open sx={{
               border: '1px solid', borderColor: 'divider', borderRadius: 2, mb: 1.5, overflow: 'hidden',
@@ -276,7 +298,7 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paperId, onBack }) => {
                           </Box>
 
                           {/* Row 3: 数值范围 */}
-                          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1, mb: 1 }}>
+                          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, mb: 1 }}>
                             <TextField label="最小值" size="small" type="number"
                               value={kp.value_min ?? ''}
                               onChange={e => setF('value_min', e.target.value ? Number(e.target.value) : null)} />
@@ -295,20 +317,6 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paperId, onBack }) => {
                             <TextField label="温度 (K)" size="small" type="number"
                               value={kp.temperature_k ?? ''}
                               onChange={e => setF('temperature_k', e.target.value ? Number(e.target.value) : null)} />
-                            <FormControl size="small">
-                              <InputLabel>超导类型</InputLabel>
-                              <Select value={kp.superconductor_type || ''} label="超导类型"
-                                onChange={e => setF('superconductor_type', e.target.value)}>
-                                <MenuItem value="">-</MenuItem>
-                                <MenuItem value="hydride">hydride · 氢化物</MenuItem>
-                                <MenuItem value="cuprate">cuprate · 铜基</MenuItem>
-                                <MenuItem value="iron_based">iron_based · 铁基</MenuItem>
-                                <MenuItem value="nickel_based">nickel_based · 镍基</MenuItem>
-                                <MenuItem value="carbon">carbon · 碳基</MenuItem>
-                                <MenuItem value="organic">organic · 有机</MenuItem>
-                                <MenuItem value="others">others · 其他</MenuItem>
-                              </Select>
-                            </FormControl>
                           </Box>
 
                           {/* Row 5: 备注 */}

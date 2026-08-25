@@ -1,3 +1,9 @@
+import type {
+  ClassificationSelection,
+  MaterialDimensionality,
+  StructureFamilySelection,
+} from './classifications'
+
 export type ProcessingStage = 'saving_file' | 'queued' | 'extracting' | 'reading' | 'summarizing' | 'ready'
 export type ProcessingStatus = 'processing' | 'succeeded' | 'failed' | 'cancelled'
 export type UploadTaskStatus = 'uploading' | 'queued' | 'extracting' | 'reading' | 'summarizing' |
@@ -33,7 +39,6 @@ export interface DraftKeyProperty {
   condition?: Record<string, unknown> | string | null
   condition_note?: string
   is_primary?: boolean
-  superconductor_type?: string
   article_type?: 'e' | 't' | '' | string
   evidence?: SourceEvidence | SourceEvidence[] | null
 }
@@ -99,6 +104,10 @@ export interface StructureCandidate {
 
 export interface DraftMaterialState {
   material?: string
+  material_family?: ClassificationSelection | null
+  structure_families?: StructureFamilySelection[]
+  element_count?: number | null
+  material_dimensionality?: MaterialDimensionality
   pressure_value_gpa?: number | null
   pressure_min_gpa?: number | null
   pressure_max_gpa?: number | null
@@ -144,8 +153,7 @@ export interface UploadDraft {
   structure_candidates?: StructureCandidate[]
   classification_reason?: string
   classification_evidence?: SourceEvidence[]
-  sc_type?: string
-  sc_type_review_status?: 'none' | 'pending' | 'accepted' | 'modified' | 'rejected' | string
+  classification_migration_warnings?: string[]
   field_evidence?: Record<string, SourceEvidence[]>
   ai_original?: Partial<UploadDraft> | null
 }
@@ -207,8 +215,6 @@ export function emptyUploadDraft(): UploadDraft {
     structure_candidates: [],
     classification_reason: '',
     classification_evidence: [],
-    sc_type: '',
-    sc_type_review_status: 'none',
     field_evidence: {},
     ai_original: null,
   }
@@ -257,7 +263,12 @@ function normalizePaperFields(value: unknown): PaperDraftFields {
 }
 
 export function normalizeUploadDraft(value: unknown): UploadDraft {
-  const raw = value && typeof value === 'object' ? value as Partial<UploadDraft> : {}
+  const rawWithLegacy = value && typeof value === 'object'
+    ? value as Partial<UploadDraft> & { sc_type?: unknown; sc_type_review_status?: unknown }
+    : {}
+  const raw = { ...rawWithLegacy }
+  delete raw.sc_type
+  delete raw.sc_type_review_status
   const empty = emptyUploadDraft()
   const rawPaper = raw.paper && typeof raw.paper === 'object' ? raw.paper : {}
   const aiRaw = raw.ai_original && typeof raw.ai_original === 'object' ? raw.ai_original : null
@@ -281,6 +292,10 @@ export function normalizeUploadDraft(value: unknown): UploadDraft {
       delete (normalizedState as { phase_label?: unknown }).phase_label
       return {
         ...normalizedState,
+        material_family: state.material_family || null,
+        structure_families: Array.isArray(state.structure_families) ? state.structure_families : [],
+        element_count: state.element_count ?? null,
+        material_dimensionality: state.material_dimensionality || 'unknown',
         tc_results: Array.isArray(state.tc_results) ? state.tc_results : [],
         properties: Array.isArray(state.properties) ? state.properties.map(item => ({
           ...item,
