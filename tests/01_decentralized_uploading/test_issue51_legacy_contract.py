@@ -70,7 +70,7 @@ def test_old_draft_get_converts_once_without_returning_legacy_fields(tmp_path, m
             session.add(MaterialFamily(
                 code="hydrogen_based", name_zh="氢基超导体",
                 name_en="Hydrogen-based superconductor",
-                normalized_name="氢基超导体", is_active=True,
+                normalized_name="氢基超导体",
             ))
         monkeypatch.setattr(rag_database, "async_session_factory", session_factory)
         _install_upload_jobs_stub(monkeypatch)

@@ -157,13 +157,11 @@ def convert_legacy_draft(
 async def load_active_catalogs(session) -> dict[str, Any]:
     material_result = await session.execute(
         select(models.MaterialFamily)
-        .where(models.MaterialFamily.is_active.is_(True))
         .options(selectinload(models.MaterialFamily.aliases))
         .order_by(models.MaterialFamily.id)
     )
     structure_result = await session.execute(
         select(models.StructureFamily)
-        .where(models.StructureFamily.is_active.is_(True))
         .options(selectinload(models.StructureFamily.aliases))
         .order_by(models.StructureFamily.id)
     )
@@ -193,7 +191,6 @@ async def resolve_material_family(session, value: Any):
         select(models.MaterialFamily)
         .outerjoin(models.MaterialFamilyAlias)
         .where(
-            models.MaterialFamily.is_active.is_(True),
             or_(
                 models.MaterialFamily.normalized_name == normalized,
                 models.MaterialFamily.code == normalized.replace(" ", "_"),
@@ -213,7 +210,6 @@ async def resolve_structure_family(session, value: Any):
         select(models.StructureFamily)
         .outerjoin(models.StructureFamilyAlias)
         .where(
-            models.StructureFamily.is_active.is_(True),
             or_(
                 models.StructureFamily.normalized_name == normalized,
                 models.StructureFamily.code == normalized.replace(" ", "_"),

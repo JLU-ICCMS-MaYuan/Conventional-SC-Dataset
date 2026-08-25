@@ -371,6 +371,10 @@ func BatchReview(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "论文列表为空或审核状态无效"})
 		return
 	}
+	if body.Status == reviewStatusApproved {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "批准论文前需要逐篇确认材料分类"})
+		return
+	}
 	email, exists := c.Get("user_email")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
@@ -413,7 +417,7 @@ func BatchReview(c *gin.Context) {
 			if requestID != "" {
 				requestID = fmt.Sprintf("%s:%d", requestID, papers[i].ID)
 			}
-			if _, err := applyPaperReview(tx, &papers[i], user.ID, body.Status, "", requestID, "batch", now); err != nil {
+			if _, err := applyPaperReview(tx, &papers[i], user.ID, body.Status, "", requestID, "batch", now, nil); err != nil {
 				return err
 			}
 		}

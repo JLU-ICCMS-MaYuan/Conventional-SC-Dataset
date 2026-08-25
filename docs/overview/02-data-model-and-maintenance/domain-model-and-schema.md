@@ -13,7 +13,7 @@
 - `MaterialState` 表达论文当前 revision 中的材料状态；`StructureModel`、
   `CalculationContext` 和 `ExperimentalContext` 分别表达结构、理论计算和实验测量上下文。
 - `MaterialState.reported_space_group_symbol/number` 保存论文报告但没有完整结构几何时的空间群事实；只有存在真实结构文本时才创建 `StructureModel`，不会为凑必填字段伪造 CIF/POSCAR。
-- `MaterialState` 不再包含 `phase_label`；空间群不属于分类树，未来材料家族和结构家族分类采用独立的可审核扩展模型。
+- `MaterialState` 不再包含 `phase_label`；空间群不属于分类树。材料家族和结构家族是相互独立、在论文审核内确认的分类维度。
 - `TcResult` 纵向保存每条 Tc；`PropertyDefinition` 和
   `SuperconductorProperty` 保存 Tc 之外的普通物性，表名为
   `superconductor_properties`，同时保留论文原文和可空规范值。
@@ -96,10 +96,10 @@ fresh 目标 Schema 已落实以下边界：
 `material_family_id`、由规范化化学式计算的 `element_count`、`material_dimensionality`、压力和结构家族关联。
 材料家族单选；结构家族可多选，并通过生成列唯一约束保证最多一个主结构家族。
 
-`material_families`、`structure_families` 及各自别名表提供确定性目录。普通接口只返回目录 ID、规范中文名和
-审核别名，不暴露内部 `code`。未知名称进入 `classification_proposals`；本文正式分类原文进入
-`classification_evidences`，引用工作的原始名称和作用域只保留在管理员审核快照；目录治理写入只追加的
-`classification_audit_events`。`papers.referenced_materials` 已从目标 Schema 删除。
+`material_families`、`structure_families` 及各自 seed 别名表提供确定性目录。普通接口只返回目录 ID 和规范中文名，
+不暴露内部 `code`。AI 建议仅作为论文审核上下文，不进入独立建议表；审核者可认可、改选已有目录项或输入新名称。
+批准事务在同一事务内创建必要的目录项、写入人工确认的正式 ID，并把 AI 上下文与最终选择保存到
+`paper_review_events.classification_snapshot`。拒绝或退回不创建分类。`papers.referenced_materials` 已从目标 Schema 删除。
 
 ## 代码与测试
 
@@ -120,7 +120,7 @@ fresh 目标 Schema 已落实以下边界：
 - [Feature #46：论文上传科学数据结构化](../../specs/46-upload-scientific-data-pipeline/spec.md)
   已完成上传草稿、编辑器和提交事务向条件化科学实体图的切换。
 - [Feature #51：材料状态多维分类目录](../../specs/51-material-state-classification/spec.md)
-  建立数据库目录、确定性别名映射、材料状态级分类、审核建议和旧数据 dry-run 迁移。
+  建立数据库目录、确定性 seed 别名映射、材料状态级分类和审核内人工确认，不迁移旧 655 篇论文数据库。
 
 ## 已知问题
 

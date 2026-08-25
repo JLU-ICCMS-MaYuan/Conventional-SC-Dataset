@@ -58,7 +58,7 @@ const ClassificationAutocomplete: React.FC<ClassificationAutocompleteProps> = ({
           {...params}
           label={label}
           error={Boolean(error)}
-          helperText={error || (value?.status === 'pending' ? '新名称，提交后由管理员确认' : undefined)}
+          helperText={error || (value?.status === 'pending' ? '新名称，将在论文审核通过时创建' : undefined)}
         />
       )}
       slotProps={{

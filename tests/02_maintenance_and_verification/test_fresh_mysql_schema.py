@@ -38,7 +38,10 @@ def _config(database_url=None):
 def test_alembic_has_one_ordered_head():
     script = ScriptDirectory.from_config(_config())
 
-    assert script.get_heads() == ["20260824_0010"]
+    assert script.get_heads() == ["20260825_0013"]
+    assert script.get_revision("20260825_0013").down_revision == "20260825_0012"
+    assert script.get_revision("20260825_0012").down_revision == "20260824_0011"
+    assert script.get_revision("20260824_0011").down_revision == "20260824_0010"
     assert script.get_revision("20260824_0010").down_revision == "20260824_0009"
     assert script.get_revision("20260824_0009").down_revision == "20260821_0008"
     assert script.get_revision("20260821_0008").down_revision == "20260821_0007"

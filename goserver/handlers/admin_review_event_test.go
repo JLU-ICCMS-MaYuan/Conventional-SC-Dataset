@@ -53,7 +53,7 @@ func TestApplyPaperReviewWritesOneImmutableEvent(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 
-	written, err := applyPaperReview(db, &paper, 7, "approved", "证据充分", "request-1", "single", reviewedAt)
+	written, err := applyPaperReview(db, &paper, 7, "approved", "证据充分", "request-1", "single", reviewedAt, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestApplyPaperReviewIgnoresRetriedRequest(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT count(*) FROM `paper_review_events` WHERE request_id = ?")).
 		WithArgs("request-1").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
 
-	written, err := applyPaperReview(db, &paper, 7, "approved", "证据充分", "request-1", "single", time.Now())
+	written, err := applyPaperReview(db, &paper, 7, "approved", "证据充分", "request-1", "single", time.Now(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestApplyPaperReviewCountsUnchangedReviewAsNewParticipation(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 
-	written, err := applyPaperReview(db, &paper, 7, "approved", comment, "", "single", reviewedAt)
+	written, err := applyPaperReview(db, &paper, 7, "approved", comment, "", "single", reviewedAt, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,6 +145,8 @@ func TestReviewPaperCommitsBeforeReviewArtifactCleanupFailure(t *testing.T) {
 	mock.ExpectQuery("SELECT \\* FROM `users`").
 		WillReturnRows(sqlmock.NewRows([]string{"id", "email"}).AddRow(7, "admin@example.com"))
 	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT \\* FROM `papers`").
+		WillReturnRows(paperRows(reviewStatusPending))
 	mock.ExpectExec("UPDATE `papers` SET").
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("INSERT INTO `paper_review_events`").

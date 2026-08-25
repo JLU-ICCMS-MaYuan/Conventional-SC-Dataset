@@ -27,8 +27,9 @@ type apiFixture struct {
 
 func newAPIFixture(t *testing.T) *apiFixture {
 	t.Helper()
-	dsn := filepath.Join(t.TempDir(), "issue51.sqlite")
-	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{DisableForeignKeyConstraintWhenMigrating: true})
+	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "issue51.sqlite")), &gorm.Config{
+		DisableForeignKeyConstraintWhenMigrating: true,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,8 +38,6 @@ func newAPIFixture(t *testing.T) *apiFixture {
 		&models.MaterialFamily{}, &models.MaterialFamilyAlias{},
 		&models.StructureFamily{}, &models.StructureFamilyAlias{},
 		&models.MaterialState{}, &models.MaterialStateStructureFamily{},
-		&models.ClassificationProposal{}, &models.ClassificationEvidence{},
-		&models.ClassificationAuditEvent{},
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -49,6 +48,13 @@ func newAPIFixture(t *testing.T) *apiFixture {
 		sqlDB, _ := db.DB()
 		_ = sqlDB.Close()
 	})
+
+	python := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	t.Setenv("PYTHON_BACKEND_URL", python.URL)
+	t.Cleanup(python.Close)
 
 	middleware.InitJWT("issue51-test-secret")
 	tokens := make(map[string]string)
@@ -71,31 +77,17 @@ func newAPIFixture(t *testing.T) *apiFixture {
 	router := gin.New()
 	router.GET("/api/classification-catalogs", handlers.GetClassificationCatalogs)
 	admin := router.Group("/api/admin", middleware.AuthRequired, middleware.AdminRequired)
-	admin.GET("/classification-proposals", handlers.ListClassificationProposals)
-	admin.POST("/classification-proposals/:id/map", handlers.MapClassificationProposal)
 	admin.POST("/papers/:id/review", handlers.ReviewPaper)
-	super := router.Group("/api/superadmin", middleware.AuthRequired, middleware.SuperAdminRequired)
-	super.POST("/classification-catalogs/:dimension", handlers.CreateClassificationCatalogTerm)
-	super.PATCH("/classification-catalogs/:dimension/:id", handlers.UpdateClassificationCatalogTerm)
-	super.POST("/classification-catalogs/:dimension/:id/merge", handlers.MergeClassificationCatalogTerm)
-	super.POST("/classification-proposals/:id/resolve", handlers.ResolveClassificationProposal)
-	super.GET("/classification-audits", handlers.ListClassificationAudits)
 	return &apiFixture{db: db, router: router, tokens: tokens}
 }
 
 func (fixture *apiFixture) request(t *testing.T, method, path, role string, body any) *httptest.ResponseRecorder {
 	t.Helper()
-	var payload *bytes.Reader
-	if body == nil {
-		payload = bytes.NewReader(nil)
-	} else {
-		encoded, err := json.Marshal(body)
-		if err != nil {
-			t.Fatal(err)
-		}
-		payload = bytes.NewReader(encoded)
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
 	}
-	request := httptest.NewRequest(method, path, payload)
+	request := httptest.NewRequest(method, path, bytes.NewReader(encoded))
 	request.Header.Set("Content-Type", "application/json")
 	if role != "" {
 		request.Header.Set("Authorization", "Bearer "+fixture.tokens[role])
@@ -105,12 +97,11 @@ func (fixture *apiFixture) request(t *testing.T, method, path, role string, body
 	return recorder
 }
 
-func seedCatalogs(t *testing.T, db *gorm.DB) (models.MaterialFamily, models.MaterialFamily, models.StructureFamily, models.StructureFamily) {
+func seedCatalogs(t *testing.T, db *gorm.DB) (models.MaterialFamily, models.MaterialFamily, models.StructureFamily) {
 	t.Helper()
-	hydride := models.MaterialFamily{Code: "hydrogen_based", NameZH: "氢基超导体", NameEN: "Hydrogen-based", NormalizedName: "氢基超导体", IsActive: true}
-	heavy := models.MaterialFamily{Code: "heavy_fermion", NameZH: "重费米子超导体", NameEN: "Heavy fermion", NormalizedName: "重费米子超导体", IsActive: true}
-	clathrate := models.StructureFamily{Code: "clathrate", NameZH: "笼状结构", NameEN: "Clathrate", NormalizedName: "笼状结构", IsActive: true}
-	layered := models.StructureFamily{Code: "layered", NameZH: "层状结构", NameEN: "Layered", NormalizedName: "层状结构", IsActive: true}
+	hydride := models.MaterialFamily{Code: "hydrogen_based", NameZH: "氢基超导体", NormalizedName: "氢基超导体"}
+	heavy := models.MaterialFamily{Code: "heavy_fermion", NameZH: "重费米子超导体", NormalizedName: "重费米子超导体"}
+	clathrate := models.StructureFamily{Code: "clathrate", NameZH: "笼状结构", NormalizedName: "笼状结构"}
 	if err := db.Create(&hydride).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -120,204 +111,227 @@ func seedCatalogs(t *testing.T, db *gorm.DB) (models.MaterialFamily, models.Mate
 	if err := db.Create(&clathrate).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&layered).Error; err != nil {
+	if err := db.Create(&models.MaterialFamilyAlias{
+		MaterialFamilyID: hydride.ID, Alias: "高压氢化物", NormalizedAlias: "高压氢化物", Language: "zh",
+	}).Error; err != nil {
 		t.Fatal(err)
 	}
-	return hydride, heavy, clathrate, layered
+	return hydride, heavy, clathrate
 }
 
-func TestCatalogOnlyReturnsActivePublicTermsAndRoleBoundaries(t *testing.T) {
+func seedPaperState(t *testing.T, db *gorm.DB, paperID uint, revision uint, elementCount int16) models.MaterialState {
+	t.Helper()
+	paperType := "experimental"
+	uploader := uint(99)
+	title := fmt.Sprintf("Paper %d", paperID)
+	paper := models.Paper{
+		ID: paperID, Title: &title, PaperType: &paperType, ReviewStatus: "pending",
+		ContentRevision: revision, UploadedBy: &uploader,
+	}
+	if err := db.Create(&paper).Error; err != nil {
+		t.Fatal(err)
+	}
+	state := models.MaterialState{
+		PaperID: paperID, PaperRevision: revision, SuperconductorID: uint(paperID),
+		ElementCount: &elementCount, MaterialDimensionality: "unknown", StateKind: "experimental",
+	}
+	if err := db.Create(&state).Error; err != nil {
+		t.Fatal(err)
+	}
+	return state
+}
+
+func approvedBody(requestID string, states []map[string]any) map[string]any {
+	return map[string]any{
+		"status": "approved", "comment": "证据充分", "review_request_id": requestID,
+		"material_states": states,
+		"classification_context": map[string]any{
+			"classification_reason": "AI 建议与人工复核",
+			"classification_scope": []map[string]any{
+				{"raw_name": "LaH10", "scope": "current_paper"},
+				{"raw_name": "H3S", "scope": "referenced_work"},
+			},
+		},
+	}
+}
+
+func TestCatalogReturnsChineseNamesAndSeedAliasesWithoutInternalCodes(t *testing.T) {
 	fixture := newAPIFixture(t)
-	hydride, _, clathrate, _ := seedCatalogs(t, fixture.db)
-	inactive := models.MaterialFamily{Code: "inactive", NameZH: "停用项", NameEN: "Inactive", NormalizedName: "停用项", IsActive: false}
-	if err := fixture.db.Create(&inactive).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := fixture.db.Model(&inactive).Update("is_active", false).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := fixture.db.Create(&models.MaterialFamilyAlias{MaterialFamilyID: hydride.ID, Alias: "hydride", NormalizedAlias: "hydride", Language: "en"}).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := fixture.db.Create(&models.StructureFamilyAlias{StructureFamilyID: clathrate.ID, Alias: "clathrate", NormalizedAlias: "clathrate", Language: "en"}).Error; err != nil {
-		t.Fatal(err)
-	}
+	hydride, _, _ := seedCatalogs(t, fixture.db)
 
 	response := fixture.request(t, http.MethodGet, "/api/classification-catalogs", "", nil)
 	if response.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
-	var catalog map[string]any
-	if err := json.Unmarshal(response.Body.Bytes(), &catalog); err != nil {
-		t.Fatal(err)
-	}
-	materialItems := catalog["material_families"].([]any)
-	if len(materialItems) != 2 {
-		t.Fatalf("active material count=%d want 2", len(materialItems))
-	}
-	for _, raw := range materialItems {
-		item := raw.(map[string]any)
-		if _, exists := item["code"]; exists {
-			t.Fatal("public catalog exposed internal code")
-		}
-		if item["name"] == "停用项" {
-			t.Fatal("inactive term appeared in public catalog")
-		}
-	}
-
-	if got := fixture.request(t, http.MethodGet, "/api/admin/classification-proposals", "user", nil).Code; got != http.StatusForbidden {
-		t.Fatalf("user admin status=%d want 403", got)
-	}
-	createBody := map[string]any{"code": "new_term", "name": "新目录", "name_en": "New term", "reason": "test"}
-	if got := fixture.request(t, http.MethodPost, "/api/superadmin/classification-catalogs/material_family", "admin", createBody).Code; got != http.StatusForbidden {
-		t.Fatalf("admin superadmin status=%d want 403", got)
-	}
-	if got := fixture.request(t, http.MethodPost, "/api/superadmin/classification-catalogs/material_family", "superadmin", createBody).Code; got != http.StatusOK {
-		t.Fatalf("superadmin create status=%d want 200", got)
-	}
-}
-
-func TestAliasCannotShadowAnotherCanonicalName(t *testing.T) {
-	fixture := newAPIFixture(t)
-	hydride, heavy, _, _ := seedCatalogs(t, fixture.db)
-	state := models.MaterialState{ID: 1, PaperID: 1, PaperRevision: 1, SuperconductorID: 1, MaterialDimensionality: "unknown", StateKind: "unknown"}
-	if err := fixture.db.Create(&state).Error; err != nil {
-		t.Fatal(err)
-	}
-	proposal := models.ClassificationProposal{MaterialStateID: state.ID, Dimension: "material_family", RawName: heavy.NameZH, NormalizedName: heavy.NormalizedName, Status: "proposed", SourceKind: "ai"}
-	if err := fixture.db.Create(&proposal).Error; err != nil {
-		t.Fatal(err)
-	}
-
-	response := fixture.request(t, http.MethodPost, fmt.Sprintf("/api/superadmin/classification-proposals/%d/resolve", proposal.ID), "superadmin", map[string]any{
-		"resolution_kind": "alias_created", "target_id": hydride.ID, "reason": "conflict test",
-	})
-	if response.Code != http.StatusConflict {
-		t.Fatalf("status=%d want 409 body=%s", response.Code, response.Body.String())
-	}
 	var body map[string]any
-	_ = json.Unmarshal(response.Body.Bytes(), &body)
-	if body["code"] != "alias_conflict" {
-		t.Fatalf("code=%v want alias_conflict", body["code"])
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
 	}
-	var aliasCount, auditCount int64
-	fixture.db.Model(&models.MaterialFamilyAlias{}).Count(&aliasCount)
-	fixture.db.Model(&models.ClassificationAuditEvent{}).Count(&auditCount)
-	fixture.db.First(&proposal, proposal.ID)
-	if aliasCount != 0 || auditCount != 0 || proposal.Status != "proposed" {
-		t.Fatal("conflicting alias produced partial writes")
+	items := body["material_families"].([]any)
+	first := items[0].(map[string]any)
+	if first["id"] != float64(hydride.ID) || first["name"] != "氢基超导体" {
+		t.Fatalf("unexpected catalog item: %#v", first)
 	}
-}
-
-func TestResolvedProposalCannotBeRewritten(t *testing.T) {
-	fixture := newAPIFixture(t)
-	hydride, _, _, _ := seedCatalogs(t, fixture.db)
-	state := models.MaterialState{ID: 1, PaperID: 1, PaperRevision: 1, SuperconductorID: 1, MaterialDimensionality: "unknown", StateKind: "unknown"}
-	fixture.db.Create(&state)
-	resolved := "mapped_existing"
-	proposal := models.ClassificationProposal{MaterialStateID: state.ID, Dimension: "material_family", RawName: "hydride", NormalizedName: "hydride", Status: "resolved", SourceKind: "ai", ResolutionKind: &resolved, MaterialFamilyID: &hydride.ID}
-	fixture.db.Create(&proposal)
-
-	response := fixture.request(t, http.MethodPost, fmt.Sprintf("/api/admin/classification-proposals/%d/map", proposal.ID), "admin", map[string]any{"target_id": hydride.ID, "reason": "retry"})
-	if response.Code != http.StatusConflict {
-		t.Fatalf("status=%d want 409", response.Code)
-	}
-	var audits int64
-	fixture.db.Model(&models.ClassificationAuditEvent{}).Count(&audits)
-	if audits != 0 {
-		t.Fatal("terminal retry wrote an audit")
+	if _, exists := first["code"]; exists {
+		t.Fatal("public catalog exposed internal code")
 	}
 }
 
-func TestMergeMigratesMaterialAndStructureRelationshipsAndAliases(t *testing.T) {
+func TestApprovalMapsAliasesCreatesNewTermsAndStoresVerifiedSnapshot(t *testing.T) {
 	fixture := newAPIFixture(t)
-	hydride, heavy, clathrate, layered := seedCatalogs(t, fixture.db)
-	state := models.MaterialState{ID: 1, PaperID: 1, PaperRevision: 1, SuperconductorID: 1, MaterialFamilyID: &hydride.ID, MaterialDimensionality: "unknown", StateKind: "unknown"}
-	fixture.db.Create(&state)
-	fixture.db.Create(&models.MaterialFamilyAlias{MaterialFamilyID: hydride.ID, Alias: "hydride", NormalizedAlias: "hydride", Language: "en"})
-	fixture.db.Create(&models.StructureFamilyAlias{StructureFamilyID: clathrate.ID, Alias: "clathrate", NormalizedAlias: "clathrate", Language: "en"})
-	fixture.db.Create(&models.MaterialStateStructureFamily{MaterialStateID: state.ID, StructureFamilyID: clathrate.ID, IsPrimary: true})
-	fixture.db.Create(&models.MaterialStateStructureFamily{MaterialStateID: state.ID, StructureFamilyID: layered.ID, IsPrimary: false})
-	materialProposal := models.ClassificationProposal{MaterialStateID: state.ID, Dimension: "material_family", RawName: "hydride", NormalizedName: "hydride", Status: "resolved", SourceKind: "ai", MaterialFamilyID: &hydride.ID}
-	structureProposal := models.ClassificationProposal{MaterialStateID: state.ID, Dimension: "structure_family", RawName: "clathrate", NormalizedName: "clathrate", Status: "resolved", SourceKind: "ai", StructureFamilyID: &clathrate.ID}
-	fixture.db.Create(&materialProposal)
-	fixture.db.Create(&structureProposal)
-	fixture.db.Create(&models.ClassificationEvidence{PaperID: 1, PaperRevision: 1, MaterialStateID: state.ID, Dimension: "material_family", MaterialFamilyID: &hydride.ID, SourceKind: "reported", Scope: "current_paper"})
-	fixture.db.Create(&models.ClassificationEvidence{PaperID: 1, PaperRevision: 1, MaterialStateID: state.ID, Dimension: "structure_family", StructureFamilyID: &clathrate.ID, SourceKind: "reported", Scope: "current_paper"})
+	hydride, _, clathrate := seedCatalogs(t, fixture.db)
+	state := seedPaperState(t, fixture.db, 41, 1, 2)
 
-	materialResponse := fixture.request(t, http.MethodPost, fmt.Sprintf("/api/superadmin/classification-catalogs/material_family/%d/merge", hydride.ID), "superadmin", map[string]any{"target_id": heavy.ID, "reason": "deduplicate"})
-	if materialResponse.Code != http.StatusOK {
-		t.Fatalf("material merge status=%d body=%s", materialResponse.Code, materialResponse.Body.String())
-	}
-	structureResponse := fixture.request(t, http.MethodPost, fmt.Sprintf("/api/superadmin/classification-catalogs/structure_family/%d/merge", clathrate.ID), "superadmin", map[string]any{"target_id": layered.ID, "reason": "deduplicate"})
-	if structureResponse.Code != http.StatusOK {
-		t.Fatalf("structure merge status=%d body=%s", structureResponse.Code, structureResponse.Body.String())
+	response := fixture.request(t, http.MethodPost, "/api/admin/papers/41/review", "admin", approvedBody(
+		"issue51-approve-1",
+		[]map[string]any{{
+			"id":                      state.ID,
+			"material_family":         map[string]any{"name": "高压氢化物"},
+			"material_dimensionality": "three_dimensional",
+			"structure_families": []map[string]any{
+				{"id": clathrate.ID, "name": "ignored client label", "is_primary": true},
+				{"name": "层状结构", "is_primary": false},
+			},
+		}},
+	))
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 
 	fixture.db.First(&state, state.ID)
-	fixture.db.First(&materialProposal, materialProposal.ID)
-	fixture.db.First(&structureProposal, structureProposal.ID)
-	var materialAlias models.MaterialFamilyAlias
-	var structureAlias models.StructureFamilyAlias
-	fixture.db.First(&materialAlias)
-	fixture.db.First(&structureAlias)
+	if state.MaterialFamilyID == nil || *state.MaterialFamilyID != hydride.ID || state.MaterialDimensionality != "three_dimensional" {
+		t.Fatalf("unexpected final state: %#v", state)
+	}
+	var layered models.StructureFamily
+	if err := fixture.db.Where("normalized_name = ?", "层状结构").First(&layered).Error; err != nil {
+		t.Fatal("new structure family was not created")
+	}
 	var links []models.MaterialStateStructureFamily
-	fixture.db.Where("material_state_id = ?", state.ID).Find(&links)
-	if state.MaterialFamilyID == nil || *state.MaterialFamilyID != heavy.ID || materialAlias.MaterialFamilyID != heavy.ID || materialProposal.MaterialFamilyID == nil || *materialProposal.MaterialFamilyID != heavy.ID {
-		t.Fatal("material merge did not migrate every relationship")
+	fixture.db.Where("material_state_id = ?", state.ID).Order("structure_family_id").Find(&links)
+	if len(links) != 2 || !links[0].IsPrimary {
+		t.Fatalf("unexpected structure links: %#v", links)
 	}
-	if len(links) != 1 || links[0].StructureFamilyID != layered.ID || !links[0].IsPrimary || structureAlias.StructureFamilyID != layered.ID || structureProposal.StructureFamilyID == nil || *structureProposal.StructureFamilyID != layered.ID {
-		t.Fatalf("structure merge result links=%#v alias=%#v proposal=%#v", links, structureAlias, structureProposal)
+
+	var event models.PaperReviewEvent
+	if err := fixture.db.Where("paper_id = ?", 41).First(&event).Error; err != nil {
+		t.Fatal(err)
 	}
-	var auditCount int64
-	fixture.db.Model(&models.ClassificationAuditEvent{}).Count(&auditCount)
-	if auditCount != 2 {
-		t.Fatalf("audit count=%d want 2", auditCount)
+	var snapshot map[string]any
+	if err := json.Unmarshal(event.ClassificationSnapshot, &snapshot); err != nil {
+		t.Fatal(err)
+	}
+	encoded, _ := json.Marshal(snapshot)
+	text := string(encoded)
+	for _, expected := range []string{"AI 建议与人工复核", "referenced_work", "氢基超导体", "笼状结构", "层状结构"} {
+		if !bytes.Contains(encoded, []byte(expected)) {
+			t.Fatalf("snapshot missing %s: %s", expected, text)
+		}
 	}
 }
 
-func TestCatalogMutationRollsBackWhenAuditInsertFails(t *testing.T) {
+func TestApprovalRollsBackCreatedTermsAndStateChangesOnLaterInvalidSelection(t *testing.T) {
 	fixture := newAPIFixture(t)
-	hydride, _, _, _ := seedCatalogs(t, fixture.db)
-	if err := fixture.db.Exec(`CREATE TRIGGER fail_classification_audit BEFORE INSERT ON classification_audit_events BEGIN SELECT RAISE(ABORT, 'audit failure'); END`).Error; err != nil {
-		t.Fatal(err)
+	seedCatalogs(t, fixture.db)
+	first := seedPaperState(t, fixture.db, 42, 1, 2)
+	secondCount := int16(3)
+	second := models.MaterialState{
+		PaperID: 42, PaperRevision: 1, SuperconductorID: 4202,
+		ElementCount: &secondCount, MaterialDimensionality: "unknown", StateKind: "experimental",
 	}
-	response := fixture.request(t, http.MethodPatch, fmt.Sprintf("/api/superadmin/classification-catalogs/material_family/%d", hydride.ID), "superadmin", map[string]any{"name": "新氢基名称", "reason": "rename"})
-	if response.Code == http.StatusOK {
-		t.Fatal("mutation succeeded despite audit failure")
-	}
-	fixture.db.First(&hydride, hydride.ID)
-	if hydride.NameZH != "氢基超导体" {
-		t.Fatalf("term changed without audit: %s", hydride.NameZH)
-	}
-}
-
-func TestPaperApprovalRejectsIncompleteClassificationWithoutChangingStatus(t *testing.T) {
-	fixture := newAPIFixture(t)
-	paperType := "experimental"
-	uploader := uint(99)
-	title := "Incomplete classification"
-	paper := models.Paper{Title: &title, PaperType: &paperType, ReviewStatus: "pending", ContentRevision: 1, UploadedBy: &uploader}
-	if err := fixture.db.Create(&paper).Error; err != nil {
+	if err := fixture.db.Create(&second).Error; err != nil {
 		t.Fatal(err)
 	}
 
-	response := fixture.request(t, http.MethodPost, fmt.Sprintf("/api/admin/papers/%d/review", paper.ID), "admin", map[string]any{"status": "approved", "comment": "approve"})
-	if response.Code != http.StatusConflict {
-		t.Fatalf("status=%d want 409 body=%s", response.Code, response.Body.String())
+	response := fixture.request(t, http.MethodPost, "/api/admin/papers/42/review", "admin", approvedBody(
+		"issue51-rollback",
+		[]map[string]any{
+			{"id": first.ID, "material_family": map[string]any{"name": "应回滚的新家族"}, "material_dimensionality": "unknown"},
+			{"id": second.ID, "material_family": map[string]any{"name": "另一个新家族"}, "material_dimensionality": "invalid"},
+		},
+	))
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
-	var body map[string]any
-	_ = json.Unmarshal(response.Body.Bytes(), &body)
-	if body["code"] != "classification_incomplete" {
-		t.Fatalf("code=%v", body["code"])
+	var count int64
+	fixture.db.Model(&models.MaterialFamily{}).Where("name_zh IN ?", []string{"应回滚的新家族", "另一个新家族"}).Count(&count)
+	if count != 0 {
+		t.Fatalf("rollback left %d catalog terms", count)
 	}
-	fixture.db.First(&paper, paper.ID)
-	if paper.ReviewStatus != "pending" || paper.ApprovedRevision != nil {
-		t.Fatal("incomplete approval changed paper")
+	fixture.db.First(&first, first.ID)
+	if first.MaterialFamilyID != nil {
+		t.Fatal("rollback left material classification")
 	}
 	var events int64
-	fixture.db.Model(&models.PaperReviewEvent{}).Count(&events)
+	fixture.db.Model(&models.PaperReviewEvent{}).Where("paper_id = ?", 42).Count(&events)
 	if events != 0 {
-		t.Fatal("incomplete approval wrote review event")
+		t.Fatal("rollback left review event")
+	}
+}
+
+func TestRejectedReviewDoesNotCreateOrOverwriteClassification(t *testing.T) {
+	fixture := newAPIFixture(t)
+	state := seedPaperState(t, fixture.db, 43, 1, 2)
+	body := approvedBody("issue51-reject", []map[string]any{{
+		"id": state.ID, "material_family": map[string]any{"name": "不得创建的家族"}, "material_dimensionality": "unknown",
+	}})
+	body["status"] = "rejected"
+
+	response := fixture.request(t, http.MethodPost, "/api/admin/papers/43/review", "admin", body)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	var count int64
+	fixture.db.Model(&models.MaterialFamily{}).Where("name_zh = ?", "不得创建的家族").Count(&count)
+	if count != 0 {
+		t.Fatal("rejected review created a catalog term")
+	}
+	fixture.db.First(&state, state.ID)
+	if state.MaterialFamilyID != nil {
+		t.Fatal("rejected review changed classification")
+	}
+}
+
+func TestReviewRequestIDIsIdempotentBeforeCatalogCreation(t *testing.T) {
+	fixture := newAPIFixture(t)
+	state := seedPaperState(t, fixture.db, 44, 1, 2)
+	body := approvedBody("issue51-idempotent", []map[string]any{{
+		"id": state.ID, "material_family": map[string]any{"name": "幂等新家族"}, "material_dimensionality": "unknown",
+	}})
+
+	for attempt := 0; attempt < 2; attempt++ {
+		response := fixture.request(t, http.MethodPost, "/api/admin/papers/44/review", "admin", body)
+		if response.Code != http.StatusOK {
+			t.Fatalf("attempt=%d status=%d body=%s", attempt, response.Code, response.Body.String())
+		}
+	}
+	var terms, events int64
+	fixture.db.Model(&models.MaterialFamily{}).Where("name_zh = ?", "幂等新家族").Count(&terms)
+	fixture.db.Model(&models.PaperReviewEvent{}).Where("request_id = ?", "issue51-idempotent").Count(&events)
+	if terms != 1 || events != 1 {
+		t.Fatalf("terms=%d events=%d want 1/1", terms, events)
+	}
+}
+
+func TestApprovalRejectsStateFromOldRevisionWithoutPartialWrites(t *testing.T) {
+	fixture := newAPIFixture(t)
+	seedCatalogs(t, fixture.db)
+	state := seedPaperState(t, fixture.db, 45, 1, 2)
+	if err := fixture.db.Model(&models.Paper{}).Where("id = ?", 45).Update("content_revision", 2).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	response := fixture.request(t, http.MethodPost, "/api/admin/papers/45/review", "admin", approvedBody(
+		"issue51-old-revision",
+		[]map[string]any{{
+			"id": state.ID, "material_family": map[string]any{"name": "旧版本新家族"}, "material_dimensionality": "unknown",
+		}},
+	))
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	var count int64
+	fixture.db.Model(&models.MaterialFamily{}).Where("name_zh = ?", "旧版本新家族").Count(&count)
+	if count != 0 {
+		t.Fatal("old revision request created a catalog term")
 	}
 }

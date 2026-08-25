@@ -165,8 +165,6 @@ async def _resolve_draft_classifications(session, draft: dict[str, Any]) -> None
                     term = None
                 if term is None:
                     raise _upload_error(404, "classification_not_found", "材料家族目录项不存在")
-                if not term.is_active:
-                    raise _upload_error(409, "classification_inactive", "材料家族目录项已停用")
             else:
                 term = await resolve_material_family(session, family.get("name"))
             resolved_family = (
@@ -191,8 +189,6 @@ async def _resolve_draft_classifications(session, draft: dict[str, Any]) -> None
                     term = None
                 if term is None:
                     raise _upload_error(404, "classification_not_found", "结构家族目录项不存在")
-                if not term.is_active:
-                    raise _upload_error(409, "classification_inactive", "结构家族目录项已停用")
             else:
                 term = await resolve_structure_family(session, selection.get("name"))
             if term is not None:

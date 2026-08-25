@@ -162,11 +162,6 @@ func main() {
 		superadmin.GET("/audits/profile-changes", handlers.ListProfileAudits)
 		superadmin.GET("/audits/username-changes", handlers.GetUsernameAuditEvents)
 		superadmin.GET("/audits/governance", handlers.ListGovernanceAudits)
-		superadmin.POST("/classification-catalogs/:dimension", handlers.CreateClassificationCatalogTerm)
-		superadmin.PATCH("/classification-catalogs/:dimension/:id", handlers.UpdateClassificationCatalogTerm)
-		superadmin.POST("/classification-catalogs/:dimension/:id/merge", handlers.MergeClassificationCatalogTerm)
-		superadmin.POST("/classification-proposals/:id/resolve", handlers.ResolveClassificationProposal)
-		superadmin.GET("/classification-audits", handlers.ListClassificationAudits)
 	}
 
 	// 管理员路由组
@@ -177,10 +172,6 @@ func main() {
 		admin.GET("/papers/:id", handlers.GetPaperDetail)
 		admin.PUT("/papers/:id", handlers.UpdatePaper)
 		admin.POST("/papers/:id/review", handlers.ReviewPaper)
-		admin.PUT("/papers/:id/material-classifications", handlers.UpdatePaperMaterialClassifications)
-		admin.GET("/classification-proposals", handlers.ListClassificationProposals)
-		admin.POST("/classification-proposals/:id/map", handlers.MapClassificationProposal)
-		admin.POST("/classification-proposals/:id/recommend", handlers.RecommendClassificationProposal)
 		admin.DELETE("/papers/:id", middleware.SuperAdminRequired, handlers.DeletePaper)
 		admin.POST("/papers/batch-review", handlers.BatchReview)
 		admin.POST("/papers/batch-delete", middleware.SuperAdminRequired, handlers.BatchDelete)

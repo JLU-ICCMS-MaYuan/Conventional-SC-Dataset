@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 const (
@@ -317,7 +319,7 @@ func getFloatAsUint(v interface{}) (uint, bool) {
 
 // ReviewPaper 审核论文
 // POST /api/admin/papers/:id/review
-func applyPaperReview(tx *gorm.DB, paper *models.Paper, reviewerID uint, status, comment, requestID, source string, reviewedAt time.Time) (bool, error) {
+func applyPaperReview(tx *gorm.DB, paper *models.Paper, reviewerID uint, status, comment, requestID, source string, reviewedAt time.Time, classificationSnapshot json.RawMessage) (bool, error) {
 	if requestID != "" {
 		var count int64
 		if err := tx.Model(&models.PaperReviewEvent{}).Where("request_id = ?", requestID).Count(&count).Error; err != nil {
@@ -352,6 +354,7 @@ func applyPaperReview(tx *gorm.DB, paper *models.Paper, reviewerID uint, status,
 		ReviewerUserID: reviewerID, Status: status,
 		ReviewComment: &commentCopy, ReviewedAt: reviewedAt,
 		RequestID: requestIDPtr, Source: source,
+		ClassificationSnapshot: classificationSnapshot,
 	}
 	if err := tx.Create(&event).Error; err != nil {
 		return false, err
@@ -371,10 +374,12 @@ func applyPaperReview(tx *gorm.DB, paper *models.Paper, reviewerID uint, status,
 func ReviewPaper(c *gin.Context) {
 	id := c.Param("id")
 	var body struct {
-		Status            string  `json:"status"`
-		Comment           string  `json:"comment"`
-		ReviewRequestID   string  `json:"review_request_id"`
-		AdminInternalNote *string `json:"admin_internal_note"`
+		Status                string                         `json:"status"`
+		Comment               string                         `json:"comment"`
+		ReviewRequestID       string                         `json:"review_request_id"`
+		AdminInternalNote     *string                        `json:"admin_internal_note"`
+		MaterialStates        []materialClassificationUpdate `json:"material_states"`
+		ClassificationContext json.RawMessage                `json:"classification_context"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
@@ -386,6 +391,10 @@ func ReviewPaper(c *gin.Context) {
 	}
 	if len(body.ReviewRequestID) > 64 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "review_request_id 过长"})
+		return
+	}
+	if len(body.ClassificationContext) > 256*1024 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "classification_context 过大"})
 		return
 	}
 
@@ -414,12 +423,41 @@ func ReviewPaper(c *gin.Context) {
 
 	now := time.Now()
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&paper, paper.ID).Error; err != nil {
+			return err
+		}
+		if body.ReviewRequestID != "" {
+			var count int64
+			if err := tx.Model(&models.PaperReviewEvent{}).
+				Where("request_id = ?", body.ReviewRequestID).Count(&count).Error; err != nil {
+				return err
+			}
+			if count > 0 {
+				return nil
+			}
+		}
+		var classificationSnapshot json.RawMessage
 		if body.Status == reviewStatusApproved {
+			states, err := applyPaperClassifications(tx, &paper, user.ID, body.MaterialStates)
+			if err != nil {
+				return err
+			}
 			if err := validatePaperClassificationComplete(tx, &paper); err != nil {
 				return err
 			}
+			context := body.ClassificationContext
+			if len(context) == 0 {
+				context = json.RawMessage(`{}`)
+			}
+			classificationSnapshot, err = json.Marshal(struct {
+				Context        json.RawMessage               `json:"context"`
+				MaterialStates []classificationSnapshotState `json:"material_states"`
+			}{Context: context, MaterialStates: states})
+			if err != nil {
+				return err
+			}
 		}
-		_, err := applyPaperReview(tx, &paper, user.ID, body.Status, body.Comment, body.ReviewRequestID, "single", now)
+		_, err := applyPaperReview(tx, &paper, user.ID, body.Status, body.Comment, body.ReviewRequestID, "single", now, classificationSnapshot)
 		if err != nil {
 			return err
 		}
@@ -435,6 +473,18 @@ func ReviewPaper(c *gin.Context) {
 				"error":              "材料分类尚未完成，不能批准论文",
 				"material_state_ids": incomplete.MaterialStateIDs,
 			})
+			return
+		}
+		if errors.Is(err, errClassificationInvalid) {
+			c.JSON(http.StatusBadRequest, gin.H{"code": "classification_invalid", "error": "材料分类选择无效"})
+			return
+		}
+		if errors.Is(err, errClassificationNotFound) || errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"code": "classification_not_found", "error": "论文当前版本、材料状态或目录项不存在"})
+			return
+		}
+		if errors.Is(err, errClassificationNameConflict) {
+			c.JSON(http.StatusConflict, gin.H{"code": "classification_name_conflict", "error": "分类名称与现有目录冲突"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "审核操作失败"})
@@ -483,25 +533,6 @@ func validatePaperClassificationComplete(tx *gorm.DB, paper *models.Paper) error
 	for _, state := range states {
 		if state.MaterialFamilyID == nil || state.ElementCount == nil || *state.ElementCount < 1 || *state.ElementCount > 118 {
 			missing = append(missing, state.ID)
-		}
-	}
-	var unresolvedStateIDs []uint64
-	if err := tx.Model(&models.ClassificationProposal{}).
-		Distinct("classification_proposals.material_state_id").
-		Joins("JOIN material_states ON material_states.id = classification_proposals.material_state_id").
-		Where("material_states.paper_id = ? AND material_states.paper_revision = ?", paper.ID, revision).
-		Where("classification_proposals.dimension = ? AND classification_proposals.status IN ?", "material_family", []string{"proposed", "under_review"}).
-		Pluck("classification_proposals.material_state_id", &unresolvedStateIDs).Error; err != nil {
-		return err
-	}
-	seen := make(map[uint64]bool)
-	for _, id := range missing {
-		seen[id] = true
-	}
-	for _, id := range unresolvedStateIDs {
-		if !seen[id] {
-			missing = append(missing, id)
-			seen[id] = true
 		}
 	}
 	if len(missing) > 0 {

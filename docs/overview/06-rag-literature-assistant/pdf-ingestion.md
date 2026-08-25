@@ -13,9 +13,9 @@
 5. 文本提取后、分段 LLM 前，系统用 DOI、标题页和开头文本检查正文与附件的一致性。信息缺失不阻塞；明确冲突显示警告并要求用户在提交前确认。
 6. Markdown 保存到 `/data/parsed_markdown`；每个分段先建立状态清单，结果采用临时文件加原子替换保存。任务详情提供“AI 临时表单”和“分段解析与证据”页签；无分段时显示提取或等待状态。后台分类证据用 `current_paper` 和 `referenced_work` 区分本文工作与被引用工作，普通草稿只返回本文研究对象；引用材料不再作为普通字段或最终科学数据输出。
 7. 解析中的临时表单只读并持续合并结果。`reading` 和 `summarizing` 阶段的分类字段显示“候选尚未汇总”，不把正常的分段差异标成正式冲突；标题、DOI 等非分类单值字段出现不同候选时仍标记“有冲突”并并列显示，不静默覆盖。内容超过统一展示高度的字段卡片默认收起，短字段直接完整显示；每张长卡片可通过文字按钮独立展开或收起，完整候选和来源证据始终保留，轮询更新与窗口变化会重新判断溢出，任务切换不会继承前一任务的展开状态。任务进入 `ready` 后同一页签原地切换为可编辑最终草稿。（[Issue #47](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/47)）
-8. 用户停止编辑 5 秒后自动保存，也可立即保存。草稿按 `material_states[]` 组织：材料家族、结构家族、不同元素种类数、压力和材料维度相互独立；材料家族候选由数据库目录驱动，界面显示规范中文名，未知名称进入待审核建议。元素种类数由服务器根据化学式重算。论文只报告空间群而没有完整 CIF/POSCAR 时，符号与国际群号分别保存在 reported 字段；`phase_label` 不再生成或写入；λ 和 ωlog 属于 `calculation_context`；Tc 属于 `tc_results`；其余数据才进入普通 `properties`。点击提交后，一篇论文、全部 `paper_files`、正式文本块、Evidence 和条件化科学实体图在一个 MySQL 事务中写入并进入 `pending`。
+8. 用户停止编辑 5 秒后自动保存，也可立即保存。草稿按 `material_states[]` 组织：材料家族建议、结构家族建议、不同元素种类数、压力和材料维度相互独立；目录候选由数据库驱动，界面统一显示规范中文名。AI 分类只进入审核上下文，不在提交阶段写正式目录 ID。元素种类数由服务器根据化学式重算。论文只报告空间群而没有完整 CIF/POSCAR 时，符号与国际群号分别保存在 reported 字段；`phase_label` 不再生成或写入；λ 和 ωlog 属于 `calculation_context`；Tc 属于 `tc_results`；其余数据才进入普通 `properties`。点击提交后，一篇论文、全部 `paper_files`、正式文本块、Evidence 和条件化科学实体图在一个 MySQL 事务中写入并进入 `pending`。
 9. MySQL 事务成功后，系统保留 PDF、附件、组合及分文件 Markdown 和精简 `result.json` 审核快照；删除 Redis state/draft、用户任务索引、RQ 处理 Job、分段 JSON 和其他 LLM 中间产物。快照写入失败时不执行该临时清理，以便后续恢复。
-10. 管理员对照 AI 建议、用户值和原文证据审核。快照同时绑定 `task_id`、`paper_id` 和 `paper_revision`，只有与论文当前 revision 一致的 pending 快照可以读取。`approved` 会同步发布 Qdrant 后幂等删除快照；`rejected` 幂等删除快照；`pending` 保留快照。
+10. 管理员对照 AI 建议、用户值和原文证据审核，在同一页面认可建议、改选已有分类或输入新名称。只有批准事务会写入人工确认的材料/结构家族 ID，必要的新目录项也在该事务中创建；审核事件保存分类上下文和最终选择快照。快照同时绑定 `task_id`、`paper_id` 和 `paper_revision`，只有与论文当前 revision 一致的 pending 快照可以读取。`approved` 会同步发布 Qdrant 后幂等删除临时快照；`rejected` 幂等删除临时快照；`pending` 保留临时快照。
 
 ## 分类规则
 
@@ -25,7 +25,7 @@
 - 理论二级类型为 `calculation`、`method`、`theory`。新算法、新模型或研究工具归 `method`。
 - 论文整体类型与每个材料状态及 Tc 结果的理论/实验类型分开保存。
 - 分段与汇总契约明确提取 GPa 压力、空间群符号/群号、`lambda_ep` 和 `omega_log_k`；没有原文证据的数值保持 `null`，不得推测。
-- 材料家族只允许规范名、内部编码或已审核别名的确定性精确匹配；不根据化学式含某元素机械判断，也不做模糊猜测。未知名称进入待审核建议，由管理员映射已有项或交由超级管理员治理目录。
+- 材料家族只允许规范名、内部编码或 seed 别名的确定性精确匹配；不根据化学式含某元素机械判断，也不做模糊猜测。未知名称由管理员在论文审核中确认是否创建，不进入独立治理队列。
 - 旧顶层 `sc_type` 只在草稿 GET 时一次性转换；PUT 和 submit 返回 `legacy_classification_contract`，不再接受旧格式。
 - 分段分类结果带内部契约版本。缺少当前版本的旧缓存会重新执行分段读取，不会根据旧文本猜测或补写证据主体。
 
@@ -84,7 +84,6 @@
 - `goserver/handlers/papers.go`
 - `goserver/handlers/stats.go`
 - `backend/services/classification_catalog.py`
-- `backend/scripts/migrate_material_classifications.py`
 - `frontend/src/components/ClassificationAutocomplete.tsx`
 - `goserver/handlers/classifications.go`
 

@@ -19,12 +19,14 @@ def test_material_state_classification_tables_exist():
         "structure_families",
         "structure_family_aliases",
         "material_state_structure_families",
-        "classification_proposals",
-        "classification_evidences",
-        "classification_audit_events",
     }
 
     assert expected <= set(Base.metadata.tables)
+    assert {
+        "classification_proposals",
+        "classification_evidences",
+        "classification_audit_events",
+    }.isdisjoint(Base.metadata.tables)
 
 
 def test_material_states_hold_independent_classification_dimensions():
@@ -60,3 +62,7 @@ def test_catalog_aliases_are_deterministically_unique():
 
 def test_final_paper_schema_does_not_store_referenced_materials():
     assert "referenced_materials" not in Base.metadata.tables["papers"].c
+
+
+def test_review_event_stores_internal_classification_snapshot():
+    assert "classification_snapshot" in Base.metadata.tables["paper_review_events"].c

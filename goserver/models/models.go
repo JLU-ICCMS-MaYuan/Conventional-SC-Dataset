@@ -100,8 +100,8 @@ type Paper struct {
 	ApprovedRevision  *uint      `json:"approved_revision"`
 	ReviewComment     *string    `json:"review_comment"`
 	AdminInternalNote *string    `json:"admin_internal_note"`
-	ReviewedBy        *uint      `json:"reviewed_by_user_id"`
-	UploadedBy        *uint      `json:"uploaded_by_user_id"`
+	ReviewedBy        *uint      `gorm:"column:reviewed_by_user_id" json:"reviewed_by_user_id"`
+	UploadedBy        *uint      `gorm:"column:uploaded_by_user_id" json:"uploaded_by_user_id"`
 	UploadTaskID      *string    `gorm:"size:32;uniqueIndex" json:"upload_task_id"`
 	ReviewedAt        *time.Time `json:"reviewed_at"`
 	CreatedAt         time.Time  `json:"created_at"`
@@ -177,15 +177,16 @@ type PaperEvidence struct {
 
 // PaperReviewEvent 一次不可变、覆盖整篇论文 revision 的审核动作。
 type PaperReviewEvent struct {
-	ID             uint      `gorm:"primaryKey" json:"id"`
-	PaperID        uint      `gorm:"not null;index:ix_paper_review_events_paper_revision,priority:1" json:"paper_id"`
-	PaperRevision  uint      `gorm:"not null;default:1;index:ix_paper_review_events_paper_revision,priority:2" json:"paper_revision"`
-	ReviewerUserID uint      `gorm:"index:ix_paper_review_events_reviewer_time,priority:1" json:"reviewer_user_id"`
-	Status         string    `gorm:"size:50" json:"status"`
-	ReviewComment  *string   `json:"review_comment"`
-	ReviewedAt     time.Time `gorm:"index:ix_paper_review_events_reviewer_time,priority:2;index:ix_paper_review_events_paper_revision,priority:3" json:"reviewed_at"`
-	RequestID      *string   `gorm:"size:64;uniqueIndex" json:"request_id"`
-	Source         string    `gorm:"size:20" json:"source"`
+	ID                     uint            `gorm:"primaryKey" json:"id"`
+	PaperID                uint            `gorm:"not null;index:ix_paper_review_events_paper_revision,priority:1" json:"paper_id"`
+	PaperRevision          uint            `gorm:"not null;default:1;index:ix_paper_review_events_paper_revision,priority:2" json:"paper_revision"`
+	ReviewerUserID         uint            `gorm:"index:ix_paper_review_events_reviewer_time,priority:1" json:"reviewer_user_id"`
+	Status                 string          `gorm:"size:50" json:"status"`
+	ReviewComment          *string         `json:"review_comment"`
+	ReviewedAt             time.Time       `gorm:"index:ix_paper_review_events_reviewer_time,priority:2;index:ix_paper_review_events_paper_revision,priority:3" json:"reviewed_at"`
+	RequestID              *string         `gorm:"size:64;uniqueIndex" json:"request_id"`
+	Source                 string          `gorm:"size:20" json:"source"`
+	ClassificationSnapshot json.RawMessage `gorm:"type:json" json:"-"`
 }
 
 // ChemicalSystem 化学体系
@@ -215,10 +216,8 @@ type MaterialFamily struct {
 	ID              uint                  `gorm:"primaryKey" json:"id"`
 	Code            string                `gorm:"size:64;not null;uniqueIndex" json:"-"`
 	NameZH          string                `gorm:"column:name_zh;size:100;not null;uniqueIndex" json:"name"`
-	NameEN          string                `gorm:"column:name_en;size:160;not null" json:"-"`
+	NameEN          string                `gorm:"column:name_en;size:160" json:"-"`
 	NormalizedName  string                `gorm:"size:160;not null;uniqueIndex" json:"-"`
-	IsActive        bool                  `gorm:"not null;default:true" json:"is_active"`
-	MergedIntoID    *uint                 `json:"merged_into_id,omitempty"`
 	CreatedByUserID *uint                 `json:"created_by_user_id,omitempty"`
 	CreatedAt       time.Time             `json:"created_at"`
 	UpdatedAt       time.Time             `json:"updated_at"`
@@ -239,10 +238,8 @@ type StructureFamily struct {
 	ID              uint                   `gorm:"primaryKey" json:"id"`
 	Code            string                 `gorm:"size:64;not null;uniqueIndex" json:"-"`
 	NameZH          string                 `gorm:"column:name_zh;size:100;not null;uniqueIndex" json:"name"`
-	NameEN          string                 `gorm:"column:name_en;size:160;not null" json:"-"`
+	NameEN          string                 `gorm:"column:name_en;size:160" json:"-"`
 	NormalizedName  string                 `gorm:"size:160;not null;uniqueIndex" json:"-"`
-	IsActive        bool                   `gorm:"not null;default:true" json:"is_active"`
-	MergedIntoID    *uint                  `json:"merged_into_id,omitempty"`
 	CreatedByUserID *uint                  `json:"created_by_user_id,omitempty"`
 	CreatedAt       time.Time              `json:"created_at"`
 	UpdatedAt       time.Time              `json:"updated_at"`
@@ -291,8 +288,6 @@ type MaterialState struct {
 	Superconductor           Superconductor                 `gorm:"foreignKey:SuperconductorID" json:"superconductor,omitempty"`
 	MaterialFamily           *MaterialFamily                `gorm:"foreignKey:MaterialFamilyID" json:"material_family,omitempty"`
 	StructureFamilyLinks     []MaterialStateStructureFamily `gorm:"foreignKey:MaterialStateID" json:"structure_families,omitempty"`
-	ClassificationProposals  []ClassificationProposal       `gorm:"foreignKey:MaterialStateID" json:"classification_proposals,omitempty"`
-	ClassificationEvidences  []ClassificationEvidence       `gorm:"foreignKey:MaterialStateID" json:"classification_evidences,omitempty"`
 }
 
 type MaterialStateStructureFamily struct {
@@ -302,58 +297,6 @@ type MaterialStateStructureFamily struct {
 	PrimaryMarker     *uint64         `gorm:"->;uniqueIndex" json:"-"`
 	CreatedAt         time.Time       `json:"created_at"`
 	StructureFamily   StructureFamily `gorm:"foreignKey:StructureFamilyID" json:"structure_family"`
-}
-
-type ClassificationProposal struct {
-	ID                uint64     `gorm:"primaryKey" json:"id"`
-	MaterialStateID   uint64     `gorm:"not null;index" json:"material_state_id"`
-	Dimension         string     `gorm:"size:32;not null" json:"dimension"`
-	RawName           string     `gorm:"size:255;not null" json:"raw_name"`
-	NormalizedName    string     `gorm:"size:255;not null" json:"-"`
-	Status            string     `gorm:"size:20;not null;default:proposed" json:"status"`
-	SourceKind        string     `gorm:"size:20;not null" json:"source_kind"`
-	ResolutionKind    *string    `gorm:"size:32" json:"resolution_kind,omitempty"`
-	MaterialFamilyID  *uint      `json:"material_family_id,omitempty"`
-	StructureFamilyID *uint      `json:"structure_family_id,omitempty"`
-	ProposedByUserID  *uint      `json:"proposed_by_user_id,omitempty"`
-	ReviewedByUserID  *uint      `json:"reviewed_by_user_id,omitempty"`
-	ReviewNote        *string    `json:"review_note,omitempty"`
-	CreatedAt         time.Time  `json:"created_at"`
-	UpdatedAt         time.Time  `json:"updated_at"`
-	ResolvedAt        *time.Time `json:"resolved_at,omitempty"`
-}
-
-type ClassificationEvidence struct {
-	ID                uint64    `gorm:"primaryKey" json:"id"`
-	PaperID           uint      `gorm:"not null;index:ix_classification_evidences_paper_revision,priority:1" json:"paper_id"`
-	PaperRevision     uint      `gorm:"not null;index:ix_classification_evidences_paper_revision,priority:2" json:"paper_revision"`
-	MaterialStateID   uint64    `gorm:"not null;index" json:"material_state_id"`
-	Dimension         string    `gorm:"size:32;not null" json:"dimension"`
-	MaterialFamilyID  *uint     `json:"material_family_id,omitempty"`
-	StructureFamilyID *uint     `json:"structure_family_id,omitempty"`
-	ProposalID        *uint64   `json:"proposal_id,omitempty"`
-	SourceKind        string    `gorm:"size:20;not null" json:"source_kind"`
-	Scope             string    `gorm:"size:20;not null;default:current_paper" json:"scope"`
-	RawValue          *string   `gorm:"size:255" json:"raw_value,omitempty"`
-	Section           *string   `gorm:"size:500" json:"section,omitempty"`
-	PageStart         *int      `json:"page_start,omitempty"`
-	PageEnd           *int      `json:"page_end,omitempty"`
-	Quote             *string   `json:"quote,omitempty"`
-	ReviewedByUserID  *uint     `json:"reviewed_by_user_id,omitempty"`
-	CreatedAt         time.Time `json:"created_at"`
-}
-
-type ClassificationAuditEvent struct {
-	ID          uint64          `gorm:"primaryKey" json:"id"`
-	ActorUserID uint            `gorm:"not null" json:"actor_user_id"`
-	Dimension   string          `gorm:"size:32;not null" json:"dimension"`
-	EntityKind  string          `gorm:"size:20;not null" json:"entity_kind"`
-	EntityID    uint64          `gorm:"not null" json:"entity_id"`
-	Action      string          `gorm:"size:32;not null" json:"action"`
-	Reason      string          `gorm:"type:text;not null" json:"reason"`
-	BeforeJSON  json.RawMessage `gorm:"type:json" json:"before,omitempty"`
-	AfterJSON   json.RawMessage `gorm:"type:json" json:"after,omitempty"`
-	CreatedAt   time.Time       `json:"created_at"`
 }
 
 // StructureModel 论文内独立保存的一个结构模型。

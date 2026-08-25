@@ -26,7 +26,7 @@ def _install_upload_dependency_stubs():
 
 _install_upload_dependency_stubs()
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 
@@ -42,13 +42,11 @@ def _write(path, content):
     path.write_text(content, encoding="utf-8")
 
 
-def test_submission_persists_material_state_classifications_transactionally(tmp_path, monkeypatch):
+def test_submission_keeps_classification_in_review_artifact_until_approval(tmp_path, monkeypatch):
     from backend.api import rag
     from backend.database import Base
     from backend.ingest import upload_tasks
     from backend.models import (
-        ClassificationEvidence,
-        ClassificationProposal,
         MaterialFamily,
         MaterialState,
         MaterialStateStructureFamily,
@@ -63,25 +61,25 @@ def test_submission_persists_material_state_classifications_transactionally(tmp_
         session_factory = async_sessionmaker(engine, expire_on_commit=False)
         monkeypatch.setattr(rag_database, "async_session_factory", session_factory)
         monkeypatch.setattr(upload_tasks.settings, "sc_wiki_data_dir", tmp_path)
+        monkeypatch.setattr(upload_tasks, "update_state", lambda *_args, **_kwargs: None)
         _install_upload_jobs_stub(monkeypatch)
 
         async with session_factory.begin() as session:
             hydride = MaterialFamily(
-                code="hydrogen_based", name_zh="氢基超导体",
+                code="hydrogen_based",
+                name_zh="氢基超导体",
                 name_en="Hydrogen-based superconductor",
-                normalized_name="氢基超导体", is_active=True,
+                normalized_name="氢基超导体",
             )
             clathrate = StructureFamily(
-                code="clathrate", name_zh="笼状结构", name_en="Clathrate",
-                normalized_name="笼状结构", is_active=True,
+                code="clathrate",
+                name_zh="笼状结构",
+                name_en="Clathrate",
+                normalized_name="笼状结构",
             )
-            layered = StructureFamily(
-                code="layered", name_zh="层状结构", name_en="Layered",
-                normalized_name="层状结构", is_active=True,
-            )
-            session.add_all([hydride, clathrate, layered])
+            session.add_all([hydride, clathrate])
             await session.flush()
-            ids = hydride.id, clathrate.id, layered.id
+            catalog_ids = hydride.id, clathrate.id
 
         task_id = "5" * 32
         state = {"task_id": task_id, "user_id": 7, "files": []}
@@ -96,24 +94,30 @@ def test_submission_persists_material_state_classifications_transactionally(tmp_
                 {
                     "material": "LaH10",
                     "material_family": {
-                        "id": ids[0], "name": "氢基超导体", "status": "confirmed",
-                        "evidence": {"section": "Results", "page": 3, "quote": "hydride"},
+                        "id": catalog_ids[0],
+                        "name": "氢基超导体",
+                        "status": "confirmed",
                     },
                     "structure_families": [
-                        {"id": ids[1], "name": "笼状结构", "status": "confirmed", "is_primary": True},
-                        {"id": ids[2], "name": "层状结构", "status": "confirmed", "is_primary": False},
+                        {
+                            "id": catalog_ids[1],
+                            "name": "笼状结构",
+                            "status": "confirmed",
+                            "is_primary": True,
+                        }
                     ],
-                    "element_count": 99,
                     "material_dimensionality": "three_dimensional",
                     "state_kind": "experimental",
                 },
                 {
                     "material": "CeCu2Si2",
                     "material_family": {
-                        "id": None, "name": "重费米子超导体", "status": "pending",
+                        "id": None,
+                        "name": "重费米子超导体",
+                        "status": "pending",
                     },
                     "structure_families": [
-                        {"id": None, "name": "四方结构", "status": "pending", "is_primary": False},
+                        {"id": None, "name": "四方结构", "status": "pending", "is_primary": False}
                     ],
                     "material_dimensionality": "three_dimensional",
                     "state_kind": "experimental",
@@ -123,47 +127,48 @@ def test_submission_persists_material_state_classifications_transactionally(tmp_
         }
 
         paper_id = await rag._create_pending_paper(task_id, state, draft)
+        rag._record_submitted_upload(task_id, paper_id, draft)
 
         async with session_factory() as session:
-            states = list((await session.scalars(
-                select(MaterialState).where(MaterialState.paper_id == paper_id).order_by(MaterialState.id)
-            )).all())
-            links = list((await session.scalars(
-                select(MaterialStateStructureFamily).where(
-                    MaterialStateStructureFamily.material_state_id == states[0].id
-                ).order_by(MaterialStateStructureFamily.structure_family_id)
-            )).all())
-            proposals = list((await session.scalars(
-                select(ClassificationProposal).order_by(ClassificationProposal.dimension)
-            )).all())
-            evidences = list((await session.scalars(
-                select(ClassificationEvidence).order_by(
-                    ClassificationEvidence.material_state_id,
-                    ClassificationEvidence.dimension,
-                )
-            )).all())
+            states = list(
+                (
+                    await session.scalars(
+                        select(MaterialState)
+                        .where(MaterialState.paper_id == paper_id)
+                        .order_by(MaterialState.id)
+                    )
+                ).all()
+            )
+            link_count = await session.scalar(
+                select(func.count()).select_from(MaterialStateStructureFamily)
+            )
         await engine.dispose()
-        return states, links, proposals, evidences, ids
+        return states, link_count, task_id
 
-    states, links, proposals, evidences, ids = asyncio.run(scenario())
+    states, link_count, task_id = asyncio.run(scenario())
 
-    assert states[0].material_family_id == ids[0]
-    assert states[0].element_count == 2
-    assert states[0].material_dimensionality == "three_dimensional"
-    assert [(link.structure_family_id, link.is_primary) for link in links] == [
-        (ids[1], True), (ids[2], False),
+    assert [item.material_family_id for item in states] == [None, None]
+    assert [item.element_count for item in states] == [2, 3]
+    assert [item.material_dimensionality for item in states] == [
+        "three_dimensional",
+        "three_dimensional",
     ]
-    assert states[1].material_family_id is None
-    assert states[1].element_count == 3
-    assert [(item.dimension, item.raw_name, item.status) for item in proposals] == [
-        ("material_family", "重费米子超导体", "proposed"),
-        ("structure_family", "四方结构", "proposed"),
-    ]
-    assert {item.dimension for item in evidences} == {
-        "material_family", "structure_family", "element_count", "material_dimensionality",
-    }
-    assert all(item.scope == "current_paper" for item in evidences)
-    assert all(item.source_kind in {"reported", "derived"} for item in evidences)
+    assert link_count == 0
+
+    snapshot_path = tmp_path / "review_artifacts" / task_id / "result.json"
+    snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    assert snapshot["user_values"]["material_states"][0]["material_family"]["name"] == "氢基超导体"
+    assert snapshot["user_values"]["material_states"][1]["material_family"]["name"] == "重费米子超导体"
+
+
+def test_models_exclude_the_superseded_classification_governance_schema():
+    from backend.database import Base
+    from backend import models  # noqa: F401
+
+    assert "classification_proposals" not in Base.metadata.tables
+    assert "classification_evidences" not in Base.metadata.tables
+    assert "classification_audit_events" not in Base.metadata.tables
+    assert "classification_snapshot" in Base.metadata.tables["paper_review_events"].c
 
 
 def test_admin_snapshot_preserves_reference_scope_without_formal_material_state(tmp_path, monkeypatch):

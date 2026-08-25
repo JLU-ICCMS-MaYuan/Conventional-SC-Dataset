@@ -18,14 +18,14 @@ import {
   Download as DownloadIcon,
   DriveFileRenameOutline as RenameIcon,
   History as HistoryIcon,
+  Add as AddIcon,
 } from '@mui/icons-material'
 import { type User, useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
-import { ClassificationCatalogs, loadClassificationCatalogs } from '../lib/classifications'
+import { ClassificationCatalogs, loadClassificationCatalogs, refreshClassificationCatalogs } from '../lib/classifications'
 import { SourceEvidence, UploadDraft, normalizeUploadDraft, unwrapData } from '../lib/paperProcessing'
 import ChartGroupEditor from '../components/ChartGroupEditor'
 import ClassificationAutocomplete from '../components/ClassificationAutocomplete'
-import ClassificationGovernancePanel from '../components/ClassificationGovernancePanel'
 import NewsManager from '../components/NewsManager'
 import SuperAdminGovernance from '../components/SuperAdminGovernance'
 import UsernameField from '../components/UsernameField'
@@ -231,15 +231,42 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
         api.get<any>(`/api/rag/papers/${paper.id}/review-artifact`).catch(() => null),
         api.get<any>(`/api/rag/papers/${paper.id}/candidate-attachments`).catch(() => null),
       ])
-      setReviewDetail(detail)
+      let artifact: ReviewArtifact | null = null
       if (artifactResponse) {
         const artifactData = unwrapData<any>(artifactResponse)
-        setReviewArtifact({
+        artifact = {
           ai: normalizeUploadDraft(artifactData?.ai_values),
           user: normalizeUploadDraft(artifactData?.user_values),
           evidence: artifactData?.evidence || {},
-        })
+        }
+        setReviewArtifact(artifact)
       }
+      setReviewDetail({
+        ...detail,
+        material_states: (detail.material_states || []).map((state: any, index: number) => {
+          const submittedState = artifact?.user.material_states?.[index]
+          const aiState = artifact?.ai.material_states?.[index]
+          const savedStructures = (state.structure_families || []).map((item: any) => ({
+            id: item.id || item.structure_family_id,
+            name: item.structure_family?.name || item.name || '',
+            status: 'confirmed',
+            is_primary: Boolean(item.is_primary),
+          }))
+          return {
+            ...state,
+            material_family: state.material_family
+              ? { ...state.material_family, status: 'confirmed' }
+              : submittedState?.material_family || aiState?.material_family || null,
+            material_dimensionality: state.material_dimensionality
+              || submittedState?.material_dimensionality
+              || aiState?.material_dimensionality
+              || 'unknown',
+            structure_families: savedStructures.length > 0
+              ? savedStructures
+              : submittedState?.structure_families || aiState?.structure_families || [],
+          }
+        }),
+      })
       setCandidateAttachments(attachmentResponse ? unwrapData<CandidateAttachment[]>(attachmentResponse) : [])
     } catch (reason) {
       setSnackbar(`审核资料加载失败: ${(reason as Error).message}`)
@@ -268,22 +295,33 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
   const handleReview = async () => {
     if (!reviewDlg.paper) return
     try {
-      if (Array.isArray(reviewDetail?.material_states) && reviewDetail.material_states.length > 0) {
-        await api.put(`/api/admin/papers/${reviewDlg.paper.id}/material-classifications`, {
-          material_states: reviewDetail.material_states.map((state: any) => ({
-            id: state.id,
-            material_family_id: state.material_family?.id || state.material_family_id,
-            material_dimensionality: state.material_dimensionality || 'unknown',
-            structure_families: (state.structure_families || []).map((item: any) => ({
-              id: item.id || item.structure_family_id,
-              is_primary: Boolean(item.is_primary),
-            })),
-          })),
-        })
-      }
       await api.post(`/api/admin/papers/${reviewDlg.paper.id}/review`, {
         status: reviewStatus, comment: reviewComment, review_request_id: crypto.randomUUID(),
+        material_states: reviewStatus === 'approved'
+          ? (reviewDetail?.material_states || []).map((state: any) => ({
+              id: state.id,
+              material_family: {
+                id: state.material_family?.id || null,
+                name: state.material_family?.name || '',
+              },
+              material_dimensionality: state.material_dimensionality || 'unknown',
+              structure_families: (state.structure_families || []).map((item: any) => ({
+                id: item.id || item.structure_family_id || null,
+                name: item.name || item.structure_family?.name || '',
+                is_primary: Boolean(item.is_primary),
+              })),
+            }))
+          : [],
+        classification_context: {
+          classification_reason: reviewArtifact?.user.classification_reason
+            || reviewArtifact?.ai.classification_reason
+            || '',
+          classification_scope: reviewArtifact?.evidence.classification_scope || [],
+          ai_material_states: reviewArtifact?.ai.material_states || [],
+          user_material_states: reviewArtifact?.user.material_states || [],
+        },
       })
+      setClassificationCatalogs(await refreshClassificationCatalogs())
       setSnackbar('审核完成')
       setReviewDlg({paper:null!,open:false})
       setReviewDetail(null)
@@ -453,7 +491,6 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
       <Tabs value={tab} onChange={(_,v)=>setTab(v)} variant="scrollable" allowScrollButtonsMobile sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}>
         <Tab label="概览" />
         <Tab label={`论文审核${papersStatus === 'pending' ? ` (${papersTotal})` : ''}`} />
-        <Tab label={isSuper ? '分类目录' : '分类建议'} />
         {isSuper && <Tab label="用户与权限" icon={<AdminIcon fontSize="small" />} iconPosition="start" />}
         {isSuper && <Tab label="图表管理" />}
         {isSuper && <Tab label="快讯管理" />}
@@ -535,7 +572,6 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
             {selectedIds.size > 0 && (
               <Box sx={{ display: 'flex', gap: 0.5 }}>
                 <Chip label={`已选 ${selectedIds.size}`} size="small" color="primary" onDelete={()=>setSelectedIds(new Set())} />
-                <Button size="small" color="success" variant="contained" onClick={()=>handleBatchReview('approved')}>批量通过</Button>
                 <Button size="small" color="error" variant="outlined" onClick={()=>handleBatchReview('rejected')}>批量拒绝</Button>
                 {isSuper && <Button size="small" color="error" variant="contained" onClick={handleBatchDelete}>批量删除</Button>}
               </Box>
@@ -617,9 +653,8 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
       {/* ═══════════════════════════════════════════ */}
       {/* TAB 2: User Management (superadmin only) */}
       {/* ═══════════════════════════════════════════ */}
-      {tab === 2 && <ClassificationGovernancePanel isSuper={isSuper} />}
-      {tab === 3 && isSuper && <SuperAdminGovernance />}
-      {false && tab === 3 && isSuper && (
+      {tab === 2 && isSuper && <SuperAdminGovernance />}
+      {false && tab === 2 && isSuper && (
         <Box>
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
             <Button variant="outlined" size="small" startIcon={<HistoryIcon />} onClick={() => void openUsernameAudit()}>
@@ -699,13 +734,13 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
       {/* ═══════════════════════════════════════════ */}
       {/* TAB: Chart Groups */}
       {/* ═══════════════════════════════════════════ */}
-      {isSuper && tab === 5 && (
+      {isSuper && tab === 4 && (
         /* ── News Management ── */
         <Box>
           <NewsManager />
         </Box>
       )}
-      {isSuper && tab === 4 && (
+      {isSuper && tab === 3 && (
         <Box>
           <Box sx={{ display: 'flex', gap: 1, mb: 2, alignItems: 'center' }}>
             <Typography variant="h6" fontWeight={600} sx={{ flex: 1 }}>图表组合管理</Typography>
@@ -863,26 +898,101 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
               <Typography variant="subtitle2" fontWeight={700} gutterBottom>确认材料状态分类</Typography>
               {classificationCatalogError && <Alert severity="error" sx={{ mb: 1 }}>{classificationCatalogError}</Alert>}
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                {(reviewDetail?.material_states || []).map((state: any, index: number) => (
-                  <ClassificationAutocomplete
-                    key={state.id || index}
-                    label={`${state.superconductor?.chemical_formula || `材料状态 #${index + 1}`} 的材料家族`}
-                    options={classificationCatalogs?.material_families || []}
-                    value={state.material_family || null}
-                    loading={!classificationCatalogs && !classificationCatalogError}
-                    error={classificationCatalogError}
-                    onChange={value => setReviewDetail(current => {
-                      if (!current) return current
-                      const materialStates = [...(current.material_states || [])]
-                      materialStates[index] = {
-                        ...materialStates[index],
-                        material_family: value,
-                        material_family_id: value?.id || null,
-                      }
-                      return { ...current, material_states: materialStates }
-                    })}
-                  />
-                ))}
+                {(reviewDetail?.material_states || []).map((state: any, index: number) => {
+                  const label = state.superconductor?.chemical_formula || `材料状态 #${index + 1}`
+                  const aiState = reviewArtifact?.ai.material_states?.[index]
+                  const updateState = (updates: Record<string, unknown>) => setReviewDetail(current => {
+                    if (!current) return current
+                    const materialStates = [...(current.material_states || [])]
+                    materialStates[index] = { ...materialStates[index], ...updates }
+                    return { ...current, material_states: materialStates }
+                  })
+                  return (
+                    <Box key={state.id || index} sx={{ border: '1px solid', borderColor: 'divider', p: 1.5, borderRadius: 1 }}>
+                      <Typography variant="body2" fontWeight={700} gutterBottom>{label}</Typography>
+                      {aiState?.material_family?.name && (
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                          AI 建议：{aiState.material_family.name}
+                        </Typography>
+                      )}
+                      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 2fr) minmax(160px, 1fr)' }, gap: 1 }}>
+                        <ClassificationAutocomplete
+                          label={`${label} 的材料家族`}
+                          options={classificationCatalogs?.material_families || []}
+                          value={state.material_family || null}
+                          loading={!classificationCatalogs && !classificationCatalogError}
+                          error={classificationCatalogError}
+                          onChange={value => updateState({
+                            material_family: value,
+                            material_family_id: value?.id || null,
+                          })}
+                        />
+                        <FormControl fullWidth size="small">
+                          <InputLabel>材料维度</InputLabel>
+                          <Select
+                            label="材料维度"
+                            value={state.material_dimensionality || 'unknown'}
+                            onChange={event => updateState({ material_dimensionality: event.target.value })}
+                          >
+                            {(classificationCatalogs?.material_dimensionalities || []).map(option => (
+                              <MenuItem key={option.value} value={option.value}>{option.name}</MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Box>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 1 }}>
+                        {(state.structure_families || []).map((selection: any, structureIndex: number) => (
+                          <Box key={`${state.id}-${structureIndex}`} sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr auto', sm: 'minmax(0, 1fr) auto auto' }, gap: 1, alignItems: 'center' }}>
+                            <ClassificationAutocomplete
+                              label="结构家族"
+                              options={classificationCatalogs?.structure_families || []}
+                              value={selection}
+                              loading={!classificationCatalogs && !classificationCatalogError}
+                              error={classificationCatalogError}
+                              onChange={value => {
+                                const structures = [...(state.structure_families || [])]
+                                structures[structureIndex] = { ...value, is_primary: Boolean(selection.is_primary) }
+                                updateState({ structure_families: structures })
+                              }}
+                            />
+                            <FormControlLabel
+                              control={<Checkbox
+                                checked={Boolean(selection.is_primary)}
+                                onChange={event => updateState({
+                                  structure_families: (state.structure_families || []).map((item: any, itemIndex: number) => ({
+                                    ...item,
+                                    is_primary: event.target.checked ? itemIndex === structureIndex : itemIndex === structureIndex ? false : item.is_primary,
+                                  })),
+                                })}
+                              />}
+                              label="主结构"
+                            />
+                            <Tooltip title="移除结构家族">
+                              <IconButton
+                                aria-label={`移除结构家族 ${structureIndex + 1}`}
+                                onClick={() => updateState({
+                                  structure_families: (state.structure_families || []).filter((_: any, itemIndex: number) => itemIndex !== structureIndex),
+                                })}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                        ))}
+                        <Button
+                          size="small"
+                          startIcon={<AddIcon />}
+                          sx={{ alignSelf: 'flex-start' }}
+                          onClick={() => updateState({
+                            structure_families: [...(state.structure_families || []), { id: null, name: '', status: 'pending', is_primary: false }],
+                          })}
+                        >
+                          添加结构家族
+                        </Button>
+                      </Box>
+                    </Box>
+                  )
+                })}
               </Box>
             </Box>
           )}
@@ -909,8 +1019,14 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
             </Box>
           )}
           <FormControl fullWidth size="small">
-            <InputLabel>审核结果</InputLabel>
-            <Select value={reviewStatus} label="审核结果" onChange={e=>setReviewStatus(e.target.value)}>
+            <InputLabel id="paper-review-status-label">审核结果</InputLabel>
+            <Select
+              labelId="paper-review-status-label"
+              id="paper-review-status"
+              value={reviewStatus}
+              label="审核结果"
+              onChange={e=>setReviewStatus(e.target.value)}
+            >
               <MenuItem value="approved">✅ 通过</MenuItem>
               <MenuItem value="rejected">❌ 拒绝</MenuItem>
               <MenuItem value="pending">退回待审核</MenuItem>
