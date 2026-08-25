@@ -6,19 +6,19 @@
 
 | 功能 | 当前入口 |
 | --- | --- |
-| 材料与文献检索 | [`overview/01-material-search-and-discovery/README.md`](overview/01-material-search-and-discovery/README.md) |
-| 数据模型与维护 | [`overview/02-data-model-and-maintenance/README.md`](overview/02-data-model-and-maintenance/README.md) |
-| 晶体结构管理 | [`overview/03-crystal-structure-management/README.md`](overview/03-crystal-structure-management/README.md) |
-| 认证与审核 | [`overview/04-authentication-and-review/README.md`](overview/04-authentication-and-review/README.md) |
-| 可视化与统计 | [`overview/05-visualization-and-metrics/README.md`](overview/05-visualization-and-metrics/README.md) |
-| RAG 文献助手 | [`overview/06-rag-literature-assistant/README.md`](overview/06-rag-literature-assistant/README.md) |
-| 实验性 Tc 估算 | [`overview/07-experimental-tc-estimation/README.md`](overview/07-experimental-tc-estimation/README.md) |
+| 超导数据去中心化上传 | [`overview/01_Decentralized_Uploading_of_Superconductivity_Data/README.md`](overview/01_Decentralized_Uploading_of_Superconductivity_Data/README.md) |
+| 去中心化维护与验证 | [`overview/02_Decentralized_Maintenance_and_Verification/README.md`](overview/02_Decentralized_Maintenance_and_Verification/README.md) |
+| 超导数据搜索与数据库发现 | [`overview/03_Superconductivity_Data_Search_and_Database_Discovery/README.md`](overview/03_Superconductivity_Data_Search_and_Database_Discovery/README.md) |
+| 超导发展知识图谱 | [`overview/04_Superconductivity_Development_Knowledge_Graph/README.md`](overview/04_Superconductivity_Development_Knowledge_Graph/README.md) |
+| 检索增强 AI 问答 | [`overview/05_Retrieval-Augmented_AI_Question_Answering/README.md`](overview/05_Retrieval-Augmented_AI_Question_Answering/README.md) |
+| AI 辅助 Tc 估算 | [`overview/06_AI_Assisted_Tc_Estimation/README.md`](overview/06_AI_Assisted_Tc_Estimation/README.md) |
+| 研究者社区论坛 | [`overview/07_Researcher_Community_Forum/README.md`](overview/07_Researcher_Community_Forum/README.md) |
 
 ## 规格与部署
 
 - 功能规格和评估材料位于 [`specs/`](specs/)。规格不代表已落地能力，当前状态以 `overview/` 为准。
 - Docker 编排入口是 [`../docker/compose.yaml`](../docker/compose.yaml)。交付部署包的导入、启动和更新步骤位于 [`../docker/deploy/README.md`](../docker/deploy/README.md)。
-- [`overview/02-data-model-and-maintenance/deployment-and-runtime.md`](overview/02-data-model-and-maintenance/deployment-and-runtime.md) 记录当前部署拓扑、配置边界和运行时约束。
+- [`overview/02_Decentralized_Maintenance_and_Verification/deployment-and-runtime.md`](overview/02_Decentralized_Maintenance_and_Verification/deployment-and-runtime.md) 记录当前部署拓扑、配置边界和运行时约束。
 
 ## 维护规则
 
