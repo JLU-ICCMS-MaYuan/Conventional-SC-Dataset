@@ -676,7 +676,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
                       <input
                         hidden
                         type="file"
-                        accept=".cif,.poscar,POSCAR,CONTCAR"
+                        accept=".cif,.poscar,.vasp,POSCAR,CONTCAR"
                         onChange={event => {
                           const selected = event.target.files?.[0]
                           event.target.value = ''

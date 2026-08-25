@@ -47,7 +47,7 @@ const MultiFileUploadPanel: React.FC<Props> = ({ onCreated }) => {
     const accepted: File[] = []
     for (const file of Array.from(files)) {
       const signature = `${file.name}:${file.size}:${file.lastModified}`
-      if (!/\.(pdf|txt|md|cif|poscar)$/i.test(file.name) && !/^(POSCAR|CONTCAR)$/i.test(file.name)) rejected.push(`${file.name}：仅支持 PDF、TXT、MD、CIF、POSCAR`)
+      if (!/\.(pdf|txt|md|cif|poscar|vasp)$/i.test(file.name) && !/^(POSCAR|CONTCAR)$/i.test(file.name)) rejected.push(`${file.name}：仅支持 PDF、TXT、MD、CIF、POSCAR/VASP`)
       else if (file.size > MAX_BYTES) rejected.push(`${file.name}：超过 50 MB`)
       else if (signatures.has(signature)) rejected.push(`${file.name}：已在当前列表中`)
       else { accepted.push(file); signatures.add(signature) }
@@ -152,7 +152,7 @@ const MultiFileUploadPanel: React.FC<Props> = ({ onCreated }) => {
           <Button variant="contained" onClick={() => void start()} disabled={busy || items.length === 0}>{busy ? '上传中…' : '开始上传并解析'}</Button>
           {items.length > 0 && <Button color="inherit" onClick={clear} disabled={busy}>清空</Button>}
         </Box>
-        <input ref={input} type="file" hidden multiple accept=".pdf,.txt,.md,.cif,.poscar,POSCAR,CONTCAR" onChange={event => { choose(event.target.files); event.target.value = '' }} />
+        <input ref={input} type="file" hidden multiple accept=".pdf,.txt,.md,.cif,.poscar,.vasp,POSCAR,CONTCAR" onChange={event => { choose(event.target.files); event.target.value = '' }} />
       </CardContent>
     </Card>
   )

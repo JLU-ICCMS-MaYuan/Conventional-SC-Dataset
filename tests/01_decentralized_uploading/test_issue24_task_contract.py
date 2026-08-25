@@ -75,6 +75,15 @@ def test_manifest_requires_exactly_one_main_and_supported_types():
         upload_tasks.validate_manifest([{**valid[0], "filename": "paper.docx"}])
 
 
+def test_manifest_treats_vasp_extension_as_poscar():
+    normalized = upload_tasks.validate_manifest([
+        {"client_id": "1", "role": "main", "filename": "paper.pdf", "size": 12},
+        {"client_id": "2", "role": "attachment", "filename": "Li2MgH16.vasp", "size": 24},
+    ])
+
+    assert normalized[1]["kind"] == "poscar"
+
+
 def test_cancelled_task_rejects_late_worker_transition():
     cancelled = {"status": "cancelled", "revision": 3}
 

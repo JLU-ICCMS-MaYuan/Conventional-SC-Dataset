@@ -18,7 +18,7 @@ RUNNING_STATUSES = {
 FIXED_TERMINAL_STATUSES = {"failed", "duplicate", "cancelled"}
 FINAL_STATUSES = FIXED_TERMINAL_STATUSES | {"submitted"}
 FILE_ROLES = {"main", "supplementary", "attachment"}
-FILE_SUFFIXES = {".pdf", ".txt", ".md", ".cif", ".poscar"}
+FILE_SUFFIXES = {".pdf", ".txt", ".md", ".cif", ".poscar", ".vasp"}
 
 PUBLIC_TASK_FIELDS = {
     "task_id", "status", "stage", "progress", "processing_status",
@@ -100,6 +100,16 @@ def apply_user_activity(state: dict[str, Any], *, now: int) -> dict[str, Any]:
     return result
 
 
+def structure_format_for_filename(filename: str) -> str | None:
+    """按通用文件名识别 CIF 或 VASP POSCAR 结构格式。"""
+    path = Path(filename)
+    if path.name.upper() in {"POSCAR", "CONTCAR"} or path.suffix.lower() in {".poscar", ".vasp"}:
+        return "poscar"
+    if path.suffix.lower() == ".cif":
+        return "cif"
+    return None
+
+
 def validate_manifest(files: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     """验证并标准化客户端声明的完整文件清单。"""
     normalized: list[dict[str, Any]] = []
@@ -110,8 +120,8 @@ def validate_manifest(files: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
         if role not in FILE_ROLES:
             raise ValueError("文件角色不支持")
         suffix = Path(filename).suffix.lower()
-        is_extensionless_poscar = Path(filename).name.upper() in {"POSCAR", "CONTCAR"}
-        if suffix not in FILE_SUFFIXES and not is_extensionless_poscar:
+        structure_format = structure_format_for_filename(filename)
+        if suffix not in FILE_SUFFIXES and structure_format is None:
             raise ValueError("文件类型不支持")
         if size < 0 or size > MAX_UPLOAD_BYTES:
             raise ValueError("文件超过 50 MB 限制")
@@ -121,7 +131,7 @@ def validate_manifest(files: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
             "role": role,
             "original_filename": filename,
             "media_type": item.get("media_type"),
-            "kind": "poscar" if is_extensionless_poscar else suffix.lstrip("."),
+            "kind": structure_format or suffix.lstrip("."),
             "size": size,
             "sort_order": index,
             "upload_status": "waiting",

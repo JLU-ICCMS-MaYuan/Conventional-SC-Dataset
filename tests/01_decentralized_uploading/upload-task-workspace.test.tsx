@@ -94,6 +94,19 @@ describe('论文上传工作区', () => {
     expect(screen.queryByText('notes.md')).not.toBeInTheDocument()
   })
 
+  it('把 .vasp 结构文件作为 POSCAR 附件接受', () => {
+    render(<MultiFileUploadPanel onCreated={vi.fn()} />)
+
+    const main = new File(['paper'], 'paper.pdf', { type: 'application/pdf' })
+    const structure = new File(['POSCAR'], 'Li2MgH16.vasp', { type: 'text/plain' })
+    fireEvent.drop(screen.getByLabelText('拖拽或选择论文文件'), {
+      dataTransfer: { files: [main, structure] },
+    })
+
+    expect(screen.getByText('Li2MgH16.vasp')).toBeVisible()
+    expect(screen.queryByText(/Li2MgH16\.vasp：仅支持/)).not.toBeInTheDocument()
+  })
+
   it('分段尚未生成时仍显示临时表单和解析证据入口', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
       ok: true,
@@ -303,6 +316,7 @@ describe('论文上传工作区', () => {
     expect(screen.getByRole('spinbutton', { name: '空间群号' })).toHaveValue(227)
     expect(screen.getByRole('spinbutton', { name: '电声耦合强度 λ' })).toHaveValue(3.35)
     expect(screen.getByRole('spinbutton', { name: '对数声子频率 ωlog (K)' })).toHaveValue(null)
+    expect(document.querySelector('input[type="file"]')?.getAttribute('accept')).toContain('.vasp')
 
     fireEvent.click(screen.getByRole('button', { name: '立即保存' }))
     await waitFor(() => expect(savedBodies).toHaveLength(1))

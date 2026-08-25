@@ -650,6 +650,7 @@ async def upload_structure_candidate(
 ):
     """Append a CIF/POSCAR after parsing and attach it to one material state."""
     from backend.ingest.upload_jobs import _normalize_draft
+    from backend.ingest.upload_contracts import structure_format_for_filename
     from backend.ingest.upload_tasks import get_draft, save_draft, task_directory, update_state
     from backend.services.structure_candidates import StructureCandidateError, build_structure_candidate
 
@@ -660,14 +661,9 @@ async def upload_structure_candidate(
         raise _upload_error(409, "draft_not_ready", "解析完成后才能上传结构附件")
 
     filename = Path(file.filename or "structure.cif").name
-    normalized_name = filename.upper()
-    suffix = Path(filename).suffix.lower()
-    if normalized_name in {"POSCAR", "CONTCAR"} or suffix == ".poscar":
-        structure_format = "poscar"
-    elif suffix == ".cif":
-        structure_format = "cif"
-    else:
-        raise _upload_error(400, "unsupported_structure_type", "只支持 CIF、POSCAR 或 CONTCAR 文件")
+    structure_format = structure_format_for_filename(filename)
+    if structure_format is None:
+        raise _upload_error(400, "unsupported_structure_type", "只支持 CIF 或 VASP 结构文件（POSCAR、CONTCAR、.poscar、.vasp）")
 
     raw = await file.read()
     await file.close()

@@ -26,7 +26,11 @@ from backend.ingest.upload_tasks import (
     schedule_cleanup,
     update_state,
 )
-from backend.ingest.upload_contracts import UPLOAD_STATE_SCHEMA_VERSION, compare_file_identities
+from backend.ingest.upload_contracts import (
+    UPLOAD_STATE_SCHEMA_VERSION,
+    compare_file_identities,
+    structure_format_for_filename,
+)
 from backend.ingest.structure_extractor import extract_structure_candidates
 from backend.models import Paper, PaperFile
 from backend.rag.llm import complete_json
@@ -230,14 +234,7 @@ def _extract_markdown(state: dict[str, Any], source: Path) -> str:
 
 def _structure_format_for_file(file_item: dict[str, Any], source: Path) -> str | None:
     filename = str(file_item.get("original_filename") or source.name)
-    if Path(filename).name.upper() in {"POSCAR", "CONTCAR"}:
-        return "poscar"
-    suffix = Path(filename).suffix.lower()
-    if suffix == ".cif":
-        return "cif"
-    if suffix == ".poscar":
-        return "poscar"
-    return None
+    return structure_format_for_filename(filename)
 
 
 def _lightweight_identity(file_item: dict[str, Any], markdown: str) -> dict[str, Any]:
