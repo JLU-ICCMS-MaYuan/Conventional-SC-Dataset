@@ -8,10 +8,8 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import SaveIcon from '@mui/icons-material/Save'
 import SendIcon from '@mui/icons-material/Send'
-import UploadFileIcon from '@mui/icons-material/UploadFile'
 import { api, ApiError } from '../lib/api'
 import StructureCandidatePanel from './StructureCandidatePanel'
-import StructureViewer3D from './StructureViewer3D'
 import {
   DraftKeyProperty, DraftMaterialState, DraftTcResult, SourceEvidence, StructureCandidate, UploadDraft, evidenceList,
   normalizeUploadDraft, unwrapData,
@@ -431,7 +429,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
 
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, '& > *': { minWidth: 0 } }}>
         <Box>
           <TextField fullWidth label="标题" value={draft.paper.title || ''}
             onChange={event => setPaperField('title', event.target.value)} />
@@ -512,7 +510,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
         </Box>
       </Box>
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 1fr' }, gap: 2, mt: 2 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 1fr' }, gap: 2, mt: 2, '& > *': { minWidth: 0 } }}>
         <FormControl fullWidth>
           <InputLabel>论文整体类型</InputLabel>
           <Select label="论文整体类型" value={draft.paper.paper_type || 'unknown'}
@@ -543,7 +541,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
         </Box>
       </Box>
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mt: 2 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mt: 2, '& > *': { minWidth: 0 } }}>
         {[
           ['research_materials', '研究材料（每行一个）'],
           ['keywords_tags', '关键词（每行一个）'],
@@ -582,9 +580,10 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
         <EvidenceNotes label="分类理由" aiValue={ai.classification_reason} evidence={classificationEvidence} />
       </Box>
 
-      <Box sx={{ mt: 3, display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) minmax(320px, 0.8fr)' }, alignItems: 'start', gap: 2 }}>
-        <Typography variant="h6" fontWeight={700}>材料状态与计算条件</Typography>
-        <Button sx={{ gridColumn: '1', gridRow: { xs: '2', md: '2' }, justifySelf: 'end' }} startIcon={<AddIcon />} onClick={() => changeDraft(current => ({
+      <Box sx={{ mt: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+          <Typography variant="h6" fontWeight={700}>材料状态与计算条件</Typography>
+          <Button startIcon={<AddIcon />} onClick={() => changeDraft(current => ({
           ...current,
           material_states: [...current.material_states, {
             material: '',
@@ -599,32 +598,15 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
             tc_results: [],
             properties: [],
           }],
-        }))}>添加材料状态</Button>
+          }))}>添加材料状态</Button>
+        </Box>
 
-      <StructureCandidatePanel
-        sx={{ gridColumn: { xs: '1', md: '2' }, gridRow: { xs: '3', md: '1 / span 3' }, mt: { xs: 0, md: 0 } }}
-        candidates={draft.structure_candidates || []}
-        materialStates={draft.material_states}
-        onChange={(candidateId, changes) => changeDraft(current => ({
-          ...current,
-          structure_candidates: (current.structure_candidates || []).map(candidate =>
-            candidate.candidate_id === candidateId ? { ...candidate, ...changes } : candidate,
-          ),
-        }))}
-      />
-
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1.5, gridColumn: { xs: '1', md: '1' }, gridRow: { xs: '4', md: '3' } }}>
+      <Box data-testid="material-states-list" sx={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 1.5, mt: 1.5 }}>
         {draft.material_states.map((state, index) => {
           const aiState = ai.material_states?.[index]
-          const stateCandidates = (draft.structure_candidates || []).filter(candidate => candidate.material_state_ref === `material_states[${index}]` && candidate.confirmation !== 'excluded')
-          const stateStructure = [...stateCandidates].reverse().find(candidate => candidate.status === 'valid' || candidate.status === 'confirmed')
-          const statePreview = stateStructure?.representations?.conventional?.cif?.text
-            ? { text: stateStructure.representations.conventional.cif.text, format: 'cif' }
-            : stateStructure?.representations?.conventional?.poscar?.text
-              ? { text: stateStructure.representations.conventional.poscar.text, format: 'vasp' }
-              : null
+          const stateCandidates = (draft.structure_candidates || []).filter(candidate => candidate.material_state_ref === `material_states[${index}]`)
           return (
-            <Card key={index} variant="outlined">
+            <Card key={index} variant="outlined" sx={{ width: '100%' }}>
               <CardContent>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
                   <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
@@ -659,41 +641,17 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
                   evidence={state.space_group_evidence || aiState?.space_group_evidence}
                 />
 
-                <Box sx={{ mt: 2, p: 1.5, borderRadius: 1, bgcolor: 'action.hover' }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                    <Box>
-                      <Typography variant="subtitle2" fontWeight={700}>结构附件</Typography>
-                      <Typography variant="caption" color="text.secondary">上传后自动校验，并在当前材料状态下预览</Typography>
-                    </Box>
-                    <Button
-                      component="label"
-                      size="small"
-                      variant="outlined"
-                      startIcon={structureUploading[index] ? <CircularProgress size={16} /> : <UploadFileIcon />}
-                      disabled={Boolean(structureUploading[index])}
-                    >
-                      {structureUploading[index] ? '校验中' : '上传 CIF / POSCAR'}
-                      <input
-                        hidden
-                        type="file"
-                        accept=".cif,.poscar,.vasp,POSCAR,CONTCAR"
-                        onChange={event => {
-                          const selected = event.target.files?.[0]
-                          event.target.value = ''
-                          if (selected) void uploadStructureForState(index, selected)
-                        }}
-                      />
-                    </Button>
-                  </Box>
-                  {stateStructure && (
-                    <Box sx={{ mt: 1.5 }}>
-                      {statePreview ? <StructureViewer3D data={statePreview.text} format={statePreview.format} height={220} /> : <Alert severity="warning">结构已通过基础校验，但暂无可用预览数据。</Alert>}
-                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, overflowWrap: 'anywhere' }}>
-                        {stateStructure.sources?.map(source => String(source.filename || '')).filter(Boolean).join('、') || '结构附件'} · {stateStructure.validation?.atom_count ?? '未提供'} 个原子 · {stateStructure.confirmation === 'confirmed' ? '已确认' : '待确认'}
-                      </Typography>
-                    </Box>
-                  )}
-                </Box>
+                <StructureCandidatePanel
+                  candidates={stateCandidates}
+                  uploading={Boolean(structureUploading[index])}
+                  onUpload={file => void uploadStructureForState(index, file)}
+                  onChange={(candidateId, changes) => changeDraft(current => ({
+                    ...current,
+                    structure_candidates: (current.structure_candidates || []).map(candidate =>
+                      candidate.candidate_id === candidateId ? { ...candidate, ...changes } : candidate,
+                    ),
+                  }))}
+                />
 
                 <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Typography variant="subtitle2" fontWeight={700}>临界温度 Tc</Typography>

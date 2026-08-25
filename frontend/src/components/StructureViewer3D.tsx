@@ -18,6 +18,7 @@ const StructureViewer3D: React.FC<Props> = ({ data, format = 'cif', height = 320
 
   useEffect(() => {
     let viewer: any
+    let resizeObserver: ResizeObserver | undefined
     let cancelled = false
     if (!data || !ref.current) return
     setError('')
@@ -33,6 +34,13 @@ const StructureViewer3D: React.FC<Props> = ({ data, format = 'cif', height = 320
       viewer.addUnitCell(model, { box: { color: '#94a3b8' } })
       viewer.zoomTo()
       viewer.render()
+      if (typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(() => {
+          viewer.resize()
+          viewer.render()
+        })
+        resizeObserver.observe(ref.current)
+      }
       // 从模型提取元素集合，与 Jmol 配色对应生成图例
       const jmol = $3Dmol.elementColors?.Jmol || {}
       const els: string[] = Array.from(new Set(model.selectedAtoms({}).map((a: any) => a.elem)))
@@ -45,6 +53,7 @@ const StructureViewer3D: React.FC<Props> = ({ data, format = 'cif', height = 320
     })
     return () => {
       cancelled = true
+      resizeObserver?.disconnect()
       if (viewer) { try { viewer.clear() } catch { /* viewer 已销毁 */ } }
     }
   }, [data, format])
@@ -53,9 +62,9 @@ const StructureViewer3D: React.FC<Props> = ({ data, format = 'cif', height = 320
     return <Typography variant="body2" color="error">3D 结构渲染失败：{error}</Typography>
   }
   return (
-    <Box>
+    <Box sx={{ minWidth: 0 }}>
       <Box ref={ref} sx={{
-        position:'relative', width:'100%', height,
+        position:'relative', width:'100%', minWidth:0, height,
         borderRadius:2, overflow:'hidden', border:'1px solid', borderColor:'divider',
         // 3Dmol 内部 canvas 为绝对定位，需要相对定位容器
         '& canvas': { borderRadius: 2 },

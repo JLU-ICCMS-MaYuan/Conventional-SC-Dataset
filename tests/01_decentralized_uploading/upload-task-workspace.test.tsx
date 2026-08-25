@@ -10,6 +10,12 @@ import UploadParsingDetail from '../../frontend/src/components/UploadParsingDeta
 import UploadPage from '../../frontend/src/pages/UploadPage'
 import { AuthProvider } from '../../frontend/src/context/AuthContext'
 
+vi.mock('../../frontend/src/components/StructureViewer3D', () => ({
+  default: ({ data, format }: { data: string; format: string }) => (
+    <div data-testid="structure-viewer" data-format={format}>{data}</div>
+  ),
+}))
+
 afterEach(() => {
   cleanup()
   localStorage.clear()
@@ -331,6 +337,64 @@ describe('论文上传工作区', () => {
     })
     expect(savedBodies[0]).not.toHaveProperty('key_properties')
     expect(savedBodies[0]).not.toHaveProperty('material_states.0.phase_label')
+  })
+
+  it('晶体结构只在所属材料状态内显示且材料状态列表占满页面', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const data = String(input).endsWith('/parsing')
+        ? {
+            status: 'ready', stage: 'ready', files: [], chunks: [],
+            form_preview: { status: 'ready', read_only: false, groups: [] },
+            summary: { status: 'completed', completed: 1, total: 1 }, next_poll_ms: null,
+          }
+        : {
+            paper: {
+              title: 'Two-state hydride study', authors: [], paper_type: 'theoretical',
+              theoretical_subtype: 'calculation', research_materials: ['Li2MgH16'],
+            },
+            material_states: [
+              {
+                material: 'Li2MgH16', pressure_value_gpa: 300, state_kind: 'theoretical',
+                calculation_context: {}, tc_results: [], properties: [],
+              },
+              {
+                material: 'Li2MgH16', pressure_value_gpa: 250, state_kind: 'theoretical',
+                calculation_context: {}, tc_results: [], properties: [],
+              },
+            ],
+            structure_candidates: [{
+              candidate_id: 'structure-state-1', material_state_ref: 'material_states[0]',
+              status: 'valid', confirmation: 'pending',
+              sources: [{ filename: 'Li2MgH16.vasp' }],
+              validation: { atom_count: 2, elements: ['Li', 'H'], volume: 20 },
+              representations: {
+                conventional: {
+                  cif: { text: 'data_conventional' },
+                  poscar: { text: 'conventional POSCAR' },
+                },
+                primitive: {
+                  cif: { text: 'data_primitive' },
+                  poscar: { text: 'primitive POSCAR' },
+                },
+              },
+            }],
+            classification_evidence: [], field_evidence: {},
+          }
+      return new Response(JSON.stringify({ ok: true, data }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      })
+    }))
+
+    render(<UploadParsingDetail taskId={'o'.repeat(32)} onSubmitted={vi.fn()} />)
+
+    expect(await screen.findByText('材料状态 #1')).toBeVisible()
+    expect(screen.getByText('材料状态 #2')).toBeVisible()
+    expect(screen.getAllByTestId('structure-viewer')).toHaveLength(1)
+    expect(screen.getByTestId('structure-viewer')).toHaveTextContent('data_conventional')
+    expect(screen.getByTestId('material-states-list')).toHaveStyle({ width: '100%' })
+    expect(screen.queryByRole('heading', { name: '晶体结构' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '下载结构' })).toBeVisible()
+    expect(screen.getByRole('button', { name: '确认' })).toBeVisible()
   })
 
   it('临时表单并列显示冲突候选及其文件来源', async () => {
