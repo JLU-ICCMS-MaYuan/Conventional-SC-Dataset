@@ -302,3 +302,83 @@ def test_submission_rejects_unknown_paper_type_but_accepts_pending_material_fami
     with pytest.raises(Exception) as exc_info:
         _validate_draft(draft)
     assert getattr(exc_info.value, "status_code", None) == 400
+
+
+def test_parse_partial_draft_accepts_complete_json():
+    from backend.ingest.upload_jobs import _parse_partial_draft
+
+    draft = _parse_partial_draft('{"paper": {"title": "T"}, "material_states": []}')
+
+    assert draft == {"paper": {"title": "T"}, "material_states": []}
+
+
+def test_parse_partial_draft_repairs_truncated_array_and_string():
+    from backend.ingest.upload_jobs import _parse_partial_draft
+
+    truncated = '{"paper": {"title": "Potential high-Tc", "authors": ["Hanyu Liu", "Ivan I. Nau'
+    draft = _parse_partial_draft(truncated)
+    assert draft is not None
+    assert draft["paper"]["title"] == "Potential high-Tc"
+    assert draft["paper"]["authors"] == ["Hanyu Liu"]
+
+    mid_value = '{"paper": {"title": "Potential hig'
+    draft = _parse_partial_draft(mid_value)
+    assert draft is not None
+    assert draft["paper"] == {}
+
+
+def test_parse_partial_draft_rejects_non_draft_text():
+    from backend.ingest.upload_jobs import _parse_partial_draft
+
+    assert _parse_partial_draft("") is None
+    assert _parse_partial_draft("no json here") is None
+    assert _parse_partial_draft('{"unrelated": 1}') is None
+
+
+def test_build_candidate_draft_merges_first_candidates():
+    from backend.ingest.upload_jobs import _build_candidate_draft
+
+    chunks = [
+        {
+            "result": {
+                "metadata": {"title": "T1", "doi": "10.1/a", "authors": ["A", "B"], "journal": "J"},
+                "paper_type_evidence": [
+                    {"candidate": "experimental", "scope": "current_paper", "quote": "q"},
+                ],
+                "methodology": [{"value": "CALYPSO"}, {"value": "CALYPSO"}, {"value": "DFT"}],
+                "key_findings": [{"value": "203 K"}],
+                "material_states": [
+                    {
+                        "material": "LaH10", "scope": "current_paper",
+                        "material_family": {"name": "hydride", "scope": "current_paper"},
+                        "structure_families": [{"name": "fcc", "is_primary": True, "scope": "current_paper"}],
+                        "evidence": {"page": 1, "quote": "x"},
+                    },
+                    {"material": "Referenced", "scope": "referenced_work"},
+                ],
+            },
+        },
+        {
+            "result": {
+                "metadata": {"title": "T1-other", "authors": ["A", "C"]},
+                "research_materials": [{"value": "LaH10"}],
+            },
+        },
+        {"result": None},
+    ]
+
+    draft = _build_candidate_draft(chunks)
+
+    assert draft["paper"]["title"] == "T1"
+    assert draft["paper"]["doi"] == "10.1/a"
+    assert draft["paper"]["authors"] == ["A", "B", "C"]
+    assert draft["paper"]["paper_type"] == "experimental"
+    assert draft["paper"]["methodology"] == ["CALYPSO", "DFT"]
+    assert draft["paper"]["key_finding"] == "203 K"
+    assert draft["paper"]["research_materials"] == ["LaH10"]
+    assert len(draft["material_states"]) == 1
+    state = draft["material_states"][0]
+    assert state["material"] == "LaH10"
+    assert state["material_family"] == {"id": None, "name": "hydride", "status": "pending"}
+    assert state["structure_families"][0]["name"] == "fcc"
+    assert "evidence" not in state and "scope" not in state

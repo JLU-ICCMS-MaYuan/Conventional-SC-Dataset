@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import shutil
+import time
 from pathlib import Path
 from typing import Any
 
@@ -84,39 +85,6 @@ CHUNK_RESULT_SCHEMA_VERSION = 5
 PUBLIC_CHUNK_RESULT_FIELDS = {
     "metadata", "paper_type_evidence", "research_materials",
     "material_relations", "material_states", "methodology", "key_findings", "_source",
-}
-
-FORM_PREVIEW_GROUPS = (
-    ("bibliography", "基本信息", (
-        ("paper.title", "标题"), ("paper.doi", "DOI"), ("paper.authors", "作者"),
-        ("paper.journal", "期刊"), ("paper.volume", "卷"), ("paper.pages", "页码"),
-        ("paper.year", "年份"), ("paper.abstract", "摘要"),
-    )),
-    ("classification", "分类判断", (
-        ("paper.paper_type", "论文类型"), ("paper.theoretical_subtype", "理论二级类型"),
-        ("classification_reason", "分类理由"),
-    )),
-    ("content", "研究内容", (
-        ("paper.summary", "全文摘要"), ("paper.keywords_tags", "关键词"),
-        ("paper.methodology", "研究方法"), ("paper.key_finding", "主要结论"),
-        ("paper.rationale", "判断依据"), ("paper.research_materials", "研究材料"),
-        ("paper.material_relations", "材料关系"),
-        ("paper.builds_on", "工作脉络"),
-    )),
-    ("properties", "关键物性", (("material_states", "材料状态与物性数据"),)),
-)
-
-FORM_PREVIEW_MULTI_FIELDS = {
-    "paper.authors", "paper.keywords_tags", "paper.methodology", "paper.key_finding",
-    "paper.research_materials", "paper.material_relations",
-    "paper.builds_on", "material_states",
-}
-
-FORM_PREVIEW_CLASSIFICATION_FIELDS = {
-    path
-    for group_id, _, fields in FORM_PREVIEW_GROUPS
-    if group_id == "classification"
-    for path, _ in fields
 }
 
 
@@ -457,83 +425,146 @@ def _summary_classification_candidates(candidates: list[dict[str, Any]]) -> list
     return prepared
 
 
-def _build_form_preview(chunks: list[dict[str, Any]], state: dict[str, Any]) -> dict[str, Any]:
-    buckets: dict[str, dict[str, dict[str, Any]]] = {
-        path: {} for _, _, fields in FORM_PREVIEW_GROUPS for path, _ in fields
-    }
+def _repair_truncated_json(fragment: str) -> Any:
+    """尽力把流式截断的 JSON 对象文本修复为可解析值，失败返回 None。"""
+    try:
+        return json.loads(fragment)
+    except json.JSONDecodeError:
+        pass
+    stack: list[str] = []
+    in_string = False
+    escaped = False
+    cut_points: list[tuple[int, str]] = []
+    for index, char in enumerate(fragment):
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char in "{[":
+            stack.append(char)
+            cut_points.append((index + 1, "".join(stack)))
+        elif char in "}]":
+            if not stack:
+                return None
+            opener = stack.pop()
+            if (opener, char) not in {("{", "}"), ("[", "]")}:
+                return None
+            if stack:
+                cut_points.append((index + 1, "".join(stack)))
+        elif char == ",":
+            cut_points.append((index, "".join(stack)))
+    for position, openers in reversed(cut_points[-200:]):
+        closers = "".join("}" if opener == "{" else "]" for opener in reversed(openers))
+        try:
+            return json.loads(fragment[:position] + closers)
+        except json.JSONDecodeError:
+            continue
+    return None
 
-    def add(path: str, value: Any, chunk: dict[str, Any], evidence: Any = None) -> None:
+
+def _parse_partial_draft(text: str) -> dict[str, Any] | None:
+    """从流式汇总的中间文本提取可用的草稿片段。"""
+    start = (text or "").find("{")
+    if start < 0:
+        return None
+    value = _repair_truncated_json(text[start:])
+    if not isinstance(value, dict):
+        return None
+    if "paper" not in value and "material_states" not in value:
+        return None
+    return value
+
+
+def _build_candidate_draft(chunks: list[dict[str, Any]]) -> dict[str, Any]:
+    """汇总前用分段首候选组装草稿骨架，供前端在最终表单上逐步点亮字段。"""
+    paper: dict[str, Any] = {}
+    seen: dict[str, set[str]] = {}
+    findings: list[str] = []
+    material_states: list[dict[str, Any]] = []
+
+    def _dedupe_key(value: Any) -> str:
+        return json.dumps(value, ensure_ascii=False, sort_keys=True)
+
+    def _append_unique(field: str, value: Any) -> None:
         if value in (None, "", [], {}):
             return
-        if path == "material_states" and isinstance(value, dict):
-            value = {
-                key: item for key, item in value.items()
-                if key not in {"page", "quote", "evidence", "_source"}
-            }
-        key = json.dumps(value, ensure_ascii=False, sort_keys=True)
-        candidate = buckets[path].setdefault(key, {"value": value, "sources": []})
-        source = _preview_source(chunk, evidence)
-        source_key = json.dumps(source, ensure_ascii=False, sort_keys=True)
-        if all(json.dumps(item, ensure_ascii=False, sort_keys=True) != source_key for item in candidate["sources"]):
-            candidate["sources"].append(source)
+        bucket = seen.setdefault(field, set())
+        key = _dedupe_key(value)
+        if key in bucket:
+            return
+        bucket.add(key)
+        paper.setdefault(field, []).append(value)
 
     for chunk in chunks:
         result = chunk.get("result")
         if not isinstance(result, dict):
             continue
         metadata = result.get("metadata") if isinstance(result.get("metadata"), dict) else {}
-        for key in ("title", "doi", "journal", "year", "abstract"):
-            add(f"paper.{key}", metadata.get(key), chunk)
-        for author in metadata.get("authors") or []:
-            add("paper.authors", author, chunk)
-        for item in result.get("paper_type_evidence") or []:
-            if _is_effective_paper_type_evidence(item):
-                add("paper.paper_type", _preview_item_value(item, "candidate", "value"), chunk, item)
-        for result_key, path, keys in (
-            ("research_materials", "paper.research_materials", ("value", "material", "name")),
-            ("methodology", "paper.methodology", ("value", "method", "name")),
-            ("key_findings", "paper.key_finding", ("value", "finding", "text")),
-            ("material_relations", "paper.material_relations", ()),
+        for field in ("title", "doi", "journal", "year", "abstract"):
+            if paper.get(field) in (None, "") and metadata.get(field) not in (None, ""):
+                paper[field] = metadata[field]
+        for field in ("authors", "corresponding_authors", "co_first_authors"):
+            for value in metadata.get(field) or []:
+                _append_unique(field, value)
+        if paper.get("paper_type") in (None, ""):
+            for item in result.get("paper_type_evidence") or []:
+                if _is_effective_paper_type_evidence(item):
+                    paper["paper_type"] = _preview_item_value(item, "candidate", "value")
+                    break
+        for result_key, field, keys in (
+            ("research_materials", "research_materials", ("value", "material", "name")),
+            ("methodology", "methodology", ("value", "method", "name")),
         ):
             for item in result.get(result_key) or []:
-                add(path, _preview_item_value(item, *keys) if keys else item, chunk, item)
-        for item in result.get("material_states") or []:
-            if _is_current_paper_evidence(item):
-                add("material_states", item, chunk, item)
-
-    task_status = state.get("status")
-    classification_pending = task_status in {"reading", "summarizing"}
-    groups: list[dict[str, Any]] = []
-    for group_id, label, field_specs in FORM_PREVIEW_GROUPS:
-        fields: list[dict[str, Any]] = []
-        for path, field_label in field_specs:
-            candidates = list(buckets[path].values())
-            conflict = path not in FORM_PREVIEW_MULTI_FIELDS and len(candidates) > 1
-            field_state = (
-                "pending_summary"
-                if classification_pending and path in FORM_PREVIEW_CLASSIFICATION_FIELDS
-                else "conflict" if conflict
-                else "filled" if candidates
-                else "waiting"
+                value = _preview_item_value(item, *keys) if isinstance(item, dict) else item
+                _append_unique(field, value)
+        for item in result.get("material_relations") or []:
+            relation = (
+                {key: value for key, value in item.items() if key not in {"page", "quote"}}
+                if isinstance(item, dict) else item
             )
-            fields.append({
-                "path": path,
-                "label": field_label,
-                "state": field_state,
-                "candidates": candidates,
-            })
-        groups.append({"id": group_id, "label": label, "fields": fields})
+            _append_unique("material_relations", relation)
+        for item in result.get("key_findings") or []:
+            value = _preview_item_value(item, "value", "finding", "text") if isinstance(item, dict) else item
+            if value not in (None, "") and str(value) not in findings:
+                findings.append(str(value))
+        for item in result.get("material_states") or []:
+            state = _current_paper_material_state(item)
+            if state is None:
+                continue
+            family = state.get("material_family")
+            candidate_state = {
+                key: value for key, value in state.items()
+                if key not in {"evidence", "scope", "material_family", "structure_families"}
+            }
+            candidate_state["material_family"] = (
+                {"id": None, "name": family.get("name"), "status": "pending"}
+                if isinstance(family, dict) and family.get("name") else None
+            )
+            candidate_state["structure_families"] = [
+                {"id": None, "name": structure.get("name"), "is_primary": bool(structure.get("is_primary", True)), "status": "pending"}
+                for structure in state.get("structure_families") or []
+                if isinstance(structure, dict) and structure.get("name")
+            ]
+            key = _dedupe_key(candidate_state)
+            if key in seen.setdefault("material_states", set()):
+                continue
+            seen["material_states"].add(key)
+            material_states.append(candidate_state)
 
-    preview_status = (
-        "ready" if task_status == "ready"
-        else "summarizing" if task_status == "summarizing"
-        else "updating" if any(buckets[path] for path in buckets)
-        else "waiting"
-    )
+    if findings:
+        paper["key_finding"] = "\n".join(findings)
     return {
-        "status": preview_status,
-        "read_only": task_status != "ready",
-        "groups": groups,
+        "paper": paper,
+        "material_states": material_states,
+        "classification_reason": "",
+        "classification_evidence": [],
     }
 
 
@@ -575,10 +606,19 @@ def public_parsing_detail(task_id: str) -> dict[str, Any]:
                 public["error"] = "分段结果不可读取"
         chunks.append(public)
     stable = state.get("status") in {"ready", "failed", "duplicate", "cancelled", "submitted"}
+    task_status = state.get("status")
+    if task_status == "summarizing":
+        partial_draft = state.get("partial_draft")
+    elif task_status in {"queued", "extracting", "reading"}:
+        partial_draft = _build_candidate_draft(chunks)
+    else:
+        partial_draft = None
     return {
         "task_id": task_id,
-        "status": state.get("status"),
+        "status": task_status,
         "stage": state.get("stage"),
+        "processing_error": state.get("processing_error"),
+        "failed_stage": state.get("failed_stage"),
         "files": [
             {key: file.get(key) for key in (
                 "file_id", "role", "original_filename", "upload_status", "extraction_status", "error",
@@ -586,7 +626,7 @@ def public_parsing_detail(task_id: str) -> dict[str, Any]:
             for file in state.get("files") or []
         ],
         "chunks": chunks,
-        "form_preview": _build_form_preview(chunks, state),
+        "partial_draft": partial_draft,
         "summary": {
             "status": "completed" if state.get("status") == "ready" else state.get("stage"),
             "completed": state.get("completed_chunks", 0),
@@ -1121,6 +1161,7 @@ def _handle_duplicate(task_id: str, state: dict[str, Any], existing: Any) -> dic
         processing_status="succeeded",
         processing_error=None,
         duplicate=True,
+        partial_draft=None,
         existing_paper_id=existing.id,
         existing_paper_status=existing.review_status,
         allowed_actions=allowed_actions,
@@ -1293,9 +1334,23 @@ def process_upload_task(task_id: str) -> dict[str, Any]:
         _ensure_not_cancelled(task_id)
         update_state(task_id, status="summarizing", stage="summarizing", stage_index=4)
         summary_candidates = _summary_classification_candidates(candidates)
+        partial_write = {"last_at": 0.0}
+
+        def _on_summary_partial(text: str) -> None:
+            _ensure_not_cancelled(task_id)
+            now = time.monotonic()
+            if now - partial_write["last_at"] < 1.0:
+                return
+            partial_draft = _parse_partial_draft(text)
+            if partial_draft is None:
+                return
+            partial_write["last_at"] = now
+            update_state(task_id, partial_draft=partial_draft)
+
         raw_draft = complete_json(
             SUMMARY_SYSTEM_PROMPT,
             json.dumps(summary_candidates, ensure_ascii=False),
+            on_partial=_on_summary_partial,
         )
         draft = _normalize_draft(raw_draft)
         draft["structure_candidates"] = structure_candidates
@@ -1340,7 +1395,8 @@ def process_upload_task(task_id: str) -> dict[str, Any]:
         save_draft(task_id, draft)
         ready = update_state(
             task_id, status="ready", stage="ready", stage_index=5, processing_status="succeeded",
-            processing_error=None, completed_chunks=len(all_chunks), total_chunks=len(all_chunks), duplicate=False,
+            processing_error=None, completed_chunks=len(all_chunks), total_chunks=len(all_chunks),
+            duplicate=False, partial_draft=None,
         )
         _schedule_terminal_cleanup(task_id)
         return ready
@@ -1349,6 +1405,7 @@ def process_upload_task(task_id: str) -> dict[str, Any]:
         if current and current.get("status") == "cancelling":
             cancelled = update_state(
                 task_id, status="cancelled", processing_status="cancelled", processing_error=None,
+                partial_draft=None,
             )
             _schedule_terminal_cleanup(task_id)
             return cancelled
@@ -1357,7 +1414,7 @@ def process_upload_task(task_id: str) -> dict[str, Any]:
         current = get_state(task_id) or state
         update_state(
             task_id, status="failed", processing_status="failed", processing_error=str(exc),
-            error_code="paper_processing_failed", failed_stage=current.get("stage"),
+            error_code="paper_processing_failed", failed_stage=current.get("stage"), partial_draft=None,
         )
         _schedule_terminal_cleanup(task_id)
         raise

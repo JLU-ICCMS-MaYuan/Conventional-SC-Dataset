@@ -27,6 +27,9 @@ import {
 interface UploadTaskEditorProps {
   taskId: string
   onSubmitted: (paperId: number) => void
+  draftOverride?: UploadDraft | null
+  readOnly?: boolean
+  statusNote?: string
 }
 
 interface SubmitResponse {
@@ -151,7 +154,9 @@ const EvidenceNotes: React.FC<{
   )
 }
 
-const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted }) => {
+const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
+  taskId, onSubmitted, draftOverride, readOnly = false, statusNote,
+}) => {
   const [draft, setDraft] = useState<UploadDraft | null>(null)
   const [loading, setLoading] = useState(true)
   const [dirty, setDirty] = useState(false)
@@ -186,6 +191,13 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
   }, [])
 
   useEffect(() => {
+    if (draftOverride !== undefined) {
+      setDraft(normalizeUploadDraft(draftOverride))
+      setLoading(false)
+      setDirty(false)
+      setError('')
+      return undefined
+    }
     const controller = new AbortController()
     setLoading(true)
     api.get<{ ok: boolean; data: UploadDraft }>(
@@ -199,7 +211,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
       if (reason.name !== 'AbortError') setError(reason.message || '草稿加载失败')
     }).finally(() => setLoading(false))
     return () => controller.abort()
-  }, [taskId])
+  }, [taskId, draftOverride])
 
   const changeDraft = useCallback((updater: (current: UploadDraft) => UploadDraft) => {
     setDraft(current => current ? updater(current) : current)
@@ -352,7 +364,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
   }
 
   const saveDraft = useCallback(async (showResult = false): Promise<boolean> => {
-    if (!draft || saving) return !dirty
+    if (!draft || saving || readOnly) return !dirty
     const revision = revisionRef.current
     setSaving(true)
     try {
@@ -367,7 +379,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
     } finally {
       setSaving(false)
     }
-  }, [dirty, draft, saving, taskId])
+  }, [dirty, draft, saving, taskId, readOnly])
 
   useEffect(() => {
     if (!dirty || !draft || saving) return
@@ -452,9 +464,14 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
     <Box sx={{ mt: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, mb: 2, flexWrap: 'wrap' }}>
         <Box>
-          <Typography variant="h6" fontWeight={700}>检查 AI 草稿</Typography>
-          <Typography variant="body2" color="text.secondary">核对后保存，确认无误再提交管理员审核。</Typography>
+          <Typography variant="h6" fontWeight={700}>{readOnly ? 'AI 草稿（实时生成中）' : '检查 AI 草稿'}</Typography>
+          <Typography variant="body2" color="text.secondary">
+            {readOnly ? (statusNote || 'AI 正在生成草稿，内容与最终校对表单一致。') : '核对后保存，确认无误再提交管理员审核。'}
+          </Typography>
         </Box>
+        {readOnly ? (
+          <Chip size="small" color="info" label="只读预览" />
+        ) : (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
           <Typography variant="caption" color={error ? 'error' : 'text.secondary'}>
             {saving ? '保存中…' : dirty ? '有修改，5 秒后自动保存' : lastSavedAt ? `${lastSavedAt} 已保存` : '草稿已加载'}
@@ -464,10 +481,12 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
           <Button variant="contained" startIcon={submitting ? <CircularProgress size={16} /> : <SendIcon />}
             disabled={saving || submitting} onClick={() => void submit()}>提交审核</Button>
         </Box>
+        )}
       </Box>
 
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
 
+      <Box sx={readOnly ? { pointerEvents: 'none', '& .MuiButton-root': { display: 'none' } } : undefined}>
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, '& > *': { minWidth: 0 } }}>
         <Box>
           <TextField fullWidth label="标题" value={draft.paper.title || ''}
@@ -822,10 +841,11 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({ taskId, onSubmitted
             </Card>
           )
         })}
-        {draft.material_states.length === 0 && (
+        {draft.material_states.length === 0 && !readOnly && (
           <Alert severity="info">AI 没有提取到材料状态。综述可以直接提交，其他论文请补充后提交。</Alert>
         )}
       </Box>
+    </Box>
     </Box>
     </Box>
   )
