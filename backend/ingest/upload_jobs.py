@@ -451,8 +451,8 @@ def _summary_classification_candidates(candidates: list[dict[str, Any]]) -> list
             ]
         if "material_states" in result:
             result["material_states"] = [
-                state for item in result.get("material_states") or []
-                if (state := _current_paper_material_state(item)) is not None
+                material_state for item in result.get("material_states") or []
+                if (material_state := _current_paper_material_state(item)) is not None
             ]
     return prepared
 
@@ -566,8 +566,8 @@ def public_parsing_detail(task_id: str) -> dict[str, Any]:
                 }
                 if "material_states" in public_result:
                     public_result["material_states"] = [
-                        state for item in public_result["material_states"]
-                        if (state := _current_paper_material_state(item)) is not None
+                        material_state for item in public_result["material_states"]
+                        if (material_state := _current_paper_material_state(item)) is not None
                     ]
                 public["result"] = public_result
             except (OSError, json.JSONDecodeError):
