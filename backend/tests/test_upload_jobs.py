@@ -382,3 +382,114 @@ def test_build_candidate_draft_merges_first_candidates():
     assert state["material_family"] == {"id": None, "name": "hydride", "status": "pending"}
     assert state["structure_families"][0]["name"] == "fcc"
     assert "evidence" not in state and "scope" not in state
+
+
+def test_element_count_locked_value_is_not_recomputed():
+    draft = _normalize_draft({
+        "paper": {"paper_type": "theoretical"},
+        "material_states": [{
+            "material": "LaH10",
+            "element_count": 5,
+            "element_count_locked": True,
+        }],
+    })
+
+    state = draft["material_states"][0]
+    assert state["element_count"] == 5
+    assert state["element_count_locked"] is True
+
+
+def test_element_count_recomputed_from_formula_when_not_locked():
+    draft = _normalize_draft({
+        "paper": {"paper_type": "theoretical"},
+        "material_states": [{"material": "LaH10"}],
+    })
+
+    assert draft["material_states"][0]["element_count"] == 2
+
+
+def test_element_count_loose_fallback_handles_variable_formula():
+    draft = _normalize_draft({
+        "paper": {"paper_type": "theoretical"},
+        "material_states": [{"material": "LaHx (x = 1–12) 150 GPa"}],
+    })
+
+    assert draft["material_states"][0]["element_count"] == 2
+
+
+def test_element_count_preserves_ai_value_when_formula_unparseable():
+    draft = _normalize_draft({
+        "paper": {"paper_type": "theoretical"},
+        "material_states": [{"material": "!!!", "element_count": 4}],
+    })
+
+    assert draft["material_states"][0]["element_count"] == 4
+
+
+def test_space_group_number_looks_up_full_spglib_table():
+    draft = _normalize_draft({
+        "paper": {"paper_type": "theoretical"},
+        "material_states": [{"material": "LaH10", "reported_space_group_symbol": "Fm-3m"}],
+    })
+
+    assert draft["material_states"][0]["reported_space_group_number"] == 225
+
+
+def test_space_group_number_stays_none_for_non_standard_symbol():
+    draft = _normalize_draft({
+        "paper": {"paper_type": "theoretical"},
+        "material_states": [{"material": "LaH10", "reported_space_group_symbol": "clathrate-I"}],
+    })
+
+    assert draft["material_states"][0]["reported_space_group_number"] is None
+
+
+def test_superconductor_kind_normalizes_aliases_and_falls_back_to_unknown():
+    draft = _normalize_draft({
+        "paper": {"paper_type": "theoretical"},
+        "material_states": [
+            {"material": "LaH10", "superconductor_kind": "常规"},
+            {"material": "MgB2", "superconductor_kind": "metallic"},
+        ],
+    })
+
+    assert draft["material_states"][0]["superconductor_kind"] == "conventional"
+    assert draft["material_states"][1]["superconductor_kind"] == "unknown"
+
+
+def test_tc_method_free_text_becomes_other_with_custom_value():
+    draft = _normalize_draft({
+        "paper": {"paper_type": "theoretical"},
+        "material_states": [{
+            "material": "LaH10",
+            "tc_results": [
+                {"tc_value_k": 250, "tc_method": "Allen-Dynes"},
+                {"tc_value_k": 260, "tc_method": "mcmillan"},
+            ],
+        }],
+    })
+
+    results = draft["material_states"][0]["tc_results"]
+    assert results[0]["tc_method"] == "other"
+    assert results[0]["tc_method_custom"] == "Allen-Dynes"
+    assert results[1]["tc_method"] == "mcmillan"
+    assert results[1]["tc_method_custom"] is None
+
+
+def test_tc_result_calculation_context_is_numeric_normalized():
+    draft = _normalize_draft({
+        "paper": {"paper_type": "theoretical"},
+        "material_states": [{
+            "material": "LaH10",
+            "tc_results": [{
+                "tc_value_k": 250,
+                "tc_method": "mcmillan",
+                "calculation_context": {"lambda_ep": "1.2", "omega_log_k": "850", "mu_star": "0.1"},
+            }],
+        }],
+    })
+
+    context = draft["material_states"][0]["tc_results"][0]["calculation_context"]
+    assert context["lambda_ep"] == 1.2
+    assert context["omega_log_k"] == 850.0
+    assert context["mu_star"] == 0.1

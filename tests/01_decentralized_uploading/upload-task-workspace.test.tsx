@@ -1,7 +1,6 @@
 import React from 'react'
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 
@@ -121,7 +120,6 @@ describe('论文上传工作区', () => {
         stage: 'extracting',
         files: [{ file_id: 'main', role: 'main', original_filename: 'paper.pdf', extraction_status: 'processing' }],
         chunks: [],
-        form_preview: { status: 'waiting', read_only: true, groups: [] },
         summary: { status: 'extracting', completed: 0, total: 0 },
         next_poll_ms: null,
       },
@@ -131,7 +129,12 @@ describe('论文上传工作区', () => {
 
     expect(await screen.findByRole('tab', { name: 'AI 临时表单' })).toBeVisible()
     expect(screen.getByRole('tab', { name: '分段解析与证据' })).toBeVisible()
-    expect(screen.getByText('正在提取正文，完成后会在这里逐段显示解析结果。')).toBeVisible()
+    expect(await screen.findByText('只读预览')).toBeVisible()
+    expect(screen.getByText('正在提取论文正文，完成后逐段解析。')).toBeVisible()
+    expect(screen.queryByRole('button', { name: '提交审核' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('tab', { name: '分段解析与证据' }))
+    expect(screen.getByText('尚未生成分段，正在等待正文提取完成。')).toBeVisible()
   })
 
   it('解析完成后在临时表单页签原地切换为可编辑草稿', async () => {
@@ -268,7 +271,7 @@ describe('论文上传工作区', () => {
       .toHaveAttribute('aria-expanded', 'false')
   })
 
-  it('按材料状态显示压力、空间群和电子声子参数，并以新契约保存', async () => {
+  it('按材料状态显示压强与空间群，并以新契约保存', async () => {
     const savedBodies: unknown[] = []
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input)
@@ -317,11 +320,11 @@ describe('论文上传工作区', () => {
 
     expect(await screen.findByRole('textbox', { name: '材料' })).toHaveValue('Li2MgH16')
     expect(screen.queryByRole('textbox', { name: '物相' })).not.toBeInTheDocument()
-    expect(screen.getByRole('spinbutton', { name: '压力 (GPa)' })).toHaveValue(300)
-    expect(screen.getByRole('textbox', { name: '空间群符号' })).toHaveValue('Fd-3m')
+    expect(screen.getByRole('spinbutton', { name: '压强 (GPa)' })).toHaveValue(300)
+    expect(screen.getByRole('combobox', { name: '空间群符号' })).toHaveValue('Fd-3m')
     expect(screen.getByRole('spinbutton', { name: '空间群号' })).toHaveValue(227)
-    expect(screen.getByRole('spinbutton', { name: '电声耦合强度 λ' })).toHaveValue(3.35)
-    expect(screen.getByRole('spinbutton', { name: '对数声子频率 ωlog (K)' })).toHaveValue(null)
+    expect(screen.queryByRole('spinbutton', { name: '电声耦合强度 λ' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('spinbutton', { name: '对数声子频率 ωlog (K)' })).not.toBeInTheDocument()
     expect(document.querySelector('input[type="file"]')?.getAttribute('accept')).toContain('.vasp')
 
     fireEvent.click(screen.getByRole('button', { name: '立即保存' }))
@@ -406,7 +409,7 @@ describe('论文上传工作区', () => {
     expect(screen.getByText('当前显示：原胞 · POSCAR')).toBeVisible()
 
     fireEvent.click(screen.getByRole('button', { name: '采用此结构' }))
-    expect(screen.getByText('已采用')).toBeVisible()
+    expect(screen.getByText('已采用'))
     fireEvent.click(screen.getByRole('button', { name: '恢复为待确认' }))
     expect(screen.getByText('待确认')).toBeVisible()
 
@@ -417,61 +420,50 @@ describe('论文上传工作区', () => {
     expect(screen.getByRole('button', { name: '不采用' })).toBeVisible()
   })
 
-  it('临时表单并列显示冲突候选及其文件来源', async () => {
+  it('分段解析页签并列显示各分段来源与解析结果', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
       ok: true,
       data: {
-        status: 'reading', stage: 'reading', files: [], chunks: [{
-          chunk_id: 'main:0', filename: 'paper.pdf', file_role: 'main', section: 'Title',
-          page_start: 1, page_end: 1, status: 'completed', result: { metadata: { title: 'Main title' } },
-        }],
-        form_preview: {
-          status: 'updating', read_only: true, groups: [{
-            id: 'bibliography', label: '基本信息', fields: [{
-              path: 'paper.title', label: '标题', state: 'conflict', candidates: [
-                { value: 'Main title', sources: [{ filename: 'paper.pdf', file_role: 'main', section: 'Title', page_start: 1, quote: 'Main title' }] },
-                { value: 'Supplement title', sources: [{ filename: 'supp.pdf', file_role: 'supplementary', section: 'Cover', page_start: 2, quote: 'Supplement title' }] },
-              ],
-            }],
-          }],
-        },
-        summary: { status: 'reading', completed: 1, total: 2 }, next_poll_ms: null,
+        status: 'reading', stage: 'reading', files: [], chunks: [
+          {
+            chunk_id: 'main:0', filename: 'paper.pdf', file_role: 'main', section: 'Title',
+            page_start: 1, page_end: 1, status: 'completed', result: { metadata: { title: 'Main title' } },
+          },
+          {
+            chunk_id: 'supp:0', filename: 'supp.pdf', file_role: 'supplementary', section: 'Cover',
+            page_start: 2, page_end: 2, status: 'completed', result: { metadata: { title: 'Supplement title' } },
+          },
+        ],
+        summary: { status: 'reading', completed: 2, total: 2 }, next_poll_ms: null,
       },
     }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
 
     render(<UploadParsingDetail taskId={'e'.repeat(32)} />)
 
-    expect(await screen.findByText('有冲突')).toBeVisible()
-    expect(screen.getByText('Main title')).toBeVisible()
-    expect(screen.getByText('Supplement title')).toBeVisible()
-    expect(screen.getByText('paper.pdf · 正文 · Title · 第 1 页')).toBeVisible()
-    expect(screen.getByText('supp.pdf · 补充材料 · Cover · 第 2 页')).toBeVisible()
+    expect(await screen.findByText('只读预览')).toBeVisible()
+    expect(screen.queryByText('有冲突')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('tab', { name: '分段解析与证据' }))
+    expect(screen.getByText('分段进度 · 2/2')).toBeVisible()
+    expect(screen.getByText('paper.pdf · Title')).toBeVisible()
+    expect(screen.getByText('supp.pdf · Cover')).toBeVisible()
+    expect(screen.getByText('第 1 页')).toBeVisible()
+    expect(screen.getByText('第 2 页')).toBeVisible()
+
+    fireEvent.click(screen.getByText('paper.pdf · Title'))
+    expect(await screen.findByText(/Main title/)).toBeInTheDocument()
+    fireEvent.click(screen.getByText('supp.pdf · Cover'))
+    expect(await screen.findByText(/Supplement title/)).toBeInTheDocument()
   })
 
-  it('临时表单只收起真实溢出的字段卡片', async () => {
-    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function () {
-      return (this.textContent?.split('\n').length || 0) >= 20 ? 240 : 80
-    })
+  it('只读预览展示局部草稿字段但不提供编辑操作', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
       ok: true,
       data: {
         status: 'reading', stage: 'reading', files: [], chunks: [],
-        form_preview: {
-          status: 'updating', read_only: true, groups: [{
-            id: 'bibliography', label: '基本信息', fields: [
-              {
-                path: 'paper.doi', label: 'DOI', state: 'filled',
-                candidates: [{ value: '10.1103/PhysRevLett.123.097001', sources: [] }],
-              },
-              {
-                path: 'paper.authors', label: '作者', state: 'filled',
-                candidates: [{ value: Array.from({ length: 20 }, (_, index) => `Author ${index + 1}`).join('\n'), sources: [] }],
-              },
-              {
-                path: 'paper.abstract', label: '摘要', state: 'waiting', candidates: [],
-              },
-            ],
-          }],
+        partial_draft: {
+          paper: { title: 'Li2MgH16 study', authors: ['Ying Sun'], paper_type: 'theoretical' },
+          material_states: [{ material: 'Li2MgH16', tc_results: [], properties: [] }],
         },
         summary: { status: 'reading', completed: 1, total: 2 }, next_poll_ms: null,
       },
@@ -479,27 +471,25 @@ describe('论文上传工作区', () => {
 
     render(<UploadParsingDetail taskId={'g'.repeat(32)} />)
 
-    expect(await screen.findByText('10.1103/PhysRevLett.123.097001')).toBeVisible()
-    expect(screen.queryByRole('button', { name: '展开 DOI' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '展开 摘要' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '展开 作者' })).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.getByText(/Author 20/)).toBeInTheDocument()
+    expect(await screen.findByText('只读预览')).toBeVisible()
+    expect(screen.getByText('AI 分段阅读中 1/2，字段随分段完成逐步点亮。')).toBeVisible()
+    expect(screen.getByLabelText('标题')).toHaveValue('Li2MgH16 study')
+    expect(screen.getByText('Ying Sun')).toBeVisible()
+    expect(screen.getByText('材料状态 #1')).toBeVisible()
+    expect(screen.getByLabelText('材料')).toHaveValue('Li2MgH16')
+    expect(screen.queryByRole('button', { name: '提交审核' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '立即保存' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '展开 作者' })).not.toBeInTheDocument()
   })
 
-  it('临时表单字段卡片可以独立展开和收起且正文点击不误触', async () => {
-    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(240)
+  it('只读预览中字段内容可见且点击不改变', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
       ok: true,
       data: {
         status: 'reading', stage: 'reading', files: [], chunks: [],
-        form_preview: {
-          status: 'updating', read_only: true, groups: [{
-            id: 'bibliography', label: '基本信息',
-            fields: ['作者', '期刊', '摘要'].map((label, index) => ({
-              path: `paper.field_${index}`, label, state: 'filled',
-              candidates: [{ value: `${label} line 1\n${label} line 20`, sources: [{ filename: `${label}.pdf`, file_role: 'main' }] }],
-            })),
-          }],
+        partial_draft: {
+          paper: { title: 'Draft title', authors: [], keywords_tags: ['超导', '高压'] },
+          material_states: [],
         },
         summary: { status: 'reading', completed: 1, total: 2 }, next_poll_ms: null,
       },
@@ -507,175 +497,154 @@ describe('论文上传工作区', () => {
 
     render(<UploadParsingDetail taskId={'h'.repeat(32)} />)
 
-    const authorButton = await screen.findByRole('button', { name: '展开 作者' })
-    const journalButton = screen.getByRole('button', { name: '展开 期刊' })
-    const abstractButton = screen.getByRole('button', { name: '展开 摘要' })
-    fireEvent.click(authorButton)
-    fireEvent.click(journalButton)
-    fireEvent.click(abstractButton)
+    expect(await screen.findByText('只读预览')).toBeVisible()
+    expect(screen.getByLabelText('标题')).toHaveValue('Draft title')
+    expect(screen.getByLabelText('关键词（每行一个）')).toHaveValue('超导\n高压')
 
-    expect(screen.getByRole('button', { name: '收起 作者' })).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByRole('button', { name: '收起 期刊' })).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByRole('button', { name: '收起 摘要' })).toHaveAttribute('aria-expanded', 'true')
+    fireEvent.click(screen.getByLabelText('关键词（每行一个）'))
+    fireEvent.click(screen.getByLabelText('标题'))
 
-    fireEvent.click(screen.getByText(/期刊 line 20/))
-    expect(screen.getByRole('button', { name: '收起 期刊' })).toHaveAttribute('aria-expanded', 'true')
-
-    fireEvent.click(screen.getByRole('button', { name: '收起 期刊' }))
-    expect(screen.getByRole('button', { name: '展开 期刊' })).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.getByRole('button', { name: '收起 作者' })).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByRole('button', { name: '收起 摘要' })).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByText('期刊.pdf · 正文')).toBeInTheDocument()
+    expect(screen.getByLabelText('关键词（每行一个）')).toHaveValue('超导\n高压')
+    expect(screen.getByLabelText('标题')).toHaveValue('Draft title')
+    expect(screen.queryByRole('button', { name: '提交审核' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '展开 作者' })).not.toBeInTheDocument()
   })
 
-  it('切换上传任务后重置字段展开状态并支持键盘操作', async () => {
-    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(240)
+  it('切换上传任务后只读预览重置为新任务的局部草稿', async () => {
+    const firstTaskId = 'i'.repeat(32)
+    const secondTaskId = 'j'.repeat(32)
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
-      const taskId = String(input).split('/').at(-2)
+      const url = String(input)
+      if (!url.endsWith('/parsing')) {
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200, headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      const taskId = url.split('/').at(-2)
       return new Response(JSON.stringify({
         ok: true,
         data: {
           status: 'reading', stage: 'reading', files: [], chunks: [],
-          form_preview: {
-            status: 'updating', read_only: true, groups: [{
-              id: 'bibliography', label: '基本信息', fields: [{
-                path: 'paper.authors', label: '作者', state: 'filled',
-                candidates: [{ value: 'Author 1\nAuthor 20', sources: [{ filename: `${taskId}.pdf`, file_role: 'main' }] }],
-              }],
-            }],
+          partial_draft: {
+            paper: { title: taskId === firstTaskId ? '第一篇草稿标题' : '第二篇草稿标题', authors: [] },
+            material_states: [],
           },
           summary: { status: 'reading', completed: 1, total: 2 }, next_poll_ms: null,
         },
       }), { status: 200, headers: { 'Content-Type': 'application/json' } })
     }))
-    const user = userEvent.setup()
-    const firstTaskId = 'i'.repeat(32)
-    const secondTaskId = 'j'.repeat(32)
+
     const { rerender } = render(<UploadParsingDetail taskId={firstTaskId} />)
 
-    const firstButton = await screen.findByRole('button', { name: '展开 作者' })
-    firstButton.focus()
-    await user.keyboard('{Enter}')
-    expect(screen.getByRole('button', { name: '收起 作者' })).toHaveAttribute('aria-expanded', 'true')
-    await user.keyboard(' ')
-    expect(screen.getByRole('button', { name: '展开 作者' })).toHaveAttribute('aria-expanded', 'false')
-    await user.keyboard(' ')
-    expect(screen.getByRole('button', { name: '收起 作者' })).toHaveAttribute('aria-expanded', 'true')
+    expect(await screen.findByLabelText('标题')).toHaveValue('第一篇草稿标题')
+    expect(screen.getByText('只读预览')).toBeVisible()
 
     rerender(<UploadParsingDetail taskId={secondTaskId} />)
 
-    expect(await screen.findByText(`${secondTaskId}.pdf · 正文`)).toBeVisible()
-    const secondButton = screen.getByRole('button', { name: '展开 作者' })
-    expect(secondButton).toHaveAttribute('aria-expanded', 'false')
-    expect(document.getElementById(secondButton.getAttribute('aria-controls') || '')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByLabelText('标题')).toHaveValue('第二篇草稿标题'))
+    expect(screen.getByText('只读预览')).toBeVisible()
   })
 
-  it('布局变化后重新判断字段卡片是否溢出', async () => {
+  it('布局变化后重新判断 AI 解释是否溢出', async () => {
     let measuredHeight = 80
     vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(() => measuredHeight)
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
-      ok: true,
-      data: {
-        status: 'reading', stage: 'reading', files: [], chunks: [],
-        form_preview: {
-          status: 'updating', read_only: true, groups: [{
-            id: 'bibliography', label: '基本信息', fields: [{
-              path: 'paper.authors', label: '作者', state: 'filled',
-              candidates: [{ value: 'Author 1\nAuthor 2', sources: [] }],
-            }],
-          }],
-        },
-        summary: { status: 'reading', completed: 1, total: 2 }, next_poll_ms: null,
-      },
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const data = String(input).endsWith('/parsing')
+        ? {
+            status: 'ready', stage: 'ready', files: [], chunks: [],
+            summary: { status: 'completed', completed: 1, total: 1 }, next_poll_ms: null,
+          }
+        : {
+            paper: {
+              title: 'Hydride study', authors: [], paper_type: 'review',
+              methodology: ['CALYPSO群智能结构搜索'],
+            },
+            material_states: [], classification_evidence: [],
+            field_evidence: {
+              methodology: [{
+                section: 'Supplementary Material', page: 2,
+                quote: 'The simulations were performed with several first-principles methods.',
+              }],
+            },
+            ai_original: {
+              paper: {
+                methodology: Array.from({ length: 20 }, (_, index) => `CALYPSO群智能结构搜索 ${index + 1}`),
+              },
+            },
+          }
+      return new Response(JSON.stringify({ ok: true, data }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      })
+    }))
 
-    render(<UploadParsingDetail taskId={'k'.repeat(32)} />)
+    render(<UploadParsingDetail taskId={'k'.repeat(32)} onSubmitted={vi.fn()} />)
 
-    expect(await screen.findByText(/Author 2/)).toBeVisible()
-    expect(screen.queryByRole('button', { name: '展开 作者' })).not.toBeInTheDocument()
+    expect(await screen.findByText(/AI 建议：CALYPSO群智能结构搜索/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '展开 研究方法（每行一项）的 AI 解释' })).not.toBeInTheDocument()
 
     measuredHeight = 240
     await waitFor(() => {
       fireEvent(window, new Event('resize'))
-      expect(screen.getByRole('button', { name: '展开 作者' })).toHaveAttribute('aria-expanded', 'false')
+      expect(screen.getByRole('button', { name: '展开 研究方法（每行一项）的 AI 解释' })).toBeInTheDocument()
     })
 
     measuredHeight = 80
     await waitFor(() => {
       fireEvent(window, new Event('resize'))
-      expect(screen.queryByRole('button', { name: '展开 作者' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: '展开 研究方法（每行一项）的 AI 解释' })).not.toBeInTheDocument()
     })
   })
 
-  it('轮询追加字段内容时保持已展开状态', async () => {
-    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(240)
-    let requestCount = 0
-    vi.stubGlobal('fetch', vi.fn(async () => {
-      requestCount += 1
-      const authors = requestCount === 1
-        ? ['Author 1', 'Author 2']
-        : ['Author 1', 'Author 2', 'Author 21']
+  it('轮询更新局部草稿时只读预览实时刷新内容', async () => {
+    let parsingRequests = 0
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (!url.endsWith('/parsing')) {
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200, headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      parsingRequests += 1
+      const paper = parsingRequests === 1
+        ? { title: 'First title', authors: [] }
+        : { title: 'First title', authors: [], keywords_tags: ['超导'] }
       return new Response(JSON.stringify({
         ok: true,
         data: {
           status: 'reading', stage: 'reading', files: [], chunks: [],
-          form_preview: {
-            status: 'updating', read_only: true, groups: [{
-              id: 'bibliography', label: '基本信息', fields: [{
-                path: 'paper.authors', label: '作者', state: 'filled',
-                candidates: [{ value: authors, sources: [{ filename: 'main.pdf', file_role: 'main' }] }],
-              }],
-            }],
-          },
-          summary: { status: 'reading', completed: requestCount, total: 2 },
-          next_poll_ms: requestCount === 1 ? 250 : null,
+          partial_draft: { paper, material_states: [] },
+          summary: { status: 'reading', completed: Math.min(parsingRequests, 2), total: 2 },
+          next_poll_ms: parsingRequests === 1 ? 250 : null,
         },
       }), { status: 200, headers: { 'Content-Type': 'application/json' } })
     }))
 
     render(<UploadParsingDetail taskId={'l'.repeat(32)} />)
 
-    fireEvent.click(await screen.findByRole('button', { name: '展开 作者' }))
-    expect(screen.getByRole('button', { name: '收起 作者' })).toHaveAttribute('aria-expanded', 'true')
+    expect(await screen.findByLabelText('标题')).toHaveValue('First title')
+    expect(screen.getByText('只读预览')).toBeVisible()
 
-    expect(await screen.findByText(/Author 21/)).toBeVisible()
-    expect(screen.getByRole('button', { name: '收起 作者' })).toHaveAttribute('aria-expanded', 'true')
+    await waitFor(
+      () => expect(screen.getByLabelText('关键词（每行一个）')).toHaveValue('超导'),
+      { timeout: 3000 },
+    )
+    expect(screen.getByText('只读预览')).toBeVisible()
+    expect(screen.getByText('AI 分段阅读中 2/2，字段随分段完成逐步点亮。')).toBeVisible()
   })
 
-  it('分类字段等待全文汇总且保留自由材料类型，元数据仍显示真实冲突', async () => {
+  it('分段阅读中的只读预览展示局部草稿的分类与材料状态', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
       ok: true,
       data: {
         status: 'reading', stage: 'reading', files: [], chunks: [],
-        form_preview: {
-          status: 'updating', read_only: true, groups: [
-            {
-              id: 'bibliography', label: '基本信息', fields: [{
-                path: 'paper.title', label: '标题', state: 'conflict', candidates: [
-                  { value: 'Main title', sources: [{ filename: 'paper.pdf', file_role: 'main' }] },
-                  { value: 'Supplement title', sources: [{ filename: 'supp.pdf', file_role: 'supplementary' }] },
-                ],
-              }],
-            },
-            {
-              id: 'classification', label: '分类判断', fields: [
-                {
-                  path: 'paper.paper_type', label: '论文类型', state: 'pending_summary',
-                  candidates: [{ value: 'theoretical', sources: [{
-                    filename: '2019 Li-Mg-H-孙莹.pdf', file_role: 'main', page_start: 2,
-                    quote: 'The phase diagram is constructed through structure searching simulations.',
-                  }] }],
-                },
-                {
-                  path: 'sc_type', label: '超导材料类型', state: 'pending_summary',
-                  candidates: [{ value: '高压三元氢化物超导体', sources: [{
-                    filename: '2019 Li-Mg-H-孙莹.pdf', file_role: 'main', page_start: 1,
-                    quote: 'ternary Li2MgH16',
-                  }] }],
-                },
-              ],
-            },
-          ],
+        partial_draft: {
+          paper: { title: 'Main title', authors: [], paper_type: 'unknown' },
+          material_states: [{
+            material: 'Li2MgH16',
+            material_family: { id: null, name: '高压三元氢化物超导体', status: 'pending' },
+            tc_results: [], properties: [],
+          }],
+          classification_reason: '',
         },
         summary: { status: 'reading', completed: 1, total: 2 }, next_poll_ms: null,
       },
@@ -683,11 +652,15 @@ describe('论文上传工作区', () => {
 
     render(<UploadParsingDetail taskId={'f'.repeat(32)} />)
 
-    expect((await screen.findAllByText('候选尚未汇总')).length).toBe(2)
-    expect(screen.getByText('高压三元氢化物超导体')).toBeVisible()
-    expect(screen.getByText('有冲突')).toBeVisible()
-    expect(screen.getByText('Main title')).toBeVisible()
-    expect(screen.getByText('Supplement title')).toBeVisible()
+    expect(await screen.findByText('只读预览')).toBeVisible()
+    expect(screen.queryByText('候选尚未汇总')).not.toBeInTheDocument()
+    expect(screen.getByText('暂不确定')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('高压三元氢化物超导体')).toBeInTheDocument()
+    expect(screen.getByText('新名称，将在论文审核通过时创建')).toBeInTheDocument()
+    expect(screen.getByLabelText('材料')).toHaveValue('Li2MgH16')
+    expect(screen.getByLabelText('标题')).toHaveValue('Main title')
+    expect(screen.getByLabelText('分类理由')).toHaveValue('')
+    expect(screen.queryByRole('button', { name: '提交审核' })).not.toBeInTheDocument()
   })
 
   it('查看和切换解析任务时仍保留上传入口及其本地文件', async () => {

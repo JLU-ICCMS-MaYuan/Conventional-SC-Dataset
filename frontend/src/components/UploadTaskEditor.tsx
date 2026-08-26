@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import {
   Alert, Autocomplete, Box, Button, Card, CardContent, Checkbox, Chip, CircularProgress, Collapse,
-  FormControl, InputLabel, ListItemText, Menu, MenuItem, Select, TextField, Typography, useMediaQuery,
+  FormControl, FormHelperText, InputLabel, ListItemText, Menu, MenuItem, Select, TextField, Typography, useMediaQuery,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import DeleteIcon from '@mui/icons-material/Delete'
@@ -47,6 +47,30 @@ const PAPER_TYPE_OPTIONS = [
   { value: 'unknown', label: '暂不确定' },
 ]
 
+const SUPERCONDUCTOR_KIND_OPTIONS = [
+  { value: 'conventional', label: '常规 (BCS)' },
+  { value: 'unconventional', label: '非常规' },
+  { value: 'unknown', label: '未知' },
+]
+
+const TC_METHOD_OPTIONS = [
+  { value: 'unknown', label: '未知' },
+  { value: 'experimental', label: '实验测量' },
+  { value: 'mcmillan', label: 'McMillan' },
+  { value: 'allen_dynes', label: 'Allen-Dynes-McMillan' },
+  { value: 'isotropic_eliashberg', label: 'isotropic Migdal-Eliashberg' },
+  { value: 'anisotropic_eliashberg', label: 'anisotropic Migdal-Eliashberg' },
+  { value: 'scdft', label: 'SCDFT' },
+  { value: 'other', label: '其他' },
+]
+
+const ENERGY_ABOVE_HULL_NAME = 'energy above hull'
+
+interface SpaceGroupOption {
+  number: number
+  symbol: string
+}
+
 const toLines = (value: string[] | undefined) => (value || []).join('\n')
 const fromLines = (value: string) => value.split(/[\n,，]/).map(item => item.trim()).filter(Boolean)
 const displayValue = (value: unknown) => {
@@ -55,6 +79,13 @@ const displayValue = (value: unknown) => {
   if (typeof value === 'object') return JSON.stringify(value)
   return String(value)
 }
+
+// 默认折叠规则：卡片数 ≤2 全部展开，否则仅第一张展开
+const defaultCollapsedStates = (count: number): Record<number, boolean> => (
+  count > 2
+    ? Object.fromEntries(Array.from({ length: count }, (_, index) => [index, index !== 0]))
+    : {}
+)
 
 const COLLAPSED_EVIDENCE_HEIGHT = 120
 
@@ -170,6 +201,10 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
   const [catalogs, setCatalogs] = useState<ClassificationCatalogs | null>(null)
   const [catalogLoading, setCatalogLoading] = useState(true)
   const [catalogError, setCatalogError] = useState('')
+  // 折叠状态仅存在浏览器会话内，不写入草稿、不参与自动保存
+  const [collapsedStates, setCollapsedStates] = useState<Record<number, boolean>>({})
+  const [elementCountEdits, setElementCountEdits] = useState<Record<number, { text: string; invalid: boolean }>>({})
+  const [spaceGroups, setSpaceGroups] = useState<SpaceGroupOption[]>([])
   const revisionRef = useRef(0)
 
   useEffect(() => {
@@ -191,8 +226,22 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
   }, [])
 
   useEffect(() => {
+    let active = true
+    api.get<{ space_groups?: SpaceGroupOption[] }>('/api/rag/space-groups')
+      .then(response => {
+        if (active) setSpaceGroups(Array.isArray(response?.space_groups) ? response.space_groups : [])
+      })
+      .catch(() => {
+        // 空间群标准表不可用时降级为纯自由输入，不阻塞校对
+      })
+    return () => { active = false }
+  }, [])
+
+  useEffect(() => {
     if (draftOverride !== undefined) {
-      setDraft(normalizeUploadDraft(draftOverride))
+      const normalized = normalizeUploadDraft(draftOverride)
+      setDraft(normalized)
+      setCollapsedStates(defaultCollapsedStates(normalized.material_states.length))
       setLoading(false)
       setDirty(false)
       setError('')
@@ -204,7 +253,9 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
       `/api/rag/upload-tasks/${taskId}/draft`,
       { signal: controller.signal },
     ).then(response => {
-      setDraft(normalizeUploadDraft(unwrapData(response)))
+      const normalized = normalizeUploadDraft(unwrapData(response))
+      setDraft(normalized)
+      setCollapsedStates(defaultCollapsedStates(normalized.material_states.length))
       setDirty(false)
       setError('')
     }).catch((reason: Error) => {
@@ -212,6 +263,22 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
     }).finally(() => setLoading(false))
     return () => controller.abort()
   }, [taskId, draftOverride])
+
+  // 材料状态数组变化时调和折叠状态：保留已有卡片的手动选择，新卡片按默认规则初始化
+  const materialStateCount = draft?.material_states.length ?? 0
+  useEffect(() => {
+    setCollapsedStates(current => {
+      const next: Record<number, boolean> = {}
+      for (let index = 0; index < materialStateCount; index += 1) {
+        next[index] = current[index] ?? (materialStateCount > 2 && index !== 0)
+      }
+      return next
+    })
+    setElementCountEdits(current => {
+      const kept = Object.entries(current).filter(([key]) => Number(key) < materialStateCount)
+      return kept.length === Object.keys(current).length ? current : Object.fromEntries(kept)
+    })
+  }, [materialStateCount])
 
   const changeDraft = useCallback((updater: (current: UploadDraft) => UploadDraft) => {
     setDraft(current => current ? updater(current) : current)
@@ -317,27 +384,100 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
     }
   }
 
-  const updateCalculationContext = (
-    index: number,
+  const setAllCollapsed = (value: boolean) => {
+    setCollapsedStates(value
+      ? Object.fromEntries((draft?.material_states || []).map((_, index) => [index, true]))
+      : {})
+  }
+
+  // 元素种类数：仅接受 1–118 的整数，非法输入即时提示且不写入草稿；手动编辑后锁定，清空则恢复服务端自动计算
+  const changeElementCount = (index: number, raw: string) => {
+    const trimmed = raw.trim()
+    if (trimmed === '') {
+      setElementCountEdits(current => ({ ...current, [index]: { text: raw, invalid: false } }))
+      changeDraft(current => ({
+        ...current,
+        material_states: current.material_states.map((item, itemIndex) =>
+          itemIndex === index ? { ...item, element_count: null, element_count_locked: false } : item),
+      }))
+      return
+    }
+    const parsed = Number(trimmed)
+    if (!/^\d+$/.test(trimmed) || parsed < 1 || parsed > 118) {
+      setElementCountEdits(current => ({ ...current, [index]: { text: raw, invalid: true } }))
+      return
+    }
+    setElementCountEdits(current => ({ ...current, [index]: { text: raw, invalid: false } }))
+    changeDraft(current => ({
+      ...current,
+      material_states: current.material_states.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, element_count: parsed, element_count_locked: true } : item),
+    }))
+  }
+
+  const updateTcCalculationContext = (
+    stateIndex: number,
+    resultIndex: number,
     field: 'lambda_ep' | 'omega_log_k' | 'mu_star',
     value: number | null,
   ) => {
     changeDraft(current => ({
       ...current,
-      material_states: current.material_states.map((item, itemIndex) =>
-        itemIndex === index
-          ? {
-              ...item,
-              calculation_context: {
-                phonon_nuclear_treatment: 'unknown',
-                lambda_ep: null,
-                omega_log_k: null,
-                mu_star: null,
-                ...item.calculation_context,
-                [field]: value,
-              },
-            }
-          : item),
+      material_states: current.material_states.map((state, index) => index === stateIndex ? {
+        ...state,
+        tc_results: (state.tc_results || []).map((item, itemIndex) =>
+          itemIndex === resultIndex
+            ? {
+                ...item,
+                calculation_context: {
+                  phonon_nuclear_treatment: 'unknown',
+                  lambda_ep: null,
+                  omega_log_k: null,
+                  mu_star: null,
+                  ...item.calculation_context,
+                  [field]: value,
+                },
+              }
+            : item),
+      } : state),
+    }))
+  }
+
+  // 常规 (BCS) 类型的 Tc 条目带独立计算上下文；首个条目用状态级旧值一次性预填 λ/ωlog
+  const addTcResult = (index: number) => {
+    changeDraft(current => ({
+      ...current,
+      material_states: current.material_states.map((item, itemIndex) => {
+        if (itemIndex !== index) return item
+        const isConventional = (item.superconductor_kind || 'unknown') === 'conventional'
+        const legacy = item.calculation_context
+        const prefillLegacy = isConventional
+          && (legacy?.lambda_ep != null || legacy?.omega_log_k != null)
+          && !(item.tc_results || []).some(entry => entry.calculation_context)
+        const entry: DraftTcResult = {
+          result_kind: item.state_kind === 'experimental' ? 'experimental' : 'theoretical',
+          tc_method: item.state_kind === 'experimental' ? 'experimental' : 'unknown',
+          tc_value_k: null, tc_min_k: null, tc_max_k: null, value_raw: '', unit_raw: 'K',
+        }
+        if (isConventional) {
+          entry.calculation_context = {
+            phonon_nuclear_treatment: 'unknown',
+            lambda_ep: prefillLegacy ? legacy?.lambda_ep ?? null : null,
+            omega_log_k: prefillLegacy ? legacy?.omega_log_k ?? null : null,
+            mu_star: null,
+          }
+        }
+        return { ...item, tc_results: [...(item.tc_results || []), entry] }
+      }),
+    }))
+  }
+
+  const removeTcResult = (stateIndex: number, resultIndex: number) => {
+    changeDraft(current => ({
+      ...current,
+      material_states: current.material_states.map((item, itemIndex) => itemIndex === stateIndex ? {
+        ...item, tc_results: (item.tc_results || []).filter((_, tcIndex) => tcIndex !== resultIndex),
+      } : item),
     }))
   }
 
@@ -360,6 +500,18 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
         properties: (state.properties || []).map((item, itemIndex) =>
           itemIndex === propertyIndex ? { ...item, [field]: value } : item),
       } : state),
+    }))
+  }
+
+  const addEnergyAboveHull = (index: number) => {
+    changeDraft(current => ({
+      ...current,
+      material_states: current.material_states.map((item, itemIndex) => itemIndex === index ? {
+        ...item,
+        properties: [...(item.properties || []), {
+          name: ENERGY_ABOVE_HULL_NAME, name_raw: ENERGY_ABOVE_HULL_NAME, value_raw: '', unit: 'eV/atom',
+        }],
+      } : item),
     }))
   }
 
@@ -591,7 +743,6 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mt: 2, '& > *': { minWidth: 0 } }}>
         {[
-          ['research_materials', '研究材料（每行一个）'],
           ['keywords_tags', '关键词（每行一个）'],
           ['methodology', '研究方法（每行一项）'],
         ].map(([field, label]) => (
@@ -631,51 +782,86 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
       <Box sx={{ mt: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
           <Typography variant="h6" fontWeight={700}>材料状态与计算条件</Typography>
-          <Button startIcon={<AddIcon />} onClick={() => changeDraft(current => ({
-          ...current,
-          material_states: [...current.material_states, {
-            material: '',
-            material_family: null,
-            structure_families: [],
-            element_count: null,
-            material_dimensionality: 'unknown',
-            pressure_value_gpa: null,
-            state_kind: current.paper.paper_type === 'experimental' ? 'experimental' : 'theoretical',
-            reported_space_group_symbol: null,
-            reported_space_group_number: null,
-            calculation_context: current.paper.paper_type === 'experimental' ? null : {
-              phonon_nuclear_treatment: 'unknown', lambda_ep: null, omega_log_k: null, mu_star: null,
-            },
-            experimental_context: current.paper.paper_type === 'experimental' ? { tc_criterion: 'unknown' } : null,
-            tc_results: [],
-            properties: [],
-          }],
-          }))}>添加材料状态</Button>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+            {draft.material_states.length > 0 && (
+              <>
+                <Button size="small" onClick={() => setAllCollapsed(true)}>全部折叠</Button>
+                <Button size="small" onClick={() => setAllCollapsed(false)}>全部展开</Button>
+              </>
+            )}
+            <Button startIcon={<AddIcon />} onClick={() => changeDraft(current => ({
+            ...current,
+            material_states: [...current.material_states, {
+              material: '',
+              material_family: null,
+              structure_families: [],
+              element_count: null,
+              element_count_locked: false,
+              material_dimensionality: 'unknown',
+              pressure_value_gpa: null,
+              state_kind: current.paper.paper_type === 'experimental' ? 'experimental' : 'theoretical',
+              superconductor_kind: 'unknown',
+              reported_space_group_symbol: null,
+              reported_space_group_number: null,
+              calculation_context: current.paper.paper_type === 'experimental' ? null : {
+                phonon_nuclear_treatment: 'unknown', lambda_ep: null, omega_log_k: null, mu_star: null,
+              },
+              experimental_context: current.paper.paper_type === 'experimental' ? { tc_criterion: 'unknown' } : null,
+              tc_results: [],
+              properties: [],
+            }],
+            }))}>添加材料状态</Button>
+          </Box>
         </Box>
 
       <Box data-testid="material-states-list" sx={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 1.5, mt: 1.5 }}>
         {draft.material_states.map((state, index) => {
           const aiState = ai.material_states?.[index]
           const stateCandidates = (draft.structure_candidates || []).filter(candidate => candidate.material_state_ref === `material_states[${index}]`)
+          const isCollapsed = !readOnly && Boolean(collapsedStates[index])
+          const isConventional = (state.superconductor_kind || 'unknown') === 'conventional'
+          const hasEnergyAboveHull = (state.properties || []).some(item =>
+            [item.name, item.name_raw].some(value => String(value || '').trim().toLowerCase() === ENERGY_ABOVE_HULL_NAME))
           return (
             <Card key={index} variant="outlined" sx={{ width: '100%' }}>
               <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                <Box
+                  role="button"
+                  aria-expanded={!isCollapsed}
+                  aria-controls={`material-state-${index}-content`}
+                  onClick={() => setCollapsedStates(current => ({ ...current, [index]: !current[index] }))}
+                  sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: isCollapsed ? 0 : 1.5, cursor: 'pointer', userSelect: 'none' }}
+                >
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', minWidth: 0 }}>
+                    <ExpandMoreIcon fontSize="small" sx={{
+                      transform: isCollapsed ? 'none' : 'rotate(180deg)',
+                      transition: 'transform 180ms ease',
+                    }} />
                     <Typography variant="subtitle2" fontWeight={700}>材料状态 #{index + 1}</Typography>
+                    {state.material?.trim() && (
+                      <Typography variant="body2" color="text.secondary" noWrap>{state.material}</Typography>
+                    )}
                     {state.material_family && draft.material_states.some((item, itemIndex) => (
                       itemIndex !== index
                       && item.material?.trim().toLocaleLowerCase() === state.material?.trim().toLocaleLowerCase()
                     )) && (
-                      <Button size="small" onClick={() => applyClassificationToSameMaterial(index)}>应用到同材料</Button>
+                      <Button size="small" onClick={event => {
+                        event.stopPropagation()
+                        applyClassificationToSameMaterial(index)
+                      }}>应用到同材料</Button>
                     )}
                   </Box>
                   <Button size="small" color="error" startIcon={<DeleteIcon />}
-                    onClick={() => changeDraft(current => ({
-                      ...current,
-                      material_states: current.material_states.filter((_, itemIndex) => itemIndex !== index),
-                    }))}>删除</Button>
+                    onClick={event => {
+                      event.stopPropagation()
+                      changeDraft(current => ({
+                        ...current,
+                        material_states: current.material_states.filter((_, itemIndex) => itemIndex !== index),
+                      }))
+                    }}>删除</Button>
                 </Box>
+                <Collapse in={!isCollapsed} timeout="auto" id={`material-state-${index}-content`}>
+                <Box>
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: 'repeat(3, 1fr)' }, gap: 1.5 }}>
                   <TextField label="材料" value={state.material || ''}
                     onChange={event => updateMaterialState(index, 'material', event.target.value)} />
@@ -689,9 +875,10 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
                   />
                   <TextField
                     label="不同元素种类数"
-                    value={state.element_count ?? ''}
-                    helperText="由服务器根据化学式计算"
-                    slotProps={{ htmlInput: { readOnly: true } }}
+                    value={elementCountEdits[index]?.text ?? (state.element_count ?? '')}
+                    error={Boolean(elementCountEdits[index]?.invalid)}
+                    helperText={elementCountEdits[index]?.invalid ? '请输入 1–118 的整数' : '自动计算，可手动修改'}
+                    onChange={event => changeElementCount(index, event.target.value)}
                   />
                   <FormControl fullWidth>
                     <InputLabel id={`material-dimensionality-${index}-label`}>材料维度</InputLabel>
@@ -747,20 +934,54 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
                         <MenuItem key={`${item.id ?? 'pending'}:${item.name}`} value={item.name}>{item.name}</MenuItem>
                       ))}
                     </Select>
+                    <FormHelperText>
+                      {state.structure_families?.length ? '主结构家族为已选结构家族中的主要一项' : '请先选择结构家族'}
+                    </FormHelperText>
                   </FormControl>
-                  <TextField label="压力 (GPa)" type="number" value={state.pressure_value_gpa ?? ''} helperText={state.pressure_value_gpa == null && state.pressure_raw ? '原文压力：' + state.pressure_raw + ' ' + (state.pressure_unit_raw || '') : undefined}
+                  <TextField label="压强 (GPa)" type="number" value={state.pressure_value_gpa ?? ''} helperText={state.pressure_value_gpa == null && state.pressure_raw ? '原文压力：' + state.pressure_raw + ' ' + (state.pressure_unit_raw || '') : undefined}
                     onChange={event => updateMaterialState(index, 'pressure_value_gpa', event.target.value ? Number(event.target.value) : null)} />
-                  <TextField label="空间群符号" value={state.reported_space_group_symbol || ''}
-                    onChange={event => updateMaterialState(index, 'reported_space_group_symbol', event.target.value || null)} />
+                  <Autocomplete<SpaceGroupOption | string, false, false, true>
+                    freeSolo
+                    options={spaceGroups}
+                    getOptionLabel={option => (typeof option === 'string' ? option : option.symbol)}
+                    value={state.reported_space_group_symbol || ''}
+                    onChange={(_, value) => {
+                      if (value && typeof value !== 'string') {
+                        changeDraft(current => ({
+                          ...current,
+                          material_states: current.material_states.map((item, itemIndex) => itemIndex === index ? {
+                            ...item,
+                            reported_space_group_symbol: value.symbol,
+                            reported_space_group_number: value.number,
+                          } : item),
+                        }))
+                        return
+                      }
+                      updateMaterialState(index, 'reported_space_group_symbol', value || null)
+                    }}
+                    onInputChange={(_, value, reason) => {
+                      if (reason === 'input' || reason === 'clear') {
+                        updateMaterialState(index, 'reported_space_group_symbol', value || null)
+                      }
+                    }}
+                    renderInput={params => <TextField {...params} label="空间群符号" />}
+                  />
                   <TextField label="空间群号" type="number" value={state.reported_space_group_number ?? ''}
                     onChange={event => updateMaterialState(index, 'reported_space_group_number', event.target.value ? Number(event.target.value) : null)}
                     slotProps={{ htmlInput: { min: 1, max: 230 } }} />
-                  <TextField label="电声耦合强度 λ" type="number" value={state.calculation_context?.lambda_ep ?? ''}
-                    onChange={event => updateCalculationContext(index, 'lambda_ep', event.target.value ? Number(event.target.value) : null)}
-                    slotProps={{ htmlInput: { min: 0, step: 'any' } }} />
-                  <TextField label="对数声子频率 ωlog (K)" type="number" value={state.calculation_context?.omega_log_k ?? ''}
-                    onChange={event => updateCalculationContext(index, 'omega_log_k', event.target.value ? Number(event.target.value) : null)}
-                    slotProps={{ htmlInput: { min: 0, step: 'any' } }} />
+                  <FormControl fullWidth>
+                    <InputLabel id={`superconductor-kind-${index}-label`}>超导类型</InputLabel>
+                    <Select
+                      labelId={`superconductor-kind-${index}-label`}
+                      label="超导类型"
+                      value={state.superconductor_kind || 'unknown'}
+                      onChange={event => updateMaterialState(index, 'superconductor_kind', event.target.value)}
+                    >
+                      {SUPERCONDUCTOR_KIND_OPTIONS.map(option => (
+                        <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
                 </Box>
                 <EvidenceNotes
                   label={`材料状态 #${index + 1}`}
@@ -768,58 +989,63 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
                   evidence={state.space_group_evidence || aiState?.space_group_evidence}
                 />
 
-                <StructureCandidatePanel
-                  candidates={stateCandidates}
-                  uploading={Boolean(structureUploading[index])}
-                  onUpload={file => void uploadStructureForState(index, file)}
-                  onChange={(candidateId, changes) => changeDraft(current => ({
-                    ...current,
-                    structure_candidates: (current.structure_candidates || []).map(candidate =>
-                      candidate.candidate_id === candidateId ? { ...candidate, ...changes } : candidate,
-                    ),
-                  }))}
-                />
-
                 <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Typography variant="subtitle2" fontWeight={700}>临界温度 Tc</Typography>
-                  <Button size="small" startIcon={<AddIcon />} onClick={() => changeDraft(current => ({
-                    ...current,
-                    material_states: current.material_states.map((item, itemIndex) => itemIndex === index ? {
-                      ...item,
-                      tc_results: [...(item.tc_results || []), {
-                        result_kind: item.state_kind === 'experimental' ? 'experimental' : 'theoretical',
-                        tc_method: item.state_kind === 'experimental' ? 'experimental' : 'unknown',
-                        tc_value_k: null, tc_min_k: null, tc_max_k: null, value_raw: '', unit_raw: 'K',
-                      }],
-                    } : item),
-                  }))}>添加 Tc</Button>
+                  <Button size="small" startIcon={<AddIcon />} onClick={() => addTcResult(index)}>添加 Tc</Button>
                 </Box>
                 {(state.tc_results || []).map((result, resultIndex) => (
-                  <Box key={resultIndex} sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr auto' }, gap: 1, mt: 1 }}>
-                    <TextField size="small" label={`Tc #${resultIndex + 1} 原始值`} value={result.value_raw || ''}
-                      onChange={event => updateTcResult(index, resultIndex, 'value_raw', event.target.value)} />
-                    <TextField size="small" label="Tc 数值 (K)" type="number" value={result.tc_value_k ?? ''}
-                      onChange={event => updateTcResult(index, resultIndex, 'tc_value_k', event.target.value ? Number(event.target.value) : null)} />
-                    <TextField size="small" label="Tc 方法" value={result.tc_method || ''}
-                      onChange={event => updateTcResult(index, resultIndex, 'tc_method', event.target.value)} />
-                    <Button size="small" color="error" onClick={() => changeDraft(current => ({
-                      ...current,
-                      material_states: current.material_states.map((item, itemIndex) => itemIndex === index ? {
-                        ...item, tc_results: (item.tc_results || []).filter((_, tcIndex) => tcIndex !== resultIndex),
-                      } : item),
-                    }))}>删除</Button>
-                  </Box>
+                  isConventional ? (
+                    <Box key={resultIndex} sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: 'repeat(3, 1fr)' }, gap: 1, mt: 1 }}>
+                      <TextField size="small" label="电声耦合强度 λ" type="number" value={result.calculation_context?.lambda_ep ?? ''}
+                        onChange={event => updateTcCalculationContext(index, resultIndex, 'lambda_ep', event.target.value ? Number(event.target.value) : null)}
+                        slotProps={{ htmlInput: { min: 0, step: 'any' } }} />
+                      <TextField size="small" label="对数声子频率 ωlog (K)" type="number" value={result.calculation_context?.omega_log_k ?? ''}
+                        onChange={event => updateTcCalculationContext(index, resultIndex, 'omega_log_k', event.target.value ? Number(event.target.value) : null)}
+                        slotProps={{ htmlInput: { min: 0, step: 'any' } }} />
+                      <TextField size="small" label="库伦屏蔽常数 μ*" type="number" value={result.calculation_context?.mu_star ?? ''}
+                        onChange={event => updateTcCalculationContext(index, resultIndex, 'mu_star', event.target.value ? Number(event.target.value) : null)}
+                        slotProps={{ htmlInput: { min: 0, step: 'any' } }} />
+                      <TextField size="small" label="Tc 数值 (K)" type="number" value={result.tc_value_k ?? ''}
+                        onChange={event => updateTcResult(index, resultIndex, 'tc_value_k', event.target.value ? Number(event.target.value) : null)} />
+                      <FormControl size="small">
+                        <InputLabel id={`tc-method-${index}-${resultIndex}-label`}>Tc 方法</InputLabel>
+                        <Select
+                          labelId={`tc-method-${index}-${resultIndex}-label`}
+                          label="Tc 方法"
+                          value={result.tc_method || 'unknown'}
+                          onChange={event => updateTcResult(index, resultIndex, 'tc_method', event.target.value)}
+                        >
+                          {TC_METHOD_OPTIONS.map(option => <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>)}
+                        </Select>
+                      </FormControl>
+                      {result.tc_method === 'other' && (
+                        <TextField size="small" label="自定义 Tc 方法" value={result.tc_method_custom || ''}
+                          onChange={event => updateTcResult(index, resultIndex, 'tc_method_custom', event.target.value || null)} />
+                      )}
+                      <Button size="small" color="error" onClick={() => removeTcResult(index, resultIndex)}>删除</Button>
+                    </Box>
+                  ) : (
+                    <Box key={resultIndex} sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr auto' }, gap: 1, mt: 1 }}>
+                      <TextField size="small" label="Tc 数值 (K)" type="number" value={result.tc_value_k ?? ''}
+                        onChange={event => updateTcResult(index, resultIndex, 'tc_value_k', event.target.value ? Number(event.target.value) : null)} />
+                      <Button size="small" color="error" onClick={() => removeTcResult(index, resultIndex)}>删除</Button>
+                    </Box>
+                  )
                 ))}
 
                 <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Typography variant="subtitle2" fontWeight={700}>其他普通物性</Typography>
-                  <Button size="small" startIcon={<AddIcon />} onClick={() => changeDraft(current => ({
-                    ...current,
-                    material_states: current.material_states.map((item, itemIndex) => itemIndex === index ? {
-                      ...item,
-                      properties: [...(item.properties || []), { name: '', name_raw: '', value_raw: '', unit: '' }],
-                    } : item),
-                  }))}>添加普通物性</Button>
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Button size="small" startIcon={<AddIcon />} disabled={hasEnergyAboveHull}
+                      onClick={() => addEnergyAboveHull(index)}>{ENERGY_ABOVE_HULL_NAME}</Button>
+                    <Button size="small" startIcon={<AddIcon />} onClick={() => changeDraft(current => ({
+                      ...current,
+                      material_states: current.material_states.map((item, itemIndex) => itemIndex === index ? {
+                        ...item,
+                        properties: [...(item.properties || []), { name: '', name_raw: '', value_raw: '', unit: '' }],
+                      } : item),
+                    }))}>添加普通物性</Button>
+                  </Box>
                 </Box>
                 {(state.properties || []).map((property, propertyIndex) => (
                   <Box key={propertyIndex} sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 2fr 1fr auto' }, gap: 1, mt: 1 }}>
@@ -837,6 +1063,20 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
                     }))}>删除</Button>
                   </Box>
                 ))}
+
+                <StructureCandidatePanel
+                  candidates={stateCandidates}
+                  uploading={Boolean(structureUploading[index])}
+                  onUpload={file => void uploadStructureForState(index, file)}
+                  onChange={(candidateId, changes) => changeDraft(current => ({
+                    ...current,
+                    structure_candidates: (current.structure_candidates || []).map(candidate =>
+                      candidate.candidate_id === candidateId ? { ...candidate, ...changes } : candidate,
+                    ),
+                  }))}
+                />
+                </Box>
+                </Collapse>
               </CardContent>
             </Card>
           )

@@ -13,7 +13,7 @@ from typing import Any
 from sqlalchemy import and_, func
 
 from backend.database import SessionLocal
-from backend.db_helpers import normalize_formula
+from backend.db_helpers import extract_formula_elements_loose, normalize_formula
 from backend.ingest.chunker import Chunk, chunk_paper
 from backend.ingest.extractor import _parse_result
 from backend.ingest.pdf_extractor import extract_text_from_pdf
@@ -35,6 +35,7 @@ from backend.ingest.upload_contracts import (
 from backend.ingest.structure_extractor import extract_structure_candidates
 from backend.models import Paper, PaperFile
 from backend.rag.llm import complete_json
+from backend.services.space_groups import lookup_number
 from backend.services.structure_candidates import (
     StructureCandidateError,
     build_structure_candidate,
@@ -106,6 +107,13 @@ referenced_materials 仅用于帮助区分本文对象与背景对象，最终�
 按材料、压力、state_kind 和报告空间群区分 material_states。空间群符号与群号必须分开；λ、ωlog 只写入
 calculation_context，Tc 只写入 tc_results。压力优先换算为 GPa，同时保留 pressure_raw 和
 pressure_unit_raw；无法可靠换算或原文没有报告时保留原文并将规范数值设为 null。
+每条 material_state 必须判断 superconductor_kind：Tc 由电声耦合机制/BCS 理论计算给出
+（如 McMillan、Allen-Dynes、Eliashberg、SCDFT 求 Tc）判 conventional；论文明确为非电声耦合机制
+（如非常规配对）判 unconventional；无法判断判 unknown。
+tc_method 只能取给定枚举；论文方法无法归入枚举时填 other，并在 tc_method_custom 写入论文中的
+方法原文，其余情况 tc_method_custom 必须为 null。
+properties 需提取 energy above hull：name 固定为 "energy above hull"，unit 固定为 "eV/atom"；
+论文明确声明 thermodynamically stable 或 on the convex hull 时值为 0；原文未提及则不生成该条目。
 
 返回结构：
 {
@@ -125,6 +133,7 @@ pressure_unit_raw；无法可靠换算或原文没有报告时保留原文并将
     "pressure_value_gpa": null, "pressure_min_gpa": null, "pressure_max_gpa": null,
     "pressure_raw": null, "pressure_unit_raw": null,
     "state_kind": "theoretical|experimental|mixed|unknown",
+    "superconductor_kind": "conventional|unconventional|unknown",
     "reported_space_group_symbol": null, "reported_space_group_number": null,
     "space_group_evidence": {"section": "", "page": null, "quote": ""},
     "structure": null,
@@ -135,7 +144,9 @@ pressure_unit_raw；无法可靠换算或原文没有报告时保留原文并将
     },
     "experimental_context": null,
     "tc_results": [{
-      "result_kind": "theoretical|experimental", "tc_method": "unknown|experimental|allen_dynes|mcmillan|isotropic_eliashberg|anisotropic_eliashberg",
+      "result_kind": "theoretical|experimental",
+      "tc_method": "unknown|experimental|mcmillan|allen_dynes|isotropic_eliashberg|anisotropic_eliashberg|scdft|other",
+      "tc_method_custom": null,
       "tc_value_k": null, "tc_min_k": null, "tc_max_k": null,
       "value_raw": "", "unit_raw": "K", "evidence": {"section": "", "page": null, "quote": ""}
     }],
@@ -687,12 +698,6 @@ def _flatten_properties(value: Any) -> list[dict[str, Any]]:
     return rows
 
 
-SPACE_GROUP_NUMBERS = {
-    "Fd-3m": 227,
-    "P-3m1": 164,
-}
-
-
 def _formula_from_material(value: Any) -> str:
     text = str(value or "").strip()
     try:
@@ -798,7 +803,7 @@ def _legacy_properties_to_material_states(properties: list[dict[str, Any]]) -> l
             symbol = str(value or "").strip()
             if symbol:
                 state["reported_space_group_symbol"] = symbol
-                state["reported_space_group_number"] = SPACE_GROUP_NUMBERS.get(symbol)
+                state["reported_space_group_number"] = lookup_number(symbol)
                 state["space_group_evidence"] = evidence
             continue
         if "electron-phonon coupling" in lowered or raw_name == "λ" or name == "electron_phonon_coupling":
@@ -850,6 +855,44 @@ def _legacy_properties_to_material_states(properties: list[dict[str, Any]]) -> l
     return list(states.values())
 
 
+TC_METHOD_CHOICES = {
+    "experimental", "mcmillan", "allen_dynes", "isotropic_eliashberg",
+    "anisotropic_eliashberg", "scdft", "other", "unknown",
+}
+
+SUPERCONDUCTOR_KINDS = {"conventional", "unconventional", "unknown"}
+
+SUPERCONDUCTOR_KIND_ALIASES = {
+    "常规": "conventional",
+    "bcs": "conventional",
+    "非常规": "unconventional",
+}
+
+
+def _int_or_none(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_calculation_context(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    calculation = dict(value)
+    calculation.setdefault("phonon_nuclear_treatment", "unknown")
+    calculation["lambda_ep"] = _numeric_value(
+        calculation.get("lambda_ep", calculation.get("lambda"))
+    )
+    calculation["omega_log_k"] = _numeric_value(
+        calculation.get("omega_log_k", calculation.get("wlog"))
+    )
+    calculation["mu_star"] = _numeric_value(calculation.get("mu_star"))
+    return calculation
+
+
 def _normalize_material_states(value: Any) -> list[dict[str, Any]]:
     states = []
     for raw in _as_list(value):
@@ -860,11 +903,17 @@ def _normalize_material_states(value: Any) -> list[dict[str, Any]]:
         state = dict(raw)
         state.pop("scope", None)
         state["material"] = _formula_from_material(state.get("material"))
-        try:
-            _normalized_formula, elements, _composition, _ratios = normalize_formula(state["material"])
-            state["element_count"] = len(elements) or None
-        except ValueError:
-            state["element_count"] = None
+        if state.get("element_count_locked"):
+            state["element_count"] = _int_or_none(state.get("element_count"))
+        else:
+            try:
+                _normalized_formula, elements, _composition, _ratios = normalize_formula(state["material"])
+                element_count = len(elements) or None
+            except ValueError:
+                element_count = len(extract_formula_elements_loose(state["material"])) or None
+            if element_count is None:
+                element_count = _int_or_none(state.get("element_count"))
+            state["element_count"] = element_count
         state.pop("phase_label", None)
         family = state.get("material_family")
         if isinstance(family, dict) and family.get("scope") == "referenced_work":
@@ -915,28 +964,18 @@ def _normalize_material_states(value: Any) -> list[dict[str, Any]]:
             state["pressure_raw"] = str(state["pressure_value_gpa"])
             state["pressure_unit_raw"] = state["pressure_unit_raw"] or "GPa"
         state.setdefault("state_kind", "unknown")
+        kind = str(state.get("superconductor_kind") or "").strip().lower()
+        kind = SUPERCONDUCTOR_KIND_ALIASES.get(kind, kind)
+        state["superconductor_kind"] = kind if kind in SUPERCONDUCTOR_KINDS else "unknown"
         state.setdefault("reported_space_group_symbol", None)
         if state.get("reported_space_group_number") in (None, ""):
-            state["reported_space_group_number"] = SPACE_GROUP_NUMBERS.get(
+            state["reported_space_group_number"] = lookup_number(
                 str(state.get("reported_space_group_symbol") or "")
             )
         else:
             state["reported_space_group_number"] = int(state["reported_space_group_number"])
         state.setdefault("structure", None)
-        calculation = state.get("calculation_context")
-        if isinstance(calculation, dict):
-            calculation = dict(calculation)
-            calculation.setdefault("phonon_nuclear_treatment", "unknown")
-            calculation["lambda_ep"] = _numeric_value(
-                calculation.get("lambda_ep", calculation.get("lambda"))
-            )
-            calculation["omega_log_k"] = _numeric_value(
-                calculation.get("omega_log_k", calculation.get("wlog"))
-            )
-            calculation["mu_star"] = _numeric_value(calculation.get("mu_star"))
-            state["calculation_context"] = calculation
-        else:
-            state["calculation_context"] = None
+        state["calculation_context"] = _normalize_calculation_context(state.get("calculation_context"))
         state.setdefault("experimental_context", None)
         tc_results = []
         for item in _as_list(state.get("tc_results")):
@@ -951,7 +990,17 @@ def _normalize_material_states(value: Any) -> list[dict[str, Any]]:
             result["value_raw"] = str(raw_value or "")
             result.setdefault("unit_raw", result.get("unit") or "K")
             result.setdefault("result_kind", "theoretical" if state["state_kind"] == "theoretical" else "experimental" if state["state_kind"] == "experimental" else "theoretical")
-            result.setdefault("tc_method", "experimental" if result["result_kind"] == "experimental" else "unknown")
+            method_text = str(result.get("tc_method") or "").strip()
+            if not method_text:
+                result["tc_method"] = "experimental" if result["result_kind"] == "experimental" else "unknown"
+                result["tc_method_custom"] = None
+            elif method_text.lower() in TC_METHOD_CHOICES:
+                result["tc_method"] = method_text.lower()
+                result["tc_method_custom"] = None
+            else:
+                result["tc_method"] = "other"
+                result["tc_method_custom"] = method_text[:128]
+            result["calculation_context"] = _normalize_calculation_context(result.get("calculation_context"))
             result.setdefault("is_representative", False)
             tc_results.append(result)
         state["tc_results"] = tc_results

@@ -129,3 +129,185 @@ def test_confirmed_structure_candidate_persists_conventional_cif():
     assert structure.atom_count == 1
     assert structure.source_locator == "attachment: Cu.cif"
     assert any(target.kind == "structure" and target.entity is structure for target in targets)
+
+
+def test_tc_level_calculation_contexts_persist_per_entry():
+    evidence = {
+        "section": "Results",
+        "page": 5,
+        "quote": "Allen-Dynes Tc=24 K with lambda=1.2, omega_log=120 K, mu*=0.13.",
+    }
+    draft = {
+        "material_states": [{
+            "material": "MgB2",
+            "state_kind": "theoretical",
+            "tc_results": [
+                {
+                    "result_kind": "theoretical",
+                    "tc_method": "allen_dynes",
+                    "tc_value_k": 24,
+                    "value_raw": "24",
+                    "unit_raw": "K",
+                    "calculation_context": {
+                        "lambda_ep": 1.2,
+                        "omega_log_k": 120,
+                        "mu_star": 0.13,
+                        "evidence": evidence,
+                    },
+                    "evidence": evidence,
+                },
+                {
+                    "result_kind": "theoretical",
+                    "tc_method": "mcmillan",
+                    "tc_value_k": 21,
+                    "value_raw": "21",
+                    "unit_raw": "K",
+                    "calculation_context": {
+                        "lambda_ep": 0.8,
+                        "omega_log_k": None,
+                        "mu_star": 0.1,
+                    },
+                },
+            ],
+        }],
+    }
+    session = _RecordingAsyncSession()
+    paper = models.Paper(id=19, content_revision=1)
+
+    targets = asyncio.run(persist_scientific_draft(session, paper, draft))
+
+    contexts = [item for item in session.added if isinstance(item, models.CalculationContext)]
+    tc_results = [item for item in session.added if isinstance(item, models.TcResult)]
+    # One shared state-level context plus one dedicated context per Tc entry.
+    assert len(contexts) == 3
+    first, second = tc_results
+    first_context = next(item for item in contexts if item.id == first.calculation_context_id)
+    second_context = next(item for item in contexts if item.id == second.calculation_context_id)
+    assert first_context.id != second_context.id
+    assert float(first_context.lambda_ep) == 1.2
+    assert float(first_context.omega_log_k) == 120
+    assert float(first_context.mu_star) == 0.13
+    assert float(second_context.lambda_ep) == 0.8
+    assert second_context.omega_log_k is None
+    assert float(second_context.mu_star) == 0.1
+    assert any(
+        target.field_path == "material_states[0].tc_results[0].calculation_context"
+        for target in targets
+    )
+
+
+def test_theoretical_tc_without_entry_context_keeps_shared_state_context():
+    draft = {
+        "material_states": [{
+            "material": "LaH10",
+            "state_kind": "theoretical",
+            "calculation_context": {
+                "lambda_ep": 2.5,
+                "omega_log_k": 900,
+                "mu_star": 0.1,
+            },
+            "tc_results": [
+                {
+                    "result_kind": "theoretical",
+                    "tc_method": "isotropic_eliashberg",
+                    "tc_value_k": 250,
+                    "value_raw": "250",
+                    "unit_raw": "K",
+                },
+                {
+                    "result_kind": "theoretical",
+                    "tc_method": "mcmillan",
+                    "tc_value_k": 240,
+                    "value_raw": "240",
+                    "unit_raw": "K",
+                    "calculation_context": {
+                        "lambda_ep": None,
+                        "omega_log_k": None,
+                        "mu_star": None,
+                    },
+                },
+            ],
+        }],
+    }
+    session = _RecordingAsyncSession()
+    paper = models.Paper(id=20, content_revision=1)
+
+    asyncio.run(persist_scientific_draft(session, paper, draft))
+
+    contexts = [item for item in session.added if isinstance(item, models.CalculationContext)]
+    tc_results = [item for item in session.added if isinstance(item, models.TcResult)]
+    assert len(contexts) == 1
+    assert all(item.calculation_context_id == contexts[0].id for item in tc_results)
+    assert float(contexts[0].lambda_ep) == 2.5
+
+
+def test_draft_element_count_takes_precedence_over_formula_count():
+    draft = {
+        "material_states": [
+            {"material": "MgB2", "element_count": 5},
+            {"material": "LaH10"},
+        ],
+    }
+    session = _RecordingAsyncSession()
+    paper = models.Paper(id=21, content_revision=1)
+
+    asyncio.run(persist_scientific_draft(session, paper, draft))
+
+    states = [item for item in session.added if isinstance(item, models.MaterialState)]
+    assert states[0].element_count == 5
+    assert states[1].element_count == 2
+
+
+def test_superconductor_kind_persisted_with_whitelist_fallback():
+    draft = {
+        "material_states": [
+            {"material": "Cu", "superconductor_kind": "unconventional"},
+            {"material": "Fe", "superconductor_kind": "not-a-kind"},
+            {"material": "Ni"},
+        ],
+    }
+    session = _RecordingAsyncSession()
+    paper = models.Paper(id=22, content_revision=1)
+
+    asyncio.run(persist_scientific_draft(session, paper, draft))
+
+    states = [item for item in session.added if isinstance(item, models.MaterialState)]
+    assert states[0].superconductor_kind == "unconventional"
+    assert states[1].superconductor_kind == "unknown"
+    assert states[2].superconductor_kind == "unknown"
+
+
+def test_tc_method_custom_persisted_only_for_other_method():
+    draft = {
+        "material_states": [{
+            "material": "MgB2",
+            "state_kind": "theoretical",
+            "calculation_context": {"lambda_ep": 0.9},
+            "tc_results": [
+                {
+                    "result_kind": "theoretical",
+                    "tc_method": "other",
+                    "tc_method_custom": "empirical formula fit",
+                    "tc_value_k": 30,
+                    "value_raw": "30",
+                    "unit_raw": "K",
+                },
+                {
+                    "result_kind": "theoretical",
+                    "tc_method": "mcmillan",
+                    "tc_method_custom": "should be dropped",
+                    "tc_value_k": 25,
+                    "value_raw": "25",
+                    "unit_raw": "K",
+                },
+            ],
+        }],
+    }
+    session = _RecordingAsyncSession()
+    paper = models.Paper(id=23, content_revision=1)
+
+    asyncio.run(persist_scientific_draft(session, paper, draft))
+
+    tc_results = [item for item in session.added if isinstance(item, models.TcResult)]
+    assert tc_results[0].tc_method_custom == "empirical formula fit"
+    assert tc_results[1].tc_method_custom is None

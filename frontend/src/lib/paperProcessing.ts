@@ -46,12 +46,14 @@ export interface DraftKeyProperty {
 export interface DraftTcResult {
   result_kind?: 'theoretical' | 'experimental' | string
   tc_method?: string
+  tc_method_custom?: string | null
   tc_value_k?: number | null
   tc_min_k?: number | null
   tc_max_k?: number | null
   value_raw?: string
   unit_raw?: string
   is_representative?: boolean
+  calculation_context?: DraftCalculationContext | null
   evidence?: SourceEvidence | SourceEvidence[] | null
 }
 
@@ -107,6 +109,8 @@ export interface DraftMaterialState {
   material_family?: ClassificationSelection | null
   structure_families?: StructureFamilySelection[]
   element_count?: number | null
+  element_count_locked?: boolean
+  superconductor_kind?: 'conventional' | 'unconventional' | 'unknown'
   material_dimensionality?: MaterialDimensionality
   pressure_value_gpa?: number | null
   pressure_min_gpa?: number | null
@@ -295,6 +299,7 @@ export function normalizeUploadDraft(value: unknown): UploadDraft {
         material_family: state.material_family || null,
         structure_families: Array.isArray(state.structure_families) ? state.structure_families : [],
         element_count: state.element_count ?? null,
+        superconductor_kind: state.superconductor_kind || 'unknown',
         material_dimensionality: state.material_dimensionality || 'unknown',
         tc_results: Array.isArray(state.tc_results) ? state.tc_results : [],
         properties: Array.isArray(state.properties) ? state.properties.map(item => ({

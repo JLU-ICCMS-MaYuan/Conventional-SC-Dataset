@@ -205,3 +205,107 @@ def test_publish_rejects_pending_paper(monkeypatch):
         assert exc.status_code == 409
     else:
         raise AssertionError("pending paper must not be published")
+
+
+class FakeBegin:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_args):
+        return False
+
+
+class FakePaperSession:
+    def __init__(self):
+        self.added = []
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_args):
+        return False
+
+    def begin(self):
+        return FakeBegin()
+
+    def add(self, obj):
+        self.added.append(obj)
+
+    async def flush(self):
+        return None
+
+    async def execute(self, statement):
+        return FakeResult([])
+
+
+def _state_with_material(material):
+    return {
+        "material": material,
+        "material_family": {"id": None, "name": "氢化物", "status": "pending"},
+    }
+
+
+def _minimal_non_review_draft(material_states, research_materials=None):
+    paper = {"title": "测试论文", "paper_type": "experimental"}
+    if research_materials is not None:
+        paper["research_materials"] = research_materials
+    return {"paper": paper, "material_states": material_states}
+
+
+def test_validate_draft_accepts_materials_from_states():
+    draft = _minimal_non_review_draft([_state_with_material("LaH10")])
+
+    _paper, states = rag._validate_draft(draft)
+
+    assert states[0]["material"] == "LaH10"
+
+
+def test_validate_draft_rejects_when_materials_missing_everywhere():
+    draft = _minimal_non_review_draft([_state_with_material("  ")])
+
+    try:
+        rag._validate_draft(draft)
+    except HTTPException as exc:
+        assert exc.status_code == 400
+        assert exc.detail["code"] == "research_material_required"
+    else:
+        raise AssertionError("paper 与材料状态均为空时必须拒绝")
+
+
+def test_create_pending_paper_derives_research_materials(tmp_path, monkeypatch):
+    import backend.rag.database as rag_database
+    from backend.ingest import scientific_drafts, upload_jobs
+
+    monkeypatch.setattr(upload_jobs, "_normalize_draft", lambda draft: draft)
+
+    async def _resolve_noop(_session, _draft):
+        return None
+
+    async def _persist_noop(_session, _paper, _draft):
+        return []
+
+    monkeypatch.setattr(rag, "_resolve_draft_classifications", _resolve_noop)
+    monkeypatch.setattr(scientific_drafts, "persist_scientific_draft", _persist_noop)
+    monkeypatch.setattr(upload_tasks, "markdown_path", lambda _task_id: tmp_path / "missing.md")
+    session = FakePaperSession()
+    monkeypatch.setattr(rag_database, "async_session_factory", lambda: session)
+
+    draft = _minimal_non_review_draft([
+        _state_with_material("LaH10"),
+        _state_with_material("CeCu2Si2"),
+        _state_with_material("LaH10"),
+    ])
+    asyncio.run(rag._create_pending_paper("c" * 32, {"user_id": 1}, draft))
+
+    paper = next(obj for obj in session.added if isinstance(obj, Paper))
+    assert paper.research_materials == ["LaH10", "CeCu2Si2"]
+
+
+def test_space_groups_endpoint_returns_full_table():
+    result = asyncio.run(rag.list_space_groups(SimpleNamespace(id=1)))
+
+    groups = result["space_groups"]
+    assert len(groups) == 230
+    assert [item["number"] for item in groups] == sorted(item["number"] for item in groups)
+    assert {"number": 225, "symbol": "Fm-3m"} in groups
+    assert all(set(item) == {"number", "symbol"} for item in groups)

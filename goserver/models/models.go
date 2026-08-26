@@ -265,6 +265,7 @@ type MaterialState struct {
 	MaterialFamilyID         *uint                          `gorm:"index" json:"material_family_id"`
 	ElementCount             *int16                         `json:"element_count"`
 	MaterialDimensionality   string                         `gorm:"size:32;not null;default:unknown" json:"material_dimensionality"`
+	SuperconductorKind       string                         `gorm:"size:32;not null;default:unknown" json:"superconductor_kind"`
 	PressureValueGPa         *float64                       `json:"pressure_value_gpa"`
 	PressureMinGPa           *float64                       `json:"pressure_min_gpa"`
 	PressureMaxGPa           *float64                       `json:"pressure_max_gpa"`
@@ -381,6 +382,7 @@ type TcResult struct {
 	ExperimentalContextID *uint64   `json:"experimental_context_id"`
 	ResultKind            string    `gorm:"size:16;not null" json:"result_kind"`
 	TcMethod              string    `gorm:"size:64;not null;index" json:"tc_method"`
+	TcMethodCustom        *string   `gorm:"size:128" json:"tc_method_custom"`
 	TcValueK              *float64  `json:"tc_value_k"`
 	TcMinK                *float64  `json:"tc_min_k"`
 	TcMaxK                *float64  `json:"tc_max_k"`

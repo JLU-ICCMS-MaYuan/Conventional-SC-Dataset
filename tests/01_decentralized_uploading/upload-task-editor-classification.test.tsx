@@ -72,7 +72,7 @@ describe('材料状态多维分类编辑', () => {
     const elementCounts = await screen.findAllByLabelText('不同元素种类数')
     expect(elementCounts).toHaveLength(2)
     expect(elementCounts[0]).toHaveValue('2')
-    expect(elementCounts[0]).toHaveAttribute('readonly')
+    expect(elementCounts[0]).not.toHaveAttribute('readonly')
 
     const dimensionalities = screen.getAllByLabelText('材料维度')
     fireEvent.mouseDown(dimensionalities[0])
@@ -111,5 +111,40 @@ describe('材料状态多维分类编辑', () => {
         ],
       }),
     ])
+  })
+
+  it('元素种类数可编辑，手动修改后保存带锁定标志与新值', async () => {
+    render(<UploadTaskEditor taskId={'5'.repeat(32)} onSubmitted={vi.fn()} />)
+
+    const elementCounts = await screen.findAllByLabelText('不同元素种类数')
+    expect(elementCounts[0]).toHaveValue('2')
+    expect(screen.getAllByText('自动计算，可手动修改')).toHaveLength(2)
+
+    fireEvent.change(elementCounts[0], { target: { value: '5' } })
+    fireEvent.click(screen.getByRole('button', { name: '立即保存' }))
+
+    await waitFor(() => expect(mockedApi.put).toHaveBeenCalledTimes(1))
+    const saved = mockedApi.put.mock.calls[0][1] as typeof draft
+    expect(saved.material_states[0]).toEqual(expect.objectContaining({
+      element_count: 5,
+      element_count_locked: true,
+    }))
+    expect(saved.material_states[1]).toEqual(expect.objectContaining({ element_count: 2 }))
+  })
+
+  it('元素种类数输入非法值时即时提示且不写入草稿', async () => {
+    render(<UploadTaskEditor taskId={'5'.repeat(32)} onSubmitted={vi.fn()} />)
+
+    const elementCounts = await screen.findAllByLabelText('不同元素种类数')
+    fireEvent.change(elementCounts[0], { target: { value: '0' } })
+    expect(await screen.findByText('请输入 1–118 的整数')).toBeInTheDocument()
+
+    fireEvent.change(elementCounts[0], { target: { value: '119' } })
+    expect(screen.getByText('请输入 1–118 的整数')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '立即保存' }))
+    await waitFor(() => expect(mockedApi.put).toHaveBeenCalledTimes(1))
+    const saved = mockedApi.put.mock.calls[0][1] as typeof draft
+    expect(saved.material_states[0]).toEqual(expect.objectContaining({ element_count: 2 }))
   })
 })

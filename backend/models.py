@@ -839,6 +839,10 @@ class MaterialState(Base):
             """,
             name="ck_material_states_dimensionality",
         ),
+        CheckConstraint(
+            "superconductor_kind IN ('conventional', 'unconventional', 'unknown')",
+            name="ck_material_states_superconductor_kind",
+        ),
         UniqueConstraint(
             "id",
             "paper_id",
@@ -897,6 +901,12 @@ class MaterialState(Base):
     magnetic_field_t = Column(Numeric(14, 6))
     state_kind = Column(
         String(20),
+        nullable=False,
+        default="unknown",
+        server_default="unknown",
+    )
+    superconductor_kind = Column(
+        String(32),
         nullable=False,
         default="unknown",
         server_default="unknown",
@@ -1281,7 +1291,7 @@ class TcResult(Base):
             tc_method IN (
                 'experimental', 'anisotropic_eliashberg',
                 'isotropic_eliashberg', 'allen_dynes',
-                'mcmillan', 'unknown'
+                'mcmillan', 'scdft', 'other', 'unknown'
             )
             """,
             name="ck_tc_results_method",
@@ -1367,6 +1377,7 @@ class TcResult(Base):
     experimental_context_id = Column(BigInteger)
     result_kind = Column(String(16), nullable=False)
     tc_method = Column(String(64), nullable=False)
+    tc_method_custom = Column(String(128))
     tc_value_k = Column(Numeric(20, 8))
     tc_min_k = Column(Numeric(20, 8))
     tc_max_k = Column(Numeric(20, 8))

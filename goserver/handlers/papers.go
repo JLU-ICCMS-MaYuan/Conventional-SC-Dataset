@@ -504,7 +504,8 @@ func materialStatesToDict(states []models.MaterialState) []gin.H {
 			"id": state.ID, "material": state.Superconductor.ChemicalFormula,
 			"material_family": family, "structure_families": structures,
 			"element_count": state.ElementCount, "material_dimensionality": state.MaterialDimensionality,
-			"pressure_value_gpa": state.PressureValueGPa,
+			"superconductor_kind": state.SuperconductorKind,
+			"pressure_value_gpa":  state.PressureValueGPa,
 		})
 	}
 	return result

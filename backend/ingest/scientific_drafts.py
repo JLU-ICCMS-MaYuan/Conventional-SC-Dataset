@@ -29,6 +29,8 @@ RESERVED_PROPERTY_CODES = {
     "space_group",
 }
 
+SUPERCONDUCTOR_KINDS = {"conventional", "unconventional", "unknown"}
+
 
 @dataclass
 class ScientificEvidenceTarget:
@@ -182,6 +184,29 @@ async def _get_or_create_property_definition(
     return definition
 
 
+async def _create_calculation_context(session, paper, state, structure, calculation_data):
+    calculation = models.CalculationContext(
+        paper_id=paper.id,
+        paper_revision=paper.content_revision,
+        material_state_id=state.id,
+        structure_id=structure.id if structure is not None else None,
+        missing_structure_reason=(
+            None if structure is not None
+            else calculation_data.get("missing_structure_reason") or "论文未提供或未提取完整结构文本"
+        ),
+        phonon_nuclear_treatment=calculation_data.get("phonon_nuclear_treatment") or "unknown",
+        lambda_ep=_number(calculation_data.get("lambda_ep")),
+        omega_log_k=_number(calculation_data.get("omega_log_k")),
+        mu_star=_number(calculation_data.get("mu_star")),
+        epc_method=calculation_data.get("epc_method"),
+        calculation_code=calculation_data.get("calculation_code"),
+        parameters_json=calculation_data.get("parameters_json"),
+    )
+    session.add(calculation)
+    await session.flush()
+    return calculation
+
+
 async def persist_scientific_draft(
     session,
     paper: models.Paper,
@@ -196,12 +221,21 @@ async def persist_scientific_draft(
         dimensionality = str(state_data.get("material_dimensionality") or "unknown")
         if dimensionality not in MATERIAL_DIMENSIONALITIES:
             raise ValueError("材料维度无效")
+        draft_element_count = state_data.get("element_count")
+        element_count = (
+            draft_element_count
+            if isinstance(draft_element_count, int) and not isinstance(draft_element_count, bool)
+            else count_formula_elements(material)
+        )
+        superconductor_kind = state_data.get("superconductor_kind") or "unknown"
+        if superconductor_kind not in SUPERCONDUCTOR_KINDS:
+            superconductor_kind = "unknown"
         state = models.MaterialState(
             paper_id=paper.id,
             paper_revision=paper.content_revision,
             superconductor_id=superconductor.id,
             material_family_id=None,
-            element_count=count_formula_elements(material),
+            element_count=element_count,
             material_dimensionality=dimensionality,
             pressure_value_gpa=_number(state_data.get("pressure_value_gpa")),
             pressure_min_gpa=_number(state_data.get("pressure_min_gpa")),
@@ -215,6 +249,7 @@ async def persist_scientific_draft(
             temperature_unit_raw=state_data.get("temperature_unit_raw"),
             magnetic_field_t=_number(state_data.get("magnetic_field_t")),
             state_kind=state_data.get("state_kind") or "unknown",
+            superconductor_kind=superconductor_kind,
             note=state_data.get("note"),
         )
         session.add(state)
@@ -314,25 +349,9 @@ async def persist_scientific_draft(
         calculation = None
         if needs_calculation:
             calculation_data = calculation_data if isinstance(calculation_data, dict) else {}
-            calculation = models.CalculationContext(
-                paper_id=paper.id,
-                paper_revision=paper.content_revision,
-                material_state_id=state.id,
-                structure_id=structure.id if structure is not None else None,
-                missing_structure_reason=(
-                    None if structure is not None
-                    else calculation_data.get("missing_structure_reason") or "论文未提供或未提取完整结构文本"
-                ),
-                phonon_nuclear_treatment=calculation_data.get("phonon_nuclear_treatment") or "unknown",
-                lambda_ep=_number(calculation_data.get("lambda_ep")),
-                omega_log_k=_number(calculation_data.get("omega_log_k")),
-                mu_star=_number(calculation_data.get("mu_star")),
-                epc_method=calculation_data.get("epc_method"),
-                calculation_code=calculation_data.get("calculation_code"),
-                parameters_json=calculation_data.get("parameters_json"),
+            calculation = await _create_calculation_context(
+                session, paper, state, structure, calculation_data
             )
-            session.add(calculation)
-            await session.flush()
             if isinstance(calculation_data.get("evidence"), dict):
                 targets.append(ScientificEvidenceTarget(
                     f"{state_path}.calculation_context", calculation_data["evidence"]
@@ -365,14 +384,32 @@ async def persist_scientific_draft(
             value_raw = str(item.get("value_raw") or item.get("tc_value_k") or "").strip()
             tc_method = "experimental" if result_kind == "experimental" else item.get("tc_method") or "unknown"
             field_path = f"{state_path}.tc_results[{tc_index}]"
+            item_calculation = None
+            item_calculation_data = item.get("calculation_context")
+            if result_kind == "theoretical" and isinstance(item_calculation_data, dict) and any(
+                _number(item_calculation_data.get(key)) is not None
+                for key in ("lambda_ep", "omega_log_k", "mu_star")
+            ):
+                item_calculation = await _create_calculation_context(
+                    session, paper, state, structure, item_calculation_data
+                )
+                if isinstance(item_calculation_data.get("evidence"), dict):
+                    targets.append(ScientificEvidenceTarget(
+                        f"{field_path}.calculation_context", item_calculation_data["evidence"]
+                    ))
+            calculation_context_id = None
+            if result_kind == "theoretical":
+                context = item_calculation or calculation
+                calculation_context_id = context.id if context is not None else None
             tc_result = models.TcResult(
                 paper_id=paper.id,
                 paper_revision=paper.content_revision,
                 material_state_id=state.id,
-                calculation_context_id=calculation.id if result_kind == "theoretical" and calculation else None,
+                calculation_context_id=calculation_context_id,
                 experimental_context_id=experimental.id if result_kind == "experimental" and experimental else None,
                 result_kind=result_kind,
                 tc_method=tc_method,
+                tc_method_custom=(item.get("tc_method_custom") or None) if tc_method == "other" else None,
                 tc_value_k=_number(item.get("tc_value_k")),
                 tc_min_k=_number(item.get("tc_min_k")),
                 tc_max_k=_number(item.get("tc_max_k")),

@@ -41,6 +41,17 @@ def build_system_key(symbols: Iterable[str]) -> tuple[str, list[str]]:
 
 FORMULA_TOKEN_RE = re.compile(r"([A-Z][a-z]?)(\d+(?:\.\d+)?)?")
 
+FORMULA_BRACKET_RE = re.compile(r"\([^()]*\)|（[^（）]*）|\[[^\[\]]*\]")
+FORMULA_TOKEN_SPLIT_RE = re.compile(r"[^0-9A-Za-z]+")
+
+# Tokens dropped as whole words by the loose fallback extractor: units and
+# annotation words (case-sensitive). Matching whole tokens first is essential,
+# e.g. "GPa" must never be scanned into the elements P / Pa / G.
+FORMULA_NON_ELEMENT_TOKENS = {
+    "GPa", "kbar", "bar", "atm", "Pa", "K", "eV", "meV", "T",
+    "mol", "wt", "at", "system", "phase", "x",
+}
+
 
 def parse_formula_composition(formula: str) -> dict[str, Decimal]:
     if not formula or not formula.strip():
@@ -98,6 +109,36 @@ def normalize_formula(formula: str) -> tuple[str, list[str], dict[str, Decimal],
         amount = composition[symbol]
         normalized_parts.append(symbol if amount == 1 else f"{symbol}{_format_formula_amount(amount)}")
     return "".join(normalized_parts), elements, composition, ratios
+
+
+def extract_formula_elements_loose(formula: str) -> list[str]:
+    """Fallback for normalize_formula: extract the element set from formulas
+    containing variables (LaHx) or annotation text (units, system names)."""
+    if not formula or not formula.strip():
+        return []
+    value = FORMULA_BRACKET_RE.sub(" ", formula)
+    elements: set[str] = set()
+    for token in FORMULA_TOKEN_SPLIT_RE.split(value):
+        if not token or token in FORMULA_NON_ELEMENT_TOKENS:
+            continue
+        if len(token) == 1 and token.islower():
+            continue
+        # Prefer the two-letter symbol and fall back to the single letter, so a
+        # trailing variable letter never swallows a valid element ("Hx" -> H).
+        cursor = 0
+        while cursor < len(token):
+            if not token[cursor].isupper():
+                cursor += 1
+                continue
+            pair = token[cursor : cursor + 2]
+            if len(pair) == 2 and pair[1].islower() and pair in VALID_ELEMENT_SYMBOLS:
+                elements.add(pair)
+                cursor += 2
+            else:
+                if token[cursor] in VALID_ELEMENT_SYMBOLS:
+                    elements.add(token[cursor])
+                cursor += 1
+    return sorted(elements)
 
 
 def build_composition_key(composition: dict[str, Decimal]) -> str:

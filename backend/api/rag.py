@@ -205,6 +205,18 @@ async def _resolve_draft_classifications(session, draft: dict[str, Any]) -> None
         state["structure_families"] = resolved_structures
 
 
+def _derived_research_materials(material_states: list[dict[str, Any]]) -> list[str]:
+    """按出现顺序汇总材料状态中的化学式，去空白、去重。"""
+    seen: set[str] = set()
+    derived: list[str] = []
+    for state in material_states:
+        material = str(state.get("material") or "").strip()
+        if material and material not in seen:
+            seen.add(material)
+            derived.append(material)
+    return derived
+
+
 def _validate_draft(draft: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     paper, material_states = _draft_values(draft)
     if not str(paper.get("title") or "").strip():
@@ -222,7 +234,11 @@ def _validate_draft(draft: dict[str, Any]) -> tuple[dict[str, Any], list[dict[st
         raise _upload_error(400, "theoretical_subtype_required", "理论论文必须选择二级类型")
     if paper_type != "theoretical":
         paper["theoretical_subtype"] = None
-    if paper_type != "review" and not paper.get("research_materials"):
+    if (
+        paper_type != "review"
+        and not paper.get("research_materials")
+        and not _derived_research_materials(material_states)
+    ):
         raise _upload_error(400, "research_material_required", "非综述论文至少需要一个研究材料")
 
     if paper_type != "review" and not material_states:
@@ -685,6 +701,20 @@ async def get_upload_task(
     return {"ok": True, "data": _task_for_user(task_id, current_user)}
 
 
+@router.get("/space-groups")
+async def list_space_groups(
+    current_user: User = Depends(get_current_user),
+):
+    from backend.services.space_groups import all_space_groups
+
+    return {
+        "space_groups": [
+            {"number": item["number"], "symbol": item["symbol"]}
+            for item in all_space_groups()
+        ]
+    }
+
+
 @router.get("/upload-tasks/{task_id}/draft")
 async def get_upload_draft(
     task_id: str,
@@ -970,6 +1000,10 @@ async def _create_pending_paper(
                             "该论文已经存在",
                             existing_paper_id=existing.id,
                         )
+
+                derived_materials = _derived_research_materials(material_states)
+                if derived_materials:
+                    paper_data["research_materials"] = derived_materials
 
                 paper = Paper(
                     upload_task_id=task_id,
