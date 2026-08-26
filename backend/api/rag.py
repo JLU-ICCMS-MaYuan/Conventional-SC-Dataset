@@ -1310,8 +1310,9 @@ async def _submit_upload_draft_locked(
     try:
         paper_id = await _create_pending_paper(task_id, state, draft)
     except Exception:
+        # 提交失败必须回滚为 ready，否则任务卡在 submitting、详情页只剩空白只读预览
         try:
-            update_state(task_id, submission_status="failed")
+            update_state(task_id, status="ready", submission_status="failed")
         except Exception:
             pass
         raise

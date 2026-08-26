@@ -382,3 +382,51 @@ def test_submit_rejects_same_half_filled_draft():
         assert exc.detail["code"] == "tc_value_required"
     else:
         raise AssertionError("半成品草稿在提交校验时必须拒绝")
+
+
+def test_submit_failure_rolls_state_back_to_ready(monkeypatch):
+    from backend.ingest import upload_contracts
+
+    task_id = "e" * 32
+    draft = {"paper": {"title": "t"}, "material_states": []}
+
+    async def _no_submitted(_task_id):
+        return None
+
+    monkeypatch.setattr(rag, "_submitted_paper_for_task", _no_submitted)
+    monkeypatch.setattr(
+        rag,
+        "_task_for_user",
+        lambda _task_id, _user: {
+            "task_id": task_id,
+            "user_id": 2,
+            "stage": "ready",
+            "processing_status": "succeeded",
+        },
+    )
+    monkeypatch.setattr(upload_tasks, "get_draft", lambda _task_id: draft)
+    monkeypatch.setattr(
+        upload_contracts.CleanupContext, "from_state", staticmethod(lambda _task_id, _state: None)
+    )
+
+    state_calls = []
+
+    def _update_state(_task_id, **fields):
+        state_calls.append(fields)
+
+    monkeypatch.setattr(upload_tasks, "update_state", _update_state)
+
+    async def _boom(_task_id, _state, _draft):
+        raise RuntimeError("模拟提交写入失败")
+
+    monkeypatch.setattr(rag, "_create_pending_paper", _boom)
+
+    try:
+        asyncio.run(rag._submit_upload_draft_locked(task_id, SimpleNamespace(id=2)))
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError("提交异常必须继续向上抛出")
+
+    assert state_calls[0] == {"status": "submitting", "submission_status": "submitting"}
+    assert state_calls[-1] == {"status": "ready", "submission_status": "failed"}
