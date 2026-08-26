@@ -83,7 +83,7 @@
 
 - [x] T023 运行 `python -m pytest backend/tests/ -q`、`cd frontend && npm run test:upload-ui`、`npx tsc --noEmit` 与 `cd goserver && go build ./... && go test ./...`，全部通过；修复波及的既有测试
 - [ ] T024 按 quickstart.md 场景 1–7 手工验证并记录结果（含 alembic upgrade head 后 fresh 启动）
-- [ ] T025 用 `gh issue edit 52 --body` 回写 Spec 链接（docs/specs/52-upload-review-material-state/）；按 AGENTS.md 提交规范 git commit（仅暂存本 Feature 文件）
+- [x] T025 用 `gh issue edit 52 --body` 回写 Spec 链接（docs/specs/52-upload-review-material-state/）；按 AGENTS.md 提交规范 git commit（仅暂存本 Feature 文件）
 
 ## 依赖与执行顺序
 
