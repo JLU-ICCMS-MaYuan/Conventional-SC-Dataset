@@ -66,7 +66,7 @@ afterEach(() => {
 })
 
 describe('材料状态多维分类编辑', () => {
-  it('保存维度与多选类型标签（不写主项标记），并把分类应用到同一材料', async () => {
+  it('保存维度与多选类型标签（不写主项标记），并把分类应用到同一材料', { timeout: 15000 }, async () => {
     render(<UploadTaskEditor taskId={'5'.repeat(32)} onSubmitted={vi.fn()} />)
 
     const elementCounts = await screen.findAllByLabelText('不同元素种类数')

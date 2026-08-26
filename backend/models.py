@@ -802,13 +802,9 @@ class MaterialState(Base):
         ),
         CheckConstraint(
             """
-            (pressure_min_gpa IS NULL AND pressure_max_gpa IS NULL)
-            OR
-            (
-                pressure_min_gpa IS NOT NULL
-                AND pressure_max_gpa IS NOT NULL
-                AND pressure_min_gpa <= pressure_max_gpa
-            )
+            pressure_min_gpa IS NULL
+            OR pressure_max_gpa IS NULL
+            OR pressure_min_gpa <= pressure_max_gpa
             """,
             name="ck_material_states_pressure_range",
         ),

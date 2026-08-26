@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import UploadTaskEditor from '../../frontend/src/components/UploadTaskEditor'
 import { api } from '../../frontend/src/lib/api'
+import type { ApiError } from '../../frontend/src/lib/api'
 import type { DraftMaterialState, UploadDraft } from '../../frontend/src/lib/paperProcessing'
 
 vi.mock('../../frontend/src/lib/api', () => ({
@@ -360,5 +361,33 @@ describe('晶系与空间群三方联动', () => {
 
     expect(screen.getByLabelText('空间群符号')).toHaveValue('Fd-3m')
     expect(screen.getByRole('combobox', { name: '晶系' })).toHaveTextContent('立方')
+  })
+})
+
+describe('保存/提交失败的后端错误提示', () => {
+  it('保存失败时展示后端 detail.message 并附 code', async () => {
+    const apiError = new Error('第 1 个材料状态的压强区间 min 不能大于 max') as ApiError
+    apiError.status = 400
+    apiError.code = 'invalid_pressure_range'
+    apiError.detail = { code: 'invalid_pressure_range', message: '第 1 个材料状态的压强区间 min 不能大于 max' }
+    mockedApi.put.mockRejectedValueOnce(apiError)
+
+    render(<UploadTaskEditor taskId={'5'.repeat(32)} onSubmitted={vi.fn()} draftOverride={makeDraft([makeState()])} />)
+    fireEvent.click(await screen.findByRole('button', { name: '立即保存' }))
+
+    expect(await screen.findByText(
+      '保存失败：第 1 个材料状态的压强区间 min 不能大于 max（invalid_pressure_range）',
+    )).toBeInTheDocument()
+  })
+
+  it('提交失败且响应无 detail 时回退通用文案', async () => {
+    const apiError = new Error('Internal Server Error') as ApiError
+    apiError.status = 500
+    mockedApi.post.mockRejectedValueOnce(apiError)
+
+    render(<UploadTaskEditor taskId={'f'.repeat(32)} onSubmitted={vi.fn()} draftOverride={makeDraft([makeState()])} />)
+    fireEvent.click(await screen.findByRole('button', { name: '提交审核' }))
+
+    expect(await screen.findByText('提交审核失败')).toBeInTheDocument()
   })
 })

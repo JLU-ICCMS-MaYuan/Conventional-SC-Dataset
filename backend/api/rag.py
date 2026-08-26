@@ -217,8 +217,14 @@ def _derived_research_materials(material_states: list[dict[str, Any]]) -> list[s
     return derived
 
 
-def _validate_draft(draft: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+def _validate_draft(
+    draft: dict[str, Any], *, partial: bool = False
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     paper, material_states = _draft_values(draft)
+    if partial:
+        # 草稿保存（PUT）仅做结构性检查，业务字段校验留给提交时执行，
+        # 避免半成品草稿被 400 拒绝导致编辑丢失。
+        return paper, material_states
     if not str(paper.get("title") or "").strip():
         raise _upload_error(400, "title_required", "论文标题不能为空")
 
@@ -274,6 +280,11 @@ def _validate_draft(draft: dict[str, Any]) -> tuple[dict[str, Any], list[dict[st
                 valid_group_number = False
             if not valid_group_number:
                 raise _upload_error(400, "invalid_space_group_number", f"第 {state_index + 1} 个材料状态的空间群号必须为 1–230")
+        if state.get("pressure_min_gpa") not in (None, "") and state.get("pressure_max_gpa") not in (None, ""):
+            pressure_min = _number(state.get("pressure_min_gpa"))
+            pressure_max = _number(state.get("pressure_max_gpa"))
+            if pressure_min is not None and pressure_max is not None and pressure_min > pressure_max:
+                raise _upload_error(400, "invalid_pressure_range", f"第 {state_index + 1} 个材料状态的压强区间 min 不能大于 max")
         calculation = state.get("calculation_context")
         if isinstance(calculation, dict):
             for field, label in (("lambda_ep", "λ"), ("omega_log_k", "ωlog")):
@@ -785,7 +796,7 @@ async def put_upload_draft(
         normalized["ai_original"] = _normalize_draft(previous["ai_original"])
     async with async_session_factory() as session:
         await _resolve_draft_classifications(session, normalized)
-    _validate_draft(normalized)
+    _validate_draft(normalized, partial=True)
     saved = save_draft(task_id, normalized)
     return {"ok": True, "data": saved, "saved_at": int(time.time())}
 

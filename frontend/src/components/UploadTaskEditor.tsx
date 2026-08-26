@@ -112,6 +112,27 @@ const defaultCollapsedStates = (count: number): Record<number, boolean> => (
     : {}
 )
 
+// 后端错误体为 FastAPI HTTPException：detail 可能是字符串或 {code, message} 对象。
+// 提取具体原因；网络错误或无 detail 时返回 null，由调用方回退通用文案
+const backendErrorReason = (reason: unknown): { message: string; code?: string } | null => {
+  const detail = (reason as ApiError | null)?.detail
+  if (typeof detail === 'string' && detail.trim()) return { message: detail }
+  if (detail && typeof detail === 'object') {
+    const { code, message } = detail as { code?: unknown; message?: unknown }
+    if (typeof message === 'string' && message.trim()) {
+      return { message, code: typeof code === 'string' && code ? code : undefined }
+    }
+  }
+  return null
+}
+
+// 保存/提交失败的横幅文案：优先展示后端具体原因（可附 code），否则回退通用文案
+const failureMessage = (action: '保存' | '提交', reason: unknown, fallback: string): string => {
+  const reasonDetail = backendErrorReason(reason)
+  if (!reasonDetail) return fallback
+  return `${action}失败：${reasonDetail.message}${reasonDetail.code ? `（${reasonDetail.code}）` : ''}`
+}
+
 const COLLAPSED_EVIDENCE_HEIGHT = 120
 // AI 建议折叠后仅保留单行（MUI caption 行高约 20px），完整文本仍保留在草稿数据中
 const COLLAPSED_AI_LINE_HEIGHT = 20
@@ -582,7 +603,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
       if (showResult) setError('')
       return true
     } catch (reason) {
-      setError((reason as Error).message || '草稿保存失败')
+      setError(failureMessage('保存', reason, '草稿保存失败'))
       return false
     } finally {
       setSaving(false)
@@ -652,7 +673,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
       if (apiError.status === 409 && apiError.existingPaperId) {
         setError(`该 DOI 已存在（论文 #${apiError.existingPaperId}），没有创建重复记录。`)
       } else {
-        setError(apiError.message || '提交审核失败')
+        setError(failureMessage('提交', reason, '提交审核失败'))
       }
     } finally {
       setSubmitting(false)

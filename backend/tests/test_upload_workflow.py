@@ -309,3 +309,76 @@ def test_space_groups_endpoint_returns_full_table():
     assert [item["number"] for item in groups] == sorted(item["number"] for item in groups)
     assert {"number": 225, "symbol": "Fm-3m"} in groups
     assert all(set(item) == {"number", "symbol"} for item in groups)
+
+
+def test_validate_draft_accepts_one_sided_pressure_range():
+    state = _state_with_material("LaH10")
+    state["pressure_min_gpa"] = 200
+    state["pressure_max_gpa"] = None
+    draft = _minimal_non_review_draft([state])
+
+    _paper, states = rag._validate_draft(draft)
+
+    assert states[0]["pressure_min_gpa"] == 200
+
+
+def test_validate_draft_rejects_inverted_pressure_range():
+    state = _state_with_material("LaH10")
+    state["pressure_min_gpa"] = 300
+    state["pressure_max_gpa"] = 200
+    draft = _minimal_non_review_draft([state])
+
+    try:
+        rag._validate_draft(draft)
+    except HTTPException as exc:
+        assert exc.status_code == 400
+        assert exc.detail["code"] == "invalid_pressure_range"
+        assert "第 1 个材料状态的压强区间 min 不能大于 max" in exc.detail["message"]
+    else:
+        raise AssertionError("min > max 的压强区间必须在提交校验时拒绝")
+
+
+def _half_filled_draft():
+    state = _state_with_material("LaH10")
+    state["tc_results"] = [{"result_kind": "experimental"}]
+    return _minimal_non_review_draft([state])
+
+
+def test_put_draft_saves_half_filled_draft(monkeypatch):
+    import backend.rag.database as rag_database
+    from backend.ingest import upload_jobs
+
+    task_id = "d" * 32
+    monkeypatch.setattr(rag, "_task_for_user", lambda _task_id, _user: {"task_id": task_id})
+    monkeypatch.setattr(upload_tasks, "get_draft", lambda _task_id: None)
+    monkeypatch.setattr(upload_jobs, "_normalize_draft", lambda draft: draft)
+
+    async def _resolve_noop(_session, _draft):
+        return None
+
+    monkeypatch.setattr(rag, "_resolve_draft_classifications", _resolve_noop)
+    monkeypatch.setattr(rag_database, "async_session_factory", lambda: FakeAsyncSession())
+
+    saved = {}
+
+    def _save(_task_id, draft):
+        saved["draft"] = draft
+        return draft
+
+    monkeypatch.setattr(upload_tasks, "save_draft", _save)
+
+    result = asyncio.run(rag.put_upload_draft(task_id, _half_filled_draft(), SimpleNamespace(id=1)))
+
+    assert result["ok"] is True
+    assert result["data"]["material_states"][0]["tc_results"] == [{"result_kind": "experimental"}]
+    assert saved["draft"] == result["data"]
+
+
+def test_submit_rejects_same_half_filled_draft():
+    try:
+        rag._validate_draft(_half_filled_draft())
+    except HTTPException as exc:
+        assert exc.status_code == 400
+        assert exc.detail["code"] == "tc_value_required"
+    else:
+        raise AssertionError("半成品草稿在提交校验时必须拒绝")
