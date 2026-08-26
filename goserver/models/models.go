@@ -266,6 +266,7 @@ type MaterialState struct {
 	ElementCount             *int16                         `json:"element_count"`
 	MaterialDimensionality   string                         `gorm:"size:32;not null;default:unknown" json:"material_dimensionality"`
 	SuperconductorKind       string                         `gorm:"size:32;not null;default:unknown" json:"superconductor_kind"`
+	CrystalSystem            string                         `gorm:"size:32;not null;default:unknown" json:"crystal_system"`
 	PressureValueGPa         *float64                       `json:"pressure_value_gpa"`
 	PressureMinGPa           *float64                       `json:"pressure_min_gpa"`
 	PressureMaxGPa           *float64                       `json:"pressure_max_gpa"`

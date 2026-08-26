@@ -66,7 +66,7 @@ afterEach(() => {
 })
 
 describe('材料状态多维分类编辑', () => {
-  it('保存维度、结构多选和唯一主项，并把分类应用到同一材料', async () => {
+  it('保存维度与多选类型标签（不写主项标记），并把分类应用到同一材料', async () => {
     render(<UploadTaskEditor taskId={'5'.repeat(32)} onSubmitted={vi.fn()} />)
 
     const elementCounts = await screen.findAllByLabelText('不同元素种类数')
@@ -78,15 +78,12 @@ describe('材料状态多维分类编辑', () => {
     fireEvent.mouseDown(dimensionalities[0])
     fireEvent.click(await screen.findByRole('option', { name: '三维' }))
 
-    const structureInputs = screen.getAllByLabelText('结构家族（可多选）')
+    expect(screen.queryByLabelText('主结构家族')).not.toBeInTheDocument()
+    const structureInputs = screen.getAllByLabelText('更多类型标签（可以填写不止一个类型）')
     fireEvent.change(structureInputs[0], { target: { value: '笼状' } })
     fireEvent.click(await screen.findByText('笼状结构'))
     fireEvent.change(structureInputs[0], { target: { value: '层状' } })
     fireEvent.click(await screen.findByText('层状结构'))
-
-    const primarySelectors = screen.getAllByLabelText('主结构家族')
-    fireEvent.mouseDown(primarySelectors[0])
-    fireEvent.click(await screen.findByRole('option', { name: '层状结构' }))
 
     fireEvent.click(screen.getAllByRole('button', { name: '应用到同材料' })[0])
     fireEvent.click(screen.getByRole('button', { name: '立即保存' }))
@@ -99,7 +96,7 @@ describe('材料状态多维分类编辑', () => {
         material_dimensionality: 'three_dimensional',
         structure_families: [
           { id: 10, name: '笼状结构', status: 'confirmed', is_primary: false },
-          { id: 11, name: '层状结构', status: 'confirmed', is_primary: true },
+          { id: 11, name: '层状结构', status: 'confirmed', is_primary: false },
         ],
       }),
       expect.objectContaining({
@@ -107,7 +104,7 @@ describe('材料状态多维分类编辑', () => {
         material_dimensionality: 'three_dimensional',
         structure_families: [
           { id: 10, name: '笼状结构', status: 'confirmed', is_primary: false },
-          { id: 11, name: '层状结构', status: 'confirmed', is_primary: true },
+          { id: 11, name: '层状结构', status: 'confirmed', is_primary: false },
         ],
       }),
     ])

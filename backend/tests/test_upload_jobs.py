@@ -493,3 +493,133 @@ def test_tc_result_calculation_context_is_numeric_normalized():
     assert context["lambda_ep"] == 1.2
     assert context["omega_log_k"] == 850.0
     assert context["mu_star"] == 0.1
+
+
+def test_crystal_system_whitelists_values_and_maps_chinese_aliases():
+    draft = _normalize_draft({
+        "paper": {"paper_type": "theoretical"},
+        "material_states": [
+            {"material": "LaH10", "crystal_system": "perovskite"},
+            {"material": "MgB2", "crystal_system": "立方"},
+        ],
+    })
+
+    assert draft["material_states"][0]["crystal_system"] == "unknown"
+    assert draft["material_states"][1]["crystal_system"] == "cubic"
+
+
+def test_crystal_system_is_overridden_by_authoritative_space_group_number():
+    draft = _normalize_draft({
+        "paper": {"paper_type": "theoretical"},
+        "material_states": [{
+            "material": "LaH10",
+            "crystal_system": "cubic",
+            "reported_space_group_number": 139,
+        }],
+    })
+
+    assert draft["material_states"][0]["crystal_system"] == "tetragonal"
+
+
+def test_crystal_system_keeps_ai_value_when_space_group_number_missing():
+    draft = _normalize_draft({
+        "paper": {"paper_type": "theoretical"},
+        "material_states": [{"material": "LaH10", "crystal_system": "Hexagonal"}],
+    })
+
+    assert draft["material_states"][0]["crystal_system"] == "hexagonal"
+
+
+def test_methodology_inference_mcmillan_marks_conventional_and_fills_tc_method():
+    draft = _normalize_draft({
+        "paper": {"paper_type": "theoretical", "methodology": ["McMillan equation"]},
+        "material_states": [{
+            "material": "LaH10",
+            "superconductor_kind": "unknown",
+            "tc_results": [{"tc_value_k": 250, "result_kind": "theoretical", "tc_method": "unknown"}],
+        }],
+    })
+
+    state = draft["material_states"][0]
+    assert state["superconductor_kind"] == "conventional"
+    assert state["tc_results"][0]["tc_method"] == "mcmillan"
+
+
+def test_methodology_inference_multiple_methods_keep_tc_method_unknown():
+    draft = _normalize_draft({
+        "paper": {
+            "paper_type": "theoretical",
+            "methodology": ["McMillan equation", "numerical solution of the Eliashberg equations"],
+        },
+        "material_states": [{
+            "material": "LaH10",
+            "tc_results": [{"tc_value_k": 250, "result_kind": "theoretical"}],
+        }],
+    })
+
+    state = draft["material_states"][0]
+    assert state["superconductor_kind"] == "conventional"
+    assert state["tc_results"][0]["tc_method"] == "unknown"
+
+
+def test_methodology_inference_ignores_non_discriminative_text():
+    draft = _normalize_draft({
+        "paper": {"paper_type": "theoretical", "methodology": ["superconductivity calculations"]},
+        "material_states": [{
+            "material": "LaH10",
+            "tc_results": [{"tc_value_k": 250, "result_kind": "theoretical"}],
+        }],
+    })
+
+    state = draft["material_states"][0]
+    assert state["superconductor_kind"] == "unknown"
+    assert state["tc_results"][0]["tc_method"] == "unknown"
+
+
+def test_methodology_inference_does_not_override_unconventional():
+    draft = _normalize_draft({
+        "paper": {"paper_type": "experimental", "methodology": ["McMillan equation"]},
+        "material_states": [{
+            "material": "YBa2Cu3O7",
+            "superconductor_kind": "unconventional",
+        }],
+    })
+
+    assert draft["material_states"][0]["superconductor_kind"] == "unconventional"
+
+
+def test_methodology_inference_leaves_experimental_tc_untouched():
+    draft = _normalize_draft({
+        "paper": {"paper_type": "experimental", "methodology": ["McMillan equation"]},
+        "material_states": [{
+            "material": "YBa2Cu3O7",
+            "tc_results": [{"tc_value_k": 92, "result_kind": "experimental"}],
+        }],
+    })
+
+    assert draft["material_states"][0]["tc_results"][0]["tc_method"] == "experimental"
+
+
+def test_methodology_inference_allen_dynes_wins_over_mcmillan():
+    draft = _normalize_draft({
+        "paper": {"paper_type": "theoretical", "methodology": ["Allen-Dynes modified McMillan"]},
+        "material_states": [{
+            "material": "LaH10",
+            "tc_results": [{"tc_value_k": 250, "result_kind": "theoretical"}],
+        }],
+    })
+
+    state = draft["material_states"][0]
+    assert state["superconductor_kind"] == "conventional"
+    assert state["tc_results"][0]["tc_method"] == "allen_dynes"
+
+
+def test_methodology_inference_never_creates_tc_results():
+    draft = _normalize_draft({
+        "paper": {"paper_type": "theoretical", "methodology": ["McMillan equation"]},
+        "material_states": [{"material": "LaH10"}],
+    })
+
+    state = draft["material_states"][0]
+    assert state["superconductor_kind"] == "conventional"
+    assert state["tc_results"] == []

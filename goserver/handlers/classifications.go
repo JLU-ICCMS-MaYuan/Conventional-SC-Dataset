@@ -61,6 +61,7 @@ type classificationSnapshotState struct {
 	MaterialFamily         classificationSnapshotTerm   `json:"material_family"`
 	MaterialDimensionality string                       `json:"material_dimensionality"`
 	SuperconductorKind     string                       `json:"superconductor_kind"`
+	CrystalSystem          string                       `json:"crystal_system"`
 	StructureFamilies      []classificationSnapshotTerm `json:"structure_families"`
 }
 
@@ -313,6 +314,7 @@ func applyPaperClassifications(
 			MaterialFamily:         classificationSnapshotTerm{ID: materialFamily.ID, Name: materialFamily.NameZH},
 			MaterialDimensionality: update.MaterialDimensionality,
 			SuperconductorKind:     state.SuperconductorKind,
+			CrystalSystem:          state.CrystalSystem,
 			StructureFamilies:      structureSnapshot,
 		})
 	}

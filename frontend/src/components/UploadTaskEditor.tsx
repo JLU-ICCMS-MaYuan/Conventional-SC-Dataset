@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import {
   Alert, Autocomplete, Box, Button, Card, CardContent, Checkbox, Chip, CircularProgress, Collapse,
-  FormControl, FormHelperText, InputLabel, ListItemText, Menu, MenuItem, Select, TextField, Typography, useMediaQuery,
+  FormControl, InputLabel, ListItemText, Menu, MenuItem, Select, TextField, Typography, useMediaQuery,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import DeleteIcon from '@mui/icons-material/Delete'
@@ -20,8 +20,8 @@ import {
 import ClassificationAutocomplete from './ClassificationAutocomplete'
 import StructureCandidatePanel from './StructureCandidatePanel'
 import {
-  DraftKeyProperty, DraftMaterialState, DraftTcResult, SourceEvidence, StructureCandidate, UploadDraft, evidenceList,
-  normalizeUploadDraft, unwrapData,
+  CrystalSystem, DraftKeyProperty, DraftMaterialState, DraftTcResult, SourceEvidence, StructureCandidate, UploadDraft,
+  evidenceList, normalizeUploadDraft, unwrapData,
 } from '../lib/paperProcessing'
 
 interface UploadTaskEditorProps {
@@ -48,9 +48,8 @@ const PAPER_TYPE_OPTIONS = [
 ]
 
 const SUPERCONDUCTOR_KIND_OPTIONS = [
-  { value: 'conventional', label: '常规 (BCS)' },
-  { value: 'unconventional', label: '非常规' },
-  { value: 'unknown', label: '未知' },
+  { value: 'conventional', label: '常规超导体（BCS超导体）' },
+  { value: 'unconventional', label: '非常规超导体' },
 ]
 
 const TC_METHOD_OPTIONS = [
@@ -71,6 +70,32 @@ interface SpaceGroupOption {
   symbol: string
 }
 
+const CRYSTAL_SYSTEM_OPTIONS: Array<{ value: CrystalSystem; label: string }> = [
+  { value: 'triclinic', label: '三斜' },
+  { value: 'monoclinic', label: '单斜' },
+  { value: 'orthorhombic', label: '正交' },
+  { value: 'tetragonal', label: '四方' },
+  { value: 'trigonal', label: '三方' },
+  { value: 'hexagonal', label: '六方' },
+  { value: 'cubic', label: '立方' },
+  { value: 'unknown', label: '未知' },
+]
+
+// 晶系↔群号静态范围表（与 backend/services/space_groups.py 一致；群号是晶系的权威来源）
+const CRYSTAL_SYSTEM_NUMBER_RANGES: Array<{ value: Exclude<CrystalSystem, 'unknown'>; min: number; max: number }> = [
+  { value: 'triclinic', min: 1, max: 2 },
+  { value: 'monoclinic', min: 3, max: 15 },
+  { value: 'orthorhombic', min: 16, max: 74 },
+  { value: 'tetragonal', min: 75, max: 142 },
+  { value: 'trigonal', min: 143, max: 167 },
+  { value: 'hexagonal', min: 168, max: 194 },
+  { value: 'cubic', min: 195, max: 230 },
+]
+
+const crystalSystemForNumber = (value: number): CrystalSystem => (
+  CRYSTAL_SYSTEM_NUMBER_RANGES.find(range => value >= range.min && value <= range.max)?.value ?? 'unknown'
+)
+
 const toLines = (value: string[] | undefined) => (value || []).join('\n')
 const fromLines = (value: string) => value.split(/[\n,，]/).map(item => item.trim()).filter(Boolean)
 const displayValue = (value: unknown) => {
@@ -88,6 +113,8 @@ const defaultCollapsedStates = (count: number): Record<number, boolean> => (
 )
 
 const COLLAPSED_EVIDENCE_HEIGHT = 120
+// AI 建议折叠后仅保留单行（MUI caption 行高约 20px），完整文本仍保留在草稿数据中
+const COLLAPSED_AI_LINE_HEIGHT = 20
 
 const EvidenceNotes: React.FC<{
   label: string
@@ -146,12 +173,19 @@ const EvidenceNotes: React.FC<{
     }}>
       <Collapse
         in={!isOverflowing || expanded}
-        collapsedSize={isOverflowing ? COLLAPSED_EVIDENCE_HEIGHT : 0}
+        collapsedSize={isOverflowing ? COLLAPSED_AI_LINE_HEIGHT : 0}
         timeout={prefersReducedMotion ? 0 : 180}
       >
         <Box id={contentId} ref={contentRef} sx={{ minWidth: 0 }}>
           {aiValue !== undefined && (
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              display="block"
+              style={isOverflowing && !expanded
+                ? { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
+                : { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
+            >
               AI 建议：{displayValue(aiValue)}
             </Typography>
           )}
@@ -337,6 +371,28 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
       ...current,
       material_states: current.material_states.map((item, itemIndex) =>
         itemIndex === index ? { ...item, [field]: value } : item),
+    }))
+  }
+
+  // 群号合法（1–230）时按标准表反查符号并按范围表改写晶系（群号权威）；非法输入只保存原值不联动
+  const changeSpaceGroupNumber = (index: number, raw: string) => {
+    const trimmed = raw.trim()
+    const parsed = trimmed === '' ? null : Number(trimmed)
+    changeDraft(current => ({
+      ...current,
+      material_states: current.material_states.map((item, itemIndex) => {
+        if (itemIndex !== index) return item
+        if (parsed != null && Number.isInteger(parsed) && parsed >= 1 && parsed <= 230) {
+          return {
+            ...item,
+            reported_space_group_number: parsed,
+            reported_space_group_symbol: spaceGroups.find(option => option.number === parsed)?.symbol
+              ?? item.reported_space_group_symbol ?? null,
+            crystal_system: crystalSystemForNumber(parsed),
+          }
+        }
+        return { ...item, reported_space_group_number: Number.isNaN(parsed) ? null : parsed }
+      }),
     }))
   }
 
@@ -801,6 +857,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
               pressure_value_gpa: null,
               state_kind: current.paper.paper_type === 'experimental' ? 'experimental' : 'theoretical',
               superconductor_kind: 'unknown',
+              crystal_system: 'unknown',
               reported_space_group_symbol: null,
               reported_space_group_number: null,
               calculation_context: current.paper.paper_type === 'experimental' ? null : {
@@ -820,6 +877,11 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
           const stateCandidates = (draft.structure_candidates || []).filter(candidate => candidate.material_state_ref === `material_states[${index}]`)
           const isCollapsed = !readOnly && Boolean(collapsedStates[index])
           const isConventional = (state.superconductor_kind || 'unknown') === 'conventional'
+          // 晶系未知时显示全部 230 条空间群，否则仅显示该晶系群号范围内的符号
+          const crystalSystem = state.crystal_system || 'unknown'
+          const spaceGroupOptions = crystalSystem === 'unknown'
+            ? spaceGroups
+            : spaceGroups.filter(option => crystalSystemForNumber(option.number) === crystalSystem)
           const hasEnergyAboveHull = (state.properties || []).some(item =>
             [item.name, item.name_raw].some(value => String(value || '').trim().toLowerCase() === ENERGY_ABOVE_HULL_NAME))
           return (
@@ -908,41 +970,32 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
                       typeof option !== 'string' && typeof value !== 'string' && option.id === value.id
                     )}
                     onChange={(_, values) => {
-                      const previous = state.structure_families || []
+                      // D4：编辑器不再写入主项标记，新写入的 is_primary 一律为 false
                       updateMaterialState(index, 'structure_families', values.map(value => {
                         const selection = typeof value === 'string' ? pendingSelection(value) : selectionForTerm(value)
-                        const wasPrimary = previous.some(item => (
-                          item.is_primary && (selection?.id != null ? item.id === selection.id : item.name === selection?.name)
-                        ))
-                        return selection ? { ...selection, is_primary: wasPrimary } : null
+                        return selection ? { ...selection, is_primary: false } : null
                       }).filter(Boolean))
                     }}
-                    renderInput={params => <TextField {...params} label="结构家族（可多选）" error={Boolean(catalogError)} />}
+                    renderInput={params => <TextField {...params} label="更多类型标签（可以填写不止一个类型）" error={Boolean(catalogError)} />}
                   />
-                  <FormControl fullWidth disabled={!state.structure_families?.length}>
-                    <InputLabel id={`primary-structure-family-${index}-label`}>主结构家族</InputLabel>
-                    <Select
-                      labelId={`primary-structure-family-${index}-label`}
-                      label="主结构家族"
-                      value={(state.structure_families || []).find(item => item.is_primary)?.name || ''}
-                      onChange={event => updateMaterialState(index, 'structure_families', (state.structure_families || []).map(item => ({
-                        ...item,
-                        is_primary: item.name === event.target.value,
-                      })))}
-                    >
-                      {(state.structure_families || []).map(item => (
-                        <MenuItem key={`${item.id ?? 'pending'}:${item.name}`} value={item.name}>{item.name}</MenuItem>
-                      ))}
-                    </Select>
-                    <FormHelperText>
-                      {state.structure_families?.length ? '主结构家族为已选结构家族中的主要一项' : '请先选择结构家族'}
-                    </FormHelperText>
-                  </FormControl>
                   <TextField label="压强 (GPa)" type="number" value={state.pressure_value_gpa ?? ''} helperText={state.pressure_value_gpa == null && state.pressure_raw ? '原文压力：' + state.pressure_raw + ' ' + (state.pressure_unit_raw || '') : undefined}
                     onChange={event => updateMaterialState(index, 'pressure_value_gpa', event.target.value ? Number(event.target.value) : null)} />
+                  <FormControl fullWidth>
+                    <InputLabel id={`crystal-system-${index}-label`}>晶系</InputLabel>
+                    <Select
+                      labelId={`crystal-system-${index}-label`}
+                      label="晶系"
+                      value={crystalSystem}
+                      onChange={event => updateMaterialState(index, 'crystal_system', event.target.value)}
+                    >
+                      {CRYSTAL_SYSTEM_OPTIONS.map(option => (
+                        <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
                   <Autocomplete<SpaceGroupOption | string, false, false, true>
                     freeSolo
-                    options={spaceGroups}
+                    options={spaceGroupOptions}
                     getOptionLabel={option => (typeof option === 'string' ? option : option.symbol)}
                     value={state.reported_space_group_symbol || ''}
                     onChange={(_, value) => {
@@ -953,6 +1006,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
                             ...item,
                             reported_space_group_symbol: value.symbol,
                             reported_space_group_number: value.number,
+                            crystal_system: crystalSystemForNumber(value.number),
                           } : item),
                         }))
                         return
@@ -967,14 +1021,19 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
                     renderInput={params => <TextField {...params} label="空间群符号" />}
                   />
                   <TextField label="空间群号" type="number" value={state.reported_space_group_number ?? ''}
-                    onChange={event => updateMaterialState(index, 'reported_space_group_number', event.target.value ? Number(event.target.value) : null)}
+                    onChange={event => changeSpaceGroupNumber(index, event.target.value)}
                     slotProps={{ htmlInput: { min: 1, max: 230 } }} />
                   <FormControl fullWidth>
                     <InputLabel id={`superconductor-kind-${index}-label`}>超导类型</InputLabel>
                     <Select
                       labelId={`superconductor-kind-${index}-label`}
                       label="超导类型"
-                      value={state.superconductor_kind || 'unknown'}
+                      value={state.superconductor_kind === 'conventional' || state.superconductor_kind === 'unconventional'
+                        ? state.superconductor_kind
+                        : ''}
+                      displayEmpty
+                      renderValue={value => SUPERCONDUCTOR_KIND_OPTIONS.find(option => option.value === value)?.label
+                        ?? <Box component="span" sx={{ color: 'text.secondary' }}>请选择</Box>}
                       onChange={event => updateMaterialState(index, 'superconductor_kind', event.target.value)}
                     >
                       {SUPERCONDUCTOR_KIND_OPTIONS.map(option => (

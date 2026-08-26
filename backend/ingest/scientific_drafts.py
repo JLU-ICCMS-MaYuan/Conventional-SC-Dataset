@@ -18,6 +18,7 @@ from backend.services.classification_catalog import (
     MATERIAL_DIMENSIONALITIES,
     count_formula_elements,
 )
+from backend.services.space_groups import CRYSTAL_SYSTEMS
 from backend.services.structure_candidates import validate_structure_text
 
 
@@ -230,6 +231,9 @@ async def persist_scientific_draft(
         superconductor_kind = state_data.get("superconductor_kind") or "unknown"
         if superconductor_kind not in SUPERCONDUCTOR_KINDS:
             superconductor_kind = "unknown"
+        crystal_system = state_data.get("crystal_system") or "unknown"
+        if crystal_system not in CRYSTAL_SYSTEMS:
+            crystal_system = "unknown"
         state = models.MaterialState(
             paper_id=paper.id,
             paper_revision=paper.content_revision,
@@ -250,6 +254,7 @@ async def persist_scientific_draft(
             magnetic_field_t=_number(state_data.get("magnetic_field_t")),
             state_kind=state_data.get("state_kind") or "unknown",
             superconductor_kind=superconductor_kind,
+            crystal_system=crystal_system,
             note=state_data.get("note"),
         )
         session.add(state)

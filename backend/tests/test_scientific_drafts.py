@@ -311,3 +311,22 @@ def test_tc_method_custom_persisted_only_for_other_method():
     tc_results = [item for item in session.added if isinstance(item, models.TcResult)]
     assert tc_results[0].tc_method_custom == "empirical formula fit"
     assert tc_results[1].tc_method_custom is None
+
+
+def test_crystal_system_persisted_with_whitelist_fallback():
+    draft = {
+        "material_states": [
+            {"material": "MgB2", "crystal_system": "hexagonal"},
+            {"material": "Cu", "crystal_system": "cubiccc"},
+            {"material": "Ni"},
+        ],
+    }
+    session = _RecordingAsyncSession()
+    paper = models.Paper(id=24, content_revision=1)
+
+    asyncio.run(persist_scientific_draft(session, paper, draft))
+
+    states = [item for item in session.added if isinstance(item, models.MaterialState)]
+    assert states[0].crystal_system == "hexagonal"
+    assert states[1].crystal_system == "unknown"
+    assert states[2].crystal_system == "unknown"

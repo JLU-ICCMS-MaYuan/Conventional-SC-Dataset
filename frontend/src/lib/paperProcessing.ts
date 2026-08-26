@@ -104,10 +104,16 @@ export interface StructureCandidate {
   user_note?: string | null
 }
 
+export const CRYSTAL_SYSTEM_VALUES = [
+  'triclinic', 'monoclinic', 'orthorhombic', 'tetragonal', 'trigonal', 'hexagonal', 'cubic', 'unknown',
+] as const
+export type CrystalSystem = typeof CRYSTAL_SYSTEM_VALUES[number]
+
 export interface DraftMaterialState {
   material?: string
   material_family?: ClassificationSelection | null
   structure_families?: StructureFamilySelection[]
+  crystal_system?: CrystalSystem
   element_count?: number | null
   element_count_locked?: boolean
   superconductor_kind?: 'conventional' | 'unconventional' | 'unknown'
@@ -294,10 +300,14 @@ export function normalizeUploadDraft(value: unknown): UploadDraft {
     material_states: Array.isArray(raw.material_states) ? raw.material_states.map(state => {
       const normalizedState = { ...state }
       delete (normalizedState as { phase_label?: unknown }).phase_label
+      const rawCrystalSystem = String(state.crystal_system || 'unknown')
       return {
         ...normalizedState,
         material_family: state.material_family || null,
         structure_families: Array.isArray(state.structure_families) ? state.structure_families : [],
+        crystal_system: (CRYSTAL_SYSTEM_VALUES as readonly string[]).includes(rawCrystalSystem)
+          ? rawCrystalSystem as CrystalSystem
+          : 'unknown',
         element_count: state.element_count ?? null,
         superconductor_kind: state.superconductor_kind || 'unknown',
         material_dimensionality: state.material_dimensionality || 'unknown',

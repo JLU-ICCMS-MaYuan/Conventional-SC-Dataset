@@ -843,6 +843,11 @@ class MaterialState(Base):
             "superconductor_kind IN ('conventional', 'unconventional', 'unknown')",
             name="ck_material_states_superconductor_kind",
         ),
+        CheckConstraint(
+            "crystal_system IN ('triclinic', 'monoclinic', 'orthorhombic', "
+            "'tetragonal', 'trigonal', 'hexagonal', 'cubic', 'unknown')",
+            name="ck_material_states_crystal_system",
+        ),
         UniqueConstraint(
             "id",
             "paper_id",
@@ -906,6 +911,12 @@ class MaterialState(Base):
         server_default="unknown",
     )
     superconductor_kind = Column(
+        String(32),
+        nullable=False,
+        default="unknown",
+        server_default="unknown",
+    )
+    crystal_system = Column(
         String(32),
         nullable=False,
         default="unknown",

@@ -35,7 +35,7 @@ from backend.ingest.upload_contracts import (
 from backend.ingest.structure_extractor import extract_structure_candidates
 from backend.models import Paper, PaperFile
 from backend.rag.llm import complete_json
-from backend.services.space_groups import lookup_number
+from backend.services.space_groups import CRYSTAL_SYSTEMS, crystal_system_for_number, lookup_number
 from backend.services.structure_candidates import (
     StructureCandidateError,
     build_structure_candidate,
@@ -107,6 +107,7 @@ referenced_materials 仅用于帮助区分本文对象与背景对象，最终�
 按材料、压力、state_kind 和报告空间群区分 material_states。空间群符号与群号必须分开；λ、ωlog 只写入
 calculation_context，Tc 只写入 tc_results。压力优先换算为 GPa，同时保留 pressure_raw 和
 pressure_unit_raw；无法可靠换算或原文没有报告时保留原文并将规范数值设为 null。
+晶系 crystal_system 依据论文明确表述或由空间群推断填写，只能取给定枚举，无法确定填 unknown。
 每条 material_state 必须判断 superconductor_kind：Tc 由电声耦合机制/BCS 理论计算给出
 （如 McMillan、Allen-Dynes、Eliashberg、SCDFT 求 Tc）判 conventional；论文明确为非电声耦合机制
 （如非常规配对）判 unconventional；无法判断判 unknown。
@@ -135,6 +136,7 @@ properties 需提取 energy above hull：name 固定为 "energy above hull"，un
     "state_kind": "theoretical|experimental|mixed|unknown",
     "superconductor_kind": "conventional|unconventional|unknown",
     "reported_space_group_symbol": null, "reported_space_group_number": null,
+    "crystal_system": "triclinic|monoclinic|orthorhombic|tetragonal|trigonal|hexagonal|cubic|unknown",
     "space_group_evidence": {"section": "", "page": null, "quote": ""},
     "structure": null,
     "calculation_context": {
@@ -868,6 +870,16 @@ SUPERCONDUCTOR_KIND_ALIASES = {
     "非常规": "unconventional",
 }
 
+CRYSTAL_SYSTEM_ALIASES = {
+    "三斜": "triclinic",
+    "单斜": "monoclinic",
+    "正交": "orthorhombic",
+    "四方": "tetragonal",
+    "三方": "trigonal",
+    "六方": "hexagonal",
+    "立方": "cubic",
+}
+
 
 def _int_or_none(value: Any) -> int | None:
     if value in (None, ""):
@@ -974,6 +986,14 @@ def _normalize_material_states(value: Any) -> list[dict[str, Any]]:
             )
         else:
             state["reported_space_group_number"] = int(state["reported_space_group_number"])
+        crystal_system = str(state.get("crystal_system") or "").strip().lower()
+        crystal_system = CRYSTAL_SYSTEM_ALIASES.get(crystal_system, crystal_system)
+        if crystal_system not in CRYSTAL_SYSTEMS:
+            crystal_system = "unknown"
+        # 群号是晶系的权威来源：合法群号强制推导覆盖，群号空/非法保留白名单化值。
+        state["crystal_system"] = (
+            crystal_system_for_number(state["reported_space_group_number"]) or crystal_system
+        )
         state.setdefault("structure", None)
         state["calculation_context"] = _normalize_calculation_context(state.get("calculation_context"))
         state.setdefault("experimental_context", None)
@@ -1009,6 +1029,37 @@ def _normalize_material_states(value: Any) -> list[dict[str, Any]]:
         ]
         states.append(state)
     return states
+
+
+def _apply_methodology_inference(methodology: list[str], material_states: list[dict[str, Any]]) -> None:
+    """按论文级 methodology 文本单向补全材料状态（FR-002~FR-004，D3），原地改写。
+
+    命中任一方法映射且 superconductor_kind 为 unknown 时置 conventional（不覆盖
+    unconventional）；去重后恰好一个方法时，补 tc_method 为 unknown 的理论 Tc 条目；
+    多个方法不补；任何情况都不创建新 Tc 条目。
+    """
+    methods: set[str] = set()
+    for entry in methodology:
+        text = str(entry or "").lower()
+        # Allen-Dynes 优先于 McMillan 匹配，每条文本只取首个命中。
+        if "allen-dynes" in text:
+            methods.add("allen_dynes")
+        elif "mcmillan" in text:
+            methods.add("mcmillan")
+        elif "eliashberg" in text:
+            methods.add("anisotropic_eliashberg" if "anisotropic" in text else "isotropic_eliashberg")
+        elif "scdft" in text or "superconducting density functional" in text:
+            methods.add("scdft")
+    if not methods:
+        return
+    inferred_method = next(iter(methods)) if len(methods) == 1 else None
+    for state in material_states:
+        if state.get("superconductor_kind") == "unknown":
+            state["superconductor_kind"] = "conventional"
+        if inferred_method:
+            for result in state.get("tc_results") or []:
+                if result.get("result_kind") == "theoretical" and result.get("tc_method") == "unknown":
+                    result["tc_method"] = inferred_method
 
 
 def _normalize_draft(raw: dict[str, Any]) -> dict[str, Any]:
@@ -1078,6 +1129,7 @@ def _normalize_draft(raw: dict[str, Any]) -> dict[str, Any]:
     material_states = _normalize_material_states(raw.get("material_states"))
     if not material_states and properties:
         material_states = _legacy_properties_to_material_states(properties)
+    _apply_methodology_inference(paper["methodology"], material_states)
 
     return {
         "paper": paper,

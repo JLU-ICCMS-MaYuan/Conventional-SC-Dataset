@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest'
 import React from 'react'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import UploadTaskEditor from '../../frontend/src/components/UploadTaskEditor'
@@ -65,6 +65,7 @@ beforeEach(() => {
           { number: 139, symbol: 'I4/mmm' },
           { number: 194, symbol: 'P6_3/mmc' },
           { number: 225, symbol: 'Fm-3m' },
+          { number: 227, symbol: 'Fd-3m' },
         ],
       } as never)
     }
@@ -149,7 +150,7 @@ describe('超导类型与条件化 Tc 字段', () => {
     expect(screen.queryByLabelText('Tc #1 原始值')).not.toBeInTheDocument()
 
     fireEvent.mouseDown(screen.getByRole('combobox', { name: '超导类型' }))
-    fireEvent.click(await screen.findByRole('option', { name: '常规 (BCS)' }))
+    fireEvent.click(await screen.findByRole('option', { name: '常规超导体（BCS超导体）' }))
     expect(await screen.findByLabelText('电声耦合强度 λ')).toBeInTheDocument()
     expect(screen.getByLabelText('对数声子频率 ωlog (K)')).toBeInTheDocument()
     expect(screen.getByLabelText('库伦屏蔽常数 μ*')).toBeInTheDocument()
@@ -161,13 +162,13 @@ describe('超导类型与条件化 Tc 字段', () => {
     fireEvent.change(screen.getByLabelText('电声耦合强度 λ'), { target: { value: '1.5' } })
 
     fireEvent.mouseDown(screen.getByRole('combobox', { name: '超导类型' }))
-    fireEvent.click(await screen.findByRole('option', { name: '非常规' }))
+    fireEvent.click(await screen.findByRole('option', { name: '非常规超导体' }))
     expect(screen.queryByLabelText('电声耦合强度 λ')).not.toBeInTheDocument()
     expect(screen.queryByRole('combobox', { name: 'Tc 方法' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('Tc 数值 (K)')).toBeInTheDocument()
 
     fireEvent.mouseDown(screen.getByRole('combobox', { name: '超导类型' }))
-    fireEvent.click(await screen.findByRole('option', { name: '常规 (BCS)' }))
+    fireEvent.click(await screen.findByRole('option', { name: '常规超导体（BCS超导体）' }))
     expect(await screen.findByLabelText('电声耦合强度 λ')).toHaveValue(1.5)
     expect(screen.getByLabelText('自定义 Tc 方法')).toHaveValue('two-band model')
   })
@@ -201,6 +202,17 @@ describe('超导类型与条件化 Tc 字段', () => {
     const lambdas = screen.getAllByLabelText('电声耦合强度 λ')
     expect(lambdas[1]).toHaveValue(null)
   })
+
+  it('超导类型下拉仅含两项全称选项，值为 unknown 时显示占位', async () => {
+    render(<UploadTaskEditor taskId={'9'.repeat(32)} onSubmitted={vi.fn()} draftOverride={makeDraft([makeState()])} />)
+
+    const kindSelect = await screen.findByRole('combobox', { name: '超导类型' })
+    expect(kindSelect).toHaveTextContent('请选择')
+
+    fireEvent.mouseDown(kindSelect)
+    const options = await screen.findAllByRole('option')
+    expect(options.map(option => option.textContent)).toEqual(['常规超导体（BCS超导体）', '非常规超导体'])
+  })
 })
 
 describe('空间群标准表自动补全', () => {
@@ -218,8 +230,8 @@ describe('空间群标准表自动补全', () => {
   })
 })
 
-describe('文案、主结构家族说明与模块顺序', () => {
-  it('显示压强文案与主结构家族说明，结构附件渲染在 Tc 与普通物性之后', async () => {
+describe('文案、类型标签与模块顺序', () => {
+  it('显示压强文案与新类型标签，无主结构家族字段，结构附件渲染在 Tc 与普通物性之后', async () => {
     render(<UploadTaskEditor taskId={'1'.repeat(32)} onSubmitted={vi.fn()} draftOverride={makeDraft([
       makeState(),
       makeState({
@@ -230,8 +242,8 @@ describe('文案、主结构家族说明与模块顺序', () => {
 
     expect((await screen.findAllByLabelText('压强 (GPa)')).length).toBe(2)
     expect(screen.queryByLabelText('压力 (GPa)')).not.toBeInTheDocument()
-    expect(screen.getByText('请先选择结构家族')).toBeInTheDocument()
-    expect(screen.getByText('主结构家族为已选结构家族中的主要一项')).toBeInTheDocument()
+    expect(screen.queryByLabelText('主结构家族')).not.toBeInTheDocument()
+    expect(screen.getAllByLabelText('更多类型标签（可以填写不止一个类型）')).toHaveLength(2)
 
     const tcHeadings = screen.getAllByText('临界温度 Tc')
     const propertiesHeadings = screen.getAllByText('其他普通物性')
@@ -264,5 +276,89 @@ describe('energy above hull 预置物性', () => {
     ])} />)
 
     expect(await screen.findByRole('button', { name: 'energy above hull' })).toBeDisabled()
+  })
+})
+
+describe('AI 建议单行截断与展开收起', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('长建议默认单行截断，点击展开显示全文，再点击收起恢复单行；短建议无展开按钮', async () => {
+    // jsdom 无布局，用 scrollHeight 模拟：含长建议的内容块 240px（>120 阈值），其余 48px
+    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.textContent?.includes('超长AI建议') ? 240 : 48
+    })
+    const draftWithAi = {
+      ...makeDraft([makeState()]),
+      ai_original: {
+        paper: { keywords_tags: [Array.from({ length: 12 }, (_, index) => `超长AI建议${index + 1}`).join('、')] },
+      },
+    } as UploadDraft
+    render(<UploadTaskEditor taskId={'4'.repeat(32)} onSubmitted={vi.fn()} draftOverride={draftWithAi} />)
+
+    const keywordsCell = (await screen.findByLabelText('关键词（每行一个）')).closest('.MuiTextField-root')!.parentElement!
+    const collapsedSuggestion = within(keywordsCell).getByText(/^AI 建议：/)
+    expect(collapsedSuggestion).toHaveStyle({ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' })
+    // 单行截断仅影响展示，完整文本仍保留在 DOM 中
+    expect(collapsedSuggestion.textContent).toContain('超长AI建议12')
+
+    fireEvent.click(within(keywordsCell).getByRole('button', { name: '展开 关键词（每行一个）的 AI 解释' }))
+    expect(within(keywordsCell).getByText(/^AI 建议：/)).toHaveStyle({ whiteSpace: 'pre-wrap' })
+
+    fireEvent.click(within(keywordsCell).getByRole('button', { name: '收起 关键词（每行一个）的 AI 解释' }))
+    expect(within(keywordsCell).getByText(/^AI 建议：/)).toHaveStyle({ whiteSpace: 'nowrap' })
+    expect(within(keywordsCell).getByRole('button', { name: '展开 关键词（每行一个）的 AI 解释' })).toBeInTheDocument()
+
+    // 短建议（标题的「未提供」）未溢出，不出现展开按钮
+    const titleCell = screen.getByLabelText('标题').closest('.MuiTextField-root')!.parentElement!
+    expect(within(titleCell).getByText('AI 建议：未提供')).toBeInTheDocument()
+    expect(within(titleCell).queryByRole('button', { name: /展开/ })).not.toBeInTheDocument()
+  })
+})
+
+describe('晶系与空间群三方联动', () => {
+  it('仅改晶系为四方后，空间群符号下拉仅含 75–142 号符号，已填符号与群号不被清除', async () => {
+    render(<UploadTaskEditor taskId={'6'.repeat(32)} onSubmitted={vi.fn()} draftOverride={makeDraft([
+      makeState({ reported_space_group_symbol: 'P6_3/mmc', reported_space_group_number: 194 }),
+    ])} />)
+
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: '晶系' }))
+    fireEvent.click(await screen.findByRole('option', { name: '四方' }))
+
+    expect(screen.getByLabelText('空间群符号')).toHaveValue('P6_3/mmc')
+    expect(screen.getByLabelText('空间群号')).toHaveValue(194)
+
+    fireEvent.keyDown(screen.getByLabelText('空间群符号'), { key: 'ArrowDown' })
+    expect(await screen.findByRole('option', { name: 'I4/mmm' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'P6_3/mmc' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Fm-3m' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Fd-3m' })).not.toBeInTheDocument()
+  })
+
+  it('选中标准符号 I4/mmm 自动带出群号 139 且晶系变为四方', async () => {
+    render(<UploadTaskEditor taskId={'7'.repeat(32)} onSubmitted={vi.fn()} draftOverride={makeDraft([makeState()])} />)
+
+    fireEvent.change(await screen.findByLabelText('空间群符号'), { target: { value: 'I4/mmm' } })
+    fireEvent.click(await screen.findByRole('option', { name: 'I4/mmm' }))
+
+    expect(screen.getByLabelText('空间群号')).toHaveValue(139)
+    expect(screen.getByLabelText('空间群符号')).toHaveValue('I4/mmm')
+    expect(screen.getByRole('combobox', { name: '晶系' })).toHaveTextContent('四方')
+  })
+
+  it('输入合法群号 227 自动带出标准符号 Fd-3m 且晶系变为立方', async () => {
+    render(<UploadTaskEditor taskId={'8'.repeat(32)} onSubmitted={vi.fn()} draftOverride={makeDraft([makeState()])} />)
+
+    // 群号反查符号依赖标准表，先打开下拉确认数据已加载
+    const symbolInput = await screen.findByLabelText('空间群符号')
+    fireEvent.keyDown(symbolInput, { key: 'ArrowDown' })
+    await screen.findByRole('option', { name: 'Fd-3m' })
+    fireEvent.keyDown(symbolInput, { key: 'Escape' })
+
+    fireEvent.change(screen.getByLabelText('空间群号'), { target: { value: '227' } })
+
+    expect(screen.getByLabelText('空间群符号')).toHaveValue('Fd-3m')
+    expect(screen.getByRole('combobox', { name: '晶系' })).toHaveTextContent('立方')
   })
 })
