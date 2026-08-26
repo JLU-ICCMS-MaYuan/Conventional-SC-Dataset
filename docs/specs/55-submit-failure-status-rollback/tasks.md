@@ -12,7 +12,7 @@
 ## 最终阶段
 
 - [x] T003 运行后端 pytest 与前端 `npm run test:upload-ui` 回归全过
-- [ ] T004 按 quickstart 场景 1–2 人工验收（含 #54 的原任务重提）
+- [x] T004 按 quickstart 场景 1–2 人工验收（含 #54 的原任务重提）
 - [x] T005 `gh issue edit 55` 回写 Spec 链接；按 AGENTS.md 规范 git commit
 
 ## 需求覆盖
