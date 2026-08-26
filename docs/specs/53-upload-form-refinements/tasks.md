@@ -42,7 +42,7 @@
 
 - [x] T015 运行后端 pytest（排除 test_concurrency.py）、前端 `npm run test:upload-ui`、`npx tsc --noEmit`、`go build ./... && go test ./...`，全部通过
 - [ ] T016 按 quickstart.md 场景 1–5 手工验证并记录结果
-- [ ] T017 用 `gh issue edit 53 --body` 回写 Spec 链接；按 AGENTS.md 规范 git commit（仅暂存本 Feature 文件）
+- [x] T017 用 `gh issue edit 53 --body` 回写 Spec 链接；按 AGENTS.md 规范 git commit（仅暂存本 Feature 文件）
 
 ## 依赖与执行顺序
 
