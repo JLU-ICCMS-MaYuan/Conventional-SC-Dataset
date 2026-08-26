@@ -21,7 +21,7 @@
 ## 最终阶段
 
 - [x] T006 全量回归：后端 pytest 99 过（test_concurrency.py 环境脚本除外）、前端 vitest 6 文件 45 用例全过、`npx tsc --noEmit` 通过
-- [ ] T007 重建 dev 镜像（`cd docker && docker compose build python frontend && docker compose up -d`）后按 quickstart 场景 1–4 验收，确认原任务 `6b5bf07c…` 提交成功、papers 表出现该论文
+- [x] T007 重建 dev 镜像（`cd docker && docker compose build python frontend && docker compose up -d`）后按 quickstart 场景 1–4 验收：原任务 `6b5bf07c…` 重新提交成功，`papers` id=4 / DOI 10.1073/pnas.1704505114 / `review_status=pending` 已入库，该材料状态 `pressure_value_gpa=250`、`pressure_min_gpa=200`、`pressure_max_gpa=NULL`、`pressure_raw="above 200 GPa"` 完整保留；dev MySQL `alembic_version=20260826_0016`，`ck_material_states_pressure_range` 实际定义为「任一侧为 NULL 合法，双侧要求 min≤max」
 - [x] T008 `gh issue comment 54` 回写修复记录；按 AGENTS.md 规范 git commit（16298c9，仅暂存本修复文件）
 
 ## 依赖与执行顺序

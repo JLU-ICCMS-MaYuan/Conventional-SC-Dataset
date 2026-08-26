@@ -13,7 +13,7 @@
 5. 文本提取后、分段 LLM 前，系统用 DOI、标题页和开头文本检查正文与附件的一致性。信息缺失不阻塞；明确冲突显示警告并要求用户在提交前确认。
 6. Markdown 保存到 `/data/parsed_markdown`；每个分段先建立状态清单，结果采用临时文件加原子替换保存。任务详情提供“AI 临时表单”和“分段解析与证据”页签；无分段时显示提取或等待状态。后台分类证据用 `current_paper` 和 `referenced_work` 区分本文工作与被引用工作，普通草稿只返回本文研究对象；引用材料不再作为普通字段或最终科学数据输出。
 7. 解析中的临时表单只读并持续合并结果。`reading` 和 `summarizing` 阶段的分类字段显示“候选尚未汇总”，不把正常的分段差异标成正式冲突；标题、DOI 等非分类单值字段出现不同候选时仍标记“有冲突”并并列显示，不静默覆盖。内容超过统一展示高度的字段卡片默认收起，短字段直接完整显示；每张长卡片可通过文字按钮独立展开或收起，完整候选和来源证据始终保留，轮询更新与窗口变化会重新判断溢出，任务切换不会继承前一任务的展开状态。任务进入 `ready` 后同一页签原地切换为可编辑最终草稿。（[Issue #47](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/47)）
-8. 用户停止编辑 5 秒后自动保存，也可立即保存。草稿按 `material_states[]` 组织：材料家族建议、结构家族建议、不同元素种类数、压力和材料维度相互独立；目录候选由数据库驱动，界面统一显示规范中文名。AI 分类只进入审核上下文，不在提交阶段写正式目录 ID。元素种类数由服务器根据化学式重算。论文只报告空间群而没有完整 CIF/POSCAR 时，符号与国际群号分别保存在 reported 字段；`phase_label` 不再生成或写入；λ 和 ωlog 属于 `calculation_context`；Tc 属于 `tc_results`；其余数据才进入普通 `properties`。点击提交后，一篇论文、全部 `paper_files`、正式文本块、Evidence 和条件化科学实体图在一个 MySQL 事务中写入并进入 `pending`。提交写入失败时任务状态回滚为 `ready` 并保留 `submission_status=failed`，草稿不丢失、详情页恢复可编辑表单，用户可修正后重新提交，不会卡在 `submitting`。（[Issue #55](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/55)）
+8. 用户停止编辑 5 秒后自动保存，也可立即保存。草稿保存只做结构性检查，半成品（如尚未填写数值的 Tc 行）可以正常落盘，业务字段的完整校验留到提交时执行；提交使用严格全集校验。草稿按 `material_states[]` 组织：材料家族建议、结构家族建议、不同元素种类数、压力和材料维度相互独立；目录候选由数据库驱动，界面统一显示规范中文名。AI 分类只进入审核上下文，不在提交阶段写正式目录 ID。元素种类数由服务器根据化学式重算。论文只报告空间群而没有完整 CIF/POSCAR 时，符号与国际群号分别保存在 reported 字段；`phase_label` 不再生成或写入；λ 和 ωlog 属于 `calculation_context`；Tc 属于 `tc_results`；其余数据才进入普通 `properties`。点击提交后，一篇论文、全部 `paper_files`、正式文本块、Evidence 和条件化科学实体图在一个 MySQL 事务中写入并进入 `pending`。提交写入失败时任务状态回滚为 `ready` 并保留 `submission_status=failed`，草稿不丢失、详情页恢复可编辑表单，用户可修正后重新提交，不会卡在 `submitting`。（[Issue #55](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/55)）
 9. MySQL 事务成功后，系统保留 PDF、附件、组合及分文件 Markdown 和精简 `result.json` 审核快照；删除 Redis state/draft、用户任务索引、RQ 处理 Job、分段 JSON 和其他 LLM 中间产物。快照写入失败时不执行该临时清理，以便后续恢复。
 10. 管理员对照 AI 建议、用户值和原文证据审核，在同一页面认可建议、改选已有分类或输入新名称。只有批准事务会写入人工确认的材料/结构家族 ID，必要的新目录项也在该事务中创建；审核事件保存分类上下文和最终选择快照。快照同时绑定 `task_id`、`paper_id` 和 `paper_revision`，只有与论文当前 revision 一致的 pending 快照可以读取。`approved` 会同步发布 Qdrant 后幂等删除临时快照；`rejected` 幂等删除临时快照；`pending` 保留临时快照。
 
@@ -25,6 +25,7 @@
 - 理论二级类型为 `calculation`、`method`、`theory`。新算法、新模型或研究工具归 `method`。
 - 论文整体类型与每个材料状态及 Tc 结果的理论/实验类型分开保存。
 - 分段与汇总契约明确提取 GPa 压力、空间群符号/群号、`lambda_ep` 和 `omega_log_k`；没有原文证据的数值保持 `null`，不得推测。
+- 压强区间允许单臂：原文只给下限或上限时（如 "above 200 GPa"）保留 `pressure_min_gpa` 或 `pressure_max_gpa` 之一，另一侧为 `null`，不补造缺失边界；两侧都有值时要求 min≤max。提交时倒置区间返回 400 `invalid_pressure_range` 并指出第几个材料状态，不再穿透到 INSERT 产生 500。（[Issue #54](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/54)）
 - 材料家族只允许规范名、内部编码或 seed 别名的确定性精确匹配；不根据化学式含某元素机械判断，也不做模糊猜测。未知名称由管理员在论文审核中确认是否创建，不进入独立治理队列。
 - 旧顶层 `sc_type` 只在草稿 GET 时一次性转换；PUT 和 submit 返回 `legacy_classification_contract`，不再接受旧格式。
 - 分段分类结果带内部契约版本。缺少当前版本的旧缓存会重新执行分段读取，不会根据旧文本猜测或补写证据主体。
@@ -61,6 +62,7 @@
 ## 失败语义
 
 - 上传、抽取、LLM 和数据库错误必须返回或记录明确原因，前端不得显示假成功。
+- 草稿保存或提交失败时，横幅区分「保存失败/提交失败」并展示后端 `detail.message` 及错误码；后端未返回结构化 detail 时才回退通用文案。
 - 超过 50 MB 的文件会在选择或上传阶段明确提示；即使 Nginx 返回非 JSON 的 HTTP 413，页面也显示相同的大小限制信息。
 - 扫描版或正文过短的 PDF 明确提示需要可搜索文本；本功能不包含 OCR。
 - 审核通过后若向量发布失败，Go API 返回 `502`，保留临时证据；管理员重复审核即可幂等重试。
@@ -93,4 +95,5 @@
 - [Issue #45：修复论文分段分类证据误归属与全文汇总前伪冲突](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/45)
 - [Issue #48：修复页面滚动时左侧导航和解析收起操作不可达](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/48)
 - [Issue #51：建立材料状态多维分类目录并统一 AI、上传与审核流程](../../specs/51-material-state-classification/spec.md)
+- [Issue #54：修复提交审核 500（压强单臂区间违反 CHECK 约束）与草稿自动保存过严](../../specs/54-submit-pressure-range-validation/spec.md)
 - [Issue #55：修复提交失败后任务卡在 submitting 状态导致校对页空白](../../specs/55-submit-failure-status-rollback/spec.md)
