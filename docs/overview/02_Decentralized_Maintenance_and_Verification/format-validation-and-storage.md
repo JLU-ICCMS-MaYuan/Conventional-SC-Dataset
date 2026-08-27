@@ -13,7 +13,7 @@
 
 ## 工作流程
 
-API 接收结构格式和文本；服务层验证非空与格式；解析结构并提取元数据；计算摘要；创建待审核的 `SuperconductorStructure`。论文编辑详情还可以直接在 `key_properties` 中保存 `structure_text` 与 `structure_format`，供前端结构预览使用。
+API 接收结构格式和文本；服务层验证非空与格式；解析结构并提取元数据；计算摘要；创建待审核的 `SuperconductorStructure`。论文详情的结构预览来源是 `structure_models`（挂在材料状态下），普通物性表不再保存结构文本与结构格式。（[Issue #57](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/57)）
 
 ## 约束
 

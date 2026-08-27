@@ -201,14 +201,15 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
       setSnackbar({ message: '该数据点已在组合中', severity: 'error' })
       return
     }
+    // 压强与类型属材料状态，不在物性上；物性表没有这两列。
     const newItem: LocalItem = {
       sort_order: group.items.length,
       source: 'kp',
       key_property_id: kp.id,
       material: kp.material,
-      tc: kp.value_max ?? null,
-      pressure: kp.pressure_gpa ?? null,
-      type: kp.superconductor_type ?? null,
+      tc: kp.value_max ?? kp.value_number ?? null,
+      pressure: kp.material_state?.pressure_value_gpa ?? null,
+      type: kp.material_state?.state_kind ?? null,
       year: null,
     }
     setGroup(prev => ({ ...prev, items: [...prev.items, newItem] }))
@@ -464,8 +465,8 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
                       <Box>
                         <Typography variant="body2" fontWeight={600}>{kp.material}</Typography>
                         <Typography variant="caption" color="text.secondary">
-                          Tc: {formatValue(kp.value_max)}K · P: {formatValue(kp.pressure_gpa)}GPa
-                          {kp.superconductor_type ? ` · ${typeLabel(kp.superconductor_type)}` : ''}
+                          Tc: {formatValue(kp.value_max ?? kp.value_number)}K · P: {formatValue(kp.material_state?.pressure_value_gpa)}GPa
+                          {kp.material_state?.state_kind ? ` · ${typeLabel(kp.material_state.state_kind)}` : ''}
                         </Typography>
                       </Box>
                       <Add fontSize="small" color="action" />

@@ -584,21 +584,33 @@ const SharePage: React.FC = () => {
                         </Box>
                       </Box>
                       <Box component="tbody">
-                        {paperDetail.key_properties.map((kp: any) => (
-                          <Box component="tr" key={kp.id} sx={{ bgcolor: kp.is_primary ? '#eef2ff' : 'transparent' }}>
+                        {paperDetail.key_properties.map((kp: any) => {
+                          // 条件（压强/温度）属材料状态，物性表无这两列；主次标记在新模型中也已不存在。
+                          const state = (paperDetail.material_states || []).find(
+                            (ms: any) => ms.id === kp.material_state_id
+                          )
+                          const condition = [
+                            state?.pressure_raw
+                              ?? (state?.pressure_value_gpa != null ? `${state.pressure_value_gpa} GPa` : null),
+                            state?.temperature_value_k != null ? `${state.temperature_value_k} K` : null,
+                          ].filter(Boolean).join(' · ') || '-'
+                          const value = kp.value_min != null
+                            ? (kp.value_min !== kp.value_max ? `${kp.value_min}–${kp.value_max}` : `${kp.value_max}`)
+                            : (kp.value_number ?? kp.value_raw ?? '-')
+                          return (
+                          <Box component="tr" key={kp.id}>
                             <Box component="td" sx={{ p: '4px 8px', borderBottom: '1px solid', borderColor: 'divider', whiteSpace: 'nowrap', fontWeight: 600 }}>{kp.material}</Box>
                             <Box component="td" sx={{ p: '4px 8px', borderBottom: '1px solid', borderColor: 'divider', whiteSpace: 'nowrap' }}>
-                              {kp.label}{kp.is_primary ? ' ★' : ''}</Box>
+                              {kp.name || kp.name_raw || '-'}</Box>
                             <Box component="td" sx={{ p: '4px 8px', borderBottom: '1px solid', borderColor: 'divider', whiteSpace: 'nowrap', fontWeight: 700, color: 'primary.main' }}>
-                              {kp.value_min != null
-                                ? (kp.value_min !== kp.value_max ? `${kp.value_min}–${kp.value_max}` : `${kp.value_max}`)
-                                : (kp.value_raw || '-')}{kp.unit ? ` ${kp.unit}` : ''}</Box>
+                              {value}{kp.unit ? ` ${kp.unit}` : ''}</Box>
                             <Box component="td" sx={{ p: '4px 8px', borderBottom: '1px solid', borderColor: 'divider', whiteSpace: 'nowrap', color: 'text.secondary' }}>
-                              {[kp.pressure_gpa != null ? `${kp.pressure_gpa} GPa` : null, kp.temperature_k != null ? `${kp.temperature_k} K` : null].filter(Boolean).join(' · ') || '-'}</Box>
+                              {condition}</Box>
                             <Box component="td" sx={{ p: '4px 8px', borderBottom: '1px solid', borderColor: 'divider', color: 'text.secondary', minWidth: 140 }}>
-                              {[kp.name_note, kp.condition_note].filter(Boolean).join('；') || '-'}</Box>
+                              {kp.condition_note || '-'}</Box>
                           </Box>
-                        ))}
+                          )
+                        })}
                       </Box>
                     </Box>
                   ) : (

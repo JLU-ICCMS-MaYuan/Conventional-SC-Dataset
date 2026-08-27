@@ -7,7 +7,8 @@
 ## 当前行为
 
 - 管理后台可按状态、关键词、材料和年份筛选论文列表，并分页展示。
-- 管理员可编辑论文基础字段、摘要、LLM 富化字段和 `key_properties`；关键物性支持新增、修改、标记删除、主记录标记、结构文本和结构格式编辑。
+- 管理员可编辑论文基础字段、摘要、LLM 富化字段和普通物性；物性支持新增、修改与标记删除。
+- 物性写入只接受 `superconductor_properties` 的真实列（`material_raw`、`name_raw`、`value_raw`、`value_number`、`unit_raw`、`canonical_unit`、`value_min`、`value_max`、`condition_note`）。压强、温度、主记录标记、结构文本与结构格式没有对应列，因此不再被接受，而不是接受后静默丢弃——后者会让管理员以为改动已保存。条件字段属材料状态，不经物性接口修改，以免绕过材料状态自身的校验与审核语义。（[Issue #57](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/57)）
 - 管理员可查看、编辑、单篇审核和批量审核论文；论文删除与批量删除只允许超级管理员。
 - 管理员在论文审核页对照 AI 建议、用户提交值和原文证据，为每个材料状态确认材料家族、结构家族和材料维度；可认可建议、改选数据库已有项或输入新名称。旧 `key_properties.superconductor_type` 不再参与管理员写入。
 - 目录不提供独立建议队列、重命名、停用、合并或超级管理员二次治理。新名称只在论文批准事务中创建，拒绝或退回不会污染正式目录。
@@ -48,6 +49,7 @@
 ## 相关变更记录
 
 - [Epic #37：用户身份、账户安全与分级管理工作台](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/37)
+- [Issue #57：物性写入收敛为真实列，不再接受无对应列的字段](../../specs/57-paper-detail-data-parity/spec.md)
 
 ## 已知问题
 

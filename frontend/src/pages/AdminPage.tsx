@@ -345,14 +345,14 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
     if (!editPaper.paper) return
     try {
       const payload: Record<string,any> = {...editForm}
-      // 清理 key_properties，去掉只读字段
+      // 只提交 superconductor_properties 的真实列。压强、温度等条件字段属材料状态，
+      // 不经物性接口修改；后端也不再接受这些无对应列的字段。
       if (payload.key_properties) {
         payload.key_properties = payload.key_properties.map((kp:any) => ({
-          id: kp.id, material: kp.material, name: kp.name, name_raw: kp.name_raw,
-          name_note: kp.name_note, value_min: kp.value_min, value_max: kp.value_max,
-          value_raw: kp.value_raw, unit: kp.unit, pressure_gpa: kp.pressure_gpa,
-          temperature_k: kp.temperature_k, is_primary: kp.is_primary,
-          article_type: kp.article_type,
+          id: kp.id, material: kp.material, name_raw: kp.name_raw,
+          value_min: kp.value_min, value_max: kp.value_max,
+          value_raw: kp.value_raw, value_number: kp.value_number,
+          unit: kp.unit, canonical_unit: kp.canonical_unit,
           condition_note: kp.condition_note,
         }))
       }

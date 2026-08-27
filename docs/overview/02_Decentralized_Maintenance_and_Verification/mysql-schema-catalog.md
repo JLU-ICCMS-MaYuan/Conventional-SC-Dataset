@@ -15,11 +15,11 @@
 - 当前实际存在 **18 张基础表**。
 - 当前 Alembic 版本为 `20260820_0005`。
 - MySQL 保存关系型业务数据；Qdrant 向量、Neo4j 图数据和 Redis 缓存不计入这 18 张表。
-- Python 模型定义了 `superconductor_records`，但当前运行数据库没有该表；当前科研物性数据仍主要位于 `key_properties`。
+- Python 模型定义了 `superconductor_records`，但当前运行数据库没有该表；当前科研数据位于条件化实体表：`material_states`、`tc_results`、`calculation_contexts`、`superconductor_properties`。旧 `key_properties` 表已不存在。
 
 | 分类 | 表 |
 | --- | --- |
-| 元素、材料与物性 | `periodic_table_elements`、`chemical_systems`、`superconductors`、`key_properties`、`superconductors_structures` |
+| 元素、材料与物性 | `periodic_table_elements`、`chemical_systems`、`superconductors`、`material_states`、`tc_results`、`calculation_contexts`、`superconductor_properties`、`property_definitions`、`structure_models`、`superconductors_structures` |
 | 论文、文件与审核 | `papers`、`paper_files`、`paper_chunks`、`paper_evidences`、`paper_review_events` |
 | 用户与内容 | `users`、`news_items` |
 | 旧图表组合 | `chart_groups`、`chart_group_items` |
@@ -71,40 +71,28 @@
 | `element_ratio` | 元素比例，JSON |
 | `created_at`、`updated_at` | 创建和更新时间 |
 
-### `key_properties`
+### `superconductor_properties`
 
-当前主要科研物性记录表，约 1101 条。
+普通物性记录表（Tc 之外的性质），当前 17 条。旧 `key_properties` 表已不存在，其压力、温度、超导类型、代表记录标记等概念在条件化模型中由 `material_states` 承载，结构文本由 `structure_models` 承载。（[Issue #57](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/57)）
 
 | 字段 | 含义 |
 | --- | --- |
 | `id` | 主键 |
-| `paper_id` | 外键，指向 `papers.id` |
-| `superconductor_id` | 外键，指向 `superconductors.id` |
-| `material` | 材料名称或化学式 |
-| `name` | 规范物性名，例如 `critical_temperature` |
-| `name_raw`、`name_note` | 论文原始物性名和名称说明 |
-| `value_min`、`value_max` | 规范数值范围 |
+| `paper_id`、`paper_revision` | 外键，指向论文及其内容修订号 |
+| `material_state_id` | 外键，指向 `material_states.id`；物性隶属材料状态 |
+| `structure_id`、`calculation_context_id` | 可选外键，指向结构模型与计算上下文 |
+| `property_definition_id` | 外键，指向 `property_definitions.id`，提供规范名与规范单位 |
+| `material_raw` | 论文原文中的材料名称 |
+| `name_raw` | 论文原文物性名 |
 | `value_raw` | 原始数值文本 |
-| `unit` | 单位 |
-| `pressure_gpa` | 压力，GPa |
-| `temperature_k` | 温度，K |
-| `condition_json`、`condition_note` | 条件结构化数据和文字说明 |
-| `is_primary` | 是否为代表记录 |
-| `superconductor_type` | 超导类型 |
-| `article_type` | 实验或理论文章类型 |
-| `source_label` | 数据来源标签 |
-| `structure_text`、`structure_format` | 结构文本和格式 |
+| `value_number` | 解析后的数值 |
+| `value_min`、`value_max` | 数值范围 |
+| `unit_raw`、`canonical_unit` | 原文单位与规范单位 |
+| `condition_note` | 条件文字说明 |
+| `source_fingerprint` | 来源指纹，用于去重 |
 | `created_at`、`updated_at` | 创建和更新时间 |
 
-当前 `superconductor_type` 实际分布为：
-
-| 类型 | 记录数 |
-| --- | ---: |
-| `hydride` | 924 |
-| 空值 | 147 |
-| `others` | 16 |
-| `carbon` | 12 |
-| `iron_based` | 2 |
+Tc 不进入本表：临界温度保存在 `tc_results`（当前 23 条），λ 与 ωlog 保存在 `calculation_contexts`，材料与条件保存在 `material_states`（当前 13 条）。
 
 ### `superconductors_structures`
 
@@ -218,7 +206,7 @@ Chunk 是可重建派生数据，Evidence 是字段级证据快照，Review Even
 
 旧组合内的数据点，当前约 0 条。
 
-字段为 `id`、`group_id`、`key_property_id`、`sort_order`、`custom_label`、`custom_tc`、`custom_pressure`、`custom_type`、`custom_article_type`、`custom_year`。`group_id` 关联 `chart_groups.id`，`key_property_id` 关联 `key_properties.id`。
+字段为 `id`、`group_id`、`key_property_id`、`sort_order`、`custom_label`、`custom_tc`、`custom_pressure`、`custom_type`、`custom_article_type`、`custom_year`。`group_id` 关联 `chart_groups.id`；`key_property_id` 沿用旧命名，指向物性记录，但旧 `key_properties` 表已不存在（当前物性表为 `superconductor_properties`），该引用的有效性属**待核验**——组合项当前 0 条，未实测过非空场景。
 
 当前存在组合定义但没有组合项，选择组合后可能得到空图。组合名称不能等同于 `superconductor_type`；“近室温”“常压”等数值条件也不是材料类型。
 
@@ -284,9 +272,14 @@ HTSC-2025 外部材料数据，当前约 140 条。
 ```mermaid
 flowchart LR
     CS[chemical_systems] --> SC[superconductors]
-    SC --> KP[key_properties]
+    SC --> MS[material_states]
     SC --> SS[superconductors_structures]
-    P[papers] --> KP
+    P[papers] --> MS
+    MS --> TR[tc_results]
+    MS --> CC[calculation_contexts]
+    MS --> SP[superconductor_properties]
+    MS --> SM[structure_models]
+    PD[property_definitions] --> SP
     P --> PF[paper_files]
     PF --> PC[paper_chunks]
     PF --> PE[paper_evidences]
@@ -294,7 +287,7 @@ flowchart LR
     U[users] --> P
     U --> PRE
     CG[chart_groups] --> CGI[chart_group_items]
-    KP --> CGI
+    SP --> CGI
 ```
 
 ## 约束与已知问题

@@ -39,9 +39,12 @@
 - 文件目录：未提交终态任务到期后删除原文件、组合及分文件 Markdown、AI 产物和 duplicate 候选副本；清理 Job 携带最小 `CleanupContext`，即使 Redis state 已过期仍能定位用户索引、RQ Job 和候选副本。删除文件前必须用 `papers.upload_task_id` 查询永久认领，数据库不可用时延后，不得依据 Redis 缺失直接删除。
 - 清理职责分为 `cleanup_transient_data`、`cleanup_unsubmitted_files` 和 `cleanup_duplicate_candidate`。已提交任务只执行临时清理并保留正式文件与待审快照；未提交的 `failed/duplicate/cancelled` 才执行全部清理。
 - 已提交论文通过 `paper_files` 永久认领所有来源文件；`paper_chunks` 和正式证据保存来源文件与页码范围。
+- Go 侧 `material_states` 的压强三列必须显式声明列名：GORM 默认命名策略会把 `GPa` 拆成 `g_pa`，生成 `pressure_value_g_pa` 这类并不存在的列，使压强字段在 MySQL 上读不出来。此类不一致在 SQLite 测试中不会暴露，因为 `AutoMigrate` 按同一错误命名建表，两侧一致反而「通过」。（[Issue #57](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/57)）
 - 分段对解析噪声鲁棒：PDF 转 Markdown 会把长正文段落误标成 `##` 标题，因此长度超过 300 字符的 `##` 行不作为章节边界，整行文本并入正文并沿用前一个真实章节名（实测真实标题上界 204 字符、被误判正文下界 389 字符）。误判段落的文字因此进入 `content`、可被搜索与 RAG 引用；若只截断标题字段，该文字会永久丢失，因为标题行本身从不进入正文。写库前另按列长安全截断 `section_name` 与 `heading` 作为第二道防线，避免超出 500 触发 `DataError 1406` 使提交返回 500。（[Issue #58](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/58)）
 - 统计、搜索和 RAG 只使用 `approved` 论文。统一论文详情的权限为：匿名仅 approved；登录用户可看 approved/pending；上传者还可看自己的 rejected 和 `review_comment`；管理员可看全部及 `admin_internal_note`。内部路径始终不公开。
 - 已提交论文详情由独立地址 `/papers/:id` 承载，内容只由地址决定：刷新、前进后退和直接分享地址都得到同一篇论文，不再依附上传页的内部视图状态。权限判定只在后端按论文逐篇执行，前端不复制一份权限规则；无效编号、无权查看、论文不存在与加载失败分别给出对应提示，失败时不渲染任何论文字段。未定义地址由兜底页提示“页面不存在”，不再白屏。（[Issue #56](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/56)）
+- 论文详情按材料状态嵌套返回科学数据：`tc_results`、`calculation_contexts` 与 `structures` 都挂在所属 `material_states[]` 元素之下，不在论文顶层平铺。三张表的外键都是 `material_state_id`，平铺会迫使每个消费方自行按该外键重建分组关系。材料状态本身输出压强的值、下限、上限、原文与原文单位，报告空间群符号与国际群号，温度值与原文温度，磁场，`state_kind` 与备注；`tc_max` 由 `tc_results` 聚合（Tc 不在普通物性表中，按普通物性聚合必然为空）。（[Issue #57](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/57)）
+- 详情响应只包含有真实数据来源的字段：物性名取 `property_definitions.display_name` 并在缺失时回退 `name_raw`，另返回 `value_number` 与 `canonical_unit`；`superconductor_id`、`name_note`、`pressure_gpa`、`temperature_k`、`condition_json`、`is_primary`、`superconductor_type`、`article_type`、`source_label`、`structure_text`、`structure_format` 共 11 个键已从物性输出中移除。保留恒为 null 的键比移除更具误导性——消费方无法区分「该论文确实没有此数据」与「系统从不读取此数据」。条件（压强、温度）属材料状态，结构文本属 `structure_models`，都不在物性上重复承载。（[Issue #57](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/57)）
 - 已提交论文的入口在「用户」页的「我的论文」列表，按提交时间倒序列出并可点击进入只读详情；详情页同时提供回到该列表的入口，离开详情页后无需手工拼接地址即可重新到达。该列表与上传页的解析任务列表分开：解析任务存 Redis、24 小时清理、受 100 条配额约束，属于待办；已提交论文存 MySQL、永久保留、数量无上限，属于归档，两者混列会破坏配额语义。（[Issue #56](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/56)）
 
 ## 上传任务中心
@@ -106,3 +109,4 @@
 - [Issue #55：修复提交失败后任务卡在 submitting 状态导致校对页空白](../../specs/55-submit-failure-status-rollback/spec.md)
 - [Issue #56：已提交论文详情页不可达（新增 /papers/:id 路由与「我的论文」入口）](../../specs/56-paper-detail-route/spec.md)
 - [Issue #58：修复解析噪声阻断提交，并补齐提交失败的结构化原因与必填字段定位](../../specs/58-submit-failure-diagnostics/spec.md)
+- [Issue #57：补全论文详情读取契约并消除恒零值字段](../../specs/57-paper-detail-data-parity/spec.md)

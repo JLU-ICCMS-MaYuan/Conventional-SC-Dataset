@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react'
 import {
   Box, Typography, Card, CardContent, Button, TextField,
   Chip, Alert,
-  FormControl, InputLabel, Select, MenuItem,
-  IconButton, Tooltip, Checkbox, FormControlLabel,
+  IconButton, Tooltip,
 } from '@mui/material'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import DeleteIcon from '@mui/icons-material/Delete'
@@ -23,27 +22,6 @@ const STATUS_LABELS: Record<string, string> = {
 const STATUS_COLORS: Record<string, 'warning' | 'success' | 'error' | 'info'> = {
   pending: 'warning', approved: 'success', rejected: 'error', needs_revision: 'info',
 }
-
-const PROP_NAME_OPTIONS = [
-  { value: 'critical_temperature', label: '超导临界温度 (Tc)' },
-  { value: 'electron_phonon_coupling', label: '电声耦合常数 (λ)' },
-  { value: 'omega_log', label: '对数平均声子频率 (ω_log)' },
-  { value: 'superconducting_gap', label: '超导能隙' },
-  { value: 'upper_critical_field', label: '上临界磁场 (Hc2)' },
-  { value: 'critical_current_density', label: '临界电流密度' },
-  { value: 'coulomb_pseudopotential', label: '库仑赝势 (μ*)' },
-  { value: 'dos_fermi', label: '费米面态密度 N(Ef)' },
-  { value: 'debye_temperature', label: '德拜温度' },
-  { value: 'metallization_pressure', label: '金属化压力' },
-  { value: 'synthesis_pressure', label: '合成压力' },
-  { value: 'stability_pressure', label: '稳定压力' },
-  { value: 'transition_pressure', label: '相变压力' },
-  { value: 'lattice_parameter', label: '晶格常数' },
-  { value: 'formation_enthalpy', label: '形成焓' },
-  { value: 'band_gap', label: '带隙' },
-  { value: 'diffusivity', label: '扩散系数' },
-  { value: 'hydrogen_storage_capacity', label: '储氢容量' },
-]
 
 const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPapers }) => {
   // Editable fields
@@ -81,6 +59,17 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
     setEditKps((data.key_properties || []).map((kp: any) => ({ ...kp })))
   }, [paper])
 
+  // 物性的条件取自所属材料状态：压强与温度不在物性表上。
+  const kpCondition = (kp: any) => {
+    const state = (paper?.material_states || []).find((ms: any) => ms.id === kp.material_state_id)
+    return {
+      pressure: state?.pressure_raw
+        ?? (state?.pressure_value_gpa != null ? `${state.pressure_value_gpa} GPa` : '-'),
+      temperature: state?.temperature_raw
+        ?? (state?.temperature_value_k != null ? `${state.temperature_value_k} K` : '-'),
+    }
+  }
+
   /* ── KP helpers ──────────────────────────── */
   const updateKp = (index: number, field: string, value: any) => {
     setEditKps(prev => prev.map((kp, i) => i === index ? { ...kp, [field]: value } : kp))
@@ -109,16 +98,18 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
     })
   }
 
-  // Structure data from key_properties
-  const structures = (paper?.key_properties || [])
-    .filter((kp: any) => kp.structure_text)
-    .map((kp: any) => ({
-      structure_text: kp.structure_text,
-      structure_format: kp.structure_format || 'cif',
-      material: kp.material,
-      name_note: kp.name_note,
-      pressure_gpa: kp.pressure_gpa,
-    }))
+  // 结构数据来自 structure_models（挂在材料状态下），物性表没有结构文本列。
+  const structures = (paper?.material_states || []).flatMap((state: any) =>
+    (state.structures || [])
+      .filter((item: any) => item.structure_text)
+      .map((item: any) => ({
+        structure_text: item.structure_text,
+        structure_format: item.structure_format || 'cif',
+        material: state.material,
+        name_note: item.space_group_symbol,
+        pressure_gpa: state.pressure_value_gpa,
+      }))
+  )
 
   return (
     <Box>
@@ -233,19 +224,13 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
                       return (
                         <Box key={kp.id || `new-${index}`} sx={{
                           p: 1.5, borderRadius: 2,
-                          bgcolor: kp.is_primary ? '#eef2ff' : 'grey.50',
-                          border: '1px solid', borderColor: kp.is_primary ? '#818cf8' : 'divider',
+                          bgcolor: 'grey.50',
+                          border: '1px solid', borderColor: 'divider',
                           opacity: kp._deleted ? 0.35 : 1,
                         }}>
-                          {/* Row 1: 核心字段 */}
+                          {/* Row 1: 核心字段。主次标记在条件化模型中已无对应列，不再展示 */}
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                             <Chip size="small" label={`#${index + 1}`} variant="outlined" />
-                            <FormControlLabel
-                              control={<Checkbox checked={!!kp.is_primary} size="small"
-                                onChange={e => setF('is_primary', e.target.checked)} />}
-                              label="主要"
-                              sx={{ m: 0, '& .MuiTypography-root': { fontSize: 12 } }}
-                            />
                             <Box sx={{ flex: 1 }} />
                             <Tooltip title="删除此物性">
                               <IconButton size="small" color="error" onClick={() => deleteKp(index)}>
@@ -258,17 +243,10 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
                           <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, mb: 1 }}>
                             <TextField label="材料 (material)" size="small"
                               value={kp.material || ''} onChange={e => setF('material', e.target.value)} />
-                            <FormControl size="small">
-                              <InputLabel>物性名</InputLabel>
-                              <Select
-                                value={kp.name || ''}
-                                label="物性名"
-                                onChange={e => setF('name', e.target.value)}>
-                                {PROP_NAME_OPTIONS.map(o => (
-                                  <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
-                                ))}
-                              </Select>
-                            </FormControl>
+                            {/* 物性名来自规范定义或原文名，不再是固定候选枚举 */}
+                            <TextField label="物性名" size="small"
+                              value={kp.name || kp.name_raw || ''}
+                              onChange={e => setF('name_raw', e.target.value)} />
                           </Box>
 
                           {/* Row 3: 数值范围 */}
@@ -283,20 +261,18 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
                               value={kp.unit || ''} onChange={e => setF('unit', e.target.value)} />
                           </Box>
 
-                          {/* Row 4: 条件 + 分类 */}
-                          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1, mb: 1 }}>
-                            <TextField label="压强 (GPa)" size="small" type="number"
-                              value={kp.pressure_gpa ?? ''}
-                              onChange={e => setF('pressure_gpa', e.target.value ? Number(e.target.value) : null)} />
-                            <TextField label="温度 (K)" size="small" type="number"
-                              value={kp.temperature_k ?? ''}
-                              onChange={e => setF('temperature_k', e.target.value ? Number(e.target.value) : null)} />
+                          {/* Row 4: 条件。压强与温度属材料状态，此处按所属状态只读展示 */}
+                          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, mb: 1 }}>
+                            <TextField label="压强（来自材料状态）" size="small"
+                              value={kpCondition(kp).pressure} InputProps={{ readOnly: true }} />
+                            <TextField label="温度（来自材料状态）" size="small"
+                              value={kpCondition(kp).temperature} InputProps={{ readOnly: true }} />
                           </Box>
 
                           {/* Row 5: 备注 */}
                           <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
-                            <TextField label="物性备注 (name_note)" size="small"
-                              value={kp.name_note || ''} onChange={e => setF('name_note', e.target.value)} />
+                            <TextField label="数值（解析值）" size="small"
+                              value={kp.value_number ?? ''} InputProps={{ readOnly: true }} />
                             <TextField label="条件备注 (condition_note)" size="small"
                               value={kp.condition_note || ''} onChange={e => setF('condition_note', e.target.value)} />
                           </Box>

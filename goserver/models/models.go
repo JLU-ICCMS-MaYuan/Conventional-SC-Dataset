@@ -258,18 +258,20 @@ type StructureFamilyAlias struct {
 
 // MaterialState 一篇论文当前 revision 中材料的条件化状态。
 type MaterialState struct {
-	ID                       uint64                         `gorm:"primaryKey;uniqueIndex:uq_material_states_identity_revision,priority:1" json:"id"`
-	PaperID                  uint                           `gorm:"not null;index:ix_material_states_paper_revision,priority:1;uniqueIndex:uq_material_states_identity_revision,priority:2" json:"paper_id"`
-	PaperRevision            uint                           `gorm:"not null;index:ix_material_states_paper_revision,priority:2;uniqueIndex:uq_material_states_identity_revision,priority:3" json:"paper_revision"`
-	SuperconductorID         uint                           `gorm:"not null;index" json:"superconductor_id"`
-	MaterialFamilyID         *uint                          `gorm:"index" json:"material_family_id"`
-	ElementCount             *int16                         `json:"element_count"`
-	MaterialDimensionality   string                         `gorm:"size:32;not null;default:unknown" json:"material_dimensionality"`
-	SuperconductorKind       string                         `gorm:"size:32;not null;default:unknown" json:"superconductor_kind"`
-	CrystalSystem            string                         `gorm:"size:32;not null;default:unknown" json:"crystal_system"`
-	PressureValueGPa         *float64                       `json:"pressure_value_gpa"`
-	PressureMinGPa           *float64                       `json:"pressure_min_gpa"`
-	PressureMaxGPa           *float64                       `json:"pressure_max_gpa"`
+	ID                     uint64 `gorm:"primaryKey;uniqueIndex:uq_material_states_identity_revision,priority:1" json:"id"`
+	PaperID                uint   `gorm:"not null;index:ix_material_states_paper_revision,priority:1;uniqueIndex:uq_material_states_identity_revision,priority:2" json:"paper_id"`
+	PaperRevision          uint   `gorm:"not null;index:ix_material_states_paper_revision,priority:2;uniqueIndex:uq_material_states_identity_revision,priority:3" json:"paper_revision"`
+	SuperconductorID       uint   `gorm:"not null;index" json:"superconductor_id"`
+	MaterialFamilyID       *uint  `gorm:"index" json:"material_family_id"`
+	ElementCount           *int16 `json:"element_count"`
+	MaterialDimensionality string `gorm:"size:32;not null;default:unknown" json:"material_dimensionality"`
+	SuperconductorKind     string `gorm:"size:32;not null;default:unknown" json:"superconductor_kind"`
+	CrystalSystem          string `gorm:"size:32;not null;default:unknown" json:"crystal_system"`
+	// 必须显式指定列名：GORM 默认命名策略会把 GPa 拆成 g_pa，
+	// 生成 pressure_value_g_pa 这类并不存在的列，导致压强字段读不出来。
+	PressureValueGPa         *float64                       `gorm:"column:pressure_value_gpa" json:"pressure_value_gpa"`
+	PressureMinGPa           *float64                       `gorm:"column:pressure_min_gpa" json:"pressure_min_gpa"`
+	PressureMaxGPa           *float64                       `gorm:"column:pressure_max_gpa" json:"pressure_max_gpa"`
 	PressureRaw              *string                        `gorm:"size:255" json:"pressure_raw"`
 	PressureUnitRaw          *string                        `gorm:"size:50" json:"pressure_unit_raw"`
 	ReportedSpaceGroupSymbol *string                        `gorm:"size:100" json:"reported_space_group_symbol"`
@@ -433,19 +435,8 @@ type SuperconductorProperty struct {
 	CreatedAt            time.Time `json:"created_at"`
 	UpdatedAt            time.Time `json:"updated_at"`
 
-	// 旧 Handler 的临时编译兼容字段；不写入目标 Schema。
-	SuperconductorID   *uint    `gorm:"-" json:"superconductor_id,omitempty"`
-	Name               string   `gorm:"-" json:"name,omitempty"`
-	NameNote           *string  `gorm:"-" json:"name_note,omitempty"`
-	PressureGpa        *float64 `gorm:"-" json:"pressure_gpa,omitempty"`
-	TemperatureK       *float64 `gorm:"-" json:"temperature_k,omitempty"`
-	ConditionJSON      *string  `gorm:"-" json:"condition_json,omitempty"`
-	IsPrimary          bool     `gorm:"-" json:"is_primary,omitempty"`
-	SuperconductorType *string  `gorm:"-" json:"superconductor_type,omitempty"`
-	ArticleType        *string  `gorm:"-" json:"article_type,omitempty"`
-	SourceLabel        string   `gorm:"-" json:"source_label,omitempty"`
-	StructureText      *string  `gorm:"-" json:"structure_text,omitempty"`
-	StructureFormat    *string  `gorm:"-" json:"structure_format,omitempty"`
+	// 物性的规范名来源；展示名优先于原文名。
+	PropertyDefinition *PropertyDefinition `gorm:"foreignKey:PropertyDefinitionID" json:"property_definition,omitempty"`
 }
 
 func (SuperconductorProperty) TableName() string { return "superconductor_properties" }

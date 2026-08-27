@@ -36,10 +36,19 @@ var (
 		"methodology", "key_finding", "rationale", "research_materials",
 		"material_relations", "builds_on",
 	}
-	keyPropertyUpdateFields = []string{
-		"material", "name", "name_raw", "name_note", "value_min", "value_max", "value_raw", "unit",
-		"pressure_gpa", "temperature_k", "is_primary", "article_type",
-		"condition_json", "condition_note", "structure_text", "structure_format",
+	// 请求字段 → superconductor_properties 真实列。
+	// Updates(map) 直接把键当列名，因此这里必须用数据库列名（material_raw / unit_raw）。
+	// 压强、温度等条件字段属材料状态，不经物性接口修改；名称由 name_raw 承载。
+	keyPropertyUpdateFields = map[string]string{
+		"material":       "material_raw",
+		"name_raw":       "name_raw",
+		"value_min":      "value_min",
+		"value_max":      "value_max",
+		"value_raw":      "value_raw",
+		"value_number":   "value_number",
+		"unit":           "unit_raw",
+		"canonical_unit": "canonical_unit",
+		"condition_note": "condition_note",
 	}
 	errKeyPropertyNotFound = errors.New("物性记录不存在或不属于当前论文")
 	pythonBackendClient    = &http.Client{Timeout: 2 * time.Minute}
@@ -72,8 +81,15 @@ func GetPapers(c *gin.Context) {
 	}
 	if material != "" {
 		like := "%" + material + "%"
-		// 子查询：找出有这个 material 的 paper_id
-		query = query.Where("id IN (SELECT paper_id FROM key_properties WHERE material LIKE ?)", like)
+		// 子查询：找出含该材料的 paper_id。化学式在 superconductors，
+		// 原文材料名在 superconductor_properties.material_raw；key_properties 表已不存在。
+		query = query.Where(`id IN (
+			SELECT ms.paper_id FROM material_states ms
+			JOIN superconductors sc ON sc.id = ms.superconductor_id
+			WHERE sc.chemical_formula LIKE ?
+			UNION
+			SELECT sp.paper_id FROM superconductor_properties sp WHERE sp.material_raw LIKE ?
+		)`, like, like)
 	}
 	if yearMin != "" {
 		query = query.Where("year >= ?", yearMin)
@@ -241,9 +257,9 @@ func updateKeyProperties(tx *gorm.DB, paperID uint, kps []map[string]interface{}
 				return err
 			}
 			kpUpdates := make(map[string]interface{})
-			for _, field := range keyPropertyUpdateFields {
+			for field, column := range keyPropertyUpdateFields {
 				if value, exists := values[field]; exists {
-					kpUpdates[field] = value
+					kpUpdates[column] = value
 				}
 			}
 			if len(kpUpdates) > 0 {
@@ -262,24 +278,20 @@ func updateKeyProperties(tx *gorm.DB, paperID uint, kps []map[string]interface{}
 	return nil
 }
 
+// newKeyProperty 只接受 superconductor_properties 的真实列。
+// 无对应列的字段（压强、温度、主次标记、结构文本等）一律不接受，而非接受后静默丢弃——
+// 后者会让管理员以为改动已保存。
 func newKeyProperty(paperID uint, values map[string]interface{}) models.KeyProperty {
-	kp := models.KeyProperty{PaperID: paperID, SourceLabel: "manual"}
+	kp := models.KeyProperty{PaperID: paperID}
 	kp.Material, _ = values["material"].(string)
-	kp.Name, _ = values["name"].(string)
 	kp.NameRaw, _ = values["name_raw"].(string)
-	assignStringPointer(values, "name_note", &kp.NameNote)
 	assignFloatPointer(values, "value_min", &kp.ValueMin)
 	assignFloatPointer(values, "value_max", &kp.ValueMax)
+	assignFloatPointer(values, "value_number", &kp.ValueNumber)
 	assignStringPointer(values, "value_raw", &kp.ValueRaw)
 	assignStringPointer(values, "unit", &kp.Unit)
-	assignFloatPointer(values, "pressure_gpa", &kp.PressureGpa)
-	assignFloatPointer(values, "temperature_k", &kp.TemperatureK)
-	assignStringPointer(values, "condition_json", &kp.ConditionJSON)
+	assignStringPointer(values, "canonical_unit", &kp.CanonicalUnit)
 	assignStringPointer(values, "condition_note", &kp.ConditionNote)
-	assignStringPointer(values, "article_type", &kp.ArticleType)
-	assignStringPointer(values, "structure_text", &kp.StructureText)
-	assignStringPointer(values, "structure_format", &kp.StructureFormat)
-	kp.IsPrimary, _ = values["is_primary"].(bool)
 	return kp
 }
 
