@@ -1,19 +1,20 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   Box, Typography, Card, CardContent, Button, TextField,
-  Chip, Alert, CircularProgress,
+  Chip, Alert,
   FormControl, InputLabel, Select, MenuItem,
   IconButton, Tooltip, Checkbox, FormControlLabel,
 } from '@mui/material'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import DeleteIcon from '@mui/icons-material/Delete'
 import AddIcon from '@mui/icons-material/Add'
-import { api } from '../lib/api'
 import StructureViewer3D from './StructureViewer3D'
 
 interface PaperEditViewProps {
-  paperId: number
+  // 论文数据与加载/错误分流由路由页面壳 PaperDetailPage 负责，本组件只负责展示。
+  paper: any
   onBack: () => void
+  onOpenMyPapers?: () => void
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -44,11 +45,7 @@ const PROP_NAME_OPTIONS = [
   { value: 'hydrogen_storage_capacity', label: '储氢容量' },
 ]
 
-const PaperEditView: React.FC<PaperEditViewProps> = ({ paperId, onBack }) => {
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [paper, setPaper] = useState<any>(null)
-
+const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPapers }) => {
   // Editable fields
   const [editTitle, setEditTitle] = useState('')
   const [editDoi, setEditDoi] = useState('')
@@ -67,32 +64,22 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paperId, onBack }) => {
   // Chem formula (read-only, derived from key_properties)
   const formula = paper?.key_properties?.[0]?.material || (paper?.materials?.[0]) || '-'
 
-  const loadPaper = useCallback(async () => {
-    setLoading(true)
-    setError('')
-    try {
-      const data = await api.get<any>(`/api/papers/${paperId}`)
-      setPaper(data)
-      setEditTitle(data.title || '')
-      setEditDoi(data.doi || '')
-      setEditJournal(data.journal || '')
-      setEditYear(data.year || '')
-      setEditAuthors(typeof data.authors === 'string' ? data.authors : JSON.stringify(data.authors || []))
-      setEditAbstract(data.abstract || '')
-      setEditSummary(data.summary || '')
-      setEditMethodology(typeof data.methodology === 'string' ? data.methodology : JSON.stringify(data.methodology || []))
-      setEditKeyFinding(data.key_finding || '')
-      setEditRationale(data.rationale || '')
-      // 深拷贝 key_properties 用于本地编辑
-      setEditKps((data.key_properties || []).map((kp: any) => ({ ...kp })))
-    } catch (e: any) {
-      setError(e.message || '加载论文失败')
-    } finally {
-      setLoading(false)
-    }
-  }, [paperId])
-
-  useEffect(() => { loadPaper() }, [loadPaper])
+  // 论文数据由 props 传入；同步到本地展示状态，切换论文时重新填充
+  useEffect(() => {
+    const data = paper || {}
+    setEditTitle(data.title || '')
+    setEditDoi(data.doi || '')
+    setEditJournal(data.journal || '')
+    setEditYear(data.year || '')
+    setEditAuthors(typeof data.authors === 'string' ? data.authors : JSON.stringify(data.authors || []))
+    setEditAbstract(data.abstract || '')
+    setEditSummary(data.summary || '')
+    setEditMethodology(typeof data.methodology === 'string' ? data.methodology : JSON.stringify(data.methodology || []))
+    setEditKeyFinding(data.key_finding || '')
+    setEditRationale(data.rationale || '')
+    // 深拷贝 key_properties 用于本地编辑
+    setEditKps((data.key_properties || []).map((kp: any) => ({ ...kp })))
+  }, [paper])
 
   /* ── KP helpers ──────────────────────────── */
   const updateKp = (index: number, field: string, value: any) => {
@@ -133,23 +120,6 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paperId, onBack }) => {
       pressure_gpa: kp.pressure_gpa,
     }))
 
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-        <CircularProgress />
-      </Box>
-    )
-  }
-
-  if (error) {
-    return (
-      <Box sx={{ textAlign: 'center', py: 8 }}>
-        <Typography color="error" gutterBottom>{error}</Typography>
-        <Button onClick={onBack} startIcon={<ArrowBackIcon />}>返回</Button>
-      </Box>
-    )
-  }
-
   return (
     <Box>
       {/* Header */}
@@ -161,6 +131,10 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paperId, onBack }) => {
           <Typography variant="overline" color="text.secondary">只读模式</Typography>
           <Typography variant="h4" fontWeight={800}>论文详情</Typography>
         </Box>
+        {/* 离开详情页后仍能经界面回到任意已提交论文，无需手工拼接网址 */}
+        {onOpenMyPapers && (
+          <Button size="small" variant="outlined" onClick={onOpenMyPapers}>我的论文</Button>
+        )}
       </Box>
 
       <Alert severity="info" sx={{ mb: 2 }}>论文已提交审核。普通用户不能在这里直接修改正式记录。</Alert>

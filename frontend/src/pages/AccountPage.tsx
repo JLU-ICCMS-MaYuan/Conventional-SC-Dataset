@@ -8,6 +8,7 @@ import { AdminPanelSettings, DeleteOutline, OpenInNew, PhotoCamera, Security } f
 import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import UsernameField from '../components/UsernameField'
+import MyPapersList from '../components/MyPapersList'
 
 interface Profile {
   id: number
@@ -150,6 +151,14 @@ const AccountPage: React.FC = () => {
           </Stack>
         </CardContent></Card>
       )}
+
+      <Card variant="outlined" sx={{ mb: 3, borderRadius: 3 }}><CardContent sx={{ p: 3 }}>
+        <Typography variant="h6" fontWeight={750}>我的论文</Typography>
+        <Typography color="text.secondary" variant="body2" sx={{ mt: 0.5 }}>
+          你提交过的论文长期保存在这里，点击任意一条可只读复查提交内容。
+        </Typography>
+        <MyPapersList />
+      </CardContent></Card>
 
       <Card variant="outlined" sx={{ mb: 3, borderRadius: 3 }}><CardContent sx={{ p: 3 }}>
         <Stack direction="row" spacing={1} alignItems="center"><Security color="primary" /><Typography variant="h6" fontWeight={750}>账户安全</Typography></Stack>

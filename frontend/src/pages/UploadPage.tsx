@@ -11,7 +11,6 @@ import {
 } from '@mui/icons-material'
 import { useAuth } from '../context/AuthContext'
 import AuthDialog from '../components/AuthDialog'
-import PaperEditView from '../components/PaperEditView'
 import UploadTaskCenter from '../components/UploadTaskCenter'
 import MultiFileUploadPanel from '../components/MultiFileUploadPanel'
 import UploadParsingDetail from '../components/UploadParsingDetail'
@@ -41,10 +40,6 @@ const UploadPage: React.FC = () => {
   const navigate = useNavigate()
   const fileInput = useRef<HTMLInputElement>(null)
   const uploadXhr = useRef<XMLHttpRequest | null>(null)
-
-  /* ── Stage ─────────────────────────────────── */
-  const [stage, setStage] = useState<'list' | 'detail'>('list')
-  const [detailPaperId, setDetailPaperId] = useState<number | null>(null)
 
   /* ── Auth dialog ───────────────────────────── */
   const [authOpen, setAuthOpen] = useState(false)
@@ -317,20 +312,20 @@ const UploadPage: React.FC = () => {
     }
   }
 
+  // 论文详情由 /papers/:id 路由承载，离开后仍可通过刷新、前进/后退或直接访问地址回到
   const handleTaskSubmitted = (paperId: number) => {
     if (taskStorageKey) localStorage.removeItem(taskStorageKey)
     setActiveTaskId(null)
     setTaskState(null)
     setSnackbar('已提交管理员审核')
-    setDetailPaperId(paperId)
-    setStage('detail')
+    navigate(`/papers/${paperId}`)
   }
 
   const openExistingPaper = (paperId: number) => {
     if (taskStorageKey) localStorage.removeItem(taskStorageKey)
     setActiveTaskId(null)
     setTaskState(null)
-    handleDetailOpen(paperId)
+    navigate(`/papers/${paperId}`)
   }
 
   /* ── JSON group save ───────────────────────── */
@@ -356,33 +351,11 @@ const UploadPage: React.FC = () => {
     finally { setSaving(false) }
   }
 
-  const handleDetailOpen = (paperId: number) => {
-    setDetailPaperId(paperId)
-    setStage('detail')
-  }
-
-  const handleDetailBack = () => {
-    setStage('list')
-    setDetailPaperId(null)
-  }
-
   const getFileIcon = () => {
     if (!file) return <CloudUpload sx={{ fontSize: 48, color: 'text.disabled', mb: 2 }} />
     if (fileType === 'json') return <Code sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
     if (file.name.endsWith('.pdf')) return <PictureAsPdf sx={{ fontSize: 48, color: 'error.main', mb: 2 }} />
     return <Description sx={{ fontSize: 48, color: 'info.main', mb: 2 }} />
-  }
-
-  /* ═══════════════════════════════════════════════ */
-  /* Detail Stage                                  */
-  /* ═══════════════════════════════════════════════ */
-  if (stage === 'detail' && detailPaperId) {
-    return (
-      <PaperEditView
-        paperId={detailPaperId}
-        onBack={handleDetailBack}
-      />
-    )
   }
 
   /* ═══════════════════════════════════════════════ */

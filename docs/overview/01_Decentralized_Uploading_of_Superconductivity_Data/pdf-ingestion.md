@@ -40,6 +40,8 @@
 - 清理职责分为 `cleanup_transient_data`、`cleanup_unsubmitted_files` 和 `cleanup_duplicate_candidate`。已提交任务只执行临时清理并保留正式文件与待审快照；未提交的 `failed/duplicate/cancelled` 才执行全部清理。
 - 已提交论文通过 `paper_files` 永久认领所有来源文件；`paper_chunks` 和正式证据保存来源文件与页码范围。
 - 统计、搜索和 RAG 只使用 `approved` 论文。统一论文详情的权限为：匿名仅 approved；登录用户可看 approved/pending；上传者还可看自己的 rejected 和 `review_comment`；管理员可看全部及 `admin_internal_note`。内部路径始终不公开。
+- 已提交论文详情由独立地址 `/papers/:id` 承载，内容只由地址决定：刷新、前进后退和直接分享地址都得到同一篇论文，不再依附上传页的内部视图状态。权限判定只在后端按论文逐篇执行，前端不复制一份权限规则；无效编号、无权查看、论文不存在与加载失败分别给出对应提示，失败时不渲染任何论文字段。未定义地址由兜底页提示“页面不存在”，不再白屏。（[Issue #56](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/56)）
+- 已提交论文的入口在「用户」页的「我的论文」列表，按提交时间倒序列出并可点击进入只读详情；详情页同时提供回到该列表的入口，离开详情页后无需手工拼接地址即可重新到达。该列表与上传页的解析任务列表分开：解析任务存 Redis、24 小时清理、受 100 条配额约束，属于待办；已提交论文存 MySQL、永久保留、数量无上限，属于归档，两者混列会破坏配额语义。（[Issue #56](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/56)）
 
 ## 上传任务中心
 
@@ -97,3 +99,4 @@
 - [Issue #51：建立材料状态多维分类目录并统一 AI、上传与审核流程](../../specs/51-material-state-classification/spec.md)
 - [Issue #54：修复提交审核 500（压强单臂区间违反 CHECK 约束）与草稿自动保存过严](../../specs/54-submit-pressure-range-validation/spec.md)
 - [Issue #55：修复提交失败后任务卡在 submitting 状态导致校对页空白](../../specs/55-submit-failure-status-rollback/spec.md)
+- [Issue #56：已提交论文详情页不可达（新增 /papers/:id 路由与「我的论文」入口）](../../specs/56-paper-detail-route/spec.md)
