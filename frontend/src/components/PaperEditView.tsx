@@ -1,12 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import {
-  Box, Typography, Card, CardContent, Button, TextField,
+  Box, Typography, Card, CardContent, Button,
   Chip, Alert,
-  IconButton, Tooltip,
 } from '@mui/material'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
-import DeleteIcon from '@mui/icons-material/Delete'
-import AddIcon from '@mui/icons-material/Add'
 import StructureViewer3D from './StructureViewer3D'
 
 interface PaperEditViewProps {
@@ -24,7 +21,7 @@ const STATUS_COLORS: Record<string, 'warning' | 'success' | 'error' | 'info'> = 
 }
 
 const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPapers }) => {
-  // Editable fields
+  // 只读展示状态：用于展示的本地状态，切换论文时重新填充
   const [editTitle, setEditTitle] = useState('')
   const [editDoi, setEditDoi] = useState('')
   const [editJournal, setEditJournal] = useState('')
@@ -32,12 +29,8 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
   const [editAuthors, setEditAuthors] = useState('')
   const [editAbstract, setEditAbstract] = useState('')
   const [editSummary, setEditSummary] = useState('')
-  const [editMethodology, setEditMethodology] = useState('')
   const [editKeyFinding, setEditKeyFinding] = useState('')
   const [editRationale, setEditRationale] = useState('')
-
-  // Editable key_properties
-  const [editKps, setEditKps] = useState<any[]>([])
 
   // Chem formula (read-only, derived from key_properties)
   const formula = paper?.key_properties?.[0]?.material || (paper?.materials?.[0]) || '-'
@@ -52,51 +45,17 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
     setEditAuthors(typeof data.authors === 'string' ? data.authors : JSON.stringify(data.authors || []))
     setEditAbstract(data.abstract || '')
     setEditSummary(data.summary || '')
-    setEditMethodology(typeof data.methodology === 'string' ? data.methodology : JSON.stringify(data.methodology || []))
     setEditKeyFinding(data.key_finding || '')
     setEditRationale(data.rationale || '')
-    // 深拷贝 key_properties 用于本地编辑
-    setEditKps((data.key_properties || []).map((kp: any) => ({ ...kp })))
   }, [paper])
 
-  // 物性的条件取自所属材料状态：压强与温度不在物性表上。
-  const kpCondition = (kp: any) => {
-    const state = (paper?.material_states || []).find((ms: any) => ms.id === kp.material_state_id)
-    return {
-      pressure: state?.pressure_raw
-        ?? (state?.pressure_value_gpa != null ? `${state.pressure_value_gpa} GPa` : '-'),
-      temperature: state?.temperature_raw
-        ?? (state?.temperature_value_k != null ? `${state.temperature_value_k} K` : '-'),
-    }
-  }
-
-  /* ── KP helpers ──────────────────────────── */
-  const updateKp = (index: number, field: string, value: any) => {
-    setEditKps(prev => prev.map((kp, i) => i === index ? { ...kp, [field]: value } : kp))
-  }
-
-  const addKp = () => {
-    setEditKps(prev => [...prev, {
-      _new: true,
-      material: '', name: 'critical_temperature', name_raw: '', name_note: '',
-      value_min: null, value_max: null, value_raw: '', unit: 'K',
-      pressure_gpa: null, temperature_k: null, condition_note: '',
-      is_primary: false, article_type: '',
-      structure_text: '', structure_format: 'cif',
-    }])
-  }
-
-  const deleteKp = (index: number) => {
-    setEditKps(prev => {
-      const kp = prev[index]
-      if (kp.id) {
-        // 已有 ID 的标记为删除（后端根据 _deleted 处理）
-        return prev.map((k, i) => i === index ? { ...k, _deleted: true } : k)
-      }
-      // 新建的未保存 KP 直接从列表移除
-      return prev.filter((_, i) => i !== index)
-    })
-  }
+  // 研究方法处理：转为可读列表
+  const methodologyList: string[] = (() => {
+    const raw = paper?.methodology
+    if (!raw) return []
+    if (Array.isArray(raw)) return raw
+    return []
+  })()
 
   // 结构数据来自 structure_models（挂在材料状态下），物性表没有结构文本列。
   const structures = (paper?.material_states || []).flatMap((state: any) =>
@@ -130,8 +89,7 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
 
       <Alert severity="info" sx={{ mb: 2 }}>论文已提交审核。普通用户不能在这里直接修改正式记录。</Alert>
 
-      <Box component="fieldset" disabled sx={{
-        border: 0, p: 0, m: 0, minWidth: 0,
+      <Box sx={{
         display: 'grid', gridTemplateColumns: '1fr 360px', gap: 3, alignItems: 'start',
         '@media (max-width:1180px)': { gridTemplateColumns: '1fr' },
       }}>
@@ -147,24 +105,36 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
               </Box>
               <Box sx={{ px: 2, pb: 2, borderTop: '1px solid', borderColor: 'divider' }}>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                  <TextField label="标题" size="small" fullWidth multiline rows={2}
-                    value={editTitle} onChange={e => setEditTitle(e.target.value)} />
-                  <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
-                    <TextField label="DOI" size="small" value={editDoi}
-                      onChange={e => setEditDoi(e.target.value)} />
-                    <TextField label="年份" size="small" type="number" value={editYear}
-                      onChange={e => setEditYear(e.target.value ? Number(e.target.value) : '')} />
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">标题</Typography>
+                    <Typography variant="body2">{editTitle || '-'}</Typography>
                   </Box>
-                  <TextField label="期刊" size="small" fullWidth value={editJournal}
-                    onChange={e => setEditJournal(e.target.value)} />
-                  <TextField label="作者" size="small" fullWidth multiline rows={2}
-                    helperText="JSON 数组格式"
-                    value={editAuthors}
-                    onChange={e => setEditAuthors(e.target.value)} />
-                  <TextField label="摘要" size="small" fullWidth multiline rows={3}
-                    value={editAbstract} onChange={e => setEditAbstract(e.target.value)} />
-                  <TextField label="论文总结 (LLM)" size="small" fullWidth multiline rows={3}
-                    value={editSummary} onChange={e => setEditSummary(e.target.value)} />
+                  <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">DOI</Typography>
+                      <Typography variant="body2">{editDoi || '-'}</Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">年份</Typography>
+                      <Typography variant="body2">{editYear || '-'}</Typography>
+                    </Box>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">期刊</Typography>
+                    <Typography variant="body2">{editJournal || '-'}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">作者</Typography>
+                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{editAuthors || '-'}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">摘要</Typography>
+                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{editAbstract || '-'}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">论文总结 (LLM)</Typography>
+                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{editSummary || '-'}</Typography>
+                  </Box>
                   <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                     <Chip label={`审核状态: ${STATUS_LABELS[paper?.review_status] || paper?.review_status || '待审核'}`}
                       size="small" color={STATUS_COLORS[paper?.review_status] || 'default'} />
@@ -175,120 +145,199 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
               </Box>
             </Box>
 
-            {(paper.material_states || []).length > 0 && (
+            {/* 材料状态 */}
+            {(paper.material_states || []).length > 0 ? (
               <Box component="details" open sx={{
                 border: '1px solid', borderColor: 'divider', borderRadius: 2, mb: 1.5, overflow: 'hidden',
               }}>
                 <Box component="summary" sx={{ cursor: 'pointer', p: 2, fontSize: 18, fontWeight: 800 }}>
-                  材料状态分类
+                  材料状态
                 </Box>
-                <Box sx={{ px: 2, pb: 2, borderTop: '1px solid', borderColor: 'divider', display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Box sx={{ px: 2, pb: 2, borderTop: '1px solid', borderColor: 'divider', display: 'flex', flexDirection: 'column', gap: 3 }}>
                   {(paper.material_states || []).map((state: any, index: number) => (
-                    <Box key={state.id || index} sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-                      <Typography variant="body2" fontWeight={700}>{state.material || `材料状态 #${index + 1}`}</Typography>
-                      <Chip size="small" label={state.material_family?.name || '材料家族待确认'} color={state.material_family ? 'primary' : 'warning'} />
-                      <Chip size="small" variant="outlined" label={`不同元素种类数: ${state.element_count ?? '未知'}`} />
-                      {(state.structure_families || []).map((family: any) => (
-                        <Chip key={family.id || family.name} size="small" variant="outlined" label={`${family.name}${family.is_primary ? '（主）' : ''}`} />
-                      ))}
+                    <Box key={state.id || index} sx={{
+                      p: 2, borderRadius: 2, bgcolor: 'grey.50', border: '1px solid', borderColor: 'divider',
+                    }}>
+                      {/* 分类区 */}
+                      <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>
+                        {state.material || `材料状态 #${index + 1}`}
+                      </Typography>
+
+                      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 1.5, mb: 2 }}>
+                        {state.material_family && (
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">材料家族</Typography>
+                            <Typography variant="body2">{state.material_family.name}</Typography>
+                          </Box>
+                        )}
+                        {state.element_count != null && (
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">不同元素种类数</Typography>
+                            <Typography variant="body2">{state.element_count}</Typography>
+                          </Box>
+                        )}
+                        {state.material_dimensionality && (
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">材料维度</Typography>
+                            <Typography variant="body2">{state.material_dimensionality}</Typography>
+                          </Box>
+                        )}
+                        {state.crystal_system && (
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">晶系</Typography>
+                            <Typography variant="body2">{state.crystal_system}</Typography>
+                          </Box>
+                        )}
+                        {state.reported_space_group_symbol && (
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">空间群符号</Typography>
+                            <Typography variant="body2">{state.reported_space_group_symbol}</Typography>
+                          </Box>
+                        )}
+                        {state.reported_space_group_number != null && (
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">空间群号</Typography>
+                            <Typography variant="body2">{state.reported_space_group_number}</Typography>
+                          </Box>
+                        )}
+                        {state.superconductor_kind && (
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">超导类型</Typography>
+                            <Typography variant="body2">{state.superconductor_kind}</Typography>
+                          </Box>
+                        )}
+                      </Box>
+
+                      {/* 结构家族标签 */}
+                      {(state.structure_families || []).length > 0 && (
+                        <Box sx={{ mb: 2 }}>
+                          <Typography variant="caption" color="text.secondary">结构家族标签</Typography>
+                          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
+                            {state.structure_families.map((family: any) => (
+                              <Chip key={family.id || family.name} size="small" label={family.name} />
+                            ))}
+                          </Box>
+                        </Box>
+                      )}
+
+                      {/* 压强区 */}
+                      {(state.pressure_value_gpa != null || state.pressure_raw || state.pressure_min_gpa != null || state.pressure_max_gpa != null) && (
+                        <Box sx={{ mb: 2 }}>
+                          <Typography variant="caption" color="text.secondary">压强条件</Typography>
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mt: 0.5 }}>
+                            {state.pressure_value_gpa != null && (
+                              <Typography variant="body2">压强：{state.pressure_value_gpa} GPa</Typography>
+                            )}
+                            {state.pressure_raw && (
+                              <Typography variant="body2" color="text.secondary">
+                                原文：{state.pressure_raw}{state.pressure_unit_raw ? ` (${state.pressure_unit_raw})` : ''}
+                              </Typography>
+                            )}
+                            {state.pressure_min_gpa != null && (
+                              <Typography variant="body2">压强下限：{state.pressure_min_gpa} GPa</Typography>
+                            )}
+                            {state.pressure_max_gpa != null && (
+                              <Typography variant="body2">压强上限：{state.pressure_max_gpa} GPa</Typography>
+                            )}
+                          </Box>
+                        </Box>
+                      )}
+
+                      {/* Tc 结果区 */}
+                      {(state.tc_results || []).length > 0 && (
+                        <Box sx={{ mb: 2 }}>
+                          <Typography variant="caption" color="text.secondary">临界温度 Tc</Typography>
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 0.5 }}>
+                            {state.tc_results.map((tcr: any, tcIdx: number) => (
+                              <Box key={tcIdx} sx={{ p: 1, bgcolor: 'background.paper', borderRadius: 1 }}>
+                                {tcr.result_kind && (
+                                  <Typography variant="caption" color="primary">类型：{tcr.result_kind}</Typography>
+                                )}
+                                {tcr.tc_value_k != null && (
+                                  <Typography variant="body2">Tc：{tcr.tc_value_k} K</Typography>
+                                )}
+                                {(tcr.tc_min_k != null || tcr.tc_max_k != null) && (
+                                  <Typography variant="body2">
+                                    Tc 区间：{tcr.tc_min_k ?? '-'} ~ {tcr.tc_max_k ?? '-'} K
+                                  </Typography>
+                                )}
+                                {tcr.tc_method && (
+                                  <Typography variant="body2">判定方法：{tcr.tc_method}</Typography>
+                                )}
+                                {tcr.tc_method_custom && (
+                                  <Typography variant="body2">自定义方法：{tcr.tc_method_custom}</Typography>
+                                )}
+                                {tcr.value_raw && (
+                                  <Typography variant="body2" color="text.secondary">
+                                    原文：{tcr.value_raw}{tcr.unit_raw ? ` ${tcr.unit_raw}` : ''}
+                                  </Typography>
+                                )}
+                              </Box>
+                            ))}
+                          </Box>
+                        </Box>
+                      )}
+
+                      {/* 计算上下文（λ、ωlog、μ*） */}
+                      {(state.calculation_contexts || []).length > 0 && (
+                        <Box sx={{ mb: 2 }}>
+                          <Typography variant="caption" color="text.secondary">计算上下文</Typography>
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 0.5 }}>
+                            {state.calculation_contexts.map((ctx: any, ctxIdx: number) => (
+                              <Box key={ctxIdx} sx={{ p: 1, bgcolor: 'background.paper', borderRadius: 1 }}>
+                                {ctx.lambda_ep != null && (
+                                  <Typography variant="body2">电声耦合强度 λ：{ctx.lambda_ep}</Typography>
+                                )}
+                                {ctx.omega_log_k != null && (
+                                  <Typography variant="body2">对数声子频率 ωlog：{ctx.omega_log_k} K</Typography>
+                                )}
+                                {ctx.mu_star != null && (
+                                  <Typography variant="body2">库伦屏蔽常数 μ*：{ctx.mu_star}</Typography>
+                                )}
+                                {ctx.calculation_method && (
+                                  <Typography variant="body2" color="text.secondary">计算方法：{ctx.calculation_method}</Typography>
+                                )}
+                                {ctx.lambda_ep == null && ctx.omega_log_k == null && ctx.mu_star == null && (
+                                  <Typography variant="body2" color="text.disabled">（数值全为空）</Typography>
+                                )}
+                              </Box>
+                            ))}
+                          </Box>
+                        </Box>
+                      )}
+
+                      {/* 普通物性 */}
+                      {(state.key_properties || paper.key_properties?.filter((kp: any) => kp.material_state_id === state.id) || []).length > 0 && (
+                        <Box>
+                          <Typography variant="caption" color="text.secondary">其他物性</Typography>
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 0.5 }}>
+                            {(state.key_properties || paper.key_properties?.filter((kp: any) => kp.material_state_id === state.id) || []).map((kp: any, kpIdx: number) => (
+                              <Box key={kpIdx} sx={{ p: 1, bgcolor: 'background.paper', borderRadius: 1 }}>
+                                <Typography variant="body2" fontWeight={600}>{kp.name || kp.name_raw || '未命名物性'}</Typography>
+                                {kp.value_raw && (
+                                  <Typography variant="body2">原始值：{kp.value_raw}</Typography>
+                                )}
+                                {kp.value_number != null && (
+                                  <Typography variant="body2">解析值：{kp.value_number}</Typography>
+                                )}
+                                {kp.unit && (
+                                  <Typography variant="body2">单位：{kp.unit}</Typography>
+                                )}
+                                {kp.condition_note && (
+                                  <Typography variant="body2" color="text.secondary">条件说明：{kp.condition_note}</Typography>
+                                )}
+                              </Box>
+                            ))}
+                          </Box>
+                        </Box>
+                      )}
                     </Box>
                   ))}
                 </Box>
               </Box>
+            ) : (
+              <Alert severity="info" sx={{ mb: 1.5 }}>该论文暂无材料状态数据</Alert>
             )}
-
-            {/* 关键物性 */}
-            <Box component="details" open sx={{
-              border: '1px solid', borderColor: 'divider', borderRadius: 2, mb: 1.5, overflow: 'hidden',
-            }}>
-              <Box component="summary" sx={{ cursor: 'pointer', p: 2, fontSize: 18, fontWeight: 800 }}>
-                关键物性
-                <Chip size="small" label={editKps.filter(k => !k._deleted).length} sx={{ ml: 1, fontWeight: 700 }} />
-              </Box>
-              <Box sx={{ px: 2, pb: 2, borderTop: '1px solid', borderColor: 'divider' }}>
-                {editKps.length === 0 ? (
-                  <Box sx={{ textAlign: 'center', py: 3 }}>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                      暂无物性数据
-                    </Typography>
-                    <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={addKp}>
-                      添加物性
-                    </Button>
-                  </Box>
-                ) : (
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1 }}>
-                    {editKps.map((kp: any, index: number) => {
-                      if (kp._deleted) return null
-                      const setF = (f: string, v: any) => updateKp(index, f, v)
-
-                      return (
-                        <Box key={kp.id || `new-${index}`} sx={{
-                          p: 1.5, borderRadius: 2,
-                          bgcolor: 'grey.50',
-                          border: '1px solid', borderColor: 'divider',
-                          opacity: kp._deleted ? 0.35 : 1,
-                        }}>
-                          {/* Row 1: 核心字段。主次标记在条件化模型中已无对应列，不再展示 */}
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                            <Chip size="small" label={`#${index + 1}`} variant="outlined" />
-                            <Box sx={{ flex: 1 }} />
-                            <Tooltip title="删除此物性">
-                              <IconButton size="small" color="error" onClick={() => deleteKp(index)}>
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          </Box>
-
-                          {/* Row 2: 材料 + 物性名 */}
-                          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, mb: 1 }}>
-                            <TextField label="材料 (material)" size="small"
-                              value={kp.material || ''} onChange={e => setF('material', e.target.value)} />
-                            {/* 物性名来自规范定义或原文名，不再是固定候选枚举 */}
-                            <TextField label="物性名" size="small"
-                              value={kp.name || kp.name_raw || ''}
-                              onChange={e => setF('name_raw', e.target.value)} />
-                          </Box>
-
-                          {/* Row 3: 数值范围 */}
-                          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, mb: 1 }}>
-                            <TextField label="最小值" size="small" type="number"
-                              value={kp.value_min ?? ''}
-                              onChange={e => setF('value_min', e.target.value ? Number(e.target.value) : null)} />
-                            <TextField label="最大值" size="small" type="number"
-                              value={kp.value_max ?? ''}
-                              onChange={e => setF('value_max', e.target.value ? Number(e.target.value) : null)} />
-                            <TextField label="单位" size="small"
-                              value={kp.unit || ''} onChange={e => setF('unit', e.target.value)} />
-                          </Box>
-
-                          {/* Row 4: 条件。压强与温度属材料状态，此处按所属状态只读展示 */}
-                          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, mb: 1 }}>
-                            <TextField label="压强（来自材料状态）" size="small"
-                              value={kpCondition(kp).pressure} InputProps={{ readOnly: true }} />
-                            <TextField label="温度（来自材料状态）" size="small"
-                              value={kpCondition(kp).temperature} InputProps={{ readOnly: true }} />
-                          </Box>
-
-                          {/* Row 5: 备注 */}
-                          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
-                            <TextField label="数值（解析值）" size="small"
-                              value={kp.value_number ?? ''} InputProps={{ readOnly: true }} />
-                            <TextField label="条件备注 (condition_note)" size="small"
-                              value={kp.condition_note || ''} onChange={e => setF('condition_note', e.target.value)} />
-                          </Box>
-                        </Box>
-                      )
-                    })}
-
-                    {/* Add button */}
-                    <Button variant="outlined" startIcon={<AddIcon />} onClick={addKp}
-                      sx={{ alignSelf: 'center', borderRadius: '999px' }}>
-                      添加物性
-                    </Button>
-                  </Box>
-                )}
-              </Box>
-            </Box>
 
             {/* 研究方法与发现 */}
             <Box component="details" sx={{
@@ -298,57 +347,74 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
                 研究方法与发现
               </Box>
               <Box sx={{ px: 2, pb: 2, borderTop: '1px solid', borderColor: 'divider' }}>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1 }}>
-                  <TextField label="研究方法 (methodology)" size="small" fullWidth multiline rows={3}
-                    helperText="JSON 数组格式"
-                    value={editMethodology}
-                    onChange={e => setEditMethodology(e.target.value)} />
-                  <TextField label="核心发现 (key_finding)" size="small" fullWidth multiline rows={3}
-                    value={editKeyFinding}
-                    onChange={e => setEditKeyFinding(e.target.value)} />
-                  <TextField label="研究理由 (rationale)" size="small" fullWidth multiline rows={2}
-                    value={editRationale}
-                    onChange={e => setEditRationale(e.target.value)} />
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">研究方法</Typography>
+                    {methodologyList.length > 0 ? (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mt: 0.5 }}>
+                        {methodologyList.map((method, idx) => (
+                          <Typography key={idx} variant="body2">• {method}</Typography>
+                        ))}
+                      </Box>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">-</Typography>
+                    )}
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">关键发现</Typography>
+                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{editKeyFinding || '-'}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">分类理由</Typography>
+                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{editRationale || '-'}</Typography>
+                  </Box>
                 </Box>
               </Box>
             </Box>
           </CardContent>
         </Card>
 
-        {/* Structure preview sidebar */}
-        <Card sx={{
-          alignSelf: 'start', position: 'sticky', top: 96,
-          boxShadow: '0 6px 16px rgba(15,23,42,.16),0 10px 24px rgba(15,23,42,.10)',
-        }}>
+        {/* Sidebar */}
+        <Card sx={{ position: 'sticky', top: 20, boxShadow: 3 }}>
           <CardContent>
-            <Typography variant="h2" gutterBottom>结构预览</Typography>
+            <Typography variant="overline" color="text.secondary">化学式</Typography>
+            <Typography variant="h5" fontWeight={700} sx={{ mb: 2, wordBreak: 'break-word' }}>
+              {formula}
+            </Typography>
+
+            {(paper?.keywords_tags || []).length > 0 && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" color="text.secondary">关键词</Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                  {paper.keywords_tags.map((kw: string, idx: number) => (
+                    <Chip key={idx} label={kw} size="small" />
+                  ))}
+                </Box>
+              </Box>
+            )}
+
             {structures.length > 0 ? (
-              <Box>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {structures.map((s: any, i: number) => (
-                  <Box key={i} sx={{ mb: i < structures.length - 1 ? 2.5 : 0 }}>
-                    {s.name_note && (
-                      <Typography variant="body2" fontWeight={700} sx={{ mb: 0.5 }}>
-                        {s.material} · {s.name_note}{s.pressure_gpa != null ? ` @ ${s.pressure_gpa} GPa` : ''}
-                      </Typography>
-                    )}
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                      格式 {s.structure_format || 'cif'} · 拖拽旋转 · 滚轮缩放
-                    </Typography>
-                    <StructureViewer3D
-                      data={s.structure_text}
-                      format={s.structure_format === 'poscar' || s.structure_format === 'vasp' ? 'vasp' : 'cif'}
-                      height={240}
-                    />
-                    <Box component="details" sx={{ mt: 1 }}>
-                      <Box component="summary" sx={{ cursor: 'pointer', fontSize: 12, fontWeight: 700, color: 'text.secondary' }}>
-                        查看结构文本
-                      </Box>
-                      <Box component="pre" sx={{
-                        mt: 1, p: 1.5, borderRadius: 2, bgcolor: 'grey.50',
-                        maxHeight: 200, overflow: 'auto', fontFamily: '"Roboto Mono",monospace', fontSize: 11,
-                      }}>
-                        {s.structure_text.slice(0, 1500)}
-                      </Box>
+                  <Box key={i} sx={{ borderRadius: 2, overflow: 'hidden', border: '1px solid', borderColor: 'divider' }}>
+                    <Box sx={{ p: 1.5, borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'grey.50' }}>
+                      <Typography variant="caption" color="text.secondary">结构 #{i + 1}</Typography>
+                      <Typography variant="body2" fontWeight={700}>{s.material}</Typography>
+                      {s.name_note && (
+                        <Typography variant="caption" color="text.secondary">{s.name_note}</Typography>
+                      )}
+                      {s.pressure_gpa != null && (
+                        <Chip label={`${s.pressure_gpa} GPa`} size="small" sx={{ ml: 1 }} />
+                      )}
+                    </Box>
+                    <Box sx={{ height: 280, bgcolor: 'grey.100' }}>
+                      <StructureViewer3D data={s.structure_text} format={s.structure_format} />
+                    </Box>
+                    <Box component="pre" sx={{
+                      mt: 1, p: 1.5, borderRadius: 2, bgcolor: 'grey.50',
+                      maxHeight: 200, overflow: 'auto', fontFamily: '"Roboto Mono",monospace', fontSize: 11,
+                    }}>
+                      {s.structure_text.slice(0, 1500)}
                     </Box>
                   </Box>
                 ))}

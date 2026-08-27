@@ -68,13 +68,15 @@ describe('论文详情路由 /papers/:id', () => {
     expect(await screen.findByText('论文详情')).toBeInTheDocument()
     expect(screen.getByText('只读模式')).toBeInTheDocument()
     expect(mockedApi.get).toHaveBeenCalledWith('/api/papers/4')
-    // 字段值由 props 经 effect 填充，晚于外壳渲染一拍，故用 waitFor 等待取值
-    // DOI、期刊、年份为单行输入可直接断言；多行字段（标题/摘要）由 MUI 渲染影子 textarea，改用文本断言
+    // 组件现在是只读展示（标签+值分离），改用文本断言
     await waitFor(() => {
-      expect(screen.getByLabelText('DOI')).toHaveValue('10.1073/pnas.1704505114')
+      expect(screen.getByText('DOI')).toBeInTheDocument()
+      expect(screen.getByText('10.1073/pnas.1704505114')).toBeInTheDocument()
     })
-    expect(screen.getByLabelText('期刊')).toHaveValue('PNAS')
-    expect(screen.getByLabelText('年份')).toHaveValue(2017)
+    expect(screen.getByText('期刊')).toBeInTheDocument()
+    expect(screen.getByText('PNAS')).toBeInTheDocument()
+    expect(screen.getByText('年份')).toBeInTheDocument()
+    expect(screen.getByText('2017')).toBeInTheDocument()
     expect(screen.getByText(/Potential high-Tc superconducting lanthanum/)).toBeInTheDocument()
   })
 
@@ -85,9 +87,9 @@ describe('论文详情路由 /papers/:id', () => {
 
     await waitFor(() => expect(mockedApi.get).toHaveBeenCalledWith('/api/papers/7'))
     await waitFor(() => {
-      expect(screen.getByLabelText('DOI')).toHaveValue('10.9999/other')
+      expect(screen.getByText('10.9999/other')).toBeInTheDocument()
     })
-    expect(screen.getByLabelText('期刊')).toHaveValue('Nature')
+    expect(screen.getByText('Nature')).toBeInTheDocument()
   })
 
   it('点击返回上传列表导航到 /upload', async () => {
