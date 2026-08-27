@@ -623,3 +623,111 @@ def test_methodology_inference_never_creates_tc_results():
     state = draft["material_states"][0]
     assert state["superconductor_kind"] == "conventional"
     assert state["tc_results"] == []
+
+
+# --- Issue #58：分段对解析噪声的鲁棒性（超长 ## 行判为正文而非章节标题） ---
+
+# 实测真实标题上界 204 字符、被误判正文下界 389 字符，阈值 300 落在两者之间。
+# 被误判段落的文字原先只存在于 section_name（_split_by_h2 不把标题行放进 body），
+# 截断会永久丢失该文字，故改为归入正文。
+_MISDETECTED_HEADING = (
+    "34 show that transition-metal hydrides are extremely promising. Thus, we decided "
+    "to perform a systematic evolutionary search for new phases in the Th-H system "
+    "under pressure. As we show below, one of the new hydrides is predicted to be a "
+    "unique high-temperature superconductor. " + "Additional discussion text. " * 40
+)
+
+
+def test_overlong_h2_line_becomes_body_text_and_inherits_section_name():
+    from backend.ingest.chunker import chunk_paper
+
+    assert len(_MISDETECTED_HEADING) > 300
+    markdown = f"""## RESULTS
+The pressure-composition phase diagram was explored with enough text to form a chunk.
+
+## {_MISDETECTED_HEADING}
+To determine the stability field of the predicted phases we performed extra calculations.
+"""
+
+    chunks = chunk_paper(markdown, paper_id=1)
+
+    probe = "transition-metal hydrides are extremely promising"
+    assert any(probe in chunk.content for chunk in chunks), "被误判的正文必须进入 content"
+    assert not any(probe in (chunk.section_name or "") for chunk in chunks), \
+        "被误判的正文不得作为 section_name"
+    assert all((chunk.section_name or "") == "RESULTS" for chunk in chunks), \
+        "超长行后的内容应沿用前一个真实章节名"
+
+
+def test_real_h2_headings_still_become_section_names():
+    from backend.ingest.chunker import chunk_paper
+
+    # 实测真实标题范围 65–204 字符
+    long_real = "KEYWORDS: High-T superconductivity, ThH10, USPEX, DFT, Eliashberg theory, hydrides"
+    assert 65 <= len(long_real) <= 204
+    # 每节正文需超过 50 tokens，否则会被既有 _merge_small_chunks 并入前一节
+    markdown = f"""## RESULTS
+{"The pressure-composition phase diagram was explored in detail. " * 6}
+
+## {long_real}
+{"Keyword section body text preserved as its own chunk. " * 6}
+"""
+
+    chunks = chunk_paper(markdown, paper_id=1)
+
+    names = {chunk.section_name for chunk in chunks}
+    assert "RESULTS" in names
+    assert long_real in names, "真实标题必须仍作为 section_name"
+
+
+def test_markdown_without_h2_headings_falls_back_to_whole_text():
+    from backend.ingest.chunker import chunk_paper
+
+    markdown = "Plain body text with no second level headings but long enough to keep."
+
+    chunks = chunk_paper(markdown, paper_id=1)
+
+    assert chunks
+    assert all((chunk.section_name or "") == "全文" for chunk in chunks)
+
+
+def test_all_overlong_h2_lines_still_produce_chunks():
+    from backend.ingest.chunker import chunk_paper
+
+    markdown = f"""## {_MISDETECTED_HEADING}
+
+## {_MISDETECTED_HEADING}
+"""
+
+    chunks = chunk_paper(markdown, paper_id=1)
+
+    assert chunks, "全部 ## 行都被判为正文时不得产出零块"
+    probe = "transition-metal hydrides are extremely promising"
+    assert any(probe in chunk.content for chunk in chunks)
+
+
+def test_overlong_h2_before_any_real_section_uses_whole_text_name():
+    from backend.ingest.chunker import chunk_paper
+
+    markdown = f"""## {_MISDETECTED_HEADING}
+Body text following the misdetected paragraph with enough characters to survive.
+
+## RESULTS
+Real results section body text long enough to be kept as a chunk.
+"""
+
+    chunks = chunk_paper(markdown, paper_id=1)
+
+    probe = "transition-metal hydrides are extremely promising"
+    holder = next(chunk for chunk in chunks if probe in chunk.content)
+    assert holder.section_name == "全文", "首个真实章节之前的误判段落归入「全文」"
+
+
+def test_fit_column_truncates_to_storage_limit():
+    from backend.api.rag import _fit_column
+
+    assert _fit_column(None, 500) is None
+    assert _fit_column("short", 500) == "short"
+    assert _fit_column("x" * 500, 500) == "x" * 500
+    long_value = "y" * 1389
+    assert len(_fit_column(long_value, 500)) == 500

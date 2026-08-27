@@ -39,6 +39,7 @@
 - 文件目录：未提交终态任务到期后删除原文件、组合及分文件 Markdown、AI 产物和 duplicate 候选副本；清理 Job 携带最小 `CleanupContext`，即使 Redis state 已过期仍能定位用户索引、RQ Job 和候选副本。删除文件前必须用 `papers.upload_task_id` 查询永久认领，数据库不可用时延后，不得依据 Redis 缺失直接删除。
 - 清理职责分为 `cleanup_transient_data`、`cleanup_unsubmitted_files` 和 `cleanup_duplicate_candidate`。已提交任务只执行临时清理并保留正式文件与待审快照；未提交的 `failed/duplicate/cancelled` 才执行全部清理。
 - 已提交论文通过 `paper_files` 永久认领所有来源文件；`paper_chunks` 和正式证据保存来源文件与页码范围。
+- 分段对解析噪声鲁棒：PDF 转 Markdown 会把长正文段落误标成 `##` 标题，因此长度超过 300 字符的 `##` 行不作为章节边界，整行文本并入正文并沿用前一个真实章节名（实测真实标题上界 204 字符、被误判正文下界 389 字符）。误判段落的文字因此进入 `content`、可被搜索与 RAG 引用；若只截断标题字段，该文字会永久丢失，因为标题行本身从不进入正文。写库前另按列长安全截断 `section_name` 与 `heading` 作为第二道防线，避免超出 500 触发 `DataError 1406` 使提交返回 500。（[Issue #58](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/58)）
 - 统计、搜索和 RAG 只使用 `approved` 论文。统一论文详情的权限为：匿名仅 approved；登录用户可看 approved/pending；上传者还可看自己的 rejected 和 `review_comment`；管理员可看全部及 `admin_internal_note`。内部路径始终不公开。
 - 已提交论文详情由独立地址 `/papers/:id` 承载，内容只由地址决定：刷新、前进后退和直接分享地址都得到同一篇论文，不再依附上传页的内部视图状态。权限判定只在后端按论文逐篇执行，前端不复制一份权限规则；无效编号、无权查看、论文不存在与加载失败分别给出对应提示，失败时不渲染任何论文字段。未定义地址由兜底页提示“页面不存在”，不再白屏。（[Issue #56](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/56)）
 - 已提交论文的入口在「用户」页的「我的论文」列表，按提交时间倒序列出并可点击进入只读详情；详情页同时提供回到该列表的入口，离开详情页后无需手工拼接地址即可重新到达。该列表与上传页的解析任务列表分开：解析任务存 Redis、24 小时清理、受 100 条配额约束，属于待办；已提交论文存 MySQL、永久保留、数量无上限，属于归档，两者混列会破坏配额语义。（[Issue #56](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/56)）
@@ -65,14 +66,18 @@
 
 - 上传、抽取、LLM 和数据库错误必须返回或记录明确原因，前端不得显示假成功。
 - 草稿保存或提交失败时，横幅区分「保存失败/提交失败」并展示后端 `detail.message` 及错误码；后端未返回结构化 detail 时才回退通用文案。
+- 未预期异常也有结构化原因：后端统一异常处理器返回 `{"detail": {"code": "internal_error", "message": "<中文说明>"}}`，不再由框架返回纯文本 500 让前端只能显示无信息量文案。响应体不含驱动名、表名列名、SQL 语句和容器路径，完整异常信息只写服务端日志。（[Issue #58](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/58)）
+- 提交前的必填校验一次性收集全部问题而非遇到第一条就中断：横幅聚合列出所有缺失项，出错的材料状态卡片自动展开，页面滚动并聚焦到首个出错字段，字段本身显示错误态与说明。后端专属规则返回的 400（如 `invalid_pressure_range`）按消息中的「第 N 个材料状态」定位到对应卡片，与前端校验共用同一套定位反馈；再次提交成功后错误态与横幅一并清除。（[Issue #58](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/58)）
 - 超过 50 MB 的文件会在选择或上传阶段明确提示；即使 Nginx 返回非 JSON 的 HTTP 413，页面也显示相同的大小限制信息。
 - 扫描版或正文过短的 PDF 明确提示需要可搜索文本；本功能不包含 OCR。
 - 审核通过后若向量发布失败，Go API 返回 `502`，保留临时证据；管理员重复审核即可幂等重试。
 
 ## 主要实现
 
+- `backend/main.py`
 - `backend/api/rag.py`
 - `backend/api/upload_tasks.py`
+- `backend/ingest/chunker.py`
 - `backend/ingest/upload_contracts.py`
 - `backend/ingest/upload_jobs.py`
 - `backend/ingest/scientific_drafts.py`
@@ -100,3 +105,4 @@
 - [Issue #54：修复提交审核 500（压强单臂区间违反 CHECK 约束）与草稿自动保存过严](../../specs/54-submit-pressure-range-validation/spec.md)
 - [Issue #55：修复提交失败后任务卡在 submitting 状态导致校对页空白](../../specs/55-submit-failure-status-rollback/spec.md)
 - [Issue #56：已提交论文详情页不可达（新增 /papers/:id 路由与「我的论文」入口）](../../specs/56-paper-detail-route/spec.md)
+- [Issue #58：修复解析噪声阻断提交，并补齐提交失败的结构化原因与必填字段定位](../../specs/58-submit-failure-diagnostics/spec.md)

@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import {
   Alert, Autocomplete, Box, Button, Card, CardContent, Checkbox, Chip, CircularProgress, Collapse,
-  FormControl, InputLabel, ListItemText, Menu, MenuItem, Select, TextField, Typography, useMediaQuery,
+  FormControl, FormHelperText, InputLabel, ListItemText, Menu, MenuItem, Select, TextField, Typography,
+  useMediaQuery,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import DeleteIcon from '@mui/icons-material/Delete'
@@ -133,6 +134,23 @@ const failureMessage = (action: '保存' | '提交', reason: unknown, fallback: 
   return `${action}失败：${reasonDetail.message}${reasonDetail.code ? `（${reasonDetail.code}）` : ''}`
 }
 
+// 一条校验问题。stateIndex 为空表示论文级问题；field 用于在 DOM 中定位出错输入框
+interface ValidationIssue {
+  stateIndex?: number
+  field: string
+  message: string
+}
+
+// 后端部分校验规则前端没有（材料家族、压强区间、专用字段等），其 message 已写明
+// 「第 N 个材料状态」。据此解析序号以便定位到卡片；解析不出时只显示横幅，不做定位。
+// 该耦合依赖后端文案，由测试固定，文案变更时测试会立即失败。
+const stateIndexFromMessage = (message: string): number | undefined => {
+  const matched = /第\s*(\d+)\s*个材料状态/.exec(message)
+  if (!matched) return undefined
+  const ordinal = Number(matched[1])
+  return Number.isSafeInteger(ordinal) && ordinal > 0 ? ordinal - 1 : undefined
+}
+
 const COLLAPSED_EVIDENCE_HEIGHT = 120
 // AI 建议折叠后仅保留单行（MUI caption 行高约 20px），完整文本仍保留在草稿数据中
 const COLLAPSED_AI_LINE_HEIGHT = 20
@@ -250,6 +268,8 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
   const [submitting, setSubmitting] = useState(false)
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
   const [error, setError] = useState('')
+  // 本次提交发现的校验问题；驱动字段错误态与定位，提交成功或重新加载草稿时清空
+  const [issues, setIssues] = useState<ValidationIssue[]>([])
   const [authorMenu, setAuthorMenu] = useState<{ author: string; anchorEl: HTMLElement } | null>(null)
   const [structureUploading, setStructureUploading] = useState<Record<number, boolean>>({})
   const [authorInput, setAuthorInput] = useState('')
@@ -300,6 +320,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
       setLoading(false)
       setDirty(false)
       setError('')
+      setIssues([])
       return undefined
     }
     const controller = new AbortController()
@@ -616,41 +637,99 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
     return () => window.clearTimeout(timer)
   }, [dirty, draft, saveDraft, saving])
 
-  const validate = (): string | null => {
-    if (!draft?.paper.title?.trim()) return '标题不能为空'
-    if (draft.paper.doi && !/^10\.\d{4,9}\/\S+$/i.test(draft.paper.doi.trim())) return 'DOI 格式不正确'
-    if (!draft.paper.paper_type || draft.paper.paper_type === 'unknown') return '请选择论文整体类型'
+  // 返回全部问题而不是遇到第一条就退出：用户需要一次看清所有待补字段，
+  // 而不是每修一条再提交一次才发现下一条
+  const validate = (): ValidationIssue[] => {
+    if (!draft) return []
+    const issues: ValidationIssue[] = []
+    if (!draft.paper.title?.trim()) {
+      issues.push({ field: 'paper.title', message: '标题不能为空' })
+    }
+    if (draft.paper.doi && !/^10\.\d{4,9}\/\S+$/i.test(draft.paper.doi.trim())) {
+      issues.push({ field: 'paper.doi', message: 'DOI 格式不正确' })
+    }
+    if (!draft.paper.paper_type || draft.paper.paper_type === 'unknown') {
+      issues.push({ field: 'paper.paper_type', message: '请选择论文整体类型' })
+    }
     if (draft.paper.paper_type === 'theoretical' && !draft.paper.theoretical_subtype) {
-      return '理论文章必须选择理论二级类型'
+      issues.push({ field: 'paper.theoretical_subtype', message: '理论文章必须选择理论二级类型' })
     }
     if (draft.paper.paper_type !== 'review' && draft.material_states.length === 0) {
-      return '非综述文章至少需要一个材料状态'
+      issues.push({ field: 'material_states', message: '非综述文章至少需要一个材料状态' })
     }
-    const invalidState = draft.material_states.findIndex(item => !item.material?.trim())
-    if (invalidState >= 0) return `第 ${invalidState + 1} 个材料状态缺少材料`
-    const invalidSpaceGroup = draft.material_states.findIndex(item =>
-      item.reported_space_group_number != null &&
-      (item.reported_space_group_number < 1 || item.reported_space_group_number > 230))
-    if (invalidSpaceGroup >= 0) return `第 ${invalidSpaceGroup + 1} 个材料状态的空间群号必须在 1–230 之间`
-    const invalidCalculation = draft.material_states.findIndex(item =>
-      [item.calculation_context?.lambda_ep, item.calculation_context?.omega_log_k, item.calculation_context?.mu_star]
-        .some(value => value != null && value < 0))
-    if (invalidCalculation >= 0) return `第 ${invalidCalculation + 1} 个材料状态的计算参数不能为负数`
-    for (const [stateIndex, state] of draft.material_states.entries()) {
+    draft.material_states.forEach((state, stateIndex) => {
+      const label = `第 ${stateIndex + 1} 个材料状态`
+      if (!state.material?.trim()) {
+        issues.push({ stateIndex, field: `material_states[${stateIndex}].material`, message: `${label}缺少材料` })
+      }
+      if (state.reported_space_group_number != null &&
+        (state.reported_space_group_number < 1 || state.reported_space_group_number > 230)) {
+        issues.push({
+          stateIndex,
+          field: `material_states[${stateIndex}].reported_space_group_number`,
+          message: `${label}的空间群号必须在 1–230 之间`,
+        })
+      }
+      if ([state.calculation_context?.lambda_ep, state.calculation_context?.omega_log_k, state.calculation_context?.mu_star]
+        .some(value => value != null && value < 0)) {
+        issues.push({
+          stateIndex,
+          field: `material_states[${stateIndex}].calculation_context`,
+          message: `${label}的计算参数不能为负数`,
+        })
+      }
       const invalidTc = (state.tc_results || []).findIndex(item =>
         !item.value_raw?.trim() && item.tc_value_k == null && (item.tc_min_k == null || item.tc_max_k == null))
-      if (invalidTc >= 0) return `第 ${stateIndex + 1} 个材料状态的第 ${invalidTc + 1} 条 Tc 缺少数值`
+      if (invalidTc >= 0) {
+        issues.push({
+          stateIndex,
+          field: `material_states[${stateIndex}].tc_results`,
+          message: `${label}的第 ${invalidTc + 1} 条 Tc 缺少数值`,
+        })
+      }
       const invalidProperty = (state.properties || []).findIndex(item =>
         !String(item.name || item.name_raw || '').trim() ||
         (!item.value_raw?.trim() && item.value == null && item.value_min == null && item.value_max == null))
-      if (invalidProperty >= 0) return `第 ${stateIndex + 1} 个材料状态的第 ${invalidProperty + 1} 条普通物性不完整`
+      if (invalidProperty >= 0) {
+        issues.push({
+          stateIndex,
+          field: `material_states[${stateIndex}].properties`,
+          message: `${label}的第 ${invalidProperty + 1} 条普通物性不完整`,
+        })
+      }
+    })
+    return issues
+  }
+
+  // 把出错位置暴露给用户：展开可能被折叠的卡片，再滚动并聚焦到第一个出错字段
+  const revealIssues = (nextIssues: ValidationIssue[]) => {
+    setIssues(nextIssues)
+    const first = nextIssues[0]
+    if (!first) return
+    if (first.stateIndex != null) {
+      setCollapsedStates(current => ({ ...current, [first.stateIndex as number]: false }))
     }
-    return null
+    // 等展开后的 DOM 就绪再定位，否则折叠中的字段无法滚动到位
+    window.setTimeout(() => {
+      const anchor = document.querySelector<HTMLElement>(`[data-issue-field="${first.field}"]`)
+      if (!anchor) return
+      // 少数旧浏览器与内嵌 WebView 没有 scrollIntoView；缺失时仅聚焦，不能让定位逻辑抛错
+      anchor.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+      const focusable = anchor.matches('input,textarea,select')
+        ? anchor
+        : anchor.querySelector<HTMLElement>('input,textarea,select,[tabindex]')
+      focusable?.focus()
+    }, 0)
   }
 
   const submit = async () => {
-    const validationError = validate()
-    if (validationError) { setError(validationError); return }
+    const validationIssues = validate()
+    if (validationIssues.length > 0) {
+      setError(validationIssues.map(item => item.message).join('；'))
+      revealIssues(validationIssues)
+      return
+    }
+    setIssues([])
     setSubmitting(true)
     try {
       if (!(await saveDraft(false))) return
@@ -674,6 +753,16 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
         setError(`该 DOI 已存在（论文 #${apiError.existingPaperId}），没有创建重复记录。`)
       } else {
         setError(failureMessage('提交', reason, '提交审核失败'))
+        // 后端独有的校验规则（材料家族、压强区间等）也要能定位到卡片
+        const backendReason = apiError.status === 400 ? backendErrorReason(reason) : null
+        const backendStateIndex = backendReason ? stateIndexFromMessage(backendReason.message) : undefined
+        if (backendStateIndex != null) {
+          revealIssues([{
+            stateIndex: backendStateIndex,
+            field: `material_states[${backendStateIndex}].material`,
+            message: backendReason!.message,
+          }])
+        }
       }
     } finally {
       setSubmitting(false)
@@ -687,6 +776,24 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
 
   const ai = draft.ai_original || {}
   const aiPaper = ai.paper || {}
+
+  // 统一给出错字段加定位锚点、错误态与说明文字，避免每处重复拼装
+  const issueOf = (field: string) => issues.find(item => item.field === field)
+  const hasIssue = (field: string) => Boolean(issueOf(field))
+  const issueProps = (field: string) => {
+    const issue = issueOf(field)
+    return {
+      'data-issue-field': field,
+      error: Boolean(issue),
+      helperText: issue?.message,
+    }
+  }
+  // Select/复合区域用不了 TextField 的 helperText，单独渲染说明文字
+  const IssueText: React.FC<{ field: string }> = ({ field }) => {
+    const issue = issueOf(field)
+    if (!issue) return null
+    return <FormHelperText error>{issue.message}</FormHelperText>
+  }
   const classificationEvidence = draft.classification_evidence || []
 
   return (
@@ -719,11 +826,13 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, '& > *': { minWidth: 0 } }}>
         <Box>
           <TextField fullWidth label="标题" value={draft.paper.title || ''}
+            {...issueProps('paper.title')}
             onChange={event => setPaperField('title', event.target.value)} />
           <EvidenceNotes label="标题" aiValue={aiPaper.title} />
         </Box>
         <Box>
           <TextField fullWidth label="DOI" value={draft.paper.doi || ''}
+            {...issueProps('paper.doi')}
             onChange={event => setPaperField('doi', event.target.value.trim())} />
           <EvidenceNotes label="DOI" aiValue={aiPaper.doi} />
         </Box>
@@ -798,15 +907,17 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
       </Box>
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mt: 2, '& > *': { minWidth: 0 } }}>
-        <FormControl fullWidth>
+        <FormControl fullWidth error={hasIssue('paper.paper_type')} data-issue-field="paper.paper_type">
           <InputLabel>论文整体类型</InputLabel>
           <Select label="论文整体类型" value={draft.paper.paper_type || 'unknown'}
             onChange={event => setPaperField('paper_type', event.target.value)}>
             {PAPER_TYPE_OPTIONS.map(option => <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>)}
           </Select>
+          <IssueText field="paper.paper_type" />
           <EvidenceNotes label="论文整体类型" aiValue={aiPaper.paper_type} evidence={classificationEvidence} />
         </FormControl>
-        <FormControl fullWidth disabled={draft.paper.paper_type !== 'theoretical'}>
+        <FormControl fullWidth disabled={draft.paper.paper_type !== 'theoretical'}
+          error={hasIssue('paper.theoretical_subtype')} data-issue-field="paper.theoretical_subtype">
           <InputLabel>理论二级类型</InputLabel>
           <Select label="理论二级类型" value={draft.paper.theoretical_subtype || ''}
             onChange={event => setPaperField('theoretical_subtype', event.target.value || null)}>
@@ -814,6 +925,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
             <MenuItem value="method">方法类</MenuItem>
             <MenuItem value="theory">理论模型与机制</MenuItem>
           </Select>
+          <IssueText field="paper.theoretical_subtype" />
           <EvidenceNotes label="理论二级类型" aiValue={aiPaper.theoretical_subtype} />
         </FormControl>
       </Box>
@@ -947,6 +1059,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
                 <Box>
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: 'repeat(3, 1fr)' }, gap: 1.5 }}>
                   <TextField label="材料" value={state.material || ''}
+                    {...issueProps(`material_states[${index}].material`)}
                     onChange={event => updateMaterialState(index, 'material', event.target.value)} />
                   <ClassificationAutocomplete
                     label="材料家族"
@@ -1042,6 +1155,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
                     renderInput={params => <TextField {...params} label="空间群符号" />}
                   />
                   <TextField label="空间群号" type="number" value={state.reported_space_group_number ?? ''}
+                    {...issueProps(`material_states[${index}].reported_space_group_number`)}
                     onChange={event => changeSpaceGroupNumber(index, event.target.value)}
                     slotProps={{ htmlInput: { min: 1, max: 230 } }} />
                   <FormControl fullWidth>
@@ -1069,9 +1183,14 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
                   evidence={state.space_group_evidence || aiState?.space_group_evidence}
                 />
 
-                <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Box data-issue-field={`material_states[${index}].calculation_context`}
+                  sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Typography variant="subtitle2" fontWeight={700}>临界温度 Tc</Typography>
                   <Button size="small" startIcon={<AddIcon />} onClick={() => addTcResult(index)}>添加 Tc</Button>
+                </Box>
+                <IssueText field={`material_states[${index}].calculation_context`} />
+                <Box data-issue-field={`material_states[${index}].tc_results`}>
+                  <IssueText field={`material_states[${index}].tc_results`} />
                 </Box>
                 {(state.tc_results || []).map((result, resultIndex) => (
                   isConventional ? (
@@ -1113,7 +1232,8 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
                   )
                 ))}
 
-                <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Box data-issue-field={`material_states[${index}].properties`}
+                  sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Typography variant="subtitle2" fontWeight={700}>其他普通物性</Typography>
                   <Box sx={{ display: 'flex', gap: 1 }}>
                     <Button size="small" startIcon={<AddIcon />} disabled={hasEnergyAboveHull}
@@ -1127,6 +1247,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
                     }))}>添加普通物性</Button>
                   </Box>
                 </Box>
+                <IssueText field={`material_states[${index}].properties`} />
                 {(state.properties || []).map((property, propertyIndex) => (
                   <Box key={propertyIndex} sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 2fr 1fr auto' }, gap: 1, mt: 1 }}>
                     <TextField size="small" label={`物性 #${propertyIndex + 1} 名称`} value={property.name_raw || property.name || ''}

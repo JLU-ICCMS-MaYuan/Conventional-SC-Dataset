@@ -335,6 +335,17 @@ def _validate_draft(
     return paper, material_states
 
 
+def _fit_column(value: str | None, limit: int) -> str | None:
+    """按数据库列长度安全截断。
+
+    分段已把超长 ## 行判为正文（见 chunker.MAX_SECTION_NAME_LENGTH），此处是与判定逻辑
+    无关的第二道防线：任何解析噪声都不得因超出列宽触发 DataError 导致整篇论文提交失败。
+    """
+    if value is None:
+        return None
+    return value if len(value) <= limit else value[:limit]
+
+
 def _number(value: Any) -> float | None:
     if value in (None, ""):
         return None
@@ -1099,8 +1110,8 @@ async def _create_pending_paper(
                             paper_revision=paper.content_revision,
                             paper_file_id=paper_file.id,
                             chunk_index=chunk.chunk_index,
-                            section_name=chunk.section_name,
-                            heading=chunk.heading,
+                            section_name=_fit_column(chunk.section_name, 500),
+                            heading=_fit_column(chunk.heading, 500),
                             content=chunk.content,
                             token_count=chunk.token_count,
                             page_start=page,

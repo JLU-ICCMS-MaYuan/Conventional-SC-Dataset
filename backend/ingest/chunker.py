@@ -11,6 +11,10 @@ import re
 from dataclasses import dataclass, field
 from typing import List
 
+# ## 行超过该长度即判定为被误标的正文段落，不作为章节标题。
+# 实测真实标题上界 204 字符、被误判正文下界 389 字符，300 落在两者之间且两侧余量均超 90。
+MAX_SECTION_NAME_LENGTH = 300
+
 
 @dataclass
 class Chunk:
@@ -114,22 +118,39 @@ def _strip_top_heading(text: str) -> str:
 def _split_by_h2(text: str):
     """按 ## 二级标题切分文本。
 
+    PDF 转 Markdown 时会把正文段落误标成 ## 标题（实测一篇论文中 12 个 ## 标题里有
+    3 个是正文，最长 1389 字符）。真实标题实测上界 204 字符、误判正文下界 389 字符，
+    因此按 MAX_SECTION_NAME_LENGTH 判定：超长的 ## 行不作为章节边界，其整行文本并入
+    正文，沿用前一个真实章节名。这样误判段落的文字仍进入 content，可被搜索与 RAG 引用；
+    若仅截断 section_name，该文字会永久丢失（标题行从不进入 body）。
+
     返回: [(section_name, heading_text, body_text), ...]
     """
     # 找到所有 ## 标题的位置
     pattern = re.compile(r"^(##\s+.+)$", re.MULTILINE)
-    matches = list(pattern.finditer(text))
+    matches = [
+        match for match in pattern.finditer(text)
+        if len(match.group(1).lstrip("#").strip()) <= MAX_SECTION_NAME_LENGTH
+    ]
 
     if not matches:
-        # 没有二级标题，整体作为一个段
-        return [("全文", None, text)]
+        # 没有可信的二级标题，整体作为一个段（误判行的文本保留在正文中）
+        return [("全文", None, text.strip())]
 
     sections = []
+    # 首个可信标题之前的正常内容（标题页、摘要）不在此处产出：其归属由调用方
+    # upload_jobs._chunks_with_preamble 处理为「论文首页与摘要」，此处不重复承担该职责。
+    # 但若该区间含被判为正文的 ## 行，说明这段文字只存在于此处，必须产出以免丢失。
+    preamble = text[: matches[0].start()].strip()
+    if preamble and pattern.search(preamble):
+        sections.append(("全文", None, preamble))
+
     for i, match in enumerate(matches):
         heading = match.group(1).strip()
         section_name = heading.lstrip("#").strip()
 
-        # 计算正文：从当前标题到下一个标题之前
+        # 计算正文：从当前标题到下一个可信标题之前；
+        # 区间内被判为正文的 ## 行原样保留，成为本节正文的一部分
         start = match.end()
         end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
         body = text[start:end].strip()
