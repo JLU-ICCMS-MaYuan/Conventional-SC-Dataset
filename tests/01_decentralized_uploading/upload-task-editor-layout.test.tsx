@@ -96,7 +96,8 @@ describe('上传校对页布局与材料状态折叠', () => {
     expect(keywordsCell!.parentElement).toBe(methodologyCell!.parentElement)
   })
 
-  it('多于 2 张卡片时默认仅展开第一张，支持全部折叠/全部展开与单卡折叠', async () => {
+  // 重度交互用例：并行下实测约 3s，默认 5s 上限余量不足
+  it('多于 2 张卡片时默认仅展开第一张，支持全部折叠/全部展开与单卡折叠', { timeout: 15000 }, async () => {
     render(<UploadTaskEditor taskId={'b'.repeat(32)} onSubmitted={vi.fn()} draftOverride={makeDraft([
       makeState({ material: 'LaH10' }),
       makeState({ material: 'H3S' }),
@@ -141,7 +142,8 @@ describe('上传校对页布局与材料状态折叠', () => {
 })
 
 describe('超导类型与条件化 Tc 字段', () => {
-  it('未知类型添加 Tc 仅含数值框，常规类型含完整字段组且方法可选其他，切换类型数据保留', async () => {
+  // 重度交互用例：单跑约 3s，默认 5s 上限在多文件并行下余量不足，会偶发超时
+  it('未知类型添加 Tc 仅含数值框，常规类型含完整字段组且方法可选其他，切换类型数据保留', { timeout: 15000 }, async () => {
     render(<UploadTaskEditor taskId={'d'.repeat(32)} onSubmitted={vi.fn()} draftOverride={makeDraft([makeState()])} />)
 
     fireEvent.click(await screen.findByRole('button', { name: '添加 Tc' }))

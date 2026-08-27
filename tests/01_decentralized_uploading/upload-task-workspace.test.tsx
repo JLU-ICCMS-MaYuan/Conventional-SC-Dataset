@@ -342,7 +342,8 @@ describe('论文上传工作区', () => {
     expect(savedBodies[0]).not.toHaveProperty('material_states.0.phase_label')
   })
 
-  it('晶体结构只在所属材料状态内显示且材料状态列表占满页面', async () => {
+  // 重度交互用例：并行下实测约 4.4s，默认 5s 上限余量不足
+  it('晶体结构只在所属材料状态内显示且材料状态列表占满页面', { timeout: 15000 }, async () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const data = String(input).endsWith('/parsing')
         ? {
