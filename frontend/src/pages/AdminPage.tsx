@@ -361,8 +361,15 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
     if (selectedIds.size === 0) { setSnackbar('请先选择论文'); return }
     if (!window.confirm(`确认删除 ${selectedIds.size} 篇论文？不可撤销！`)) return
     try {
-      await api.post('/api/admin/papers/batch-delete', { paper_ids: [...selectedIds] })
-      setSnackbar('批量删除完成')
+      // 后端部分失败返回 206，而 response.ok 对 2xx 全为 true 不会抛错，
+      // 必须按 failed_ids 判定；否则删除失败也会显示「批量删除完成」。
+      const result = await api.post<{ message?: string; failed_ids?: number[] }>(
+        '/api/admin/papers/batch-delete', { paper_ids: [...selectedIds] },
+      )
+      const failed = result?.failed_ids || []
+      setSnackbar(failed.length > 0
+        ? `${failed.length} 篇删除失败（ID: ${failed.join(', ')}），其余已删除`
+        : '批量删除完成')
       setSelectedIds(new Set())
       loadPapers()
     } catch (e: unknown) { setSnackbar(`失败: ${(e as Error).message}`) }
