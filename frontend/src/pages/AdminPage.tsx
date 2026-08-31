@@ -147,6 +147,10 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
   const [editPaper, setEditPaper] = useState<{paper:PaperRecord|null,open:boolean}>({paper:null,open:false})
   const [editForm, setEditForm] = useState<Record<string,any>>({})
   const [editLoading, setEditLoading] = useState(false)
+  // 编辑页审核用独立状态：它与审核弹窗可能先后打开，共用一份会串。
+  const [editReviewStatus, setEditReviewStatus] = useState('')
+  const [editReviewComment, setEditReviewComment] = useState('')
+  const [editReviewSaving, setEditReviewSaving] = useState(false)
 
   /* ── Users ───────────────────────────────────── */
   const [users, setUsers] = useState<UserRecord[]>([])
@@ -318,9 +322,38 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
     try {
       const detail = await api.get<Record<string,any>>(`/api/admin/papers/${p.id}`)
       setEditForm(detail)
+      // 编辑页只提供拒绝与退回两项，已通过的论文若原样带入 approved，
+      // Select 的值将不在选项内而显示空白，故落到 rejected。
+      setEditReviewStatus(p.review_status === 'rejected' ? 'rejected' : 'pending')
+      setEditReviewComment(p.review_comment || '')
       setEditPaper({paper:p,open:true})
     } catch (e: unknown) { setSnackbar(`加载失败: ${(e as Error).message}`) }
     finally { setEditLoading(false) }
+  }
+
+  // 编辑页内提交审核。只允许拒绝与退回待审核：
+  // 批准要求逐个材料状态确认分类（不完整则后端返回 409 classification_incomplete），
+  // 而编辑页没有分类确认区，放开批准只会得到一个必然失败的按钮。
+  const handleEditReview = async () => {
+    if (!editPaper.paper) return
+    if (editReviewStatus === 'approved') {
+      setSnackbar('批准需要确认材料分类，请使用列表中的审核入口')
+      return
+    }
+    setEditReviewSaving(true)
+    try {
+      await api.post(`/api/admin/papers/${editPaper.paper.id}/review`, {
+        status: editReviewStatus,
+        comment: editReviewComment,
+        review_request_id: crypto.randomUUID(),
+      })
+      setSnackbar('审核已提交')
+      setEditPaper({paper:null,open:false})
+      loadPapers()
+      loadStats()
+    } catch (e: unknown) {
+      setSnackbar(`审核失败: ${(e as Error).message}`)
+    } finally { setEditReviewSaving(false) }
   }
 
   const handleEditSave = async () => {
@@ -957,6 +990,36 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
           </Box>
         </DialogTitle>
         <DialogContent sx={{ display:'flex',flexDirection:'column',gap:1.5,mt:1 }}>
+          {/* 审核区固定在顶部：编辑页表单很长，随内容滚走的审核控件等于没有。 */}
+          <Box sx={{
+            position: 'sticky', top: 0, zIndex: 2, bgcolor: 'background.paper',
+            pb: 1.5, mb: 0.5, borderBottom: '1px solid', borderColor: 'divider',
+          }}>
+            <Typography variant="subtitle2" fontWeight={700} gutterBottom>审核</Typography>
+            <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+              <FormControl size="small" sx={{ minWidth: 170 }}>
+                <InputLabel id="edit-review-status-label">审核结果</InputLabel>
+                <Select
+                  labelId="edit-review-status-label"
+                  value={editReviewStatus}
+                  label="审核结果"
+                  onChange={e=>setEditReviewStatus(e.target.value)}
+                >
+                  <MenuItem value="rejected">❌ 拒绝</MenuItem>
+                  <MenuItem value="pending">退回待审核</MenuItem>
+                </Select>
+              </FormControl>
+              <TextField label="审核意见" size="small" multiline rows={2} sx={{ flex: 1, minWidth: 240 }}
+                value={editReviewComment} onChange={e=>setEditReviewComment(e.target.value)} />
+              <Button variant="contained" size="small" disabled={editReviewSaving}
+                onClick={handleEditReview} sx={{ mt: 0.5 }}>
+                提交审核
+              </Button>
+            </Box>
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+              批准需逐个确认材料分类，请使用列表中的审核入口；此处只处理拒绝与退回。
+            </Typography>
+          </Box>
           <TextField label="标题" size="small" fullWidth multiline rows={2}
             value={editForm.title || ''} onChange={e=>setEditForm({...editForm,title:e.target.value})} />
           <Box sx={{ display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:1.5 }}>

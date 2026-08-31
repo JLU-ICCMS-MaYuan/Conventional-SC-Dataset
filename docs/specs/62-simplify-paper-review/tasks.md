@@ -28,7 +28,13 @@
 ## 阶段 4：文档
 
 - [x] T010 回写 Overview：审核弹窗保留范围与移除范围
-- [ ] T011 [US2] 编辑页面审核控件区域 —— **本轮推迟**，见 spec.md US2
+- [x] T011 [US2] 编辑弹窗顶部新增 sticky 审核区域（审核结果 + 审核意见 + 提交按钮）
+- [x] T012 [US2] 独立 `editReviewStatus` / `editReviewComment` 状态，避免与审核弹窗串值
+- [x] T013 [US2] 审核结果只提供拒绝与退回；`approved` 进入时落到 `pending`，
+  防止 Select 值不在选项内显示空白
+- [x] T014 [US2] `handleEditReview` 保留 approved 守卫作为纵深防御——当前下拉已无该选项，
+  但若日后有人加回，守卫可避免直接撞 409
+- [x] T015 [US2] 新增 `tests/02_identity_governance/admin-edit-review.test.tsx`（3 用例）
 
 ## 需求覆盖
 
@@ -39,4 +45,5 @@
 | FR-006 | T004 | `admin-paper-classification-review.test.tsx` 2 个用例 |
 | FR-007 | T005 | 上述用例断言 body 含 classification_context |
 | FR-008 | T003 | tsc 无未使用告警 |
-| FR-004、FR-005 | T011 | 推迟 |
+| FR-004、FR-005 | T011 | 控件可定位且字段仍可编辑 |
+| FR-009 | T013、T014 | 下拉不含「通过」选项 |
