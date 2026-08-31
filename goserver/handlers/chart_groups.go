@@ -54,11 +54,13 @@ func CreateChartGroup(c *gin.Context) {
 		Description string `json:"description"`
 		IsPublic    bool   `json:"is_public"`
 		Items       []struct {
-			KeyPropertyID  *uint   `json:"key_property_id"`
-			CustomLabel    *string `json:"custom_label"`
-			CustomTc       *float64 `json:"custom_tc"`
-			CustomPressure *float64 `json:"custom_pressure"`
-			CustomType     *string `json:"custom_type"`
+			KeyPropertyID     *uint    `json:"key_property_id"`
+			CustomLabel       *string  `json:"custom_label"`
+			CustomTc          *float64 `json:"custom_tc"`
+			CustomPressure    *float64 `json:"custom_pressure"`
+			CustomType        *string  `json:"custom_type"`
+			CustomArticleType *string  `json:"custom_article_type"`
+			CustomYear        *int     `json:"custom_year"`
 		} `json:"items"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil || body.Name == "" {
@@ -82,13 +84,17 @@ func CreateChartGroup(c *gin.Context) {
 		}
 	}
 
-	for _, item := range body.Items {
+	// SortOrder 用数组下标，保持前端传入顺序；与 UpdateChartGroup 一致。
+	for i, item := range body.Items {
 		it := models.ChartGroupItem{
-			KeyPropertyID:  item.KeyPropertyID,
-			CustomLabel:    item.CustomLabel,
-			CustomTc:       item.CustomTc,
-			CustomPressure: item.CustomPressure,
-			CustomType:     item.CustomType,
+			SortOrder:         i,
+			KeyPropertyID:     item.KeyPropertyID,
+			CustomLabel:       item.CustomLabel,
+			CustomTc:          item.CustomTc,
+			CustomPressure:    item.CustomPressure,
+			CustomType:        item.CustomType,
+			CustomArticleType: item.CustomArticleType,
+			CustomYear:        item.CustomYear,
 		}
 		group.Items = append(group.Items, it)
 	}
@@ -112,12 +118,14 @@ func UpdateChartGroup(c *gin.Context) {
 		Description *string `json:"description"`
 		IsPublic    *bool   `json:"is_public"`
 		Items       []struct {
-			ID             *uint   `json:"id"`
-			KeyPropertyID  *uint   `json:"key_property_id"`
-			CustomLabel    *string `json:"custom_label"`
-			CustomTc       *float64 `json:"custom_tc"`
-			CustomPressure *float64 `json:"custom_pressure"`
-			CustomType     *string `json:"custom_type"`
+			ID                *uint    `json:"id"`
+			KeyPropertyID     *uint    `json:"key_property_id"`
+			CustomLabel       *string  `json:"custom_label"`
+			CustomTc          *float64 `json:"custom_tc"`
+			CustomPressure    *float64 `json:"custom_pressure"`
+			CustomType        *string  `json:"custom_type"`
+			CustomArticleType *string  `json:"custom_article_type"`
+			CustomYear        *int     `json:"custom_year"`
 		} `json:"items"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
@@ -143,13 +151,15 @@ func UpdateChartGroup(c *gin.Context) {
 		database.DB.Where("group_id = ?", group.ID).Delete(&models.ChartGroupItem{})
 		for i, item := range body.Items {
 			it := models.ChartGroupItem{
-				GroupID:       group.ID,
-				SortOrder:     i,
-				KeyPropertyID: item.KeyPropertyID,
-				CustomLabel:   item.CustomLabel,
-				CustomTc:      item.CustomTc,
-				CustomPressure: item.CustomPressure,
-				CustomType:    item.CustomType,
+				GroupID:           group.ID,
+				SortOrder:         i,
+				KeyPropertyID:     item.KeyPropertyID,
+				CustomLabel:       item.CustomLabel,
+				CustomTc:          item.CustomTc,
+				CustomPressure:    item.CustomPressure,
+				CustomType:        item.CustomType,
+				CustomArticleType: item.CustomArticleType,
+				CustomYear:        item.CustomYear,
 			}
 			database.DB.Create(&it)
 		}
