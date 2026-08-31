@@ -16,6 +16,8 @@
 - 探索页默认不预选任何元素，Formula 输入框默认为空；仅当 URL 显式带 `elements` 参数时才预选。此前无参时兜底为 `La,H`，会把检索静默限定在氢化物体系，用户未必察觉自己并非在做全库检索。（[Issue #65](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/65)）
 - 论文总结（`summary`）与核心发现（`key_finding`）在探索页、社区页均以 `pre-wrap` 渲染，保留用户按「一个要点一行」录入的换行。这两个字段的换行是内容结构而非排版噪声：库中以真实 `\n` 存储、API 原样透传，缺失 `pre-wrap` 时 HTML 折叠空白符，分条要点被挤成一段连续文本，编号还在但结构不可读。展示侧只负责不折叠换行，不对内容做 trim 或改写。详情页 `PaperEditView` 对 `abstract`、`summary`、`key_finding`、`research_motivation` 四个字段一直设了 `pre-wrap`，两个检索页此前都没有，同一份数据三个页面呈现不一致。`tests/03_.../multiline-text-preserved.test.tsx` 断言 computed `white-space` 而非 DOM 文本——后者在未修复时也含 `\n`（是 CSS 折叠了它），属恒真断言抓不到缺陷；该用例经反向验证，移除样式后即失败。（[Issue #68](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/68)）
 - 不对这两个字段做 Markdown 渲染：保留换行已满足可读性，而 Markdown 会改变内容语义（`1.` 被重排为有序列表、下划线与星号被吃掉）。用户录入的是纯文本分条，展示侧不重新解释它。（[Issue #68](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/68)）
+- 详情区块内标签与正文的层级约定：标签用 `caption`（12px/600），长文本正文（论文总结、核心发现）用 `body2` 并显式覆盖为 12px 且不加粗，短值字段（DOI、年份、期刊、标题）保持 `body1`（14px）加粗。长文本与短值的呈现差异是按内容长度分的两类——短值加粗帮助快速定位，大段文字加粗则妨碍阅读。此前核心发现的 `Typography` 漏写 `variant` 落到默认 `body1`（14px）又显式加粗，比自己的标签大 2px、同字重，视觉层级颠倒。字号字重的回归测试须在 `ThemeProvider` 下测量——MUI 默认 `body2` 是 14px，不套主题会量到默认值而得出错误结论，`vitest.config.ts` 因此补了 `@mui/material` 别名。（[Issue #69](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/69)）
+- 知识图谱节点使用专用标题（`knowledge_graph_title`），限 15-30 字，高度凝练论文核心贡献和历史地位，取代冗长的原始标题（如 "Further experiments with liquid helium. V. The disappearance of the resistance of mercury" → "首次发现超导体 Hg"）。MySQL `papers` 表添加 `knowledge_graph_title` VARCHAR(200) 字段，AI 提取时自动生成（修改 `backend/ai_services/summary.py` 的 `SUMMARY_SYSTEM_PROMPT`，要求突出核心发现、材料体系、历史地位），审批通过后同步到 Neo4j（修改 `backend/rag.py` 的 `publish_paper_to_neo4j()`）。知识图谱 API（`backend/api/kg_live.py`）优先返回 `knowledge_graph_title`，对已有论文优雅降级到 `title`（使用 `paper.knowledge_graph_title or paper.title`）。前端无需修改，API 契约保持向后兼容（只是 `nodes[].label` 字段的值改变）。数据库迁移脚本为 `alembic/versions/20260831_175226_add_knowledge_graph_title.py`。已有论文可手工优化：`UPDATE papers SET knowledge_graph_title = '首次发现超导体 Hg' WHERE id = 9;`（P2）。详细实现见 `docs/knowledge-graph-title-feature.md`。（[Issue #70](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/70)）
 
 ## 工作流程
 
@@ -43,6 +45,8 @@
 - [Issue #57：详情与搜索读取投影切换到条件化表，消除恒零值字段](../../specs/57-paper-detail-data-parity/spec.md)
 - [Issue #65：修复探索页与社区页默认选中、总结换行、Tc 与结构读废弃字段致恒空](../../specs/65-search-detail-source-fixes/spec.md)
 - [Issue #68：修复探索页与社区页核心发现、论文总结丢失用户录入的换行](../../specs/68-preserve-multiline-text/spec.md)
+- [Issue #69：修复长文本正文字号字重压过标签导致视觉层级颠倒](../../specs/69-detail-text-hierarchy/spec.md)
+- [Issue #70：知识图谱节点专用标题 - 高度凝练论文核心贡献](../../specs/70-knowledge-graph-title/spec.md)
 
 ## 已知问题
 
