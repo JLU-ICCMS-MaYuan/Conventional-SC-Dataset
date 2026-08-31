@@ -80,16 +80,29 @@
 
 ### 功能需求
 
-- **FR-001**：系统必须在超级管理员删除论文时，级联删除以下关联数据：
-  - `key_properties`（关键物性）
-  - `material_states`（材料状态）
-  - `tc_results`（Tc 结果）
-  - `calculation_contexts`（计算上下文）
-  - `experimental_contexts`（实验上下文）
-  - `structures`（晶体结构）
-  - `paper_chunks`（论文分块）
-  - `paper_evidences`（证据快照）
-  - `paper_review_events`（审核历史）
+- **FR-001**：系统必须在超级管理员删除论文时，级联删除以下 **14 张**关联表：
+
+  | 表 | 说明 |
+  | --- | --- |
+  | `superconductor_properties` | 普通物性（旧称 key_properties） |
+  | `material_states` | 材料状态 |
+  | `tc_results` | Tc 结果 |
+  | `calculation_contexts` | 计算上下文 |
+  | `experimental_contexts` | 实验上下文 |
+  | `structure_models` | 结构模型 |
+  | `paper_chunks` | 论文分块 |
+  | `paper_evidences` | 证据快照 |
+  | `paper_review_events` | 审核历史 |
+  | `paper_files` | 论文文件 |
+  | `tc_result_evidences` | Tc 证据连接 |
+  | `structure_model_evidences` | 结构证据连接 |
+  | `superconductor_property_evidences` | 物性证据连接 |
+  | `material_state_structure_families` | 状态-结构家族连接（无 paper_id，按状态子查询） |
+
+  **2026-08-31 修正**：初稿只列了 9 张表，漏掉后 5 张，且删除顺序违反真实外键依赖
+  （`superconductor_properties` 排在 `calculation_contexts` 之后），导致线上删除
+  触发 `Error 1451` 并整体回滚，功能完全不可用。顺序须按 `information_schema`
+  实测的依赖拓扑逆序，详见 `plan.md` 的删除顺序设计与代码注释。
 
 - **FR-002**：系统必须在删除论文后，清理 Qdrant 向量库中的对应向量记录。
 
@@ -134,7 +147,9 @@
 
 ## 成功标准
 
-- **SC-001**：删除单篇论文后，直接查询数据库，该论文的所有关联记录（FR-001 列出的 9 张表）均不存在。
+- **SC-001**：删除单篇论文后，直接查询数据库，该论文的所有关联记录（FR-001 列出的 14 张表）均不存在。
+  更强的检查：遍历 `information_schema` 中所有含 `paper_id` 列的表，均无该 paper_id 的行。
+  **2026-08-31 已在真实 MySQL 验证**：删除 id=8 后 14 表全部清零，全库无残留，`superconductors` 保留 8 条。
 
 - **SC-002**：删除单篇论文后，调用 Qdrant API 查询该论文的 DOI，返回空结果。
 

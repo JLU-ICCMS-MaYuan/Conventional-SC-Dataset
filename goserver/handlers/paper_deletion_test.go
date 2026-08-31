@@ -11,12 +11,23 @@ import (
 )
 
 // newDeletionTestDB 建内存库并接管全局 DB；用 Cleanup 还原，避免污染同包其他测试。
+//
+// 必须开启 foreign_keys：SQLite 默认不强制外键，关闭时删除顺序写错也能通过，
+// 曾因此漏掉线上 Error 1451（superconductor_properties 排在 calculation_contexts 之后）。
 func newDeletionTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("打开内存库失败: %v", err)
 	}
+	if err := db.Exec("PRAGMA foreign_keys = ON").Error; err != nil {
+		t.Fatalf("开启外键强制失败: %v", err)
+	}
+	var fkOn int
+	if err := db.Raw("PRAGMA foreign_keys").Scan(&fkOn).Error; err != nil || fkOn != 1 {
+		t.Fatalf("外键强制未生效（fkOn=%d, err=%v），测试无法覆盖顺序错误", fkOn, err)
+	}
+
 	if err := db.AutoMigrate(
 		&models.Paper{},
 		&models.KeyProperty{},
@@ -29,6 +40,13 @@ func newDeletionTestDB(t *testing.T) *gorm.DB {
 		&models.PaperEvidence{},
 		&models.PaperReviewEvent{},
 		&models.Superconductor{},
+		&models.PropertyDefinition{},
+		// 以下 5 张表曾被 spec 漏掉，导致真实库删除失败
+		&models.PaperFile{},
+		&models.TcResultEvidence{},
+		&models.StructureModelEvidence{},
+		&models.SuperconductorPropertyEvidence{},
+		&models.MaterialStateStructureFamily{},
 	); err != nil {
 		t.Fatalf("迁移失败: %v", err)
 	}
@@ -56,6 +74,14 @@ func seedPaperGraph(t *testing.T, db *gorm.DB, doi string) (uint, uint) {
 		t.Fatalf("创建 superconductor 失败: %v", err)
 	}
 
+	// property_definitions 是 superconductor_properties 的外键父表，必须先建。
+	propDef := models.PropertyDefinition{
+		Code: "tc-" + doi, DisplayName: "Tc", ValueKind: "number", IsActive: true,
+	}
+	if err := db.Create(&propDef).Error; err != nil {
+		t.Fatalf("创建 property_definition 失败: %v", err)
+	}
+
 	paper := models.Paper{DOI: strPtr(doi), Title: strPtr("Test " + doi), ReviewStatus: "pending"}
 	if err := db.Create(&paper).Error; err != nil {
 		t.Fatalf("创建 paper 失败: %v", err)
@@ -66,30 +92,67 @@ func seedPaperGraph(t *testing.T, db *gorm.DB, doi string) (uint, uint) {
 		t.Fatalf("创建 material_state 失败: %v", err)
 	}
 
-	// chunk_index 与 paper_evidences.id 带唯一约束，按 paper.ID 错开避免多篇论文互撞。
+	// paper_chunks 外键指向 paper_files，必须先建父行。
+	file := models.PaperFile{PaperID: paper.ID, PaperRevision: 1}
+	if err := db.Create(&file).Error; err != nil {
+		t.Fatalf("创建 paper_file 失败: %v", err)
+	}
+
+	// chunk_index 带唯一约束，按 paper.ID 错开避免多篇论文互撞。
 	chunk := models.PaperChunk{
 		PaperID: paper.ID, PaperRevision: 1,
-		PaperFileID: uint(paper.ID), ChunkIndex: int(paper.ID),
+		PaperFileID: file.ID, ChunkIndex: int(paper.ID),
 	}
 	if err := db.Create(&chunk).Error; err != nil {
 		t.Fatalf("创建 paper_chunk 失败: %v", err)
 	}
 
+	evidence := models.PaperEvidence{
+		PaperID: paper.ID, PaperRevision: 1, PaperChunkID: chunk.ID,
+		FieldPath: "abstract", Quote: "q",
+	}
+	if err := db.Create(&evidence).Error; err != nil {
+		t.Fatalf("创建 paper_evidence 失败: %v", err)
+	}
+
+	structure := models.StructureModel{PaperID: paper.ID, PaperRevision: 1, MaterialStateID: state.ID}
+	if err := db.Create(&structure).Error; err != nil {
+		t.Fatalf("创建 structure_model 失败: %v", err)
+	}
+
+	calcCtx := models.CalculationContext{PaperID: paper.ID, PaperRevision: 1, MaterialStateID: state.ID}
+	if err := db.Create(&calcCtx).Error; err != nil {
+		t.Fatalf("创建 calculation_context 失败: %v", err)
+	}
+
+	tcResult := models.TcResult{
+		PaperID: paper.ID, PaperRevision: 1, MaterialStateID: state.ID,
+		CalculationContextID: &calcCtx.ID,
+		ResultKind:           "theoretical", TcMethod: "eliashberg", ValueRaw: "200 K",
+	}
+	if err := db.Create(&tcResult).Error; err != nil {
+		t.Fatalf("创建 tc_result 失败: %v", err)
+	}
+
+	// superconductor_properties 同时引用 calculation_contexts / structure_models /
+	// material_states——正是它让「先删 contexts」的错误顺序触发 Error 1451。
+	prop := models.KeyProperty{
+		PaperID: paper.ID, PaperRevision: 1, MaterialStateID: state.ID,
+		CalculationContextID: &calcCtx.ID, StructureID: &structure.ID,
+		PropertyDefinitionID: propDef.ID, Material: "H3S", NameRaw: "Tc",
+		ValueRaw: strPtr("200"), SourceFingerprint: "fp-" + doi,
+	}
+	if err := db.Create(&prop).Error; err != nil {
+		t.Fatalf("创建 superconductor_property 失败: %v", err)
+	}
+
 	rows := []any{
-		&models.KeyProperty{
-			PaperID: paper.ID, PaperRevision: 1, MaterialStateID: state.ID,
-			PropertyDefinitionID: 1, Material: "H3S", NameRaw: "Tc",
-			ValueRaw: strPtr("200"), SourceFingerprint: "fp-" + doi,
-		},
-		&models.TcResult{
-			PaperID: paper.ID, PaperRevision: 1, MaterialStateID: state.ID,
-			ResultKind: "experimental", TcMethod: "resistivity", ValueRaw: "200 K",
-		},
-		&models.CalculationContext{PaperID: paper.ID, PaperRevision: 1, MaterialStateID: state.ID},
 		&models.ExperimentalContext{PaperID: paper.ID, PaperRevision: 1, MaterialStateID: state.ID, TcCriterion: "onset"},
-		&models.StructureModel{PaperID: paper.ID, PaperRevision: 1, MaterialStateID: state.ID},
-		&models.PaperEvidence{PaperID: paper.ID, PaperRevision: 1, PaperChunkID: chunk.ID, FieldPath: "abstract", Quote: "q"},
 		&models.PaperReviewEvent{PaperID: paper.ID, PaperRevision: 1, Status: "pending"},
+		// 证据连接表：引用 tc_results / structure_models / paper_evidences
+		&models.TcResultEvidence{TcResultID: tcResult.ID, PaperEvidenceID: evidence.ID, PaperID: paper.ID, PaperRevision: 1},
+		&models.StructureModelEvidence{StructureID: structure.ID, PaperEvidenceID: evidence.ID, PaperID: paper.ID, PaperRevision: 1},
+		&models.SuperconductorPropertyEvidence{SuperconductorPropertyID: prop.ID, PaperEvidenceID: evidence.ID, PaperID: paper.ID, PaperRevision: 1},
 	}
 	for _, row := range rows {
 		if err := db.Create(row).Error; err != nil {
@@ -132,6 +195,10 @@ func TestCascadeDeleteInDBRemovesEveryRelation(t *testing.T) {
 		{"paper_chunks", &models.PaperChunk{}},
 		{"paper_evidences", &models.PaperEvidence{}},
 		{"paper_review_events", &models.PaperReviewEvent{}},
+		{"paper_files", &models.PaperFile{}},
+		{"tc_result_evidences", &models.TcResultEvidence{}},
+		{"structure_model_evidences", &models.StructureModelEvidence{}},
+		{"superconductor_property_evidences", &models.SuperconductorPropertyEvidence{}},
 	}
 	for _, rel := range relations {
 		if n := countBy(t, db, rel.model, paperID); n != 0 {

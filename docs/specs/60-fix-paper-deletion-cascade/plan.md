@@ -201,21 +201,57 @@ Authorization: Bearer <jwt_token>
 
 ## 删除顺序设计
 
-基于外键依赖关系，删除顺序如下：
+> **2026-08-31 修正**：初版顺序基于对模型的推测，与真实外键不符——
+> `superconductor_properties` 排在 `calculation_contexts` 之后，而它正引用后者，
+> 导致 MySQL 抛 `Error 1451` 并整体回滚，删除功能完全不可用。
+> 下面的依赖关系由 `information_schema.KEY_COLUMN_USAGE` 实测得出。
+
+### 真实外键依赖（子表 → 父表）
 
 ```text
-1. paper_evidences        (依赖 paper_id)
-2. paper_chunks           (依赖 paper_id)
-3. paper_review_events    (依赖 paper_id)
-4. tc_results             (依赖 material_state_id，间接依赖 paper_id)
-5. calculation_contexts   (依赖 material_state_id)
-6. experimental_contexts  (依赖 material_state_id)
-7. structures             (依赖 material_state_id)
-8. material_states        (依赖 paper_id)
-9. key_properties         (依赖 paper_id)
-10. UPDATE upload_tasks SET paper_id = NULL WHERE paper_id = ?
-11. DELETE FROM papers WHERE id = ?
+superconductor_properties → calculation_contexts, structure_models, material_states, property_definitions
+tc_results                → calculation_contexts, experimental_contexts, material_states
+tc_result_evidences       → tc_results, paper_evidences
+structure_model_evidences → structure_models, paper_evidences
+superconductor_property_evidences → paper_evidences
+calculation_contexts      → material_states, structure_models
+experimental_contexts     → material_states, structure_models
+structure_models          → material_states, structure_models(自引用 parent_structure_id)
+material_state_structure_families → material_states, structure_families
+material_states           → papers, superconductors, material_families
+paper_evidences           → paper_chunks, papers
+paper_chunks              → paper_files, papers
+paper_files               → papers
+paper_review_events       → papers, users
 ```
+
+### 删除顺序（拓扑逆序）
+
+```text
+1.  tc_result_evidences
+2.  structure_model_evidences
+3.  superconductor_property_evidences
+4.  tc_results
+5.  superconductor_properties          ← 必须早于 calculation_contexts
+6.  calculation_contexts
+7.  experimental_contexts
+8.  UPDATE structure_models SET parent_structure_id = NULL   ← 解开自引用
+9.  structure_models
+10. material_state_structure_families   ← 无 paper_id，按 material_states 子查询
+11. material_states
+12. paper_evidences
+13. paper_chunks
+14. paper_files
+15. paper_review_events
+16. papers
+```
+
+**不删除**：`superconductors`、`material_families`、`structure_families`、
+`property_definitions` —— 均为跨论文共享的目录数据。
+
+**验证方式**：先在真实 MySQL 用 `START TRANSACTION … ROLLBACK` 演练该顺序，
+确认无 `Error 1451` 且各表清零后再上线。单元测试的 SQLite 必须
+`PRAGMA foreign_keys = ON`，否则顺序错误无法被捕获。
 
 **事务保证**：
 - 步骤 1-11 在一个 MySQL 事务中执行
