@@ -217,6 +217,50 @@ describe('我的论文列表', () => {
   })
 })
 
+// GET /api/papers/:id 透传数据库里的 JSON 文本列（keywords_tags / methodology / authors），
+// 所以这些字段到前端可能是 JSON 字符串而不是数组。此前详情页对其直接 .map()，
+// 真实提交的论文一打开就整树崩溃、整页白屏（连顶栏与侧栏都不渲染）。
+describe('详情页对 JSON 文本列字段的容错', () => {
+  const jsonStringPaper = makePaper({
+    id: 9,
+    title: 'Further experiments with liquid helium',
+    authors: '["H. Kamerlingh Onnes"]',
+    keywords_tags: '["超导", "汞", "液氦"]',
+    methodology: '["电阻测量", "低温实验"]',
+  })
+
+  it('keywords_tags 为 JSON 字符串时正常渲染详情而非白屏', async () => {
+    mockedApi.get.mockResolvedValue(jsonStringPaper)
+
+    renderAt('/papers/9')
+
+    expect(await screen.findByText('论文详情')).toBeInTheDocument()
+    expect(screen.getByText('超导')).toBeInTheDocument()
+    expect(screen.getByText('汞')).toBeInTheDocument()
+    expect(screen.getByText('液氦')).toBeInTheDocument()
+  })
+
+  it('methodology 为 JSON 字符串时逐项可读展示', async () => {
+    mockedApi.get.mockResolvedValue(jsonStringPaper)
+
+    renderAt('/papers/9')
+
+    expect(await screen.findByText('• 电阻测量')).toBeInTheDocument()
+    expect(screen.getByText('• 低温实验')).toBeInTheDocument()
+  })
+
+  it('authors 为 JSON 字符串时展示人名而非 JSON 原文', async () => {
+    mockedApi.get.mockResolvedValue(jsonStringPaper)
+
+    renderAt('/papers/9')
+
+    expect(await screen.findByText('H. Kamerlingh Onnes')).toBeInTheDocument()
+    const bodyText = document.body.textContent || ''
+    expect(bodyText).not.toContain('["')
+    expect(bodyText).not.toContain('"]')
+  })
+})
+
 describe('未匹配地址的兜底页', () => {
   it('相对路径误拼的地址显示「页面不存在」而非白屏', async () => {
     render(

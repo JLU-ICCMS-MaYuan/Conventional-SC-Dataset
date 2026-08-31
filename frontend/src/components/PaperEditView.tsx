@@ -20,6 +20,19 @@ const STATUS_COLORS: Record<string, 'warning' | 'success' | 'error' | 'info'> = 
   pending: 'warning', approved: 'success', rejected: 'error', needs_revision: 'info',
 }
 
+// keywords_tags / methodology 在数据库里是 JSON 文本列，后端按原样透传（*string），
+// 所以详情接口返回的可能是数组也可能是 JSON 字符串。统一在这里归一为字符串数组，
+// 避免展示层对同一字段出现两种消费方式。
+const toTextList = (value: unknown): string[] => {
+  const items = Array.isArray(value)
+    ? value
+    : typeof value === 'string' && value.trim()
+      ? (() => { try { return JSON.parse(value) } catch { return [value] } })()
+      : []
+  if (!Array.isArray(items)) return []
+  return items.map(item => String(item ?? '').trim()).filter(Boolean)
+}
+
 const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPapers }) => {
   // 只读展示状态：用于展示的本地状态，切换论文时重新填充
   const [editTitle, setEditTitle] = useState('')
@@ -42,20 +55,17 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
     setEditDoi(data.doi || '')
     setEditJournal(data.journal || '')
     setEditYear(data.year || '')
-    setEditAuthors(typeof data.authors === 'string' ? data.authors : JSON.stringify(data.authors || []))
+    // authors 同为 JSON 文本列，直接展示会把 ["A","B"] 原样印到页面上。
+    setEditAuthors(toTextList(data.authors).join('、'))
     setEditAbstract(data.abstract || '')
     setEditSummary(data.summary || '')
     setEditKeyFinding(data.key_finding || '')
     setEditRationale(data.rationale || '')
   }, [paper])
 
-  // 研究方法处理：转为可读列表
-  const methodologyList: string[] = (() => {
-    const raw = paper?.methodology
-    if (!raw) return []
-    if (Array.isArray(raw)) return raw
-    return []
-  })()
+  // 研究方法与关键词处理：转为可读列表
+  const methodologyList = toTextList(paper?.methodology)
+  const keywordList = toTextList(paper?.keywords_tags)
 
   // 结构数据来自 structure_models（挂在材料状态下），物性表没有结构文本列。
   const structures = (paper?.material_states || []).flatMap((state: any) =>
@@ -382,11 +392,11 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
               {formula}
             </Typography>
 
-            {(paper?.keywords_tags || []).length > 0 && (
+            {keywordList.length > 0 && (
               <Box sx={{ mb: 2 }}>
                 <Typography variant="caption" color="text.secondary">关键词</Typography>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
-                  {paper.keywords_tags.map((kw: string, idx: number) => (
+                  {keywordList.map((kw, idx) => (
                     <Chip key={idx} label={kw} size="small" />
                   ))}
                 </Box>

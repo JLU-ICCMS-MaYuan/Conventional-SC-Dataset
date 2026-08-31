@@ -47,6 +47,7 @@
 - 详情响应只包含有真实数据来源的字段：物性名取 `property_definitions.display_name` 并在缺失时回退 `name_raw`，另返回 `value_number` 与 `canonical_unit`；`superconductor_id`、`name_note`、`pressure_gpa`、`temperature_k`、`condition_json`、`is_primary`、`superconductor_type`、`article_type`、`source_label`、`structure_text`、`structure_format` 共 11 个键已从物性输出中移除。保留恒为 null 的键比移除更具误导性——消费方无法区分「该论文确实没有此数据」与「系统从不读取此数据」。条件（压强、温度）属材料状态，结构文本属 `structure_models`，都不在物性上重复承载。（[Issue #57](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/57)）
 - 已提交论文的入口在「用户」页的「我的论文」列表，按提交时间倒序列出并可点击进入只读详情；详情页同时提供回到该列表的入口，离开详情页后无需手工拼接地址即可重新到达。该列表与上传页的解析任务列表分开：解析任务存 Redis、24 小时清理、受 100 条配额约束，属于待办；已提交论文存 MySQL、永久保留、数量无上限，属于归档，两者混列会破坏配额语义。（[Issue #56](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/56)）
 - 详情页的字段集与校对页材料状态卡片完全一致：分类区展示材料、材料家族、不同元素种类数、材料维度、结构家族标签、晶系、空间群符号与国际群号、超导类型共 9 项；压强按单臂区间呈现（显示下限/上限与原文，单臂时不补造缺失的一侧）；Tc 结果与所属材料状态下全部计算上下文（λ/ωlog/μ*）一并展示，含数值全为 NULL 的记录；普通物性显示名称、原始值、解析值与单位，不再出现校对页不存在的「最小值」「最大值」空字段。字段语义纠正：用户在校对页填写的分类说明以「分类理由」为标签显示，不再错标为「研究理由」；研究方法按可读列表逐项展示，不暴露 JSON 数组原文。组件成为纯只读：删除全部编辑态控件（输入框、增删改按钮、onChange 处理器）与死代码，不依赖整体 disabled 伪装只读。（[Issue #59](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/59)）
+- 详情页对 `keywords_tags`、`methodology`、`authors` 同时接受数组与 JSON 字符串两种形态。这三列在 MySQL 中是 JSON 文本列，Python 侧以 `json.dumps` 写入、Go 侧按 `*string` 原样透传，因此详情接口返回的是字符串而非数组；此前前端直接对其调用 `.map()`，凡 AI 抽取产出了关键词的论文，详情页必然抛 `TypeError`。由于全仓没有 ErrorBoundary，React 会卸载整棵组件树，表现为连顶栏与侧边导航一起消失的整页白屏，且 `PaperDetailPage` 的 403/404 分流提示一条都到不了。三个字段现由单一归一函数收敛为字符串数组，对 null、空串、非法 JSON 与非数组 JSON 均不抛错；作者以顿号连接展示，不再把 `["H. Kamerlingh Onnes"]` 原文印到页面上。回归用例的论文 fixture 改用后端真实返回形态——此前 fixture 写的是数组，16 个用例全绿却漏掉了 100% 故障率的缺陷。（[Issue #64](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/64)）
 
 ## 上传任务中心
 
@@ -112,3 +113,4 @@
 - [Issue #57：补全论文详情读取契约并消除恒零值字段](../../specs/57-paper-detail-data-parity/spec.md)
 - [Issue #58：修复解析噪声阻断提交，并补齐提交失败的结构化原因与必填字段定位](../../specs/58-submit-failure-diagnostics/spec.md)
 - [Issue #59：修复只读详情页与校对表单字段集不一致、字段语义错配与死代码残留](../../specs/59-detail-review-form-parity/spec.md)
+- [Issue #64：修复论文详情页整页白屏（JSON 文本列字段被当数组消费致渲染崩溃）](../../specs/64-fix-paper-detail-blank-screen/spec.md)
