@@ -79,8 +79,10 @@ AI 分类判据（`SUMMARY_SYSTEM_PROMPT` 返回结构中的 `rationale`）。`A
 
 ### 边界与异常场景
 
-- **存量数据**：`rationale` 当前仅 1 行有内容（id=9，旧语义的背景陈述）。该内容属分类
-  判据，**不迁移**，随列删除
+- **存量数据**：`rationale` 当前仅 1 行有内容（id=9）。**2026-08-31 修正**：删列前复核
+  发现该内容已是分条式研究动因（443 字，判定低温电阻三种对立理论、选汞的纯度理由），
+  符合新字段契约，故**改为迁移保留**。初稿判定「不迁移」依据的是更早的旧内容
+  （「背景：1908 年昂内斯实现氦气液化…」），用户重新解析后该依据已不成立
 - **审核快照**：`classification_context` 中的 `classification_reason` 键一并移除
   （`AdminPage.tsx:302-303`）；`paper_review_events` 已有历史快照不动（不可变记录）
 - **字段可编辑性**：与 `summary`、`key_finding` 等 AI 提取字段一致，用户与管理员均可
@@ -151,7 +153,7 @@ AI 分类判据（`SUMMARY_SYSTEM_PROMPT` 返回结构中的 `rationale`）。`A
   本 Feature 只用 PDF 引言背景生成
 - 不改动 `backend/rag/inspiration/` 下的 `rationale`（灵感探索模块的思考模式选择原因）
 - 不回溯修改 `paper_review_events` 已有快照内容
-- 不迁移 `rationale` 存量数据到新列（旧语义与新语义不同）
+- ~~不迁移 `rationale` 存量数据~~ —— 已改为迁移，见「边界与异常场景」的存量数据条目
 - 不为其他字段调整语义或标签
 
 ## 澄清记录
@@ -160,6 +162,9 @@ AI 分类判据（`SUMMARY_SYSTEM_PROMPT` 返回结构中的 `rationale`）。`A
 
 - 问：`rationale` 列如何处置？ → 答：**方案 B**——新增 `research_motivation` 列并删除
   `rationale`。用户明确不希望研究驱动力写在名为 `rationale` 的列里。
+- 问：存量数据是否迁移？ → 答：初稿定为不迁移（依据旧内容为背景陈述）；执行迁移前
+  复核发现 id=9 内容已符合新语义，**改为迁移保留**。教训：涉及不可逆删除时，
+  规划期的数据快照可能已过期，执行前必须重新核查。
 - 问：审核快照中的 `classification_reason` 如何处置？ → 答：**方案 A**——一并移除。
   分类判据整体退役，快照保留该键必然为空；追溯主体（材料状态分类、scope 证据）不受影响。
 - 问：新字段是否仍允许用户在校对页编辑？ → 答：**允许**，与 `summary`、`key_finding`

@@ -115,6 +115,22 @@ tc_method 只能取给定枚举；论文方法无法归入枚举时填 other，�
 方法原文，其余情况 tc_method_custom 必须为 null。
 properties 需提取 energy above hull：name 固定为 "energy above hull"，unit 固定为 "eV/atom"；
 论文明确声明 thermodynamically stable 或 on the convex hull 时值为 0；原文未提及则不生成该条目。
+research_motivation 写作者开展这项研究的驱动力，不是本文的结论，也不是你的分类依据。
+依据引言、背景与动机相关段落归纳：该领域此前存在什么问题、悬而未决的争议或技术瓶颈，
+以及作者据此想解决什么。按 "1. " "2. " "3. " 分条，每条一个独立动因，总长不超过 500 字。
+只写原文支持的内容；引言未交代研究动机时返回空字符串，不要用摘要或结论倒推填充。
+
+knowledge_graph_title 用于知识图谱节点显示，高度凝练论文的核心贡献，限 15-30 字（中文）或 10-15 词（英文）。
+格式要求：
+- 必须包含：核心发现/贡献 + 材料/体系名称
+- 优先突出：历史地位（"首次"/"第一个"）、突破性质（"高温"/"常压"）、独特性质
+- 避免：冗长修饰、系列编号（"Further..."/"Part II"）、通用描述
+示例：
+  - "Further experiments with liquid helium. V" → "首次发现超导体 Hg"
+  - "High-temperature superconductivity in cuprates" → "铜氧化物高温超导"
+  - "BCS theory of superconductivity" → "BCS 超导理论"
+  - "Iron-based superconductor LaFeAsO" → "铁基超导体 LaFeAsO"
+key_finding 保留原有格式，提供完整的核心发现描述。
 
 返回结构：
 {
@@ -122,8 +138,9 @@ properties 需提取 energy above hull：name 固定为 "energy above hull"，un
     "title": "", "doi": null, "authors": [], "corresponding_authors": [], "co_first_authors": [],
     "journal": null, "volume": null, "pages": null,
     "year": null, "abstract": null, "summary": "", "paper_type": "theoretical|experimental|review|unknown",
-    "theoretical_subtype": null, "keywords_tags": [], "methodology": [], "key_finding": "",
-    "rationale": "", "research_materials": [], "material_relations": [], "builds_on": []
+    "theoretical_subtype": null, "keywords_tags": [], "methodology": [],
+    "knowledge_graph_title": "", "key_finding": "",
+    "research_motivation": "", "research_materials": [], "material_relations": [], "builds_on": []
   },
   "material_states": [{
     "material": "",
@@ -154,7 +171,7 @@ properties 需提取 energy above hull：name 固定为 "energy above hull"，un
     }],
     "properties": []
   }],
-  "classification_reason": "",
+  "research_motivation": "",
   "classification_evidence": [{"section": "", "page": null, "quote": ""}]
 }"""
 
@@ -576,7 +593,7 @@ def _build_candidate_draft(chunks: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "paper": paper,
         "material_states": material_states,
-        "classification_reason": "",
+        "research_motivation": "",
         "classification_evidence": [],
     }
 
@@ -1095,7 +1112,7 @@ def _normalize_draft(raw: dict[str, Any]) -> dict[str, Any]:
         "keywords_tags": keywords or _normalize_text_items(parsed.keywords_tags, "keyword", "value", "name")[0],
         "methodology": methodology,
         "key_finding": raw_paper.get("key_finding") or "",
-        "rationale": raw_paper.get("rationale") or raw.get("classification_reason") or "",
+        "research_motivation": raw_paper.get("research_motivation") or "",
         "research_materials": research_materials,
         "material_relations": _as_list(raw_paper.get("material_relations")),
         "builds_on": _as_list(raw_paper.get("builds_on")),
@@ -1138,7 +1155,7 @@ def _normalize_draft(raw: dict[str, Any]) -> dict[str, Any]:
             item for item in _as_list(raw.get("structure_candidates"))
             if isinstance(item, dict)
         ],
-        "classification_reason": raw.get("classification_reason") or paper["rationale"],
+        "research_motivation": paper["research_motivation"],
         "classification_evidence": _as_list(raw.get("classification_evidence")),
         "field_evidence": field_evidence,
     }

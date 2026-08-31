@@ -645,7 +645,7 @@ describe('论文上传工作区', () => {
             material_family: { id: null, name: '高压三元氢化物超导体', status: 'pending' },
             tc_results: [], properties: [],
           }],
-          classification_reason: '',
+          research_motivation: '',
         },
         summary: { status: 'reading', completed: 1, total: 2 }, next_poll_ms: null,
       },
@@ -660,7 +660,7 @@ describe('论文上传工作区', () => {
     expect(screen.getByText('新名称，将在论文审核通过时创建')).toBeInTheDocument()
     expect(screen.getByLabelText('材料')).toHaveValue('Li2MgH16')
     expect(screen.getByLabelText('标题')).toHaveValue('Main title')
-    expect(screen.getByLabelText('分类理由')).toHaveValue('')
+    expect(screen.getByLabelText('研究驱动力')).toHaveValue('')
     expect(screen.queryByRole('button', { name: '提交审核' })).not.toBeInTheDocument()
   })
 

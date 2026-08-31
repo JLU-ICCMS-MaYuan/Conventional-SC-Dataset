@@ -151,7 +151,7 @@ export interface PaperDraftFields {
   keywords_tags?: string[]
   methodology?: string[]
   key_finding?: string
-  rationale?: string
+  research_motivation?: string
   research_materials?: string[]
   material_relations?: unknown[]
   builds_on?: unknown[]
@@ -161,7 +161,7 @@ export interface UploadDraft {
   paper: PaperDraftFields
   material_states: DraftMaterialState[]
   structure_candidates?: StructureCandidate[]
-  classification_reason?: string
+  research_motivation?: string
   classification_evidence?: SourceEvidence[]
   classification_migration_warnings?: string[]
   field_evidence?: Record<string, SourceEvidence[]>
@@ -218,12 +218,12 @@ export function emptyUploadDraft(): UploadDraft {
       title: '', doi: '', authors: [], corresponding_authors: [], co_first_authors: [],
       journal: '', volume: '', pages: '', year: null,
       abstract: '', summary: '', paper_type: 'unknown', theoretical_subtype: null,
-      keywords_tags: [], methodology: [], key_finding: '', rationale: '',
+      keywords_tags: [], methodology: [], key_finding: '', research_motivation: '',
       research_materials: [], material_relations: [], builds_on: [],
     },
     material_states: [],
     structure_candidates: [],
-    classification_reason: '',
+    research_motivation: '',
     classification_evidence: [],
     field_evidence: {},
     ai_original: null,

@@ -79,7 +79,7 @@ beforeEach(() => {
       return {
         data: {
           ai_values: {
-            paper: { title: 'Hydride paper', classification_reason: '论文明确称为 hydride' },
+            paper: { title: 'Hydride paper', research_motivation: '论文明确称为 hydride' },
             material_states: [{
               material: 'LaH10',
               material_family: { id: 1, name: '氢基超导体', status: 'confirmed' },

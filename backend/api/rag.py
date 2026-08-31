@@ -1043,7 +1043,7 @@ async def _create_pending_paper(
                     keywords_tags=json.dumps(paper_data.get("keywords_tags") or [], ensure_ascii=False),
                     methodology=json.dumps(paper_data.get("methodology") or [], ensure_ascii=False),
                     key_finding=paper_data.get("key_finding"),
-                    rationale=draft.get("classification_reason") or paper_data.get("rationale"),
+                    research_motivation=draft.get("research_motivation") or paper_data.get("research_motivation"),
                     research_materials=paper_data.get("research_materials") or [],
                     material_relations=paper_data.get("material_relations") or [],
                     builds_on=paper_data.get("builds_on") or [],
@@ -1422,7 +1422,66 @@ async def publish_approved_paper(
         for chunk in chunks
     ]
     indexed = await asyncio.to_thread(embed_and_index_chunks, chunk_data)
-    return {"ok": True, "paper_id": paper_id, "indexed_chunks": indexed}
+
+    # 同步到 Neo4j 知识图谱
+    kg_sync_result = {"success": False, "error": None}
+    try:
+        from neo4j import GraphDatabase
+        from sqlalchemy import text
+        from backend.database import SessionLocal
+        import os, json
+
+        db = SessionLocal()
+        paper_data = db.execute(text(
+            "SELECT id, title, doi, year, journal, authors, knowledge_graph_title FROM papers WHERE id = :pid"
+        ), {"pid": paper_id}).fetchone()
+
+        if paper_data:
+            driver = GraphDatabase.driver(
+                os.environ.get("NEO4J_URI", "bolt://neo4j:7687"),
+                auth=(os.environ.get("NEO4J_USER", "neo4j"),
+                      os.environ.get("NEO4J_PASSWORD", "scwiki123"))
+            )
+
+            with driver.session() as s:
+                # 使用 knowledge_graph_title（如果有）或 title
+                display_title = paper_data[6] or paper_data[1]
+                s.run("""
+                    MERGE (p:Paper {paper_id: $id})
+                    SET p.title = $title, p.knowledge_graph_title = $kg_title,
+                        p.doi = $doi, p.year = $year, p.journal = $journal
+                """, id=paper_data[0], title=paper_data[1], kg_title=paper_data[6],
+                     doi=paper_data[2], year=paper_data[3], journal=paper_data[4])
+
+                if paper_data[5]:
+                    try:
+                        authors = json.loads(paper_data[5]) if isinstance(paper_data[5], str) else paper_data[5]
+                        for idx, author in enumerate(authors):
+                            name = author.get("name") if isinstance(author, dict) else str(author)
+                            if name:
+                                s.run("MERGE (r:Researcher {name: $name})", name=name)
+                                s.run("""
+                                    MATCH (p:Paper {paper_id: $pid})
+                                    MATCH (r:Researcher {name: $name})
+                                    MERGE (r)-[:AUTHORED {position: $pos}]->(p)
+                                """, pid=paper_id, name=name, pos=idx)
+                    except:
+                        pass
+
+            driver.close()
+            kg_sync_result["success"] = True
+
+        db.close()
+    except Exception as e:
+        kg_sync_result["error"] = str(e)
+
+    return {
+        "ok": True,
+        "paper_id": paper_id,
+        "indexed_chunks": indexed,
+        "kg_synced": kg_sync_result["success"],
+        "kg_error": kg_sync_result.get("error")
+    }
 
 
 @router.delete("/papers/{paper_id}/review-artifact")

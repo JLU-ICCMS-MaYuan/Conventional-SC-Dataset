@@ -26,7 +26,7 @@ DEFAULT_WORKERS = 4
 PAPER_FIELDS = [
     "id", "doi", "title", "year", "journal", "volume", "pages",
     "abstract", "authors", "summary", "paper_type", "keywords_tags",
-    "methodology", "key_finding", "rationale",
+    "methodology", "key_finding", "research_motivation",
     "research_materials", "referenced_materials",
     "material_relations", "builds_on",
 ]
@@ -51,15 +51,15 @@ class KGSync:
         db = SessionLocal()
         paper = db.execute(text(
             "SELECT id, doi, title, year, journal, volume, pages, abstract, authors, summary, paper_type, "
-            "keywords_tags, methodology, key_finding, rationale FROM papers WHERE id = :pid"
+            "keywords_tags, methodology, key_finding, research_motivation FROM papers WHERE id = :pid"
         ), {"pid": paper_id}).fetchone()
         db.close()
         if not paper:
             return 0
 
         pid = paper[0]
-        props = {k: paper[i] for i, k in enumerate(
-            PAPER_FIELDS) if paper[i]}
+        field_names = ["id", "doi", "title", "year", "journal", "volume", "pages", "abstract", "authors", "summary", "paper_type", "keywords_tags", "methodology", "key_finding", "research_motivation"]
+        props = {field_names[i]: paper[i] for i in range(len(paper)) if paper[i] is not None}
 
         authors = props.get("authors")
         if isinstance(authors, str):

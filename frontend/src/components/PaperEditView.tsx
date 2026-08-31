@@ -43,7 +43,7 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
   const [editAbstract, setEditAbstract] = useState('')
   const [editSummary, setEditSummary] = useState('')
   const [editKeyFinding, setEditKeyFinding] = useState('')
-  const [editRationale, setEditRationale] = useState('')
+  const [editResearchMotivation, setEditResearchMotivation] = useState('')
 
   // Chem formula (read-only, derived from key_properties)
   const formula = paper?.key_properties?.[0]?.material || (paper?.materials?.[0]) || '-'
@@ -60,7 +60,7 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
     setEditAbstract(data.abstract || '')
     setEditSummary(data.summary || '')
     setEditKeyFinding(data.key_finding || '')
-    setEditRationale(data.rationale || '')
+    setEditResearchMotivation(data.research_motivation || '')
   }, [paper])
 
   // 研究方法与关键词处理：转为可读列表
@@ -375,8 +375,8 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
                     <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{editKeyFinding || '-'}</Typography>
                   </Box>
                   <Box>
-                    <Typography variant="caption" color="text.secondary">分类理由</Typography>
-                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{editRationale || '-'}</Typography>
+                    <Typography variant="caption" color="text.secondary">研究驱动力</Typography>
+                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{editResearchMotivation || '-'}</Typography>
                   </Box>
                 </Box>
               </Box>

@@ -34,7 +34,7 @@ var (
 	paperUpdateFields = []string{
 		"doi", "title", "authors", "journal", "volume", "pages", "year", "abstract",
 		"summary", "paper_type", "theoretical_subtype", "keywords_tags",
-		"methodology", "key_finding", "rationale", "research_materials",
+		"methodology", "key_finding", "research_motivation", "research_materials",
 		"material_relations", "builds_on",
 	}
 	// 请求字段 → superconductor_properties 真实列。

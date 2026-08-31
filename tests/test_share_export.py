@@ -45,7 +45,7 @@ def _paper():
         keywords_tags=None,
         methodology=None,
         key_finding=None,
-        rationale=None,
+        research_motivation=None,
         review_status="approved",
         review_comment=None,
         reviewed_by_user_id=None,

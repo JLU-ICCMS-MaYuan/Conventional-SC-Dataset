@@ -113,7 +113,7 @@ type Paper struct {
 	KeywordsTags       *string `json:"keywords_tags"`
 	Methodology        *string `json:"methodology"`
 	KeyFinding         *string `json:"key_finding"`
-	Rationale          *string `json:"rationale"`
+	ResearchMotivation *string `json:"research_motivation"`
 	ResearchMaterials  *string `json:"research_materials"`
 	MaterialRelations  *string `json:"material_relations"`
 	BuildsOn           *string `json:"builds_on"`

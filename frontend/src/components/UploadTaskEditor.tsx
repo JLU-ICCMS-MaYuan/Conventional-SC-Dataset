@@ -962,10 +962,10 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
       ))}
 
       <Box sx={{ mt: 2 }}>
-        <TextField fullWidth label="分类理由" multiline minRows={3}
-          value={draft.classification_reason || ''}
-          onChange={event => setDraftField('classification_reason', event.target.value)} />
-        <EvidenceNotes label="分类理由" aiValue={ai.classification_reason} evidence={classificationEvidence} />
+        <TextField fullWidth label="研究驱动力" multiline minRows={3}
+          value={draft.research_motivation || ''}
+          onChange={event => setDraftField('research_motivation', event.target.value)} />
+        <EvidenceNotes label="研究驱动力" aiValue={ai.research_motivation} evidence={classificationEvidence} />
       </Box>
 
       <Box sx={{ mt: 3 }}>

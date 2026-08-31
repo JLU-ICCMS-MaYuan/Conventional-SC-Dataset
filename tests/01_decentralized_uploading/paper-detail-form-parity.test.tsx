@@ -186,25 +186,27 @@ describe('只读详情页与校对表单字段一致（Issue #59）', () => {
   })
 
   /**
-   * T007 [US2]: 断言页面含「分类理由」且不含「研究理由」（FR-006、FR-007）
+   * T007 [US2]: 断言页面含「研究驱动力」且不含旧标签（Issue #66 FR-002）
+   * 原断言为「分类理由」，Issue #66 将该字段语义改为研究驱动力并统一命名。
    */
-  it('分类理由标签正确，无「研究理由」错配', () => {
+  it('研究驱动力标签正确，无「分类理由」「研究理由」旧标签残留', () => {
     const paper = {
       id: 1,
       title: '测试论文',
-      rationale: '该材料在高压下表现出超导特性',
+      research_motivation: '该材料在高压下表现出超导特性',
     }
 
     render(<PaperEditView paper={paper} onBack={() => {}} />)
 
-    // 断言「分类理由」标签存在（侧边栏与主区都有，所以用 getAllByText）
-    const labels = screen.getAllByText('分类理由')
+    // 断言「研究驱动力」标签存在（侧边栏与主区都有，所以用 getAllByText）
+    const labels = screen.getAllByText('研究驱动力')
     expect(labels.length).toBeGreaterThanOrEqual(1)
     // 断言内容可见
     expect(screen.getByText(/该材料在高压下表现出超导特性/)).toBeInTheDocument()
 
-    // 关键断言：页面不含「研究理由」标签
+    // 关键断言：两个旧标签均不得出现
     expect(screen.queryByText('研究理由')).not.toBeInTheDocument()
+    expect(screen.queryByText('分类理由')).not.toBeInTheDocument()
   })
 
   /**

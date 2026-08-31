@@ -146,7 +146,6 @@ func approvedBody(requestID string, states []map[string]any) map[string]any {
 		"status": "approved", "comment": "证据充分", "review_request_id": requestID,
 		"material_states": states,
 		"classification_context": map[string]any{
-			"classification_reason": "AI 建议与人工复核",
 			"classification_scope": []map[string]any{
 				{"raw_name": "LaH10", "scope": "current_paper"},
 				{"raw_name": "H3S", "scope": "referenced_work"},

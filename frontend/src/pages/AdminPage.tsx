@@ -299,9 +299,8 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
             }))
           : [],
         classification_context: {
-          classification_reason: reviewArtifact?.user.classification_reason
-            || reviewArtifact?.ai.classification_reason
-            || '',
+          // Issue #66：分类判据已整体退役，快照不再记录该键；
+          // 追溯主体是 classification_scope 与材料状态分类。
           classification_scope: reviewArtifact?.evidence.classification_scope || [],
           ai_material_states: reviewArtifact?.ai.material_states || [],
           user_material_states: reviewArtifact?.user.material_states || [],
@@ -1057,8 +1056,8 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
             onChange={e=>{ try { setEditForm({...editForm,methodology:JSON.parse(e.target.value)}) } catch { setEditForm({...editForm,methodology:e.target.value})}}} />
           <TextField label="核心发现 (key_finding)" size="small" fullWidth multiline rows={2}
             value={editForm.key_finding || ''} onChange={e=>setEditForm({...editForm,key_finding:e.target.value})} />
-          <TextField label="研究理由 (rationale)" size="small" fullWidth multiline rows={2}
-            value={editForm.rationale || ''} onChange={e=>setEditForm({...editForm,rationale:e.target.value})} />
+          <TextField label="研究驱动力 (research_motivation)" size="small" fullWidth multiline rows={2}
+            value={editForm.research_motivation || ''} onChange={e=>setEditForm({...editForm,research_motivation:e.target.value})} />
           {/* Non-editable metadata */}
           <Box sx={{ display:'flex',gap:1,flexWrap:'wrap',mt:0.5 }}>
             <Chip size="small" label={`ID: ${editForm.id || '-'}`} variant="outlined" />

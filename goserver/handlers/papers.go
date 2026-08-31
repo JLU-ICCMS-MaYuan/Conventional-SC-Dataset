@@ -156,7 +156,7 @@ func PatchPaper(c *gin.Context) {
 		"title": true, "doi": true, "authors": true, "journal": true, "volume": true,
 		"pages": true, "year": true, "abstract": true, "summary": true,
 		"paper_type": true, "theoretical_subtype": true, "keywords_tags": true,
-		"methodology": true, "key_finding": true, "rationale": true,
+		"methodology": true, "key_finding": true, "research_motivation": true,
 		"research_materials": true,
 		"material_relations": true, "builds_on": true,
 	}
@@ -485,7 +485,7 @@ func paperToDict(p models.Paper) gin.H {
 		"keywords_tags":       p.KeywordsTags,
 		"methodology":         p.Methodology,
 		"key_finding":         p.KeyFinding,
-		"rationale":           p.Rationale,
+		"research_motivation": p.ResearchMotivation,
 		"review_status":       p.ReviewStatus,
 		"created_at":          p.CreatedAt,
 		"updated_at":          p.UpdatedAt,

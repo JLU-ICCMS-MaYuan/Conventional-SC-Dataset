@@ -67,7 +67,7 @@ is_primary=true为核心结论值。
   "methodology": ["DFT"],
   "builds_on": [{{"work":"Allen-Dynes Tc equation","hint":"Allen, Dynes, 1975"}}],
   "key_finding": "核心发现一句话",
-  "rationale": "判断依据"
+  "research_motivation": "作者开展研究的驱动力，按 1. 2. 3. 分条，不超过 500 字"
 }}"""
 
 FIX_PROMPT = """你是超导材料研究专家。下面是你之前的分析结果和论文原文。请根据原文修正之前的分析。
@@ -81,7 +81,7 @@ FIX_PROMPT = """你是超导材料研究专家。下面是你之前的分析结�
 ## 修正指引
 {guidance}
 
-返回完整的JSON（同之前格式，包含 research_materials, referenced_materials, paper_type, material_relations, key_properties, methodology, builds_on, key_finding, rationale）"""
+返回完整的JSON（同之前格式，包含 research_materials, referenced_materials, paper_type, material_relations, key_properties, methodology, builds_on, key_finding, research_motivation）"""
 
 
 # ═══════════════════════════════════════════════
