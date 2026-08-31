@@ -13,7 +13,9 @@
 - Go API `POST /api/papers/search/records` 返回扁平列表行，包含 `record_id`、`paper_id`、`year`、`formula`、`type`、`pressure`、`tc`、`space_group`、`source`、`status`、`doi` 等字段。
 - `/search` 页面单击或选择记录后可显示详情；如果记录有 `paper_id`，会请求论文详情；结构预览的数据源是材料状态下的 `structures`。（[Issue #57](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/57)）**#57 确立的是 API 契约，前端直到 Issue #65 才真正照此读取**——在此之前探索页与社区页仍读 `key_properties[].structure_text`，该字段在 Go 侧标记 `gorm:"-"` 从不落库，结构预览恒显示「暂无结构数据」。
 - 探索页与社区页的关键物性表覆盖三类来源，顺序为 Tc（`tc_results`）→ 计算参数（`calculation_contexts` 的 λ/ωlog/μ*）→ 普通物性（`superconductor_properties`）。Tc 排最前是因为它是超导论文的核心结论，而非按存储顺序排列。此前两页只读 `key_properties`，只报告 Tc 的实验论文（超导领域最常见的一类）整块显示「该论文暂无结构化物性数据」，用户上传的核心数据完全不可见。计算参数中数值为 NULL 的项不产生表格行——后端返回全部记录是为了不擅自判定有效性，展示侧渲染空行则对读者无意义。物性与结构的提取逻辑收敛到 `frontend/src/lib/paperDetailView.ts`：同一读取错误此前在详情页、探索页、社区页各存一份，Issue #59 只修了详情页那份。社区页另新增结构预览区块（此前完全没有）。（[Issue #65](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/65)）
-- 探索页默认不预选任何元素，Formula 输入框默认为空；仅当 URL 显式带 `elements` 参数时才预选。此前无参时兜底为 `La,H`，会把检索静默限定在氢化物体系，用户未必察觉自己并非在做全库检索。论文总结以 `pre-wrap` 渲染，保留库中原有换行，与详情页行为一致。（[Issue #65](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/65)）
+- 探索页默认不预选任何元素，Formula 输入框默认为空；仅当 URL 显式带 `elements` 参数时才预选。此前无参时兜底为 `La,H`，会把检索静默限定在氢化物体系，用户未必察觉自己并非在做全库检索。（[Issue #65](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/65)）
+- 论文总结（`summary`）与核心发现（`key_finding`）在探索页、社区页均以 `pre-wrap` 渲染，保留用户按「一个要点一行」录入的换行。这两个字段的换行是内容结构而非排版噪声：库中以真实 `\n` 存储、API 原样透传，缺失 `pre-wrap` 时 HTML 折叠空白符，分条要点被挤成一段连续文本，编号还在但结构不可读。展示侧只负责不折叠换行，不对内容做 trim 或改写。详情页 `PaperEditView` 对 `abstract`、`summary`、`key_finding`、`research_motivation` 四个字段一直设了 `pre-wrap`，两个检索页此前都没有，同一份数据三个页面呈现不一致。`tests/03_.../multiline-text-preserved.test.tsx` 断言 computed `white-space` 而非 DOM 文本——后者在未修复时也含 `\n`（是 CSS 折叠了它），属恒真断言抓不到缺陷；该用例经反向验证，移除样式后即失败。（[Issue #68](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/68)）
+- 不对这两个字段做 Markdown 渲染：保留换行已满足可读性，而 Markdown 会改变内容语义（`1.` 被重排为有序列表、下划线与星号被吃掉）。用户录入的是纯文本分条，展示侧不重新解释它。（[Issue #68](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/68)）
 
 ## 工作流程
 
@@ -40,6 +42,7 @@
 - [Feature #46：论文上传科学数据结构化](../../specs/46-upload-scientific-data-pipeline/spec.md)
 - [Issue #57：详情与搜索读取投影切换到条件化表，消除恒零值字段](../../specs/57-paper-detail-data-parity/spec.md)
 - [Issue #65：修复探索页与社区页默认选中、总结换行、Tc 与结构读废弃字段致恒空](../../specs/65-search-detail-source-fixes/spec.md)
+- [Issue #68：修复探索页与社区页核心发现、论文总结丢失用户录入的换行](../../specs/68-preserve-multiline-text/spec.md)
 
 ## 已知问题
 

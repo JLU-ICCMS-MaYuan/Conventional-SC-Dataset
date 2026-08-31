@@ -127,7 +127,7 @@ Tc 不进入本表：临界温度保存在 `tc_results`（当前 23 条），λ 
 | 标识 | `id`、唯一 `doi` |
 | 出版信息 | `title`、`journal`、`volume`、`pages`、`year`、`abstract`、`authors` |
 | 上传与审核 | `uploaded_by_user_id`、`reviewed_by_user_id`、`review_status`、`reviewed_at`、`review_comment`、`admin_internal_note` |
-| 富化内容 | `summary`、`keywords_tags`、`paper_type`、`methodology`、`key_finding`、`rationale`、`theoretical_subtype` |
+| 富化内容 | `summary`、`keywords_tags`、`paper_type`、`methodology`、`key_finding`、`research_motivation`、`theoretical_subtype` |
 | 材料关系 | `research_materials`、`referenced_materials`、`material_relations`、`builds_on` |
 | 文件和任务 | `source_file_path`、唯一 `upload_task_id` |
 | 时间 | `created_at`、`updated_at` |
