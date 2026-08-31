@@ -64,8 +64,8 @@ func main() {
 	// gin.Default() = 带 Logger + Recovery 中间件
 	r := gin.Default()
 
-	// 5. 加载知识图谱数据
-	handlers.LoadGraph(cfg.DataDir + "/graph.json")
+	// 5. 初始化知识图谱（动态 Neo4j）
+	handlers.InitKnowledgeGraph()
 
 	// 6. 注册路由
 	// Gzip 压缩
@@ -108,9 +108,8 @@ func main() {
 	kg := r.Group("/api/knowledge-graph")
 	{
 		kg.GET("/overview", handlers.KGOverview)
-		kg.GET("/papers/:paper_id", handlers.KGPaperDetail)
-		kg.GET("/papers/:paper_id/neighbors", handlers.KGNeighbors)
-		kg.GET("/stats", handlers.KGGraphStats)
+		kg.GET("/papers/:paperId/neighbors", handlers.KGPaperNeighbors)
+		kg.GET("/stats", handlers.KGStats)
 	}
 
 	// 外部数据源 API（替代 Python /api/alexandria/* + /api/htsc2025/*）
@@ -130,6 +129,7 @@ func main() {
 
 	// 快讯 API
 	r.GET("/api/news", handlers.ListNews)
+	r.GET("/api/news/feed", handlers.ListNewsFeed)
 	// 认证路由组（普通用户可访问，仅需登录）
 	auth := r.Group("/api")
 	auth.Use(middleware.AuthRequired)
@@ -162,6 +162,10 @@ func main() {
 		superadmin.GET("/audits/profile-changes", handlers.ListProfileAudits)
 		superadmin.GET("/audits/username-changes", handlers.GetUsernameAuditEvents)
 		superadmin.GET("/audits/governance", handlers.ListGovernanceAudits)
+		// 快讯管理（仅超级管理员）
+		superadmin.POST("/news", handlers.CreateNews)
+		superadmin.PUT("/news/:id", handlers.UpdateNews)
+		superadmin.DELETE("/news/:id", handlers.DeleteNews)
 	}
 
 	// 管理员路由组

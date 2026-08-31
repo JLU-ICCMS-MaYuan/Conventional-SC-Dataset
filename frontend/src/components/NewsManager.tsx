@@ -37,9 +37,9 @@ const NewsManager: React.FC = () => {
   const save = async () => {
     try {
       if (editing?.id) {
-        await api.put(`/api/admin/news/${editing.id}`, form)
+        await api.put(`/api/superadmin/news/${editing.id}`, form)
       } else {
-        await api.post('/api/admin/news', form)
+        await api.post('/api/superadmin/news', form)
       }
       setSnackbar('已保存'); setDialog(false); load()
     } catch (e: any) { setSnackbar(`失败: ${e.message}`) }
@@ -48,7 +48,7 @@ const NewsManager: React.FC = () => {
   const remove = async (id: number) => {
     if (!window.confirm('确认删除？')) return
     try {
-      await api.del(`/api/admin/news/${id}`)
+      await api.del(`/api/superadmin/news/${id}`)
       setSnackbar('已删除'); load()
     } catch (e: any) { setSnackbar(`失败: ${e.message}`) }
   }

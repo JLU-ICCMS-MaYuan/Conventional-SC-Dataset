@@ -696,7 +696,8 @@ const SearchPage: React.FC = () => {
                   </Box>
                   <Box>
                     <Typography variant="caption">核心发现</Typography>
-                    <Typography fontWeight={600} sx={{ lineHeight:1.8 }}>
+                    {/* 用户按「一个要点一行」录入，换行是内容结构，须保留 */}
+                    <Typography fontWeight={600} sx={{ lineHeight:1.8,whiteSpace:'pre-wrap' }}>
                       {(() => { try { return JSON.parse(paperDetail?.key_finding || '""') || '-' } catch { return paperDetail?.key_finding || '-' } })()}
                     </Typography>
                   </Box>

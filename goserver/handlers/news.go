@@ -17,7 +17,7 @@ func ListNews(c *gin.Context) {
 
 	result := database.DB.Order("event_date DESC").Find(&items)
 	if result.Error != nil {
-		c.JSON(http.StatusOK, items)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "人工快讯读取失败，请稍后重试"})
 		return
 	}
 	c.JSON(http.StatusOK, items)
