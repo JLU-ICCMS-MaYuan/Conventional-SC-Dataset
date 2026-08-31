@@ -75,6 +75,8 @@ legacy/
 CLI_GUIDE.md
 INSTALL.md
 
+# 本地并行开发工作区
+/.worktree/
 .worktrees/
 .claude
 
