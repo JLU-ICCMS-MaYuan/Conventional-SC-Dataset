@@ -566,7 +566,7 @@ const SharePage: React.FC = () => {
                       <Typography fontWeight={600}>{paperDetail.title || '-'}</Typography></Box>
                     {paperDetail.summary && (
                       <Box sx={{ gridColumn: '1/-1' }}><Typography variant="caption" color="text.secondary">论文总结</Typography>
-                        <Typography variant="body2" sx={{ lineHeight: 1.8 }}>{paperDetail.summary}</Typography></Box>
+                        <Typography variant="body2" sx={{ lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>{paperDetail.summary}</Typography></Box>
                     )}
                   </Box>
                   {paperDetail.doi && (
