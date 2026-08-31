@@ -51,7 +51,7 @@ app.include_router(structures.router)
 app.include_router(rag.router)
 app.include_router(upload_tasks.router)
 app.include_router(kg.router)
-app.include_router(admin_internal.router, prefix="/api")
+app.include_router(admin_internal.router)
 BASE_DIR = Path(__file__).resolve().parent.parent
 STATIC_DIR = BASE_DIR / "frontend" / "static"
 

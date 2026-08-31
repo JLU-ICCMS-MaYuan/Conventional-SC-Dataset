@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"os"
@@ -625,11 +626,12 @@ func DeletePaper(c *gin.Context) {
 
 	authToken := c.GetHeader("Authorization")
 	if err := CascadeDeletePaper(paperID, authToken); err != nil {
-		if err.Error() == "论文不存在" {
+		if errors.Is(err, ErrPaperNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "论文不存在"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("删除失败: %v", err)})
+		log.Printf("删除论文 %d 失败: %v", paperID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "删除失败，请重试"})
 		return
 	}
 

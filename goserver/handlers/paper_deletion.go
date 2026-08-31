@@ -1,8 +1,7 @@
 package handlers
 
 import (
-	"bytes"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -14,6 +13,9 @@ import (
 
 	"gorm.io/gorm"
 )
+
+// ErrPaperNotFound 供调用方区分 404 与 500，避免按错误文案做字符串匹配。
+var ErrPaperNotFound = errors.New("论文不存在")
 
 // cascadeDeleteInDB 在数据库事务中按依赖顺序删除论文及其所有关联数据
 func cascadeDeleteInDB(tx *gorm.DB, paperID uint) error {
@@ -64,29 +66,18 @@ func cascadeDeleteInDB(tx *gorm.DB, paperID uint) error {
 	return nil
 }
 
-// cleanUploadTasks 清空 upload_tasks 中的 paper_id 引用（保留任务记录）
-func cleanUploadTasks(tx *gorm.DB, paperID uint) error {
-	// 注意：upload_tasks 表可能不存在 paper_id 列，需要确认数据模型
-	// 如果没有 UploadTask 模型，跳过此步骤
-	// TODO: 确认 upload_tasks 表结构
-	return nil
-}
+// cleanExternalServices 调用 Python 内部端点清理 Qdrant 和 Neo4j。
+// 外部清理属 best-effort：MySQL 记录已物理删除且不可恢复，此处失败只记日志，
+// 不回滚也不阻断删除，避免把可补偿的不一致升级成删不掉的死局。
+func cleanExternalServices(paperID uint, authToken string) {
+	baseURL := pythonBackendURL()
 
-// cleanExternalServices 调用 Python 内部端点清理 Qdrant 和 Neo4j
-func cleanExternalServices(paperID uint, authToken string) error {
-	pythonURL := "http://localhost:8000" // TODO: 从环境变量读取
-
-	// 清理 Qdrant 向量
-	if err := callPythonDelete(pythonURL+fmt.Sprintf("/api/internal/papers/%d/vectors", paperID), authToken); err != nil {
+	if err := callPythonDelete(fmt.Sprintf("%s/api/internal/papers/%d/vectors", baseURL, paperID), authToken); err != nil {
 		log.Printf("警告: paper %d 的 Qdrant 清理失败: %v", paperID, err)
 	}
-
-	// 清理 Neo4j 图节点
-	if err := callPythonDelete(pythonURL+fmt.Sprintf("/api/internal/papers/%d/graph", paperID), authToken); err != nil {
+	if err := callPythonDelete(fmt.Sprintf("%s/api/internal/papers/%d/graph", baseURL, paperID), authToken); err != nil {
 		log.Printf("警告: paper %d 的 Neo4j 清理失败: %v", paperID, err)
 	}
-
-	return nil
 }
 
 // callPythonDelete 调用 Python DELETE 端点
@@ -121,30 +112,22 @@ func CascadeDeletePaper(paperID uint, authToken string) error {
 	// 检查论文是否存在
 	var paper models.Paper
 	if err := database.DB.First(&paper, paperID).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return fmt.Errorf("论文不存在")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrPaperNotFound
 		}
 		return fmt.Errorf("数据库查询失败: %w", err)
 	}
 
 	// 阶段1：MySQL 删除（事务保证原子性）
 	err := database.DB.Transaction(func(tx *gorm.DB) error {
-		if err := cascadeDeleteInDB(tx, paperID); err != nil {
-			return err
-		}
-		if err := cleanUploadTasks(tx, paperID); err != nil {
-			return err
-		}
-		return nil
+		return cascadeDeleteInDB(tx, paperID)
 	})
 	if err != nil {
 		return fmt.Errorf("数据库删除失败: %w", err)
 	}
 
-	// 阶段2：外部清理（best-effort，失败记录日志）
-	if authToken != "" {
-		cleanExternalServices(paperID, authToken)
-	}
+	// 阶段2：外部清理（best-effort，失败只记日志）
+	cleanExternalServices(paperID, authToken)
 
 	// 阶段3：清理缓存
 	cache.FlushPattern("chart:*")

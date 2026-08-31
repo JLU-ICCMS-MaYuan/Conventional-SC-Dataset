@@ -121,7 +121,7 @@ describe('论文审核内材料分类确认', () => {
     const user = userEvent.setup()
     render(<AdminPage />)
 
-    await user.click(screen.getByRole('tab', { name: '论文审核' }))
+    await user.click(screen.getByRole('button', { name: '论文审核' }))
     expect(await screen.findByText('Hydride paper')).toBeVisible()
     expect(screen.queryByRole('tab', { name: '分类建议' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: '分类目录' })).not.toBeInTheDocument()
@@ -129,7 +129,8 @@ describe('论文审核内材料分类确认', () => {
     await user.click(screen.getByRole('button', { name: '审核' }))
 
     expect(await screen.findByText('确认材料状态分类')).toBeVisible()
-    expect(screen.getByText(/引用工作.*H3S/)).toBeVisible()
+    // Issue #62 起弹窗不再展示原文证据引文；classification_scope 仍随审核请求提交，
+    // 由本用例末尾的 body 断言保护，因此这里不再断言引文的可见性。
     expect(screen.getByRole('combobox', { name: 'LaH10 的材料家族' })).toHaveValue('氢基超导体')
 
     fireEvent.mouseDown(screen.getByRole('combobox', { name: '审核结果' }))
@@ -158,7 +159,7 @@ describe('论文审核内材料分类确认', () => {
   it('自由输入的新名称留在同一个审核请求中，不调用目录治理 API', async () => {
     const user = userEvent.setup()
     render(<AdminPage />)
-    await user.click(screen.getByRole('tab', { name: '论文审核' }))
+    await user.click(screen.getByRole('button', { name: '论文审核' }))
     expect(await screen.findByText('Hydride paper')).toBeVisible()
     await user.click(screen.getByRole('button', { name: '审核' }))
 

@@ -44,7 +44,8 @@
   - 删除 `material_states`（`WHERE paper_id = ?`）
   - 删除 `key_properties`（`WHERE paper_id = ?`）
   - 删除 `papers`（`WHERE id = ?`）
-- [x] T013 [P] [US1] 在 `paper_deletion.go` 实现函数 `cleanUploadTasks(tx *gorm.DB, paperID uint) error`，更新 `upload_tasks` 表：`UPDATE upload_tasks SET paper_id = NULL WHERE paper_id = ?`（当前跳过，upload_tasks 不在 Go 模型中）
+- [x] ~~T013 `cleanUploadTasks`~~ **已撤销**：上传任务存于 Redis 而非 MySQL 表，
+  FR-004 的前提不成立。原先写下的空函数已删除，不留无用桩代码。
 - [x] T014 [P] [US1] 在 `paper_deletion.go` 实现函数 `cleanExternalServices(paperID uint, authToken string) error`，调用 Python 内部端点删除 Qdrant 和 Neo4j 数据
 - [x] T015 [P] [US1] 在 `paper_deletion.go` 实现主函数 `CascadeDeletePaper(paperID uint, authToken string) error`：
   - 检查论文是否存在
@@ -59,24 +60,16 @@
 
 ### 测试
 
-- [x] T018 [P] [US1] 在 `goserver/handlers/paper_deletion_test.go` 编写单元测试 `TestCascadeDeleteInDB`：
-  - 使用 GORM 创建完整的论文数据（包含材料状态、Tc 结果、结构等）
-  - 调用 `cascadeDeleteInDB`
-  - 验证所有关联表记录数为 0
-  - 验证 `superconductors` 表记录仍存在
-- [x] T019 [P] [US1] 在 `goserver/handlers/paper_deletion_test.go` 编写单元测试 `TestCascadeDeleteTransactionRollback`：
-  - 模拟删除中途失败（如删除 `tc_results` 时报错）
-  - 验证事务回滚，所有数据仍完整
-- [ ] T020 [P] [US1] 在 `goserver/handlers/paper_deletion_test.go` 编写单元测试 `TestCleanUploadTasks`：
-  - 创建 `upload_tasks` 记录关联到论文
-  - 调用 `cleanUploadTasks`
-  - 验证 `upload_tasks` 记录存在但 `paper_id` 为 NULL
-- [ ] T021 [US1] 编写集成测试 `goserver/handlers/admin_delete_integration_test.go`（需要真实 MySQL + Qdrant + Neo4j）：
-  - 创建论文并同步到 Qdrant 和 Neo4j
-  - 调用 `DELETE /api/admin/papers/:id`
-  - 验证 MySQL 所有关联表为空
-  - 验证 Qdrant 查询返回空
-  - 验证 Neo4j Cypher 查询返回空
+- [x] T018 [P] [US1] `TestCascadeDeleteInDBRemovesEveryRelation`：造带完整关联的论文，
+  删除后逐一断言 9 张表残留为 0，且 `superconductors` 记录保留。**已通过**
+- [x] T019 [P] [US1] `TestCascadeDeleteRollsBackOnFailure`：删掉 `papers` 表使末步必然失败，
+  断言先删的 `tc_results` / `material_states` 在回滚后复原。**已通过**
+- [x] T019b [P] [US1] `TestCascadeDeleteOnlyTargetsRequestedPaper`：确认删除不越界影响其他论文。**已通过**
+- [x] T019c [P] [US1] `TestCascadeDeletePaperMissingReturnsSentinel`：确认返回可判定的
+  `ErrPaperNotFound` 哨兵错误而非按文案匹配。**已通过**
+- [x] ~~T020 `TestCleanUploadTasks`~~ 随 FR-004 撤销。
+- [ ] T021 [US1] 集成测试（真实 MySQL + Qdrant + Neo4j）：**未做**。当前单元测试用
+  SQLite 内存库，未覆盖 MySQL 外键行为与外部服务真实清理，需在部署环境手动验收。
 
 ## 阶段 4：用户故事 2——超级管理员批量删除多篇论文（P1）
 

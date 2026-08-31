@@ -347,20 +347,20 @@ def delete_paper_from_graph(paper_id: int) -> dict[str, Any]:
     供内部管理端点调用，用于彻底删除论文数据。
     """
     with _driver().session() as s:
-        # 删除论文节点及其关系
-        result = s.run(
+        # 先取关系数再删：DETACH DELETE 之后 p 已失效，无法再对它计数。
+        # 计数用 COUNT {} 子查询——Neo4j 5 已移除 size((p)--()) 这种写法。
+        row = s.run(
             "MATCH (p:Paper {paper_id: $pid}) "
-            "WITH p, size((p)--()) AS rel_count "
-            "DETACH DELETE p "
-            "RETURN rel_count",
+            "RETURN COUNT { (p)--() } AS rel_count",
             pid=paper_id,
-        )
-        row = result.single()
+        ).single()
 
-        if not row:
-            return {"deleted_nodes": 0, "deleted_relationships": 0, "message": "论文不存在"}
+        if row is None:
+            return {"deleted_nodes": 0, "deleted_relationships": 0, "message": f"论文 {paper_id} 不在图中"}
 
         rel_count = row["rel_count"] or 0
+        s.run("MATCH (p:Paper {paper_id: $pid}) DETACH DELETE p", pid=paper_id).consume()
+
         return {
             "deleted_nodes": 1,
             "deleted_relationships": rel_count,
