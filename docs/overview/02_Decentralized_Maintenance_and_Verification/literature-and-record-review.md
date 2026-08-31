@@ -9,7 +9,7 @@
 - 管理后台可按状态、关键词、材料和年份筛选论文列表，并分页展示。
 - 管理员可编辑论文基础字段、摘要、LLM 富化字段和普通物性；物性支持新增、修改与标记删除。
 - 物性写入只接受 `superconductor_properties` 的真实列（`material_raw`、`name_raw`、`value_raw`、`value_number`、`unit_raw`、`canonical_unit`、`value_min`、`value_max`、`condition_note`）。压强、温度、主记录标记、结构文本与结构格式没有对应列，因此不再被接受，而不是接受后静默丢弃——后者会让管理员以为改动已保存。条件字段属材料状态，不经物性接口修改，以免绕过材料状态自身的校验与审核语义。（[Issue #57](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/57)）
-- 管理员可查看、编辑、单篇审核和批量审核论文；论文删除与批量删除只允许超级管理员。
+- 管理员可查看、编辑、单篇审核和批量审核论文；论文删除与批量删除只允许超级管理员，且为不可恢复的物理删除（详见下方“论文物理删除”）。
 - 管理员在论文审核页对照 AI 建议、用户提交值和原文证据，为每个材料状态确认材料家族、结构家族和材料维度；可认可建议、改选数据库已有项或输入新名称。旧 `key_properties.superconductor_type` 不再参与管理员写入。
 - 目录不提供独立建议队列、重命名、停用、合并或超级管理员二次治理。新名称只在论文批准事务中创建，拒绝或退回不会污染正式目录。
 - 批准论文前检查当前 revision 的材料家族、元素种类数、材料维度和主结构唯一性；不完整时返回 `409 classification_incomplete`，论文状态及目录均不改变。批准事件保存 AI 上下文与最终目录 ID 快照。
@@ -20,6 +20,17 @@
 - `/admin` 页面标题为“管理员工作台”，只加载审核概览和论文审核。
 - `/superadmin` 页面标题为“超级管理员工作台”，复用同一 `AdminPage` 审核状态和业务逻辑，并额外组合图表管理、快讯管理、管理员申请、用户与权限、账号治理和三类审计面板。
 - 图表组合和快讯公开读取保持不变，创建、修改、删除和公开状态切换只允许超级管理员。
+
+## 论文物理删除
+
+超级管理员通过 `DELETE /api/admin/papers/:id`（单篇）和 `POST /api/admin/papers/batch-delete`（批量）执行删除。删除是物理删除：论文行从 MySQL 移除，不写软删除标记，无法恢复。（[Issue #60](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/60)）
+
+- 同一事务内级联清理 14 张关联表，顺序为：`tc_result_evidences`、`structure_model_evidences`、`superconductor_property_evidences`、`tc_results`、`superconductor_properties`、`calculation_contexts`、`experimental_contexts`、`structure_models`、`material_state_structure_families`、`material_states`、`paper_evidences`、`paper_chunks`、`paper_files`、`paper_review_events`，最后删除 `papers`。
+- 删除顺序按 `information_schema` 实测的外键依赖拓扑逆序，不可随意调整：例如 `superconductor_properties` 引用 `calculation_contexts`，必须先删前者，否则 MySQL 抛 `Error 1451` 并回滚整个事务，表现为“提示删除成功但数据仍在”。`structure_models` 自引用 `parent_structure_id`，删除前先置空。`material_state_structure_families` 没有 `paper_id` 列，按本论文的 `material_states` 子查询删除。
+- 跨论文共享的目录数据不删除：`superconductors`、`material_families`、`structure_families`、`property_definitions`。
+- MySQL 事务提交后，Go 调用 Python 内部端点 `DELETE /api/internal/papers/{id}/vectors` 与 `DELETE /api/internal/papers/{id}/graph` 清理 Qdrant 向量与 Neo4j 节点。该清理是 best-effort：失败只写日志，不回滚、不改变 HTTP 结果——MySQL 行此时已不可恢复，强制回滚只会制造更严重的不一致。Go 通过 `PYTHON_BACKEND_URL` 定位 Python 服务。
+- 批量删除逐篇独立处理，单篇失败不影响其余。存在失败时返回 `206` 与 `failed_ids`；`206` 落在 2xx 内不会触发前端的错误分支，因此前端按 `failed_ids` 判定并提示失败篇数与 ID，而非仅凭 HTTP 成功即报完成。
+- 删除成功后清理 `chart:*`、`search:*`、`community:contributions:*` 缓存。
 
 ## 工作流程
 
@@ -35,6 +46,10 @@
 ## 代码与测试
 
 - `goserver/handlers/admin.go`
+- `goserver/handlers/paper_deletion.go`
+- `goserver/handlers/paper_deletion_test.go`
+- `goserver/handlers/stats.go`
+- `backend/api/admin_internal.py`
 - `goserver/handlers/papers.go`
 - `goserver/handlers/classifications.go`
 - `goserver/handlers/news.go`
@@ -50,7 +65,9 @@
 
 - [Epic #37：用户身份、账户安全与分级管理工作台](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/37)
 - [Issue #57：物性写入收敛为真实列，不再接受无对应列的字段](../../specs/57-paper-detail-data-parity/spec.md)
+- [Issue #60：论文删除改为按外键依赖级联的物理删除](../../specs/60-fix-paper-deletion-cascade/spec.md)
 
 ## 已知问题
 
 - 图表组合的搜索、导入、导出和复制接口前后端契约仍不完整；本次只收紧现有写接口权限。
+- 论文删除对 Qdrant 与 Neo4j 的实际清理效果**待核验**：MySQL 级联删除已在真实库验证（删除后 14 张表清零、全库无 `paper_id` 残留、`superconductors` 保留），但用于验证的论文为 `pending` 状态、从未发布到向量库与图库，两库本就没有对应数据，因此目前只覆盖了“目标不存在时不误报失败”这一边界。需用一篇已 `approved` 且已发布的论文补验。
