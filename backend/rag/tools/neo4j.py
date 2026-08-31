@@ -334,3 +334,35 @@ TOOL_EXECUTORS = {
     "traverse_graph": traverse_graph,
     "find_path": find_path,
 }
+
+
+# ═══════════════════════════════════════════════
+# 内部管理：删除论文
+# ═══════════════════════════════════════════════
+
+def delete_paper_from_graph(paper_id: int) -> dict[str, Any]:
+    """
+    删除论文节点及其所有关系。
+
+    供内部管理端点调用，用于彻底删除论文数据。
+    """
+    with _driver().session() as s:
+        # 删除论文节点及其关系
+        result = s.run(
+            "MATCH (p:Paper {paper_id: $pid}) "
+            "WITH p, size((p)--()) AS rel_count "
+            "DETACH DELETE p "
+            "RETURN rel_count",
+            pid=paper_id,
+        )
+        row = result.single()
+
+        if not row:
+            return {"deleted_nodes": 0, "deleted_relationships": 0, "message": "论文不存在"}
+
+        rel_count = row["rel_count"] or 0
+        return {
+            "deleted_nodes": 1,
+            "deleted_relationships": rel_count,
+            "message": f"已删除论文 {paper_id} 及其 {rel_count} 个关系",
+        }

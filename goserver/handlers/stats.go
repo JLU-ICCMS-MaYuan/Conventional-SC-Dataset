@@ -457,7 +457,24 @@ func BatchDelete(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
 		return
 	}
-	database.DB.Where("paper_id IN ?", body.PaperIDs).Delete(&models.KeyProperty{})
-	database.DB.Delete(&models.Paper{}, body.PaperIDs)
+
+	authToken := c.GetHeader("Authorization")
+	failedIDs := make([]uint, 0)
+
+	for _, id := range body.PaperIDs {
+		if err := CascadeDeletePaper(id, authToken); err != nil {
+			log.Printf("批量删除: paper %d 失败: %v", id, err)
+			failedIDs = append(failedIDs, id)
+		}
+	}
+
+	if len(failedIDs) > 0 {
+		c.JSON(http.StatusPartialContent, gin.H{
+			"message":    "部分删除失败",
+			"failed_ids": failedIDs,
+		})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{"message": "批量删除完成"})
 }

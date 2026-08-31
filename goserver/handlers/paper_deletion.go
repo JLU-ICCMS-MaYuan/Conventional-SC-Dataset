@@ -1,0 +1,155 @@
+package handlers
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+
+	"scwiki/server/cache"
+	"scwiki/server/database"
+	"scwiki/server/models"
+
+	"gorm.io/gorm"
+)
+
+// cascadeDeleteInDB 在数据库事务中按依赖顺序删除论文及其所有关联数据
+func cascadeDeleteInDB(tx *gorm.DB, paperID uint) error {
+	// 1. 删除证据和分块（叶子节点）
+	if err := tx.Where("paper_id = ?", paperID).Delete(&models.PaperEvidence{}).Error; err != nil {
+		return fmt.Errorf("删除 paper_evidences 失败: %w", err)
+	}
+	if err := tx.Where("paper_id = ?", paperID).Delete(&models.PaperChunk{}).Error; err != nil {
+		return fmt.Errorf("删除 paper_chunks 失败: %w", err)
+	}
+
+	// 2. 删除审核历史
+	if err := tx.Where("paper_id = ?", paperID).Delete(&models.PaperReviewEvent{}).Error; err != nil {
+		return fmt.Errorf("删除 paper_review_events 失败: %w", err)
+	}
+
+	// 3. 删除 Tc 结果和上下文（依赖 material_states）
+	if err := tx.Where("paper_id = ?", paperID).Delete(&models.TcResult{}).Error; err != nil {
+		return fmt.Errorf("删除 tc_results 失败: %w", err)
+	}
+	if err := tx.Where("paper_id = ?", paperID).Delete(&models.CalculationContext{}).Error; err != nil {
+		return fmt.Errorf("删除 calculation_contexts 失败: %w", err)
+	}
+	if err := tx.Where("paper_id = ?", paperID).Delete(&models.ExperimentalContext{}).Error; err != nil {
+		return fmt.Errorf("删除 experimental_contexts 失败: %w", err)
+	}
+
+	// 4. 删除晶体结构
+	if err := tx.Where("paper_id = ?", paperID).Delete(&models.StructureModel{}).Error; err != nil {
+		return fmt.Errorf("删除 structures 失败: %w", err)
+	}
+
+	// 5. 删除材料状态
+	if err := tx.Where("paper_id = ?", paperID).Delete(&models.MaterialState{}).Error; err != nil {
+		return fmt.Errorf("删除 material_states 失败: %w", err)
+	}
+
+	// 6. 删除关键物性
+	if err := tx.Where("paper_id = ?", paperID).Delete(&models.KeyProperty{}).Error; err != nil {
+		return fmt.Errorf("删除 key_properties 失败: %w", err)
+	}
+
+	// 7. 最后删除论文记录
+	if err := tx.Delete(&models.Paper{}, paperID).Error; err != nil {
+		return fmt.Errorf("删除 papers 失败: %w", err)
+	}
+
+	return nil
+}
+
+// cleanUploadTasks 清空 upload_tasks 中的 paper_id 引用（保留任务记录）
+func cleanUploadTasks(tx *gorm.DB, paperID uint) error {
+	// 注意：upload_tasks 表可能不存在 paper_id 列，需要确认数据模型
+	// 如果没有 UploadTask 模型，跳过此步骤
+	// TODO: 确认 upload_tasks 表结构
+	return nil
+}
+
+// cleanExternalServices 调用 Python 内部端点清理 Qdrant 和 Neo4j
+func cleanExternalServices(paperID uint, authToken string) error {
+	pythonURL := "http://localhost:8000" // TODO: 从环境变量读取
+
+	// 清理 Qdrant 向量
+	if err := callPythonDelete(pythonURL+fmt.Sprintf("/api/internal/papers/%d/vectors", paperID), authToken); err != nil {
+		log.Printf("警告: paper %d 的 Qdrant 清理失败: %v", paperID, err)
+	}
+
+	// 清理 Neo4j 图节点
+	if err := callPythonDelete(pythonURL+fmt.Sprintf("/api/internal/papers/%d/graph", paperID), authToken); err != nil {
+		log.Printf("警告: paper %d 的 Neo4j 清理失败: %v", paperID, err)
+	}
+
+	return nil
+}
+
+// callPythonDelete 调用 Python DELETE 端点
+func callPythonDelete(url string, authToken string) error {
+	req, err := http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return fmt.Errorf("创建请求失败: %w", err)
+	}
+	req.Header.Set("Authorization", authToken)
+
+	resp, err := pythonBackendClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("HTTP 请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode == 404 {
+		// 资源不存在，认为已删除
+		return nil
+	}
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// CascadeDeletePaper 完整删除论文：MySQL 事务 + 外部清理 + 缓存清理
+func CascadeDeletePaper(paperID uint, authToken string) error {
+	// 检查论文是否存在
+	var paper models.Paper
+	if err := database.DB.First(&paper, paperID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return fmt.Errorf("论文不存在")
+		}
+		return fmt.Errorf("数据库查询失败: %w", err)
+	}
+
+	// 阶段1：MySQL 删除（事务保证原子性）
+	err := database.DB.Transaction(func(tx *gorm.DB) error {
+		if err := cascadeDeleteInDB(tx, paperID); err != nil {
+			return err
+		}
+		if err := cleanUploadTasks(tx, paperID); err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("数据库删除失败: %w", err)
+	}
+
+	// 阶段2：外部清理（best-effort，失败记录日志）
+	if authToken != "" {
+		cleanExternalServices(paperID, authToken)
+	}
+
+	// 阶段3：清理缓存
+	cache.FlushPattern("chart:*")
+	cache.FlushPattern("search:*")
+	cache.FlushPattern("community:contributions:*")
+
+	return nil
+}

@@ -615,12 +615,24 @@ func callPythonPaperEndpoint(method, url, authorization string, missingIsSuccess
 // DeletePaper 删除论文
 // DELETE /api/admin/papers/:id
 func DeletePaper(c *gin.Context) {
-	id := c.Param("id")
-	// 先删 key_properties
-	database.DB.Where("paper_id = ?", id).Delete(&models.KeyProperty{})
-	database.DB.Delete(&models.Paper{}, id)
-	cache.FlushPattern("chart:*")
-	cache.FlushPattern("search:*")
+	idStr := c.Param("id")
+	id64, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的论文 ID"})
+		return
+	}
+	paperID := uint(id64)
+
+	authToken := c.GetHeader("Authorization")
+	if err := CascadeDeletePaper(paperID, authToken); err != nil {
+		if err.Error() == "论文不存在" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "论文不存在"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("删除失败: %v", err)})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{"message": "已删除"})
 }
 
