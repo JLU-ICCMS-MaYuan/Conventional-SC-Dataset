@@ -1,0 +1,7 @@
+# 独立资讯进程，无需安装 PDF/科学计算依赖。
+httpx==0.28.1
+feedparser==6.0.14
+SQLAlchemy==2.0.52
+PyMySQL==1.2.0
+redis==8.1.0
+rq==2.12.0

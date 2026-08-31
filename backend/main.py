@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from pathlib import Path
 
 from backend.api import admin_internal, kg, rag, structures, tc_predict, upload_tasks
+from backend.api.kg_live import router as kg_live_router
 
 
 logger = logging.getLogger(__name__)
@@ -51,6 +52,7 @@ app.include_router(structures.router)
 app.include_router(rag.router)
 app.include_router(upload_tasks.router)
 app.include_router(kg.router)
+app.include_router(kg_live_router)
 app.include_router(admin_internal.router)
 BASE_DIR = Path(__file__).resolve().parent.parent
 STATIC_DIR = BASE_DIR / "frontend" / "static"

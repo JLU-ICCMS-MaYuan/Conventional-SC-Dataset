@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react'
+import React from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Box, Typography, Paper, Button, Chip } from '@mui/material'
-import { api } from '../lib/api'
+import { Box, Typography, Paper, Button } from '@mui/material'
+import NewsFeed, { ManualNews } from '../components/NewsFeed'
 
 
 const NOBEL_MILESTONES = [
@@ -39,11 +39,6 @@ const NOBEL_MILESTONES = [
 
 const NewsPage: React.FC = () => {
   const navigate = useNavigate()
-  const [news, setNews] = useState<any[]>([])
-
-  useEffect(() => {
-    api.get<any>('/api/news').then(data => setNews(Array.isArray(data) ? data : [])).catch(() => setNews([]))
-  }, [])
 
   return (
     <Box>
@@ -82,24 +77,8 @@ const NewsPage: React.FC = () => {
       </Box>
 
       {/* News Section */}
-      <Typography variant="overline" sx={{ mb: 2, display: 'block' }}>超导快讯</Typography>
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' }, gap: 3, mb: 6 }}>
-        {news.map((item) => (
-          <Paper key={item.id}
-            onClick={() => item.link && window.open(item.link, '_blank')}
-            sx={{ p: 2.5, borderRadius: 4, borderLeft: '4px solid', borderColor: 'primary.main',
-              cursor: item.link ? 'pointer' : 'default',
-              transition: 'box-shadow 0.15s',
-              '&:hover': item.link ? { boxShadow: '0 4px 16px rgba(79,70,229,.14)' } : {},
-            }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-              <Chip label={item.event_date} size="small" color="primary" />
-            </Box>
-            <Typography variant="h3" gutterBottom>{item.title}</Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary', lineHeight: 1.7 }}>{item.summary}</Typography>
-          </Paper>
-        ))}
-      </Box>
+      <NewsFeed />
+      <ManualNews />
 
       {/* Nobel Milestones */}
       <Typography variant="overline" sx={{ mb: 2, display: 'block' }}>诺贝尔奖里程碑</Typography>

@@ -10,6 +10,7 @@ SC-Wiki 是面向超导材料研究的数据检索与知识服务应用。当前
 
 | 大功能 | 职责 | 主要依赖 |
 | --- | --- | --- |
+| [超导快讯与最新论文](news.md) | 官方来源每日采集、稳定标识去重、独立资讯列表与来源状态 | Python、独立 RQ 队列、Redis、MySQL、Go API |
 | [超导数据去中心化上传](01_Decentralized_Uploading_of_Superconductivity_Data/README.md) | PDF/TXT/MD 与结构附件的上传、五阶段 AI 解析、校对提交落库 | RQ Worker、Redis、LLM、MySQL、Qdrant |
 | [去中心化维护与验证](02_Decentralized_Maintenance_and_Verification/README.md) | 领域模型、迁移、导入导出、部署，论文审核、管理员审批、结构校验 | GORM、SQLAlchemy、Alembic、MySQL |
 | [超导数据搜索与数据库发现](03_Superconductivity_Data_Search_and_Database_Discovery/README.md) | 本地与外部材料检索、结果分享导出、代表结构下载、Tc 统计图表 | Go API、主业务数据库、外部数据表 |

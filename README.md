@@ -49,3 +49,39 @@ rag界面
 ### 完成
 
 探索|对话|预测
+
+## 自动资讯采集（Feature #63）
+
+`/news` 增加 arXiv、Crossref、Phys.org 自动资讯，按类型筛选和分页；保留人工快讯与诺贝尔奖里程碑。
+自动资讯标注“自动采集，未经本站审核”，只进入独立资讯表，不进入正式论文、材料或 PDF 解析队列。
+
+Python 进程使用 `requirements-news.txt` 中的基础库，不复制外部项目仓库：
+
+```bash
+uv venv .venv-news
+uv pip install --python .venv-news/bin/python -r requirements-news.txt
+```
+
+运行前为进程提供明确的 `DATABASE_URL`、`REDIS_URL`。需要先经部署者确认，使用既有 Alembic 流程应用迁移 `20260831_0063`；以下命令不会自动建表。
+分别在两个受进程管理器管理的进程中运行：
+
+```bash
+.venv-news/bin/python -m backend.news worker
+.venv-news/bin/python -m backend.news schedule
+```
+
+手动补跑：`.venv-news/bin/python -m backend.news collect --source all`；也可指定 `arxiv`、`crossref` 或 `physorg`。
+队列名固定为 `scwiki-news`，不要让 PDF Worker 消费它。默认北京时间每天 08:00、首次回看 7 天、增量重叠 2 天、失败一小时后重试。
+
+| 进程配置 | 默认值 | 用途 |
+| --- | --- | --- |
+| `NEWS_DAILY_HOUR` | `8` | 每日运行小时，0–23 |
+| `NEWS_TIMEZONE` | `Asia/Shanghai` | 每日运行时区 |
+| `NEWS_INITIAL_DAYS` | `7` | 首次回看天数 |
+| `NEWS_MAX_PAGES` | `100` | 每来源单次分页上限，超限报告失败 |
+| `NEWS_CONTACT_EMAIL` | 空 | 可选真实联系邮箱，用于 Crossref polite pool |
+
+Go 提供 `GET /api/news/feed`，旧 `GET /api/news` 保持人工快讯数组格式。部署需要配套发布 Go、前端、迁移和两个 Python 进程。
+Phys.org 只能补回当前 RSS 窗口；Crossref 不转载摘要；该版本不计算热度或生成 AI 摘要。
+
+完整测试、启动、恢复说明见 [Quickstart](docs/specs/63-daily-superconductivity-news/quickstart.md)，当前行为见 [资讯功能总览](docs/overview/news.md)。
