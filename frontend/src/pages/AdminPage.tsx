@@ -488,48 +488,56 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
         </Box>
       </Box>
 
-      <Tabs value={tab} onChange={(_,v)=>setTab(v)} variant="scrollable" allowScrollButtonsMobile sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}>
-        <Tab label="概览" />
-        <Tab label={`论文审核${papersStatus === 'pending' ? ` (${papersTotal})` : ''}`} />
-        {isSuper && <Tab label="用户与权限" icon={<AdminIcon fontSize="small" />} iconPosition="start" />}
-        {isSuper && <Tab label="图表管理" />}
-        {isSuper && <Tab label="快讯管理" />}
-      </Tabs>
 
       {/* ═══════════════════════════════════════════ */}
-      {/* TAB 0: Dashboard */}
+      {/* Dashboard - 卡片式功能入口 */}
       {/* ═══════════════════════════════════════════ */}
-      {tab === 0 && (
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 2 }}>
-          {isSuper && <Card sx={{ borderLeft: '4px solid', borderColor: 'primary.main' }}>
-            <CardContent>
-              <Typography variant="caption" color="text.secondary">用户总数</Typography>
-              <Typography variant="h3" fontWeight={700}>{stats?.users ?? '…'}</Typography>
-            </CardContent>
-          </Card>}
-          <Card sx={{ borderLeft: '4px solid', borderColor: 'success.main' }}>
-            <CardContent>
-              <Typography variant="caption" color="text.secondary">论文总数</Typography>
-              <Typography variant="h3" fontWeight={700}>{stats?.papers ?? '…'}</Typography>
-            </CardContent>
-          </Card>
-          {isSuper && <Card sx={{ borderLeft: '4px solid', borderColor: 'warning.main' }}>
-            <CardContent>
-              <Typography variant="caption" color="text.secondary">待审批管理员</Typography>
-              <Typography variant="h3" fontWeight={700}>{stats?.pending ?? '…'}</Typography>
-            </CardContent>
-          </Card>}
-          <Card sx={{ borderLeft: '4px solid', borderColor: 'info.main' }}>
-            <CardContent>
-              <Typography variant="caption" color="text.secondary">当前角色</Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                <Chip size="small" color={isSuper ? 'error' : 'primary'} label={isSuper ? '超级管理员' : '管理员'} />
-                <Typography variant="h6" fontWeight={700}>{user?.username}</Typography>
-              </Box>
-            </CardContent>
-          </Card>
-        </Box>
-      )}
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 2, mb: 3 }}>
+        {isSuper && <Card sx={{ borderLeft: '4px solid', borderColor: 'primary.main', cursor: 'pointer', transition: 'all 0.2s', '&:hover': { bgcolor: 'action.hover', transform: 'translateY(-2px)', boxShadow: 3 } }} onClick={() => setTab(2)}>
+          <CardContent>
+            <Typography variant="caption" color="text.secondary">用户与权限</Typography>
+            <Typography variant="h3" fontWeight={700}>{stats?.users ?? '…'}</Typography>
+            <Typography variant="caption" color="primary.main" sx={{ mt: 1, display: 'block' }}>点击管理 →</Typography>
+          </CardContent>
+        </Card>}
+        <Card sx={{ borderLeft: '4px solid', borderColor: 'success.main', cursor: 'pointer', transition: 'all 0.2s', '&:hover': { bgcolor: 'action.hover', transform: 'translateY(-2px)', boxShadow: 3 } }} onClick={() => setTab(1)}>
+          <CardContent>
+            <Typography variant="caption" color="text.secondary">论文审核</Typography>
+            <Typography variant="h3" fontWeight={700}>{stats?.papers ?? '…'}</Typography>
+            <Typography variant="caption" color="success.main" sx={{ mt: 1, display: 'block' }}>点击审核 →</Typography>
+          </CardContent>
+        </Card>
+        {isSuper && <Card sx={{ borderLeft: '4px solid', borderColor: 'warning.main', cursor: 'pointer', transition: 'all 0.2s', '&:hover': { bgcolor: 'action.hover', transform: 'translateY(-2px)', boxShadow: 3 } }} onClick={() => setTab(2)}>
+          <CardContent>
+            <Typography variant="caption" color="text.secondary">待审批管理员</Typography>
+            <Typography variant="h3" fontWeight={700}>{stats?.pending ?? '…'}</Typography>
+            <Typography variant="caption" color="warning.main" sx={{ mt: 1, display: 'block' }}>点击审批 →</Typography>
+          </CardContent>
+        </Card>}
+        <Card sx={{ borderLeft: '4px solid', borderColor: 'info.main' }}>
+          <CardContent>
+            <Typography variant="caption" color="text.secondary">当前角色</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+              <Chip size="small" color={isSuper ? 'error' : 'primary'} label={isSuper ? '超级管理员' : '管理员'} />
+              <Typography variant="h6" fontWeight={700}>{user?.username}</Typography>
+            </Box>
+          </CardContent>
+        </Card>
+        {isSuper && <Card sx={{ borderLeft: '4px solid', borderColor: 'secondary.main', cursor: 'pointer', transition: 'all 0.2s', '&:hover': { bgcolor: 'action.hover', transform: 'translateY(-2px)', boxShadow: 3 } }} onClick={() => setTab(3)}>
+          <CardContent>
+            <Typography variant="caption" color="text.secondary">图表管理</Typography>
+            <Typography variant="h3" fontWeight={700}>{chartGroups.length}</Typography>
+            <Typography variant="caption" color="secondary.main" sx={{ mt: 1, display: 'block' }}>点击管理 →</Typography>
+          </CardContent>
+        </Card>}
+        {isSuper && <Card sx={{ borderLeft: '4px solid', borderColor: 'error.main', cursor: 'pointer', transition: 'all 0.2s', '&:hover': { bgcolor: 'action.hover', transform: 'translateY(-2px)', boxShadow: 3 } }} onClick={() => setTab(4)}>
+          <CardContent>
+            <Typography variant="caption" color="text.secondary">快讯管理</Typography>
+            <Typography variant="h3" fontWeight={700}>-</Typography>
+            <Typography variant="caption" color="error.main" sx={{ mt: 1, display: 'block' }}>点击管理 →</Typography>
+          </CardContent>
+        </Card>}
+      </Box>
 
       {/* ═══════════════════════════════════════════ */}
       {/* TAB 1: Paper Review */}
@@ -832,192 +840,6 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
             <Chip size="small" label={`年份: ${reviewDlg.paper?.year || '-'}`} variant="outlined" />
             <Chip size="small" label={`记录: ${paperRecordCount(reviewDlg.paper)}`} variant="outlined" />
           </Box>
-          <Box sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 2 }}>
-            <Typography variant="subtitle2" fontWeight={700} gutterBottom>AI 建议、用户提交与原文证据</Typography>
-            {reviewArtifactLoading ? (
-              <LinearProgress />
-            ) : !reviewArtifact ? (
-              <Alert severity="info">临时证据已清理或当前记录没有可用证据，不阻断审核。</Alert>
-            ) : (
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
-                {[
-                  ['论文类型', reviewArtifact.ai.paper.paper_type, reviewDetail?.paper_type || reviewArtifact.user.paper.paper_type],
-                  ['理论二级类型', reviewArtifact.ai.paper.theoretical_subtype, reviewDetail?.theoretical_subtype || reviewArtifact.user.paper.theoretical_subtype],
-                  ['分类理由', reviewArtifact.ai.classification_reason, reviewArtifact.user.classification_reason],
-                ].map(([label, aiValue, userValue]) => (
-                  <Box key={String(label)} sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '120px 1fr 1fr' }, gap: 1 }}>
-                    <Typography variant="caption" fontWeight={700}>{String(label)}</Typography>
-                    <Typography variant="caption" color="text.secondary">AI：{aiValue == null || aiValue === '' ? '未提供' : String(aiValue)}</Typography>
-                    <Typography variant="caption">提交：{userValue == null || userValue === '' ? '未提供' : String(userValue)}</Typography>
-                  </Box>
-                ))}
-                {(reviewArtifact.evidence.classification || reviewArtifact.user.classification_evidence || []).map((item, index) => (
-                  <Box key={index} sx={{ px: 1.25, py: 0.5, bgcolor: 'action.hover', borderRadius: 1 }}>
-                    <Typography variant="caption" color="text.secondary">
-                      {[item.section, item.page ? `第 ${item.page} 页` : ''].filter(Boolean).join(' · ') || '原文'}
-                      {item.quote ? `：“${item.quote}”` : ''}
-                    </Typography>
-                  </Box>
-                ))}
-                {(reviewArtifact.evidence.classification_scope || []).map((item, index) => (
-                  <Box key={`scope-${index}`} sx={{ px: 1.25, py: 0.5, bgcolor: 'action.hover', borderRadius: 1 }}>
-                    <Typography variant="caption" fontWeight={700} display="block">
-                      {item.scope === 'current_paper' ? '本文工作' : '引用工作'} · {item.raw_name || '未命名候选'}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {[item.section, item.page_start ? `第 ${item.page_start} 页` : ''].filter(Boolean).join(' · ') || '原文'}
-                      {item.quote ? `：“${item.quote}”` : ''}
-                    </Typography>
-                  </Box>
-                ))}
-                {reviewArtifact.user.material_states.map((state, index) => (
-                  <Box key={index} sx={{ p: 1.25, bgcolor: 'action.hover', borderRadius: 1 }}>
-                    <Typography variant="caption" fontWeight={700} display="block">
-                      材料状态 #{index + 1}：{state.material || '-'} · {state.pressure_value_gpa ?? state.pressure_raw ?? '-'} {state.pressure_unit_raw || 'GPa'}
-                    </Typography>
-                    <Typography variant="caption" display="block">
-                      空间群：{state.reported_space_group_symbol || '-'}（#{state.reported_space_group_number ?? '-'}） · λ：{state.calculation_context?.lambda_ep ?? '-'} · ωlog：{state.calculation_context?.omega_log_k ?? '-'} K
-                    </Typography>
-                    {[
-                      state.space_group_evidence,
-                      state.calculation_context?.evidence,
-                      ...(state.tc_results || []).map(item => item.evidence),
-                    ].flatMap(value => Array.isArray(value) ? value : value ? [value] : []).map((item, itemIndex) => (
-                      <Typography key={itemIndex} variant="caption" color="text.secondary" display="block">
-                        {[item.section, item.page ? `第 ${item.page} 页` : ''].filter(Boolean).join(' · ') || '原文'}
-                        {item.quote ? `：“${item.quote}”` : ''}
-                      </Typography>
-                    ))}
-                  </Box>
-                ))}
-              </Box>
-            )}
-          </Box>
-          {(reviewDetail?.material_states || []).length > 0 && (
-            <Box sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 2 }}>
-              <Typography variant="subtitle2" fontWeight={700} gutterBottom>确认材料状态分类</Typography>
-              {classificationCatalogError && <Alert severity="error" sx={{ mb: 1 }}>{classificationCatalogError}</Alert>}
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                {(reviewDetail?.material_states || []).map((state: any, index: number) => {
-                  const label = state.superconductor?.chemical_formula || `材料状态 #${index + 1}`
-                  const aiState = reviewArtifact?.ai.material_states?.[index]
-                  const updateState = (updates: Record<string, unknown>) => setReviewDetail(current => {
-                    if (!current) return current
-                    const materialStates = [...(current.material_states || [])]
-                    materialStates[index] = { ...materialStates[index], ...updates }
-                    return { ...current, material_states: materialStates }
-                  })
-                  return (
-                    <Box key={state.id || index} sx={{ border: '1px solid', borderColor: 'divider', p: 1.5, borderRadius: 1 }}>
-                      <Typography variant="body2" fontWeight={700} gutterBottom>{label}</Typography>
-                      {aiState?.material_family?.name && (
-                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                          AI 建议：{aiState.material_family.name}
-                        </Typography>
-                      )}
-                      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 2fr) minmax(160px, 1fr)' }, gap: 1 }}>
-                        <ClassificationAutocomplete
-                          label={`${label} 的材料家族`}
-                          options={classificationCatalogs?.material_families || []}
-                          value={state.material_family || null}
-                          loading={!classificationCatalogs && !classificationCatalogError}
-                          error={classificationCatalogError}
-                          onChange={value => updateState({
-                            material_family: value,
-                            material_family_id: value?.id || null,
-                          })}
-                        />
-                        <FormControl fullWidth size="small">
-                          <InputLabel>材料维度</InputLabel>
-                          <Select
-                            label="材料维度"
-                            value={state.material_dimensionality || 'unknown'}
-                            onChange={event => updateState({ material_dimensionality: event.target.value })}
-                          >
-                            {(classificationCatalogs?.material_dimensionalities || []).map(option => (
-                              <MenuItem key={option.value} value={option.value}>{option.name}</MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
-                      </Box>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 1 }}>
-                        {(state.structure_families || []).map((selection: any, structureIndex: number) => (
-                          <Box key={`${state.id}-${structureIndex}`} sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr auto', sm: 'minmax(0, 1fr) auto auto' }, gap: 1, alignItems: 'center' }}>
-                            <ClassificationAutocomplete
-                              label="结构家族"
-                              options={classificationCatalogs?.structure_families || []}
-                              value={selection}
-                              loading={!classificationCatalogs && !classificationCatalogError}
-                              error={classificationCatalogError}
-                              onChange={value => {
-                                const structures = [...(state.structure_families || [])]
-                                structures[structureIndex] = { ...value, is_primary: Boolean(selection.is_primary) }
-                                updateState({ structure_families: structures })
-                              }}
-                            />
-                            <FormControlLabel
-                              control={<Checkbox
-                                checked={Boolean(selection.is_primary)}
-                                onChange={event => updateState({
-                                  structure_families: (state.structure_families || []).map((item: any, itemIndex: number) => ({
-                                    ...item,
-                                    is_primary: event.target.checked ? itemIndex === structureIndex : itemIndex === structureIndex ? false : item.is_primary,
-                                  })),
-                                })}
-                              />}
-                              label="主结构"
-                            />
-                            <Tooltip title="移除结构家族">
-                              <IconButton
-                                aria-label={`移除结构家族 ${structureIndex + 1}`}
-                                onClick={() => updateState({
-                                  structure_families: (state.structure_families || []).filter((_: any, itemIndex: number) => itemIndex !== structureIndex),
-                                })}
-                              >
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          </Box>
-                        ))}
-                        <Button
-                          size="small"
-                          startIcon={<AddIcon />}
-                          sx={{ alignSelf: 'flex-start' }}
-                          onClick={() => updateState({
-                            structure_families: [...(state.structure_families || []), { id: null, name: '', status: 'pending', is_primary: false }],
-                          })}
-                        >
-                          添加结构家族
-                        </Button>
-                      </Box>
-                    </Box>
-                  )
-                })}
-              </Box>
-            </Box>
-          )}
-          {candidateAttachments.length > 0 && (
-            <Box sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 2 }}>
-              <Typography variant="subtitle2" fontWeight={700} gutterBottom>同 DOI 候选附件</Typography>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                {candidateAttachments.map(attachment => (
-                  <Box key={attachment.id} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography variant="body2" noWrap>{attachment.filename}</Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {(attachment.file_size / 1024 / 1024).toFixed(2)} MB · SHA-256 {attachment.file_sha256?.slice(0, 12) || '-'}
-                      </Typography>
-                    </Box>
-                    <Tooltip title="下载候选附件">
-                      <IconButton size="small" onClick={() => void downloadCandidateAttachment(attachment)}>
-                        <DownloadIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
-                ))}
-              </Box>
-            </Box>
-          )}
           <FormControl fullWidth size="small">
             <InputLabel id="paper-review-status-label">审核结果</InputLabel>
             <Select
