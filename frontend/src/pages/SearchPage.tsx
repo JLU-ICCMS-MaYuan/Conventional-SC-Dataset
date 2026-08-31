@@ -11,6 +11,7 @@ import HtscDetail from '../components/HtscDetail'
 import StructureViewer3D from '../components/StructureViewer3D'
 import { ELEMENTS } from '../lib/periodicElements'
 import { api } from '../lib/api'
+import { collectPropertyRows, collectStructures, viewerFormat } from '../lib/paperDetailView'
 
 /* ── mock data matching 03 demo records exactly ── */
 interface SuperconductorRecord {
@@ -122,7 +123,9 @@ const RangeField: React.FC<{
 const SearchPage: React.FC = () => {
   const [searchParams] = useSearchParams()
   // 从 URL 参数读取初始值
-  const initElements = (searchParams.get('elements') || 'La,H').split(',').filter(Boolean)
+  // 无 elements 参数时不预选任何元素：默认选中某个体系会把检索静默限定在该体系，
+  // 用户未必察觉自己并非在做全库检索。
+  const initElements = (searchParams.get('elements') || '').split(',').filter(Boolean)
   const initMode = searchParams.get('mode') || 'elements_combination_search'
   const initPaperId = searchParams.get('paper_id')
   const [stage, setStage] = useState<'explore'|'results'|'detail'>(
@@ -316,7 +319,7 @@ const SearchPage: React.FC = () => {
 
   const toast = (msg: string) => setSnackbar(msg)
 
-  // Stage 3: fetch paper detail + 从 key_properties 取结构
+  // Stage 3: fetch paper detail + 从 material_states[].structures[] 取结构
   useEffect(() => {
     if (stage !== 'detail' || !selectedRecord.paper_id) return
     setPaperDetail(null)
@@ -325,15 +328,7 @@ const SearchPage: React.FC = () => {
     api.get(`/api/papers/${selectedRecord.paper_id}`)
       .then((data: any) => {
         setPaperDetail(data)
-        // 从 key_properties 中取所有有结构文本的行，依次排列
-        const kps = data?.key_properties || []
-        const structures = kps.filter((kp: any) => kp.structure_text).map((kp: any) => ({
-          structure_text: kp.structure_text,
-          structure_format: kp.structure_format || 'cif',
-          material: kp.material,
-          name_note: kp.name_note,
-          pressure_gpa: kp.pressure_gpa,
-        }))
+        const structures = collectStructures(data)
         setStructureData(structures.length > 0 ? structures : null)
       })
       .catch(() => setPaperDetail(null))
@@ -618,6 +613,8 @@ const SearchPage: React.FC = () => {
     return <HtscDetail name={selectedRecord.sourceRecordId} formula={selectedRecord.formula} onBack={()=>setStage('results')} />
   }
   const r = selectedRecord
+  // Tc 与计算参数不在 key_properties 里，须跨三张来源表汇总（见 lib/paperDetailView）
+  const propertyRows = collectPropertyRows(paperDetail)
   return (
     <Box>
       <Box sx={{ display:'flex',alignItems:'center',justifyContent:'space-between',gap:2,mb:3 }}>
@@ -647,19 +644,20 @@ const SearchPage: React.FC = () => {
                   <Box><Typography variant="caption">DOI</Typography><Typography fontWeight={600}>{r.doi}</Typography></Box>
                   <Box><Typography variant="caption">期刊</Typography><Typography fontWeight={600}>{paperDetail?.journal || r.journal}</Typography></Box>
                   <Box sx={{ gridColumn:'1/-1' }}><Typography variant="caption">论文标题</Typography><Typography fontWeight={600}>{paperDetail?.title || r.title}</Typography></Box>
+                  {/* summary 常含分条结构的真实换行，pre-wrap 须保留；否则多条记录会被挤成一段 */}
                   {paperDetail?.summary && (
-                    <Box sx={{ gridColumn:'1/-1' }}><Typography variant="caption">论文总结</Typography><Typography variant="body2" sx={{ lineHeight:1.8 }}>{paperDetail.summary}</Typography></Box>
+                    <Box sx={{ gridColumn:'1/-1' }}><Typography variant="caption">论文总结</Typography><Typography variant="body2" sx={{ lineHeight:1.8,whiteSpace:'pre-wrap' }}>{paperDetail.summary}</Typography></Box>
                   )}
                   <Box><Typography variant="caption">审核状态</Typography><Chip label={r.status} size="small" color={r.status==='Approved'?'success':'warning'} /></Box>
                   <Box><Typography variant="caption">数据来源</Typography><Chip label={r.source} size="small" color="primary" /></Box>
                 </Box>
               </Box>
             </Box>
-            {/* 关键物性（key_properties 全量列表）*/}
+            {/* 关键物性：Tc（tc_results）+ 计算参数（calculation_contexts）+ 普通物性（key_properties）*/}
             <Box component="details" open sx={{ border:'1px solid',borderColor:'divider',borderRadius:2,mb:1.5,overflow:'hidden' }}>
               <Box component="summary" sx={{ cursor:'pointer',p:2,fontSize:18,fontWeight:800 }}>关键物性</Box>
               <Box sx={{ px:2,pb:2,borderTop:'1px solid',borderColor:'divider',overflowX:'auto' }}>
-                {Array.isArray(paperDetail?.key_properties) && paperDetail.key_properties.length > 0 ? (
+                {propertyRows.length > 0 ? (
                   <Box component="table" sx={{ width:'100%',borderCollapse:'collapse',fontSize:13,mt:1 }}>
                     <Box component="thead">
                       <Box component="tr">
@@ -669,24 +667,13 @@ const SearchPage: React.FC = () => {
                       </Box>
                     </Box>
                     <Box component="tbody">
-                      {paperDetail.key_properties.map((kp: any) => (
-                        <Box component="tr" key={kp.id} sx={{ bgcolor: kp.is_primary ? '#eef2ff' : 'transparent' }}>
-                          <Box component="td" sx={{ p:'6px 10px',borderBottom:'1px solid',borderColor:'divider',whiteSpace:'nowrap',fontWeight:600 }}>{kp.material}</Box>
-                          <Box component="td" sx={{ p:'6px 10px',borderBottom:'1px solid',borderColor:'divider',whiteSpace:'nowrap' }}>
-                            {kp.label}{kp.is_primary ? ' ★' : ''}
-                          </Box>
-                          <Box component="td" sx={{ p:'6px 10px',borderBottom:'1px solid',borderColor:'divider',whiteSpace:'nowrap',fontWeight:700,color:'primary.main' }}>
-                            {kp.value_min != null
-                              ? (kp.value_min !== kp.value_max ? `${kp.value_min}–${kp.value_max}` : `${kp.value_max}`)
-                              : (kp.value_raw || '-')}{kp.unit ? ` ${kp.unit}` : ''}
-                          </Box>
-                          <Box component="td" sx={{ p:'6px 10px',borderBottom:'1px solid',borderColor:'divider',whiteSpace:'nowrap',color:'text.secondary' }}>
-                            {[kp.pressure_gpa != null ? `${kp.pressure_gpa} GPa` : null,
-                              kp.temperature_k != null ? `${kp.temperature_k} K` : null].filter(Boolean).join(' · ') || '-'}
-                          </Box>
-                          <Box component="td" sx={{ p:'6px 10px',borderBottom:'1px solid',borderColor:'divider',color:'text.secondary',minWidth:180 }}>
-                            {[kp.name_note, kp.condition_note].filter(Boolean).join('；') || '-'}
-                          </Box>
+                      {propertyRows.map(row => (
+                        <Box component="tr" key={row.key}>
+                          <Box component="td" sx={{ p:'6px 10px',borderBottom:'1px solid',borderColor:'divider',whiteSpace:'nowrap',fontWeight:600 }}>{row.material}</Box>
+                          <Box component="td" sx={{ p:'6px 10px',borderBottom:'1px solid',borderColor:'divider',whiteSpace:'nowrap' }}>{row.label}</Box>
+                          <Box component="td" sx={{ p:'6px 10px',borderBottom:'1px solid',borderColor:'divider',whiteSpace:'nowrap',fontWeight:700,color:'primary.main' }}>{row.value}</Box>
+                          <Box component="td" sx={{ p:'6px 10px',borderBottom:'1px solid',borderColor:'divider',whiteSpace:'nowrap',color:'text.secondary' }}>{row.condition}</Box>
+                          <Box component="td" sx={{ p:'6px 10px',borderBottom:'1px solid',borderColor:'divider',color:'text.secondary',minWidth:180 }}>{row.note}</Box>
                         </Box>
                       ))}
                     </Box>
@@ -737,7 +724,7 @@ const SearchPage: React.FC = () => {
                     </Typography>
                     <StructureViewer3D
                       data={s.structure_text}
-                      format={s.structure_format === 'poscar' || s.structure_format === 'vasp' ? 'vasp' : 'cif'}
+                      format={viewerFormat(s.structure_format)}
                       height={240}
                     />
                     <Box component="details" sx={{ mt:1 }}>

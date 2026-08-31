@@ -13,6 +13,8 @@ import { useAuth } from '../context/AuthContext'
 import { SC_TYPE_CONFIG } from '../lib/scatterConfig'
 import ChartScatter from '../components/ChartScatter'
 import ChartGroupEditor from '../components/ChartGroupEditor'
+import StructureViewer3D from '../components/StructureViewer3D'
+import { collectPropertyRows, collectStructures, viewerFormat } from '../lib/paperDetailView'
 import {
   clearChartPreferences, DEFAULT_CHART_PREFERENCES, readChartPreferences,
   TC_FIELDS, TC_FIELD_LABELS, TcField, writeChartPreferences,
@@ -182,6 +184,11 @@ const SharePage: React.FC = () => {
       .catch(() => setDetailError('加载论文详情失败'))
       .finally(() => setDetailLoading(false))
   }, [selectedPaperId])
+
+  // Tc 与计算参数不在 key_properties 里，结构也不在 key_properties[].structure_text 里，
+  // 两者都须跨材料状态汇总（见 lib/paperDetailView）
+  const detailPropertyRows = collectPropertyRows(paperDetail)
+  const detailStructures = collectStructures(paperDetail)
 
   // ── Refresh groups ──
   const refreshGroups = () => { loadAllGroups() }
@@ -574,7 +581,7 @@ const SharePage: React.FC = () => {
               <Box component="details" open sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, mb: 1.5, overflow: 'hidden' }}>
                 <Box component="summary" sx={{ cursor: 'pointer', p: 2, fontSize: 16, fontWeight: 800 }}>关键物性</Box>
                 <Box sx={{ px: 2, pb: 2, borderTop: '1px solid', borderColor: 'divider', overflowX: 'auto' }}>
-                  {Array.isArray(paperDetail.key_properties) && paperDetail.key_properties.length > 0 ? (
+                  {detailPropertyRows.length > 0 ? (
                     <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, mt: 1 }}>
                       <Box component="thead">
                         <Box component="tr">
@@ -584,37 +591,43 @@ const SharePage: React.FC = () => {
                         </Box>
                       </Box>
                       <Box component="tbody">
-                        {paperDetail.key_properties.map((kp: any) => {
-                          // 条件（压强/温度）属材料状态，物性表无这两列；主次标记在新模型中也已不存在。
-                          const state = (paperDetail.material_states || []).find(
-                            (ms: any) => ms.id === kp.material_state_id
-                          )
-                          const condition = [
-                            state?.pressure_raw
-                              ?? (state?.pressure_value_gpa != null ? `${state.pressure_value_gpa} GPa` : null),
-                            state?.temperature_value_k != null ? `${state.temperature_value_k} K` : null,
-                          ].filter(Boolean).join(' · ') || '-'
-                          const value = kp.value_min != null
-                            ? (kp.value_min !== kp.value_max ? `${kp.value_min}–${kp.value_max}` : `${kp.value_max}`)
-                            : (kp.value_number ?? kp.value_raw ?? '-')
-                          return (
-                          <Box component="tr" key={kp.id}>
-                            <Box component="td" sx={{ p: '4px 8px', borderBottom: '1px solid', borderColor: 'divider', whiteSpace: 'nowrap', fontWeight: 600 }}>{kp.material}</Box>
-                            <Box component="td" sx={{ p: '4px 8px', borderBottom: '1px solid', borderColor: 'divider', whiteSpace: 'nowrap' }}>
-                              {kp.name || kp.name_raw || '-'}</Box>
-                            <Box component="td" sx={{ p: '4px 8px', borderBottom: '1px solid', borderColor: 'divider', whiteSpace: 'nowrap', fontWeight: 700, color: 'primary.main' }}>
-                              {value}{kp.unit ? ` ${kp.unit}` : ''}</Box>
-                            <Box component="td" sx={{ p: '4px 8px', borderBottom: '1px solid', borderColor: 'divider', whiteSpace: 'nowrap', color: 'text.secondary' }}>
-                              {condition}</Box>
-                            <Box component="td" sx={{ p: '4px 8px', borderBottom: '1px solid', borderColor: 'divider', color: 'text.secondary', minWidth: 140 }}>
-                              {kp.condition_note || '-'}</Box>
+                        {detailPropertyRows.map(row => (
+                          <Box component="tr" key={row.key}>
+                            <Box component="td" sx={{ p: '4px 8px', borderBottom: '1px solid', borderColor: 'divider', whiteSpace: 'nowrap', fontWeight: 600 }}>{row.material}</Box>
+                            <Box component="td" sx={{ p: '4px 8px', borderBottom: '1px solid', borderColor: 'divider', whiteSpace: 'nowrap' }}>{row.label}</Box>
+                            <Box component="td" sx={{ p: '4px 8px', borderBottom: '1px solid', borderColor: 'divider', whiteSpace: 'nowrap', fontWeight: 700, color: 'primary.main' }}>{row.value}</Box>
+                            <Box component="td" sx={{ p: '4px 8px', borderBottom: '1px solid', borderColor: 'divider', whiteSpace: 'nowrap', color: 'text.secondary' }}>{row.condition}</Box>
+                            <Box component="td" sx={{ p: '4px 8px', borderBottom: '1px solid', borderColor: 'divider', color: 'text.secondary', minWidth: 140 }}>{row.note}</Box>
                           </Box>
-                          )
-                        })}
+                        ))}
                       </Box>
                     </Box>
                   ) : (
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>该论文暂无结构化物性数据</Typography>
+                  )}
+                </Box>
+              </Box>
+
+              {/* 结构预览：数据源为 material_states[].structures[]（structure_models 表）*/}
+              <Box component="details" open sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, mb: 1.5, overflow: 'hidden' }}>
+                <Box component="summary" sx={{ cursor: 'pointer', p: 2, fontSize: 16, fontWeight: 800 }}>结构预览</Box>
+                <Box sx={{ px: 2, pb: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+                  {detailStructures.length > 0 ? (
+                    detailStructures.map((s, i) => (
+                      <Box key={i} sx={{ mt: 1.5 }}>
+                        <Typography variant="body2" fontWeight={700}>
+                          {s.material}{s.name_note ? ` · ${s.name_note}` : ''}{s.pressure_gpa != null ? ` @ ${s.pressure_gpa} GPa` : ''}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          格式 {s.structure_format} · 拖拽旋转 · 滚轮缩放
+                        </Typography>
+                        <Box sx={{ mt: 1 }}>
+                          <StructureViewer3D data={s.structure_text} format={viewerFormat(s.structure_format)} height={240} />
+                        </Box>
+                      </Box>
+                    ))
+                  ) : (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>该论文暂无结构数据</Typography>
                   )}
                 </Box>
               </Box>
