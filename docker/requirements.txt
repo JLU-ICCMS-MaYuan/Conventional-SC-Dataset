@@ -44,3 +44,5 @@ starlette==1.3.1
 typing-inspection==0.4.2
 typing_extensions==4.16.0
 uvicorn==0.51.0
+# uvicorn --reload 与 goserver 热重载依赖；uvicorn 非 [standard] 版本不自带。
+watchfiles==1.2.0

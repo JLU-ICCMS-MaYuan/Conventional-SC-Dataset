@@ -4,7 +4,7 @@
 
 SC-Wiki 是面向超导材料研究的数据检索与知识服务应用。当前代码以 React/Vite 提供单页应用，以 Go Gin 服务作为主要公开 API 聚合层，并将未覆盖的接口反向代理到 Python FastAPI 服务；数据库侧同时使用 GORM 与 SQLAlchemy 模型访问 MySQL 中的用户、论文、材料、物性记录、晶体结构、外部数据和图表组合数据。
 
-当前能力覆盖超导数据去中心化上传（PDF 解析管线）、数据维护与审核验证、本地与外部材料检索、知识图谱、RAG 文献问答、实验性 Tc 估算和研究者社区。部分能力依赖 Docker 部署中的 MySQL、Redis、Neo4j、Qdrant、外部数据文件和 LLM/Embedding 配置，具体边界见各功能文档。
+当前能力覆盖超导数据去中心化上传（PDF 解析管线）、数据维护与审核验证、本地与外部材料检索、知识图谱、RAG 文献问答、实验性 Tc 估算和研究者社区。部分能力依赖 MySQL、Redis、Neo4j、Qdrant、外部数据文件和 LLM/Embedding 配置，具体边界见各功能文档。生产部署使用 Docker Compose，本地开发运行在宿主机进程上（[Issue #71](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/71)），两条链路的服务组成与启动方式见[部署与运行时](02_Decentralized_Maintenance_and_Verification/deployment-and-runtime.md)。
 
 ## 大功能目录
 
@@ -45,6 +45,7 @@ flowchart LR
 ## 当前边界
 
 - Docker 部署入口使用 Nginx 前端、Go API、Python RAG、MySQL、Redis、Neo4j、Qdrant 七类服务；本地直接运行 Python FastAPI 时只包含 Python 注册的接口。
+- 本地开发已移除 Docker 依赖：八个服务跑在宿主机，由 `make start` 编排，前端/Python/goserver 均支持热重载，数据存放仓库内 `.data/`。本地链路以 Vite 代理替代 Nginx；由于生产镜像会重新构建源码，本地改动不会因此丢失，但 nginx 特有的上传体积与缓冲配置、以及仅构建期生效的分包与预取优化在本地不成立，两条链路的行为差异见[部署与运行时](02_Decentralized_Maintenance_and_Verification/deployment-and-runtime.md)。使用说明见 `docs/local-dev.md`。
 - `backend/main.py` 当前 include `tc_predict`、`structures`、`rag`、`upload_tasks`、`kg` 五类 Python 路由；canonical `/api/upload-tasks` 由 Go 未匹配路由转发到 Python。邮箱验证、用户中心、公开资料与管理员治理由 Go 直接承载；图表组合导入/导出/复制/搜索等前端调用仍需按实际部署链路继续核验。
 - RAG 已从 Chroma 迁移到 Qdrant 封装，但部分兼容命名仍保留 `chroma` 字样。
 - 晶体结构后端 API 已实现，前端在论文详情中按材料状态下的 `structures`（来自 `structure_models`）展示结构，完整结构审核工作台仍未从当前路由中确认。当前全库无结构模型记录，只验证过空态。（[Issue #57](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/57)）

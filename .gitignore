@@ -82,8 +82,11 @@ INSTALL.md
 
 # 数据库
 hydride_literature_image_ai.db
-/data/
+.data/
 docs/local-mysql-import.md
+
+# 本地开发运行时（Neo4j/Qdrant 二进制、pid、日志、MySQL 配置）
+.local/
 
 # React 构建产物
 /.vite/
