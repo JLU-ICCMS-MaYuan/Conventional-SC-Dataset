@@ -13,8 +13,8 @@ cd frontend
 npm ci
 npm run build
 cd ..
-.venv-news/bin/python -m pytest tests/08_news -q
-frontend/node_modules/.bin/vitest run --config vitest.config.ts tests/08_news
+.venv-news/bin/python -m pytest tests/07_researcher_community_forum -q
+frontend/node_modules/.bin/vitest run --config vitest.config.ts tests/07_researcher_community_forum
 cd goserver
 go test ./handlers -run News -count=1
 ```
@@ -45,7 +45,7 @@ go test handlers/news.go handlers/news_feed.go handlers/news_feed_test.go -count
 
 ## 隔离集成测试
 
-`tests/08_news/test_integration.py` 仅在明确设置 `NEWS_TEST_MYSQL_URL` 与 `NEWS_TEST_REDIS_URL` 后运行。
+`tests/07_researcher_community_forum/test_news_integration.py` 仅在明确设置 `NEWS_TEST_MYSQL_URL` 与 `NEWS_TEST_REDIS_URL` 后运行。
 MySQL 数据库名限定为 `news_test` 或 `news_test_` 前缀，主机限定 localhost；数据库和 Redis 必须为空。测试拒绝清空已有实例。
 测试通过新迁移创建三表，启动真实 RQ 子进程，验证去重、故障后恢复、正式论文哨兵与独立 PDF 队列哨兵保持不变。
 
@@ -54,10 +54,10 @@ MySQL 数据库名限定为 `news_test` 或 `news_test_` 前缀，主机限定 l
 ```bash
 NEWS_TEST_MYSQL_URL='mysql+pymysql://root:news-test-only@127.0.0.1:44622/news_test' \
 NEWS_TEST_REDIS_URL='redis://127.0.0.1:44621/0' \
-.venv-news/bin/python -m pytest tests/08_news -q
+.venv-news/bin/python -m pytest tests/07_researcher_community_forum -q
 ```
 
-`tests/08_news/verify-go.sh <测试MySQL端口>` 使用 Docker 中的 Go 验证相同 MySQL 数据，由 Python 写、Go 读。
+`tests/07_researcher_community_forum/verify-news-go.sh <测试MySQL端口>` 使用 Docker 中的 Go 验证相同 MySQL 数据，由 Python 写、Go 读。
 默认镜像 `golang:1.25`；可用 `NEWS_TEST_GO_IMAGE` 指定本地已准备的兼容测试镜像。加 `preview` 参数会在 localhost:5183 启动最多 20 分钟的隔离预览，读取前端构建目录；人工快讯为测试响应，绝非生产部署。
 
 在线采集验证可用 `python -m tests.08_news.live_smoke --database <新SQLite绝对路径>`；需设置只用于导入模型的 `DATABASE_URL=sqlite:///:memory:`，父目录须存在且目标文件不得存在。
@@ -77,9 +77,9 @@ NEWS_TEST_REDIS_URL='redis://127.0.0.1:44621/0' \
 - 未执行现有业务数据库迁移、部署、合并或推送；完整 Go 编译门尚未通过。
 
 ### mayuan 分支合并后验证（2026-08-31 14:00）
-- Python 后端测试：16 项全部通过（test_collection.py: 15 项，test_scheduler.py: 1 项）
+- Python 后端测试：16 项全部通过（test_news_collection.py: 15 项，test_news_scheduler.py: 1 项）
   - 测试包含解析与筛选、三源数据归一化、重复去重、版本管理、限流重试、事务回滚、水位保持等核心功能
-  - 集成测试 test_integration.py 已跳过（需要独立 MySQL/Redis 环境）
+  - 集成测试 test_news_integration.py 已跳过（需要独立 MySQL/Redis 环境）
 - 前端测试：75 项全部通过（9 个测试文件）
   - 涵盖论文上传、分类审核、身份治理、详情路由、表单校对、提交验证等功能
   - 现有功能回归测试全部通过，未引入破坏性变更

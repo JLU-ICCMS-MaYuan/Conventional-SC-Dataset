@@ -84,7 +84,7 @@ jsdom 不做布局计算，无法验证「文本在视觉上分了几行」。�
 | 产物核对 | `SearchPage-CPpRNREo.js` 与 `share-*.js` 各含 2 处 `pre-wrap` |
 | 数据侧复核 | 库中 `cat -A` 见 `\n`；API 返回真实换行（`chr(10)` 命中，`'\\n'` 字面未命中） |
 
-**关于 NewsFeed 失败**：`tests/08_news/NewsFeed.test.tsx` 属 Issue #63 每日新闻在建代码，
+**关于 NewsFeed 失败**：`tests/07_researcher_community_forum/news-feed.test.tsx` 属 Issue #63 每日新闻在建代码，
 本次改动前即失败，与本 Issue 无关。
 
 ## 实施细节

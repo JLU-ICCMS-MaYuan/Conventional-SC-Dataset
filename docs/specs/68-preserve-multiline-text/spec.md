@@ -109,7 +109,7 @@ HTML 默认折叠连续空白符，把换行当空格处理。
 
 - **SC-005**：TypeScript 编译无错误，既有测试不回退。
   **已验证**：`tsc --noEmit` 通过；全量 107 例中 106 通过（唯一失败为 Issue #63 在建
-  代码的 `NewsFeed.test.tsx`，与本次无关）。
+  代码的 `news-feed.test.tsx`，与本次无关）。
 
 - **SC-006**：真实环境下库中与 API 的换行均已确认存在，排除数据侧丢失。
   **已验证**：`cat -A` 见 `\n`；API 返回 `chr(10) in key_finding` 为 True，`'\\n' in ...`

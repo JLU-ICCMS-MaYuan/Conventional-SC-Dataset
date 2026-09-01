@@ -92,7 +92,7 @@ docs/overview/01_.../pdf-ingestion.md       [修改] 回写行为与变更记录
 | 项目 | 结果 |
 |------|------|
 | 详情页专项用例 | 26 例通过（`paper-detail-route` 16 + `paper-detail-form-parity` 10） |
-| 前端全量用例 | 89 例中 88 通过；1 例失败在 `tests/08_news/NewsFeed.test.tsx` |
+| 前端全量用例 | 89 例中 88 通过；1 例失败在 `tests/07_researcher_community_forum/news-feed.test.tsx` |
 | `tsc --noEmit` | 通过 |
 | 真实 API | 用 id=2 合法 token 请求 `GET /api/papers/9` 返回 200，三字段确认为 `str` |
 | 真实页面 | 重建容器后 `/papers/9` 返回 200，新 bundle `index-BYNGd8N8.js` 生效 |

@@ -177,7 +177,7 @@ API 侧数据完好，问题全在前端读取与渲染：
 
 - **SC-007**：TypeScript 编译无错误，既有测试不回退。
   **已验证**：`tsc --noEmit` 通过；全量 104 例中 103 通过（唯一失败为 Issue #63 在建
-  代码的 `NewsFeed.test.tsx`，与本次无关）。
+  代码的 `news-feed.test.tsx`，与本次无关）。
 
 - **SC-008**：真实环境下 Hg 论文的 Tc 与结构经 API 可达。
   **已验证**：`GET /api/papers/9` 返回 `tc_value_k: 4.2`、816 字节 CIF、`I4/mmm`。

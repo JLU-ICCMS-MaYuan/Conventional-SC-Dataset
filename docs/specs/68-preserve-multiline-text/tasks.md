@@ -52,7 +52,7 @@
 
 - [x] T018 多行文本用例 3 例通过
 - [x] T019 `tsc --noEmit` 通过（SC-005）
-- [x] T020 前端全量 107 例中 106 通过；唯一失败为 `tests/08_news/NewsFeed.test.tsx`
+- [x] T020 前端全量 107 例中 106 通过；唯一失败为 `tests/07_researcher_community_forum/news-feed.test.tsx`
   （Issue #63 在建代码，本次改动前即失败）
 - [x] T021 重建 dev 前端容器
 - [x] T022 产物核对：`SearchPage-CPpRNREo.js` 与 `share-*.js` 两个 bundle 各含 2 处

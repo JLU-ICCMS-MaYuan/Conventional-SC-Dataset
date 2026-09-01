@@ -86,7 +86,7 @@
 
 - [x] T044 提取逻辑 12 例通过（7ms）
 - [x] T045 探索页默认值 3 例通过
-- [x] T046 前端全量 104 例中 103 通过；唯一失败为 `tests/08_news/NewsFeed.test.tsx`
+- [x] T046 前端全量 104 例中 103 通过；唯一失败为 `tests/07_researcher_community_forum/news-feed.test.tsx`
   （Issue #63 在建代码，本次改动前即失败）
 - [x] T047 `tsc --noEmit` 通过（SC-007）
 - [x] T048 重建 dev 前端容器

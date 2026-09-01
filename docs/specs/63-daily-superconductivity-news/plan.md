@@ -23,7 +23,7 @@ Python 3.10+ 以 HTTPX、feedparser、SQLAlchemy 和 RQ/Redis 采集；MySQL 为
 - requirements-news.txt；alembic/versions/20260831_0063_news_feed.py；alembic/env.py。
 - goserver/models/news_feed.go；goserver/handlers/news_feed.go；goserver/main.go；goserver/handlers/news.go。
 - frontend/src/components/NewsFeed.tsx；frontend/src/pages/NewsPage.tsx。
-- tests/08_news/；goserver/handlers/news_feed_test.go；vitest.config.ts。
+- tests/07_researcher_community_forum/；goserver/handlers/news_feed_test.go；vitest.config.ts。
 - docs/overview/news.md、docs/overview/README.md、README.md。
 
 ## 设计决策与职责

@@ -108,7 +108,7 @@
 
 - **SC-006**：TypeScript 编译无错误，既有测试不回退。
   **已验证**：`tsc --noEmit` 通过；全量 110 例中 109 通过（唯一失败为 Issue #63 在建
-  代码的 `NewsFeed.test.tsx`）。
+  代码的 `news-feed.test.tsx`）。
 
 ## 假设与依赖
 

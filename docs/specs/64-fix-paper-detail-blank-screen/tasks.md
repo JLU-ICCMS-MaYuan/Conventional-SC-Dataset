@@ -59,7 +59,7 @@
 
 - [x] T018 详情页专项：`paper-detail-route.test.tsx` + `paper-detail-form-parity.test.tsx`
   共 26 例通过，证明数组形态行为未回退（SC-004）
-- [x] T019 前端全量：89 例中 88 通过。唯一失败为 `tests/08_news/NewsFeed.test.tsx`，
+- [x] T019 前端全量：89 例中 88 通过。唯一失败为 `tests/07_researcher_community_forum/news-feed.test.tsx`，
   属 Issue #63 在建代码，grep 确认不引用 `PaperEditView` 与 `papers/`，与本次无关
 - [x] T020 `tsc --noEmit` 通过（SC-006）
 - [x] T021 重建 dev 前端容器 `docker compose -f dev.yaml up -d --build frontend`，

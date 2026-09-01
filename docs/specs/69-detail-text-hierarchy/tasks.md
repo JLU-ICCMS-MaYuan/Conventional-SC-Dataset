@@ -48,7 +48,7 @@
 
 - [x] T018 多行文本文件 6 例通过（3 例换行 + 3 例字号字重）
 - [x] T019 `tsc --noEmit` 通过（SC-006）
-- [x] T020 前端全量 110 例中 109 通过；唯一失败为 `tests/08_news/NewsFeed.test.tsx`
+- [x] T020 前端全量 110 例中 109 通过；唯一失败为 `tests/07_researcher_community_forum/news-feed.test.tsx`
   （Issue #63 在建代码）
 - [x] T021 排查全量中一度出现的另 2 例失败：单独重跑稳定通过，确认为并发超时而非回归
 - [x] T022 查清实际服务路径：仓库已在 `abed855`（Issue #71）切为本地化开发环境，8080 由

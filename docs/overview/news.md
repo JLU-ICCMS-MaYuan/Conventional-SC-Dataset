@@ -38,7 +38,7 @@ RSS 只能补回当前订阅窗口；已移除的历史内容无法保证找回�
 - [采集适配](../../backend/news/sources.py)、[事务与去重](../../backend/news/service.py)、[日调度](../../backend/news/scheduler.py)、[命令入口](../../backend/news/__main__.py)。
 - [数据模型](../../backend/news/models.py)、[迁移](../../alembic/versions/20260831_0063_news_feed.py)。
 - [Go 列表接口](../../goserver/handlers/news_feed.go)、[React 资讯组件](../../frontend/src/components/NewsFeed.tsx)。
-- [Python 与页面测试](../../tests/08_news/)、[Go 测试](../../goserver/handlers/news_feed_test.go)。
+- [Python 与页面测试](../../tests/07_researcher_community_forum/)、[Go 测试](../../goserver/handlers/news_feed_test.go)。
 - [完整运行与验证说明](../specs/63-daily-superconductivity-news/quickstart.md)。
 
 ## 验证与运行边界

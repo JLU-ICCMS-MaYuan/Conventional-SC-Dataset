@@ -93,7 +93,7 @@ DOI、年份、期刊、标题同样是 `body1` + `fontWeight={600}`，也比标
 | 产物核对 | `frontend/static/assets/` 下 `SearchPage-*.js` 与 `share-*.js` 各含 2 处 `pre-wrap`，均带 `fontSize:12`；无 `fontWeight:600` + `pre-wrap` 残留 |
 | 服务验证 | `http://localhost:8080/search` 返回 200，首页加载新 bundle |
 
-**关于 NewsFeed 失败**：`tests/08_news/NewsFeed.test.tsx` 属 Issue #63 在建代码，本次
+**关于 NewsFeed 失败**：`tests/07_researcher_community_forum/news-feed.test.tsx` 属 Issue #63 在建代码，本次
 改动前即失败。
 
 ## 部署路径的澄清

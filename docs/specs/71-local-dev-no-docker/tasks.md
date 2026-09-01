@@ -216,7 +216,7 @@ make stop               # 停止全部
 
 ## 遗留事项
 
-- **`tests/08_news/NewsFeed.test.tsx` 一个用例失败**。在干净 `HEAD` 上同样失败，
+- **`tests/07_researcher_community_forum/news-feed.test.tsx` 一个用例失败**。在干净 `HEAD` 上同样失败，
   与本地化无关，属独立议题。
 - **`papers.knowledge_graph_title` 列与 alembic 状态曾不一致**。列已存在但
   revision 未记录，Docker 库中亦然，说明是手工加的列。已 `stamp head` 对齐，

@@ -108,7 +108,7 @@ docs/overview/03_.../paper-and-property-results.md  [修改] 回写
 | 产物核对 | `La,H` 出现 0 次；`paperDetailView` chunk 已生成并被引用 |
 | 真实 API | `GET /api/papers/9`：`tc_value_k: 4.2`、`I4/mmm` CIF 816 字节、summary 含 `\n`、`key_properties: []` |
 
-**关于 NewsFeed 失败**：`tests/08_news/NewsFeed.test.tsx` 属 Issue #63 每日新闻在建代码，
+**关于 NewsFeed 失败**：`tests/07_researcher_community_forum/news-feed.test.tsx` 属 Issue #63 每日新闻在建代码，
 本次改动前即失败，与探索页无关。
 
 ## 事故记录

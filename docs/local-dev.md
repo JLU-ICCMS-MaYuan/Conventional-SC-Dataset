@@ -150,6 +150,6 @@ MySQL 拒绝打开高版本 datadir。必须走 `mysqldump` 逻辑导出，`migr
 
 ## 已知的既有问题（非本次引入）
 
-- `tests/08_news/NewsFeed.test.tsx` 中一个用例失败。在干净的 `HEAD` 上同样失败，与本地化无关。
+- `tests/07_researcher_community_forum/news-feed.test.tsx` 中一个用例失败。在干净的 `HEAD` 上同样失败，与本地化无关。
 - 数据库里 `papers.knowledge_graph_title` 列已存在但 `alembic_version` 未记录该 revision
   （Docker 库里也一样，说明是手工加的列）。已用 `alembic stamp head` 对齐。

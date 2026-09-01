@@ -26,7 +26,7 @@ export default defineConfig({
       'tests/01_decentralized_uploading/**/*.test.tsx',
       'tests/02_identity_governance/**/*.test.tsx',
       'tests/03_data_search_and_database_discovery/**/*.test.tsx',
-      'tests/08_news/**/*.test.tsx',
+      'tests/07_researcher_community_forum/**/*.test.tsx',
     ],
   },
 })
