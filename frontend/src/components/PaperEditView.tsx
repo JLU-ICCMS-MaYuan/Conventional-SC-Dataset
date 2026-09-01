@@ -42,6 +42,7 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
   const [editAuthors, setEditAuthors] = useState('')
   const [editAbstract, setEditAbstract] = useState('')
   const [editSummary, setEditSummary] = useState('')
+  const [editKnowledgeGraphTitle, setEditKnowledgeGraphTitle] = useState('')
   const [editKeyFinding, setEditKeyFinding] = useState('')
   const [editResearchMotivation, setEditResearchMotivation] = useState('')
 
@@ -59,6 +60,7 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
     setEditAuthors(toTextList(data.authors).join('、'))
     setEditAbstract(data.abstract || '')
     setEditSummary(data.summary || '')
+    setEditKnowledgeGraphTitle(data.knowledge_graph_title || '')
     setEditKeyFinding(data.key_finding || '')
     setEditResearchMotivation(data.research_motivation || '')
   }, [paper])
@@ -145,6 +147,12 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
                     <Typography variant="caption" color="text.secondary">论文总结 (LLM)</Typography>
                     <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{editSummary || '-'}</Typography>
                   </Box>
+                  {editKnowledgeGraphTitle && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">知识图谱标题 (LLM)</Typography>
+                      <Typography variant="body2">{editKnowledgeGraphTitle}</Typography>
+                    </Box>
+                  )}
                   <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                     <Chip label={`审核状态: ${STATUS_LABELS[paper?.review_status] || paper?.review_status || '待审核'}`}
                       size="small" color={STATUS_COLORS[paper?.review_status] || 'default'} />

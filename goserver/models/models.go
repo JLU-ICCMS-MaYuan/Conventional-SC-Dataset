@@ -107,16 +107,17 @@ type Paper struct {
 	CreatedAt         time.Time  `json:"created_at"`
 	UpdatedAt         time.Time  `json:"updated_at"`
 	// LLM 富化字段
-	Summary            *string `json:"summary"`
-	PaperType          *string `gorm:"size:20" json:"paper_type"`
-	TheoreticalSubtype *string `gorm:"size:20" json:"theoretical_subtype"`
-	KeywordsTags       *string `json:"keywords_tags"`
-	Methodology        *string `json:"methodology"`
-	KeyFinding         *string `json:"key_finding"`
-	ResearchMotivation *string `json:"research_motivation"`
-	ResearchMaterials  *string `json:"research_materials"`
-	MaterialRelations  *string `json:"material_relations"`
-	BuildsOn           *string `json:"builds_on"`
+	Summary              *string `json:"summary"`
+	PaperType            *string `gorm:"size:20" json:"paper_type"`
+	TheoreticalSubtype   *string `gorm:"size:20" json:"theoretical_subtype"`
+	KeywordsTags         *string `json:"keywords_tags"`
+	Methodology          *string `json:"methodology"`
+	KnowledgeGraphTitle  *string `gorm:"size:200" json:"knowledge_graph_title"`
+	KeyFinding           *string `json:"key_finding"`
+	ResearchMotivation   *string `json:"research_motivation"`
+	ResearchMaterials    *string `json:"research_materials"`
+	MaterialRelations    *string `json:"material_relations"`
+	BuildsOn             *string `json:"builds_on"`
 
 	// 关联（GORM 预加载用）
 	Reviewer       *User              `gorm:"foreignKey:ReviewedBy" json:"-"`
