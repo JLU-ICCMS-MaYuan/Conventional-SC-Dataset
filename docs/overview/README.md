@@ -53,6 +53,7 @@ flowchart LR
 - Tc 估算由代码明确标记为实验页面，不构成模型科学有效性的保证。
 - Neo4j 知识图谱同步不在上传链路中自动触发，需独立运行 `backend/ingest/sync_neo4j.py`；自动触发机制待核验。
 - 账号身份与分级工作台变更已通过 Go 全量测试、Vitest、前端生产构建和 Alembic MySQL 离线迁移 SQL 生成；真实 SMTP、持久化 MySQL 与完整部署链路仍需在目标环境验收。
+- 界面支持简体中文与英文切换：顶栏头像左侧 `CH / EN` 控件，偏好存浏览器 `localStorage`（键 `sc-wiki.language`），默认中文，未登录也可切换；仅界面文案与固定枚举标签跟随语言。六个 LLM 叙述字段（`summary`、`keywords_tags`、`methodology`、`key_finding`、`research_motivation`、`knowledge_graph_title`）在数据层统一为英文存储，不随界面语言变化，无双语列。（[Issue #74](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/74)）
 
 ## 文档维护
 

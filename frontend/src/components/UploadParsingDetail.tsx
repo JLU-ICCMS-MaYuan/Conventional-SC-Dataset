@@ -6,7 +6,8 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import { api } from '../lib/api'
-import { UploadDraft, unwrapData } from '../lib/paperProcessing'
+import { PROCESSING_STAGES, UploadDraft, unwrapData } from '../lib/paperProcessing'
+import { useLanguage } from '../context/LanguageContext'
 import UploadTaskEditor from './UploadTaskEditor'
 
 interface ChunkDetail {
@@ -39,18 +40,13 @@ interface ParsingDetail {
   next_poll_ms: number | null
 }
 
-const FAILED_STAGE_LABEL: Record<string, string> = {
-  extracting: '提取论文正文',
-  reading: 'AI 分段阅读',
-  summarizing: 'AI 汇总草稿',
-}
-
 interface Props {
   taskId: string
   onSubmitted?: (paperId: number) => void
 }
 
 const UploadParsingDetail: React.FC<Props> = ({ taskId, onSubmitted = () => undefined }) => {
+  const { t } = useLanguage()
   const [detail, setDetail] = useState<ParsingDetail | null>(null)
   const [error, setError] = useState('')
   const [tab, setTab] = useState(0)
@@ -70,7 +66,7 @@ const UploadParsingDetail: React.FC<Props> = ({ taskId, onSubmitted = () => unde
         if (value.next_poll_ms) timer = window.setTimeout(poll, value.next_poll_ms)
       } catch (reason: any) {
         if (!stopped) {
-          setError(reason.message || '解析详情加载失败')
+          setError(reason.message || t('upload.detailLoadFailed'))
           timer = window.setTimeout(poll, 2000)
         }
       }
@@ -85,24 +81,30 @@ const UploadParsingDetail: React.FC<Props> = ({ taskId, onSubmitted = () => unde
       await api.post(`/api/rag/upload-tasks/${taskId}/${path}`)
       setReload(value => value + 1)
     } catch (reason: any) {
-      setError(reason.message || '操作失败')
+      setError(reason.message || t('upload.operationFailed'))
     } finally {
       setActionPending(false)
     }
   }
 
+  // 处理阶段标签统一走 upload.step.<stage.key>，与处理流程组件保持一致
+  const failedStageLabel = (key: string | null | undefined): string => {
+    const stage = key ? PROCESSING_STAGES.find(item => item.key === key) : undefined
+    return stage ? t('upload.step.' + stage.key) : (key || '')
+  }
+
   const statusNote = (value: ParsingDetail): string => {
     switch (value.status) {
       case 'summarizing':
-        return 'AI 正在汇总全文草稿，表单内容实时更新；生成完成后即可校对。'
+        return t('upload.summarizingNote')
       case 'reading':
-        return `AI 分段阅读中 ${value.summary.completed}/${value.summary.total}，字段随分段完成逐步点亮。`
+        return t('upload.readingNote', { completed: value.summary.completed, total: value.summary.total })
       case 'extracting':
-        return '正在提取论文正文，完成后逐段解析。'
+        return t('upload.extractingNote')
       case 'queued':
-        return '排队等待解析…'
+        return t('upload.queuedNote')
       default:
-        return 'AI 正在生成草稿，内容与最终校对表单一致。'
+        return t('upload.defaultNote')
     }
   }
 
@@ -111,11 +113,11 @@ const UploadParsingDetail: React.FC<Props> = ({ taskId, onSubmitted = () => unde
       {error && (
         <Alert severity="warning" sx={{ mb: 1.5 }} action={
           <Button color="inherit" size="small" startIcon={<RefreshIcon />} onClick={() => setReload(value => value + 1)}>
-            重试
+            {t('common.retry')}
           </Button>
         }>{error}</Alert>
       )}
-      {!detail && !error && <LinearProgress aria-label="正在加载解析详情" />}
+      {!detail && !error && <LinearProgress aria-label={t('upload.loadingDetailAria')} />}
       {detail && (
         <>
           {detail.status === 'failed' && (
@@ -125,35 +127,39 @@ const UploadParsingDetail: React.FC<Props> = ({ taskId, onSubmitted = () => unde
               action={
                 <Box sx={{ display: 'flex', gap: 1 }}>
                   <Button color="inherit" size="small" disabled={actionPending} onClick={() => void runAction('retry')}>
-                    重新解析
+                    {t('upload.retryParse')}
                   </Button>
                   <Button color="inherit" size="small" disabled={actionPending} onClick={() => void runAction('manual')}>
-                    手动填写
+                    {t('upload.manualFill')}
                   </Button>
                 </Box>
               }
             >
-              解析失败{detail.failed_stage ? `（${FAILED_STAGE_LABEL[detail.failed_stage] || detail.failed_stage}阶段）` : ''}
-              ：{detail.processing_error || '未知错误'}。可重新解析（已完成的分段会复用缓存），或改为手动填写。
+              {t('upload.parseFailed', {
+                stage: detail.failed_stage
+                  ? t('upload.stageSuffix', { label: failedStageLabel(detail.failed_stage) })
+                  : '',
+                error: detail.processing_error || t('upload.unknownError'),
+              })}
             </Alert>
           )}
           <Tabs
             value={tab}
             onChange={(_, value) => setTab(value)}
-            aria-label="上传任务解析详情"
+            aria-label={t('upload.parsingDetailAria')}
             sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}
           >
-            <Tab label="AI 临时表单" />
-            <Tab label="分段解析与证据" />
+            <Tab label={t('upload.tabAiForm')} />
+            <Tab label={t('upload.tabChunks')} />
           </Tabs>
 
           {tab === 0 && (
-            <Box role="tabpanel" aria-label="AI 临时表单">
+            <Box role="tabpanel" aria-label={t('upload.tabAiForm')}>
               {detail.status === 'ready' ? (
                 <UploadTaskEditor taskId={taskId} onSubmitted={onSubmitted} />
               ) : detail.status === 'failed' ? (
                 <Typography variant="body2" color="text.secondary">
-                  本次解析未完成，请重新解析或改为手动填写。
+                  {t('upload.parseIncomplete')}
                 </Typography>
               ) : (
                 <UploadTaskEditor
@@ -168,20 +174,23 @@ const UploadParsingDetail: React.FC<Props> = ({ taskId, onSubmitted = () => unde
           )}
 
           {tab === 1 && (
-            <Box role="tabpanel" aria-label="分段解析与证据">
+            <Box role="tabpanel" aria-label={t('upload.tabChunks')}>
               <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
-                分段进度 · {detail.summary.completed}/{detail.summary.total}
+                {t('upload.chunkProgressTitle', { completed: detail.summary.completed, total: detail.summary.total })}
               </Typography>
               {detail.chunks.length === 0 && (
-                <Typography variant="body2" color="text.secondary">尚未生成分段，正在等待正文提取完成。</Typography>
+                <Typography variant="body2" color="text.secondary">{t('upload.noChunksYet')}</Typography>
               )}
               {detail.chunks.map(chunk => (
                 <Accordion key={chunk.chunk_id} disableGutters elevation={0} sx={{ borderBottom: 1, borderColor: 'divider' }}>
                   <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', minWidth: 0, flexWrap: 'wrap' }}>
                       <Chip size="small" label={chunk.status} color={chunk.status === 'failed' ? 'error' : chunk.status === 'completed' ? 'success' : 'default'} />
-                      <Typography variant="body2">{chunk.filename} · {chunk.section || '正文'}</Typography>
-                      {chunk.page_start && <Typography variant="caption" color="text.secondary">第 {chunk.page_start}{chunk.page_end && chunk.page_end !== chunk.page_start ? `-${chunk.page_end}` : ''} 页</Typography>}
+                      <Typography variant="body2">{chunk.filename} · {chunk.section || t('upload.bodyText')}</Typography>
+                      {chunk.page_start && <Typography variant="caption" color="text.secondary">{t('upload.pageRange', {
+                        start: chunk.page_start,
+                        end: chunk.page_end && chunk.page_end !== chunk.page_start ? `-${chunk.page_end}` : '',
+                      })}</Typography>}
                     </Box>
                   </AccordionSummary>
                   <AccordionDetails>

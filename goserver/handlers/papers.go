@@ -17,6 +17,28 @@ import (
 	"gorm.io/gorm"
 )
 
+var paperPatchFields = map[string]bool{
+	"title": true, "doi": true, "authors": true, "journal": true, "volume": true,
+	"pages": true, "year": true, "abstract": true, "summary": true,
+	"paper_type": true, "theoretical_subtype": true, "keywords_tags": true,
+	"methodology": true, "key_finding": true, "research_motivation": true,
+	"research_materials": true, "material_relations": true, "builds_on": true,
+	"knowledge_graph_title": true,
+}
+
+func paperPatchFieldAllowed(field string) bool { return paperPatchFields[field] }
+
+// paperPatchUpdatesFromBody 从请求体提取业务白名单字段，供 PatchPaper 使用。
+func paperPatchUpdatesFromBody(body map[string]interface{}) map[string]interface{} {
+	updates := map[string]interface{}{}
+	for key, value := range body {
+		if paperPatchFieldAllowed(key) {
+			updates[key] = value
+		}
+	}
+	return updates
+}
+
 // ═══════════════════════════════════════════════
 // 论文公开 API（替代 Python /api/papers/*）
 // ═══════════════════════════════════════════════
@@ -152,20 +174,7 @@ func PatchPaper(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
 		return
 	}
-	allowed := map[string]bool{
-		"title": true, "doi": true, "authors": true, "journal": true, "volume": true,
-		"pages": true, "year": true, "abstract": true, "summary": true,
-		"paper_type": true, "theoretical_subtype": true, "keywords_tags": true,
-		"methodology": true, "key_finding": true, "research_motivation": true,
-		"research_materials": true,
-		"material_relations": true, "builds_on": true,
-	}
-	updates := map[string]interface{}{}
-	for key, value := range body {
-		if allowed[key] {
-			updates[key] = value
-		}
-	}
+	updates := paperPatchUpdatesFromBody(body)
 	if len(updates) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "没有可修改字段"})
 		return

@@ -5,7 +5,9 @@ import {
   ClassificationTerm,
   pendingSelection,
   selectionForTerm,
+  familyName,
 } from '../lib/classifications'
+import { useLanguage } from '../context/LanguageContext'
 
 interface ClassificationAutocompleteProps {
   label: string
@@ -24,6 +26,7 @@ const ClassificationAutocomplete: React.FC<ClassificationAutocompleteProps> = ({
   error,
   onChange,
 }) => {
+  const { lang, t } = useLanguage()
   const selected = value?.id == null
     ? value?.name || null
     : options.find(option => option.id === value.id) || value.name
@@ -34,7 +37,7 @@ const ClassificationAutocomplete: React.FC<ClassificationAutocompleteProps> = ({
       options={options}
       value={selected}
       loading={loading}
-      getOptionLabel={option => typeof option === 'string' ? option : option.name}
+      getOptionLabel={option => typeof option === 'string' ? option : familyName(option, lang)}
       isOptionEqualToValue={(option, candidate) => (
         typeof candidate !== 'string' && 'id' in candidate && option.id === candidate.id
       )}
@@ -42,7 +45,10 @@ const ClassificationAutocomplete: React.FC<ClassificationAutocompleteProps> = ({
         const needle = state.inputValue.trim().toLocaleLowerCase()
         if (!needle) return catalogOptions
         return catalogOptions.filter(option => (
-          option.name.toLocaleLowerCase().includes(needle)
+          familyName(option, lang).toLocaleLowerCase().includes(needle)
+          || option.name.toLocaleLowerCase().includes(needle)
+          || (option.name_zh || '').toLocaleLowerCase().includes(needle)
+          || (option.name_en || '').toLocaleLowerCase().includes(needle)
           || option.aliases.some(alias => alias.toLocaleLowerCase().includes(needle))
         ))
       }}
@@ -58,7 +64,7 @@ const ClassificationAutocomplete: React.FC<ClassificationAutocompleteProps> = ({
           {...params}
           label={label}
           error={Boolean(error)}
-          helperText={error || (value?.status === 'pending' ? '新名称，将在论文审核通过时创建' : undefined)}
+          helperText={error || (value?.status === 'pending' ? t('common.pendingClassification') : undefined)}
         />
       )}
       slotProps={{

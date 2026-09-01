@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Box, Typography, Card, CardContent, Chip, Button, LinearProgress } from '@mui/material'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import { api } from '../lib/api'
+import { useLanguage } from '../context/LanguageContext'
 import StructureViewer3D from './StructureViewer3D'
 
 /* ── Alexandria 专属 Layer 3：电声耦合材料详情 ── */
@@ -22,6 +23,7 @@ const Field = ({ label, value }: { label: string; value: React.ReactNode }) => (
 const num = (v: any, digits = 3) => (typeof v === 'number' ? v.toFixed(digits) : '-')
 
 const AlexandriaDetail: React.FC<Props> = ({ matId, formula, onBack }) => {
+  const { t, lang } = useLanguage()
   const [data, setData] = useState<any>(null)
   const [error, setError] = useState('')
 
@@ -30,7 +32,7 @@ const AlexandriaDetail: React.FC<Props> = ({ matId, formula, onBack }) => {
     setError('')
     api.get(`/api/alexandria/material/${matId}`)
       .then((d: any) => setData(d))
-      .catch((e: any) => setError(e.message || '加载失败'))
+      .catch((e: any) => setError(e.message || t('common.loadFailed')))
   }, [matId])
 
   const tc = data?.tc || {}
@@ -49,17 +51,17 @@ const AlexandriaDetail: React.FC<Props> = ({ matId, formula, onBack }) => {
     <Box>
       <Box sx={{ display:'flex',alignItems:'center',justifyContent:'space-between',gap:2,mb:3 }}>
         <Box>
-          <Button size="small" startIcon={<ArrowBackIcon/>} onClick={onBack} sx={{ mb:1 }}>返回结果表格</Button>
+          <Button size="small" startIcon={<ArrowBackIcon/>} onClick={onBack} sx={{ mb:1 }}>{t('search.backResults')}</Button>
           <Typography variant="overline">Layer 3 · Alexandria Material</Typography>
-          <Typography variant="h1">{formula} 详情</Typography>
+          <Typography variant="h1">{t('search.detailTitle', { formula })}</Typography>
           <Box sx={{ display:'flex',gap:1,mt:1 }}>
             <Chip label="Alexandria" size="small" color="secondary" />
             <Chip label={matId} size="small" variant="outlined" sx={{ fontFamily:'"Roboto Mono",monospace' }} />
           </Box>
         </Box>
         <Box sx={{ display:'flex',gap:1 }}>
-          <Button variant="contained" color="secondary" component="a" href={`/api/alexandria/material/${matId}/cif`} download>下载 CIF</Button>
-          <Button variant="outlined" component="a" href={`/api/alexandria/material/${matId}/download`}>下载完整数据</Button>
+          <Button variant="contained" color="secondary" component="a" href={`/api/alexandria/material/${matId}/cif`} download>{t('search.alexandria.downloadCif')}</Button>
+          <Button variant="outlined" component="a" href={`/api/alexandria/material/${matId}/download`}>{t('search.alexandria.downloadFullData')}</Button>
         </Box>
       </Box>
 
@@ -71,42 +73,42 @@ const AlexandriaDetail: React.FC<Props> = ({ matId, formula, onBack }) => {
           <CardContent>
             {/* 基础信息 */}
             <Box component="details" open sx={{ border:'1px solid',borderColor:'divider',borderRadius:2,mb:1.5,overflow:'hidden' }}>
-              <Box component="summary" sx={{ cursor:'pointer',p:2,fontSize:18,fontWeight:800 }}>基础信息</Box>
+              <Box component="summary" sx={{ cursor:'pointer',p:2,fontSize:18,fontWeight:800 }}>{t('search.basicInfo')}</Box>
               <Box sx={{ px:2,pb:2,borderTop:'1px solid',borderColor:'divider' }}>
                 <Box sx={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:1.5 }}>
                   <Field label="Formula" value={data?.formula || formula} />
-                  <Field label="材料 ID" value={data?.mat_id || matId} />
-                  <Field label="元素" value={(data?.elements || []).join(', ') || '-'} />
-                  <Field label="原胞原子数" value={data?.nsites} />
-                  <Field label="空间群" value={st.spg_symbol ? `${st.spg_symbol} (#${st.spg_number})` : '-'} />
-                  <Field label="动力学稳定" value={data ? (data.imag ? '否（存在虚声子）' : '是（无虚声子）') : '-'} />
+                  <Field label={t('search.alexandria.materialId')} value={data?.mat_id || matId} />
+                  <Field label={t('search.alexandria.elements')} value={(data?.elements || []).join(', ') || '-'} />
+                  <Field label={t('search.alexandria.atomsPerCell')} value={data?.nsites} />
+                  <Field label={t('search.alexandria.spaceGroup')} value={st.spg_symbol ? `${st.spg_symbol} (#${st.spg_number})` : '-'} />
+                  <Field label={t('search.alexandria.dynamicStability')} value={data ? (data.imag ? t('search.alexandria.unstable') : t('search.alexandria.stable')) : '-'} />
                 </Box>
               </Box>
             </Box>
             {/* 电声耦合参数 */}
             <Box component="details" open sx={{ border:'1px solid',borderColor:'divider',borderRadius:2,mb:1.5,overflow:'hidden' }}>
-              <Box component="summary" sx={{ cursor:'pointer',p:2,fontSize:18,fontWeight:800 }}>电声耦合参数</Box>
+              <Box component="summary" sx={{ cursor:'pointer',p:2,fontSize:18,fontWeight:800 }}>{t('search.alexandria.epCouplingParams')}</Box>
               <Box sx={{ px:2,pb:2,borderTop:'1px solid',borderColor:'divider' }}>
                 <Box sx={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:1.5 }}>
                   <Box>
-                    <Typography variant="caption">代表 Tc（Allen-Dynes，μ*=0.10）</Typography>
+                    <Typography variant="caption">{t('search.alexandria.representativeTc')}</Typography>
                     <Typography fontWeight={800} color="primary.main" fontSize={20}>
                       {typeof tcRep === 'number' ? `${tcRep.toFixed(1)} K` : '-'}
                     </Typography>
                   </Box>
-                  <Field label="λ（电声耦合常数）" value={num(tc.lambda)} />
+                  <Field label={t('search.alexandria.lambdaEp')} value={num(tc.lambda)} />
                   <Field label="ω_log" value={typeof tc['wlog[K]'] === 'number' ? `${tc['wlog[K]'].toFixed(1)} K` : '-'} />
                   <Field label="ω₂" value={typeof tc['w2av[K]'] === 'number' ? `${tc['w2av[K]'].toFixed(1)} K` : '-'} />
                   <Field label="∫α²F" value={num(tc.integral_a2F, 2)} />
-                  <Field label="费米能级" value={typeof data?.fermi_level === 'number' ? `${data.fermi_level} eV` : '-'} />
-                  <Field label="压强（应力换算）" value={pressure} />
+                  <Field label={t('search.alexandria.fermiLevel')} value={typeof data?.fermi_level === 'number' ? `${data.fermi_level} eV` : '-'} />
+                  <Field label={t('search.alexandria.pressureFromStress')} value={pressure} />
                 </Box>
               </Box>
             </Box>
             {/* Tc–μ* 表格 */}
             {mustr.length > 0 && (
               <Box component="details" sx={{ border:'1px solid',borderColor:'divider',borderRadius:2,mb:1.5,overflow:'hidden' }}>
-                <Box component="summary" sx={{ cursor:'pointer',p:2,fontSize:18,fontWeight:800 }}>Tc – μ* 关系表</Box>
+                <Box component="summary" sx={{ cursor:'pointer',p:2,fontSize:18,fontWeight:800 }}>{t('search.alexandria.tcMuTable')}</Box>
                 <Box sx={{ px:2,pb:2,borderTop:'1px solid',borderColor:'divider',overflowX:'auto' }}>
                   <Box component="table" sx={{ width:'100%',borderCollapse:'collapse',fontSize:13,mt:1 }}>
                     <Box component="thead">
@@ -131,13 +133,13 @@ const AlexandriaDetail: React.FC<Props> = ({ matId, formula, onBack }) => {
             )}
             {/* 计算设置 */}
             <Box component="details" sx={{ border:'1px solid',borderColor:'divider',borderRadius:2,mb:1.5,overflow:'hidden' }}>
-              <Box component="summary" sx={{ cursor:'pointer',p:2,fontSize:18,fontWeight:800 }}>计算设置</Box>
+              <Box component="summary" sx={{ cursor:'pointer',p:2,fontSize:18,fontWeight:800 }}>{t('search.alexandria.calculationSettings')}</Box>
               <Box sx={{ px:2,pb:2,borderTop:'1px solid',borderColor:'divider' }}>
                 <Box sx={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:1.5 }}>
-                  <Field label="动能截断" value={typeof data?.kinetic_cutoff === 'number' ? `${data.kinetic_cutoff} Ry` : '-'} />
-                  <Field label="总能量" value={typeof data?.energy_total === 'number' ? `${data.energy_total.toFixed(4)} Ry` : '-'} />
-                  <Field label="粗 k 点数" value={data?.kpoints_coarse ?? '-'} />
-                  <Field label="细 k 点数" value={data?.kpoints_fine ?? '-'} />
+                  <Field label={t('search.alexandria.kineticCutoff')} value={typeof data?.kinetic_cutoff === 'number' ? `${data.kinetic_cutoff} Ry` : '-'} />
+                  <Field label={t('search.alexandria.totalEnergy')} value={typeof data?.energy_total === 'number' ? `${data.energy_total.toFixed(4)} Ry` : '-'} />
+                  <Field label={t('search.alexandria.coarseKpoints')} value={data?.kpoints_coarse ?? '-'} />
+                  <Field label={t('search.alexandria.fineKpoints')} value={data?.kpoints_fine ?? '-'} />
                 </Box>
               </Box>
             </Box>
@@ -147,23 +149,23 @@ const AlexandriaDetail: React.FC<Props> = ({ matId, formula, onBack }) => {
         {/* 结构预览 */}
         <Card sx={{ alignSelf:'start',position:'sticky',top:96,boxShadow:'0 6px 16px rgba(15,23,42,.16),0 10px 24px rgba(15,23,42,.10)' }}>
           <CardContent>
-            <Typography variant="h2" gutterBottom>结构预览</Typography>
+            <Typography variant="h2" gutterBottom>{t('search.structurePreview')}</Typography>
             {st.cif ? (
               <Box>
                 <Box sx={{ display:'grid',gap:1,mb:1.5 }}>
-                  <Typography variant="body2">空间群: {st.spg_symbol || '-'} (#{st.spg_number || '-'})</Typography>
-                  <Typography variant="body2" color="text.secondary">拖拽旋转 · 滚轮缩放</Typography>
+                  <Typography variant="body2">{t('search.alexandria.spaceGroup')}: {st.spg_symbol || '-'} (#{st.spg_number || '-'})</Typography>
+                  <Typography variant="body2" color="text.secondary">{t('search.structureHint')}</Typography>
                 </Box>
                 <StructureViewer3D data={st.cif} format="cif" height={320} />
                 <Box component="details" sx={{ mt:1.5 }}>
-                  <Box component="summary" sx={{ cursor:'pointer',fontSize:13,fontWeight:700,color:'text.secondary' }}>查看 CIF 文本</Box>
+                  <Box component="summary" sx={{ cursor:'pointer',fontSize:13,fontWeight:700,color:'text.secondary' }}>{t('search.viewCifText')}</Box>
                   <Box component="pre" sx={{ mt:1,p:2,borderRadius:2,bgcolor:'grey.50',maxHeight:240,overflow:'auto',fontFamily:'"Roboto Mono",monospace',fontSize:12 }}>
                     {st.cif}
                   </Box>
                 </Box>
               </Box>
             ) : (
-              <Typography variant="body2" color="text.secondary">{data ? '该材料无结构数据' : '加载中…'}</Typography>
+              <Typography variant="body2" color="text.secondary">{data ? t('search.noStructureMaterial') : t('search.loading')}</Typography>
             )}
           </CardContent>
         </Card>

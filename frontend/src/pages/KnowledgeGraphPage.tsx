@@ -9,6 +9,7 @@ import { DataSet } from 'vis-data'
 import { Network } from 'vis-network'
 import 'vis-network/styles/vis-network.css'
 import { api } from '../lib/api'
+import { useLanguage } from '../context/LanguageContext'
 
 const TYPE_COLORS: Record<string, string> = {
   first_discovery: '#e53935',
@@ -21,18 +22,11 @@ const TYPE_COLORS: Record<string, string> = {
   supporting_evidence: '#78909c',
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  first_discovery: '首次发现',
-  experimental_validation: '实验验证',
-  theoretical_basis: '理论基础',
-  correction_or_dispute: '修正争议',
-  development_extension: '发展延续',
-  material_system_extension: '材料扩展',
-  same_research_direction: '同方向',
-  supporting_evidence: '支撑证据',
-}
+const RELATION_TYPES = Object.keys(TYPE_COLORS)
 
 const KnowledgeGraphPage: React.FC = () => {
+  const { t } = useLanguage()
+  const relationLabel = useCallback((type: string) => t(`kg.relation.${type}`), [t])
   const containerRef = useRef<HTMLDivElement>(null)
   const networkRef = useRef<Network | null>(null)
   const nodesDs = useRef<DataSet<any>>(new DataSet([]))
@@ -174,8 +168,8 @@ const KnowledgeGraphPage: React.FC = () => {
         return {
           id: `${e.source}_${e.target}_${e.type}`,
           from: e.source, to: e.target,
-          label: TYPE_LABELS[e.type] || '',
-          title: `<b>${TYPE_LABELS[e.type] || e.type}</b><br>importance: ${e.importance?.toFixed(3)}`,
+          label: relationLabel(e.type),
+          title: `<b>${relationLabel(e.type)}</b><br>importance: ${e.importance?.toFixed(3)}`,
           color: { color: TYPE_COLORS[e.type] || '#999', opacity: 0.7 },
           width: Math.max(1.2, (e.importance || 0.5) * 3),
           type: e.type, importance: e.importance, evidence: e.evidence,
@@ -185,7 +179,7 @@ const KnowledgeGraphPage: React.FC = () => {
       setActiveTypes(types)
     } catch (e) { console.error(e) }
     setLoading(false)
-  }, [rebuildGraph])
+  }, [rebuildGraph, relationLabel])
 
   useEffect(() => { loadOverview() }, [loadOverview])
 
@@ -219,7 +213,7 @@ const KnowledgeGraphPage: React.FC = () => {
         if (!existingEdge) {
           edgesDs.current.add({
             id: eid, from: e.source, to: e.target,
-            label: TYPE_LABELS[e.type] || '',
+            label: relationLabel(e.type),
             color: { color: TYPE_COLORS[e.type] || '#999', opacity: 0.7 },
             width: Math.max(1.2, (e.importance || 0.5) * 3),
             type: e.type, importance: e.importance, evidence: e.evidence,
@@ -231,7 +225,7 @@ const KnowledgeGraphPage: React.FC = () => {
       expandedRef.current = true
       filterReachable(nodeId)
     } catch (e) { console.error(e) }
-  }, [])
+  }, [relationLabel])
 
   const toggleType = (t: string) => {
     const next = new Set(activeTypes)
@@ -247,10 +241,10 @@ const KnowledgeGraphPage: React.FC = () => {
       {/* Header */}
       <Box>
         <Typography variant="overline" color="text.secondary">Knowledge Graph</Typography>
-        <Typography variant="h5" fontWeight={700}>论文之间的发现、验证与发展关系</Typography>
+        <Typography variant="h5" fontWeight={700}>{t('kg.title')}</Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-          默认展示已审核里程碑论文，不把 Tc、压强、空间群等参数画成图谱节点
-          {totalEdges > 0 && `。当前共 ${totalEdges} 条关系`}
+          {t('kg.description')}
+          {totalEdges > 0 && t('kg.relationCount', { count: totalEdges })}
         </Typography>
       </Box>
 
@@ -261,8 +255,8 @@ const KnowledgeGraphPage: React.FC = () => {
           {/* Filter bar */}
           <Box sx={{ p: 1.5, pb: 0 }}>
             <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
-              {Object.entries(TYPE_LABELS).map(([key, label]) => (
-                <Chip key={key} label={label} size="small"
+              {RELATION_TYPES.map(key => (
+                <Chip key={key} label={relationLabel(key)} size="small"
                   variant={activeTypes.has(key) ? 'filled' : 'outlined'}
                   sx={{
                     bgcolor: activeTypes.has(key) ? TYPE_COLORS[key] : undefined,
@@ -284,16 +278,16 @@ const KnowledgeGraphPage: React.FC = () => {
         <Paper elevation={3} sx={{ width: 340, p: 2.5, overflow: 'auto', flexShrink: 0 }}>
           {!selectedNode && !selectedEdge && (
             <>
-              <Typography variant="subtitle1" fontWeight={600}>点选节点或关系边</Typography>
+              <Typography variant="subtitle1" fontWeight={600}>{t('kg.selectHint')}</Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                点击论文节点查看详情和关联关系，点击边查看关系证据原文。
+                {t('kg.selectDescription')}
               </Typography>
             </>
           )}
 
           {selectedNode && (
             <>
-              <Typography variant="overline" color="text.secondary">选中论文</Typography>
+              <Typography variant="overline" color="text.secondary">{t('kg.selectedPaper')}</Typography>
               <Typography variant="subtitle2" fontWeight={600} sx={{ mt: 0.5 }}>
                 {selectedNode.label}
               </Typography>
@@ -304,8 +298,8 @@ const KnowledgeGraphPage: React.FC = () => {
               {/* Paper detail from API */}
               {paperDetail && (
                 <Stack spacing={0.5} sx={{ mt: 1.5 }}>
-                  {paperDetail.year && <Typography variant="caption">年份: {paperDetail.year}</Typography>}
-                  {paperDetail.journal && <Typography variant="caption">期刊: {paperDetail.journal}</Typography>}
+                  {paperDetail.year && <Typography variant="caption">{t('kg.year', { value: paperDetail.year })}</Typography>}
+                  {paperDetail.journal && <Typography variant="caption">{t('kg.journal', { value: paperDetail.journal })}</Typography>}
                   {paperDetail.doi && (
                     <Link href={`https://doi.org/${paperDetail.doi}`} target="_blank" variant="caption"
                       sx={{ display: 'flex', alignItems: 'center', gap: 0.3 }}>
@@ -314,16 +308,16 @@ const KnowledgeGraphPage: React.FC = () => {
                   )}
                   {paperDetail.authors && (
                     <Typography variant="caption">
-                      作者: {Array.isArray(paperDetail.authors) ? paperDetail.authors.slice(0, 3).join(', ') : paperDetail.authors}
+                      {t('kg.authors', { value: Array.isArray(paperDetail.authors) ? paperDetail.authors.slice(0, 3).join(', ') : paperDetail.authors })}
                     </Typography>
                   )}
                 </Stack>
               )}
 
               <Divider sx={{ my: 1.5 }} />
-              <Typography variant="caption" fontWeight={600}>操作</Typography>
+              <Typography variant="caption" fontWeight={600}>{t('kg.actions')}</Typography>
               <Box sx={{ mt: 0.5 }}>
-                <Chip icon={<ExpandMoreIcon />} label="展开一层关联" color="primary" size="small"
+                <Chip icon={<ExpandMoreIcon />} label={t('kg.expand')} color="primary" size="small"
                   onClick={() => expandNode(selectedNode.id)} />
               </Box>
             </>
@@ -331,8 +325,8 @@ const KnowledgeGraphPage: React.FC = () => {
 
           {selectedEdge && (
             <>
-              <Typography variant="overline" color="text.secondary">关系详情</Typography>
-              <Chip label={TYPE_LABELS[selectedEdge.type] || selectedEdge.type} size="small"
+              <Typography variant="overline" color="text.secondary">{t('kg.relationDetail')}</Typography>
+              <Chip label={relationLabel(selectedEdge.type)} size="small"
                 sx={{ mt: 1, bgcolor: TYPE_COLORS[selectedEdge.type] || '#999', color: '#fff' }} />
               <Typography variant="caption" display="block" sx={{ mt: 1 }}>
                 importance: {selectedEdge.importance?.toFixed(3)}
@@ -343,7 +337,7 @@ const KnowledgeGraphPage: React.FC = () => {
 
               {selectedEdge.evidence && (
                 <Paper variant="outlined" sx={{ mt: 2, p: 1.5, bgcolor: '#fafafa' }}>
-                  <Typography variant="caption" color="text.secondary" fontWeight={600}>证据原文</Typography>
+                  <Typography variant="caption" color="text.secondary" fontWeight={600}>{t('kg.evidence')}</Typography>
                   <Typography variant="body2" sx={{ mt: 0.5, fontSize: 12 }}>
                     {selectedEdge.evidence}
                   </Typography>

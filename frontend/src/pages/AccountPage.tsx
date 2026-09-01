@@ -7,6 +7,7 @@ import {
 import { AdminPanelSettings, DeleteOutline, OpenInNew, PhotoCamera, Security } from '@mui/icons-material'
 import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
+import { useLanguage } from '../context/LanguageContext'
 import UsernameField from '../components/UsernameField'
 import MyPapersList from '../components/MyPapersList'
 
@@ -32,12 +33,10 @@ interface AdminApplication {
   submitted_at: string
 }
 
-const roleLabel = { user: '用户', admin: '管理员', superadmin: '超级管理员' }
-const applicationLabel = { pending: '待审核', approved: '已通过', rejected: '已拒绝', withdrawn: '已撤回' }
-
 const AccountPage: React.FC = () => {
   const navigate = useNavigate()
   const { user, replaceUser, updateUsername, logout } = useAuth()
+  const { t } = useLanguage()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [applications, setApplications] = useState<AdminApplication[]>([])
   const [realName, setRealName] = useState('')
@@ -53,6 +52,17 @@ const AccountPage: React.FC = () => {
 
   const pendingApplication = useMemo(() => applications.find(item => item.status === 'pending'), [applications])
 
+  /**
+   * 错误消息映射：AuthContext 抛出的 Error.message 是机器键（如 'usernameUpdateFailed'），
+   * 此处映射为 `account.*` 字典文案（随语言切换）；api 层返回的后端原文原样显示。
+   */
+  const errorText = (error: unknown): string => {
+    const message = (error as Error).message
+    const key = `account.${message}`
+    const mapped = t(key)
+    return mapped === key ? message : mapped
+  }
+
   const load = async () => {
     const data = await api.get<Profile>('/api/account/profile')
     setProfile(data)
@@ -64,7 +74,7 @@ const AccountPage: React.FC = () => {
   }
 
   useEffect(() => {
-    void load().catch(error => setMessage({ severity: 'error', text: error.message })).finally(() => setInitialLoading(false))
+    void load().catch(error => setMessage({ severity: 'error', text: errorText(error) })).finally(() => setInitialLoading(false))
   }, [])
 
   const run = async (action: () => Promise<void>, success: string) => {
@@ -74,22 +84,22 @@ const AccountPage: React.FC = () => {
       await action()
       setMessage({ severity: 'success', text: success })
     } catch (error) {
-      setMessage({ severity: 'error', text: (error as Error).message })
+      setMessage({ severity: 'error', text: errorText(error) })
     } finally {
       setBusy(false)
     }
   }
 
   if (initialLoading) return <Box sx={{ minHeight: '55vh', display: 'grid', placeItems: 'center' }}><CircularProgress /></Box>
-  if (!profile || !user) return <Alert severity="error">{message?.text || '用户资料加载失败'}</Alert>
+  if (!profile || !user) return <Alert severity="error">{message?.text || t('account.profileLoadFailed')}</Alert>
 
   const saveProfile = () => {
-    if (realName && !profile.real_name && !window.confirm('真实姓名填写后会在公开主页展示，确认继续吗？')) return
+    if (realName && !profile.real_name && !window.confirm(t('account.realNameConfirm'))) return
     void run(async () => {
     const researchInterests = interests.split(/[，,]/).map(value => value.trim()).filter(Boolean)
     const updated = await api.patch<Profile>('/api/account/profile', { real_name: realName, affiliation, orcid, research_interests: researchInterests })
     setProfile(updated)
-    }, '个人资料已保存')
+    }, t('account.profileSaved'))
   }
 
   const uploadAvatar = (file?: File) => {
@@ -101,14 +111,14 @@ const AccountPage: React.FC = () => {
       const next = { ...profile, avatar_url: result.avatar_url }
       setProfile(next)
       replaceUser({ ...user, avatar_url: result.avatar_url })
-    }, '头像已更新')
+    }, t('account.avatarUpdated'))
   }
 
   return (
     <Box sx={{ maxWidth: 1040, mx: 'auto' }}>
       <Typography variant="overline" color="primary" fontWeight={700}>ACCOUNT</Typography>
-      <Typography variant="h3" fontWeight={800}>用户中心</Typography>
-      <Typography color="text.secondary" sx={{ mt: 1, mb: 3 }}>统一维护你的公开研究身份、账户安全和工作入口。</Typography>
+      <Typography variant="h3" fontWeight={800}>{t('account.title')}</Typography>
+      <Typography color="text.secondary" sx={{ mt: 1, mb: 3 }}>{t('account.subtitle')}</Typography>
       {message && <Alert severity={message.severity} onClose={() => setMessage(null)} sx={{ mb: 2 }}>{message.text}</Alert>}
 
       <Card variant="outlined" sx={{ mb: 3, borderRadius: 3 }}>
@@ -118,67 +128,67 @@ const AccountPage: React.FC = () => {
             <Box sx={{ flex: 1 }}>
               <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                 <Typography variant="h5" fontWeight={750}>{profile.username}</Typography>
-                <Chip size="small" label={roleLabel[profile.role]} color={profile.role === 'superadmin' ? 'error' : profile.role === 'admin' ? 'primary' : 'default'} />
+                <Chip size="small" label={t(`enums.role.${profile.role}`)} color={profile.role === 'superadmin' ? 'error' : profile.role === 'admin' ? 'primary' : 'default'} />
               </Stack>
-              <Typography color="text.secondary">{profile.email} · 邮箱已验证</Typography>
+              <Typography color="text.secondary">{profile.email} · {t('account.emailVerified')}</Typography>
               <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
-                <Button component="label" size="small" startIcon={<PhotoCamera />}>上传头像<input hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={event => uploadAvatar(event.target.files?.[0])} /></Button>
-                {profile.avatar_url && <Button color="error" size="small" startIcon={<DeleteOutline />} onClick={() => void run(async () => { await api.del('/api/account/avatar'); setProfile({ ...profile, avatar_url: null }); replaceUser({ ...user, avatar_url: null }) }, '头像已删除')}>删除</Button>}
-                <Button size="small" startIcon={<OpenInNew />} onClick={() => navigate(`/users/${profile.username}`)}>查看公开主页</Button>
+                <Button component="label" size="small" startIcon={<PhotoCamera />}>{t('account.uploadAvatar')}<input hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={event => uploadAvatar(event.target.files?.[0])} /></Button>
+                {profile.avatar_url && <Button color="error" size="small" startIcon={<DeleteOutline />} onClick={() => void run(async () => { await api.del('/api/account/avatar'); setProfile({ ...profile, avatar_url: null }); replaceUser({ ...user, avatar_url: null }) }, t('account.avatarDeleted'))}>{t('common.delete')}</Button>}
+                <Button size="small" startIcon={<OpenInNew />} onClick={() => navigate(`/users/${profile.username}`)}>{t('account.viewPublicProfile')}</Button>
               </Stack>
             </Box>
           </Stack>
           <Divider sx={{ my: 3 }} />
-          <Typography variant="h6" fontWeight={750} gutterBottom>个人资料</Typography>
-          <Alert severity="info" sx={{ mb: 2 }}>头像、用户名、真实姓名、所属机构、ORCID 和研究方向在填写后对所有访客公开；邮箱始终不公开。</Alert>
+          <Typography variant="h6" fontWeight={750} gutterBottom>{t('account.profileSection')}</Typography>
+          <Alert severity="info" sx={{ mb: 2 }}>{t('account.profilePrivacyHint')}</Alert>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
-            <TextField label="真实姓名" value={realName} onChange={event => setRealName(event.target.value)} helperText="可清空；每次变更都会留下审计记录" />
-            <TextField label="所属机构" value={affiliation} onChange={event => setAffiliation(event.target.value)} />
+            <TextField label={t('account.realName')} value={realName} onChange={event => setRealName(event.target.value)} helperText={t('account.realNameHelper')} />
+            <TextField label={t('account.affiliation')} value={affiliation} onChange={event => setAffiliation(event.target.value)} />
             <TextField label="ORCID" value={orcid} onChange={event => setOrcid(event.target.value)} placeholder="0000-0002-1825-0097" />
-            <TextField label="研究方向" value={interests} onChange={event => setInterests(event.target.value)} helperText="使用逗号分隔，最多 10 项，每项最多 30 字" />
+            <TextField label={t('account.researchInterests')} value={interests} onChange={event => setInterests(event.target.value)} helperText={t('account.interestsHelper')} />
           </Box>
-          <Button variant="contained" disabled={busy} onClick={saveProfile} sx={{ mt: 2 }}>保存资料</Button>
+          <Button variant="contained" disabled={busy} onClick={saveProfile} sx={{ mt: 2 }}>{t('account.saveProfile')}</Button>
         </CardContent>
       </Card>
 
       {profile.username_change_allowed && (
         <Card variant="outlined" sx={{ mb: 3, borderRadius: 3 }}><CardContent sx={{ p: 3 }}>
-          <Typography variant="h6" fontWeight={750}>设置正式用户名</Typography>
-          <Alert severity="warning" sx={{ my: 2 }}>用户名只能由你修改一次；提交后旧公开主页地址立即失效。</Alert>
+          <Typography variant="h6" fontWeight={750}>{t('account.setUsernameTitle')}</Typography>
+          <Alert severity="warning" sx={{ my: 2 }}>{t('account.usernameChangeWarning')}</Alert>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems="start">
             <Box sx={{ flex: 1, width: '100%' }}><UsernameField value={newUsername} onChange={setNewUsername} /></Box>
-            <Button variant="outlined" disabled={busy || !newUsername} onClick={() => void run(async () => { await updateUsername(newUsername); await load() }, '用户名已更新')}>确认修改</Button>
+            <Button variant="outlined" disabled={busy || !newUsername} onClick={() => void run(async () => { await updateUsername(newUsername); await load() }, t('account.usernameUpdated'))}>{t('account.confirmChange')}</Button>
           </Stack>
         </CardContent></Card>
       )}
 
       <Card variant="outlined" sx={{ mb: 3, borderRadius: 3 }}><CardContent sx={{ p: 3 }}>
-        <Typography variant="h6" fontWeight={750}>我的论文</Typography>
+        <Typography variant="h6" fontWeight={750}>{t('account.myPapers')}</Typography>
         <Typography color="text.secondary" variant="body2" sx={{ mt: 0.5 }}>
-          你提交过的论文长期保存在这里，点击任意一条可只读复查提交内容。
+          {t('account.myPapersHint')}
         </Typography>
         <MyPapersList />
       </CardContent></Card>
 
       <Card variant="outlined" sx={{ mb: 3, borderRadius: 3 }}><CardContent sx={{ p: 3 }}>
-        <Stack direction="row" spacing={1} alignItems="center"><Security color="primary" /><Typography variant="h6" fontWeight={750}>账户安全</Typography></Stack>
-        <Typography color="text.secondary" sx={{ my: 1.5 }}>修改成功后，其他设备和当前设备的旧登录状态都会失效。</Typography>
+        <Stack direction="row" spacing={1} alignItems="center"><Security color="primary" /><Typography variant="h6" fontWeight={750}>{t('account.securitySection')}</Typography></Stack>
+        <Typography color="text.secondary" sx={{ my: 1.5 }}>{t('account.securityHint')}</Typography>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-          <TextField type="password" label="当前密码" value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} />
-          <TextField type="password" label="新密码" value={newPassword} onChange={event => setNewPassword(event.target.value)} helperText="至少 10 位" />
-          <Button variant="outlined" disabled={busy || newPassword.length < 10} onClick={() => void run(async () => { await api.post('/api/account/change-password', { current_password: currentPassword, new_password: newPassword }); logout(); navigate('/news') }, '密码已修改，请重新登录')}>修改密码</Button>
+          <TextField type="password" label={t('account.currentPassword')} value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} />
+          <TextField type="password" label={t('account.newPassword')} value={newPassword} onChange={event => setNewPassword(event.target.value)} helperText={t('account.passwordMinHint')} />
+          <Button variant="outlined" disabled={busy || newPassword.length < 10} onClick={() => void run(async () => { await api.post('/api/account/change-password', { current_password: currentPassword, new_password: newPassword }); logout(); navigate('/news') }, t('account.passwordChanged'))}>{t('account.changePassword')}</Button>
         </Stack>
       </CardContent></Card>
 
       <Card variant="outlined" sx={{ borderRadius: 3 }}><CardContent sx={{ p: 3 }}>
-        <Stack direction="row" spacing={1} alignItems="center"><AdminPanelSettings color="primary" /><Typography variant="h6" fontWeight={750}>工作入口</Typography></Stack>
-        {profile.role === 'admin' && <Button variant="contained" sx={{ mt: 2 }} onClick={() => navigate('/admin')}>进入管理员工作台</Button>}
-        {profile.role === 'superadmin' && <Button variant="contained" color="error" sx={{ mt: 2 }} onClick={() => navigate('/superadmin')}>进入超级管理员工作台</Button>}
+        <Stack direction="row" spacing={1} alignItems="center"><AdminPanelSettings color="primary" /><Typography variant="h6" fontWeight={750}>{t('account.workSection')}</Typography></Stack>
+        {profile.role === 'admin' && <Button variant="contained" sx={{ mt: 2 }} onClick={() => navigate('/admin')}>{t('account.enterAdmin')}</Button>}
+        {profile.role === 'superadmin' && <Button variant="contained" color="error" sx={{ mt: 2 }} onClick={() => navigate('/superadmin')}>{t('account.enterSuperAdmin')}</Button>}
         {profile.role === 'user' && (
           <Box sx={{ mt: 2 }}>
-            <Typography color="text.secondary">管理员可参与科研内容审核。申请无需填写理由，但提交前必须完善真实姓名和所属机构。</Typography>
-            <Button variant="contained" sx={{ mt: 1.5 }} disabled={busy || Boolean(pendingApplication)} onClick={() => void run(async () => { await api.post('/api/account/admin-applications'); await load() }, '管理员申请已提交')}>申请成为管理员</Button>
-            {applications.length > 0 && <Stack spacing={1} sx={{ mt: 2 }}>{applications.map(item => <Box key={item.id} sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 2 }}><Stack direction="row" justifyContent="space-between" alignItems="center"><Box><Chip size="small" label={applicationLabel[item.status]} /><Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>{new Date(item.submitted_at).toLocaleString()}</Typography>{item.rejection_reason && <Typography color="error" variant="body2" sx={{ mt: 0.5 }}>原因：{item.rejection_reason}</Typography>}</Box>{item.status === 'pending' && <Button size="small" color="warning" onClick={() => void run(async () => { await api.post(`/api/account/admin-applications/${item.id}/withdraw`); await load() }, '申请已撤回')}>撤回</Button>}</Stack></Box>)}</Stack>}
+            <Typography color="text.secondary">{t('account.adminApplyHint')}</Typography>
+            <Button variant="contained" sx={{ mt: 1.5 }} disabled={busy || Boolean(pendingApplication)} onClick={() => void run(async () => { await api.post('/api/account/admin-applications'); await load() }, t('account.adminApplied'))}>{t('account.applyAdmin')}</Button>
+            {applications.length > 0 && <Stack spacing={1} sx={{ mt: 2 }}>{applications.map(item => <Box key={item.id} sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 2 }}><Stack direction="row" justifyContent="space-between" alignItems="center"><Box><Chip size="small" label={t(`account.applicationStatus.${item.status}`)} /><Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>{new Date(item.submitted_at).toLocaleString()}</Typography>{item.rejection_reason && <Typography color="error" variant="body2" sx={{ mt: 0.5 }}>{t('account.rejectionReason', { reason: item.rejection_reason || '' })}</Typography>}</Box>{item.status === 'pending' && <Button size="small" color="warning" onClick={() => void run(async () => { await api.post(`/api/account/admin-applications/${item.id}/withdraw`); await load() }, t('account.applicationWithdrawn'))}>{t('account.withdraw')}</Button>}</Stack></Box>)}</Stack>}
           </Box>
         )}
       </CardContent></Card>

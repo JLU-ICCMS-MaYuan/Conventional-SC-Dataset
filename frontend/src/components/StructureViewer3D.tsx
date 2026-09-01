@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Box, Typography } from '@mui/material'
+import { useLanguage } from '../context/LanguageContext'
 
 /* ── 3D 晶体结构查看器（3Dmol.js，动态加载避免主包膨胀）── */
 
@@ -12,6 +13,7 @@ interface Props {
 interface LegendItem { el: string; color: string }
 
 const StructureViewer3D: React.FC<Props> = ({ data, format = 'cif', height = 320 }) => {
+  const { t } = useLanguage()
   const ref = useRef<HTMLDivElement>(null)
   const [error, setError] = useState('')
   const [legend, setLegend] = useState<LegendItem[]>([])
@@ -49,17 +51,17 @@ const StructureViewer3D: React.FC<Props> = ({ data, format = 'cif', height = 320
         color: '#' + Number(jmol[el] ?? 0x909090).toString(16).padStart(6, '0'),
       })))
     }).catch((e: any) => {
-      if (!cancelled) setError(e?.message || '3D 渲染失败')
+      if (!cancelled) setError(e?.message || t('paperDetail.renderFailed'))
     })
     return () => {
       cancelled = true
       resizeObserver?.disconnect()
       if (viewer) { try { viewer.clear() } catch { /* viewer 已销毁 */ } }
     }
-  }, [data, format])
+  }, [data, format, t])
 
   if (error) {
-    return <Typography variant="body2" color="error">3D 结构渲染失败：{error}</Typography>
+    return <Typography variant="body2" color="error">{t('paperDetail.renderFailedDetail', { error })}</Typography>
   }
   return (
     <Box sx={{ minWidth: 0 }}>

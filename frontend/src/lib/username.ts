@@ -8,13 +8,20 @@ export interface UsernameAvailability {
   available: boolean
   reason?: string
 }
-export const usernameValidationError = (username: string): string => {
+
+/**
+ * 返回机器键而非文案：格式错误、sc_ 前缀保留、系统保留名分别对应
+ * 'format' | 'sc_prefix' | 'reserved'，合法返回 ''。
+ * 展示文案由 UsernameField 按 t('admin.usernameError.<key>') 映射。
+ */
+export type UsernameValidationErrorKey = '' | 'format' | 'sc_prefix' | 'reserved'
+export const usernameValidationError = (username: string): UsernameValidationErrorKey => {
   if (!USERNAME_PATTERN.test(username)) {
-    return '用户名须为 3–32 位，以字母开头且只包含字母、数字和下划线'
+    return 'format'
   }
   const normalized = username.toLowerCase()
-  if (normalized.startsWith('sc_')) return 'sc_ 前缀由系统保留'
-  if (RESERVED_USERNAMES.has(normalized)) return '该用户名由系统保留'
+  if (normalized.startsWith('sc_')) return 'sc_prefix'
+  if (RESERVED_USERNAMES.has(normalized)) return 'reserved'
   return ''
 }
 
@@ -22,6 +29,6 @@ export const checkUsernameAvailability = async (username: string): Promise<Usern
   const localError = usernameValidationError(username)
   if (localError) return { available: false, reason: localError }
   const response = await fetch(`/api/auth/username-availability?username=${encodeURIComponent(username)}`)
-  if (!response.ok) throw new Error('用户名检查失败')
+  if (!response.ok) throw new Error('checkFailed')
   return response.json()
 }

@@ -10,7 +10,8 @@ import {
 import { Delete, Add } from '@mui/icons-material'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
-import { ClassificationTerm, loadClassificationCatalogs } from '../lib/classifications'
+import { useLanguage } from '../context/LanguageContext'
+import { ClassificationTerm, familyName, loadClassificationCatalogs } from '../lib/classifications'
 
 // ── Types ──
 
@@ -55,6 +56,7 @@ const emptyGroup: LocalGroup = { name: '', description: '', is_public: false, it
 
 const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) => {
   const { user } = useAuth()
+  const { t, lang } = useLanguage()
   const isAdmin = user?.role === 'admin' || user?.role === 'superadmin'
 
   // ── Group state ──
@@ -84,7 +86,8 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
 
   // ── 材料家族目录：分类选项随目录变化，含用户自建家族 ──
   const [families, setFamilies] = useState<ClassificationTerm[]>([])
-  const familyNames = new Map(families.map(family => [family.id, family.name]))
+  // 家族显示名按语言取：目录项双语（自建家族英文缺失时回退中文名）
+  const familyNames = new Map(families.map(family => [family.id, familyName(family, lang)]))
 
   useEffect(() => {
     if (!open) return
@@ -162,7 +165,7 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
           })),
         })
       })
-      .catch(() => setSnackbar({ message: '加载失败', severity: 'error' }))
+      .catch(() => setSnackbar({ message: t('common.loadFailed'), severity: 'error' }))
       .finally(() => setLoading(false))
     } else {
       setGroup(emptyGroup)
@@ -186,7 +189,7 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
       const data = await api.get<any[]>(`/api/chart-groups/search?q=${encodeURIComponent(kpSearch)}`)
       setKpResults(data || [])
     } catch (e: any) {
-      setSnackbar({ message: e.message || '搜索失败', severity: 'error' })
+      setSnackbar({ message: e.message || t('share.searchFailed'), severity: 'error' })
     } finally {
       setKpLoading(false)
     }
@@ -196,7 +199,7 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
   const addKpToGroup = (kp: any) => {
     // Prevent duplicate
     if (group.items.some(it => it.source === 'kp' && it.key_property_id === kp.id)) {
-      setSnackbar({ message: '该数据点已在组合中', severity: 'error' })
+      setSnackbar({ message: t('share.duplicatePoint'), severity: 'error' })
       return
     }
     // 压强与分类属材料状态，不在物性上；物性表没有这两列。
@@ -259,7 +262,7 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
   // ── Save ──
   const handleSave = async () => {
     if (!group.name.trim()) {
-      setSnackbar({ message: '请输入组合名称', severity: 'error' })
+      setSnackbar({ message: t('share.groupNameRequired'), severity: 'error' })
       return
     }
     setSaving(true)
@@ -305,7 +308,7 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
       onSaved()
       onClose()
     } catch (e: any) {
-      setSnackbar({ message: e.message || '保存失败', severity: 'error' })
+      setSnackbar({ message: e.message || t('common.saveFailed'), severity: 'error' })
     } finally {
       setSaving(false)
     }
@@ -320,9 +323,9 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
 
   // 组合点的分类值存材料家族 id（字符串形式，沿用 custom_type 列）。
   // 目录是动态的，标签必须查目录，不能硬编码。
-  const typeLabel = (t: string | null): string => {
-    if (!t) return '-'
-    return familyNames.get(Number(t)) ?? t
+  const typeLabel = (value: string | null): string => {
+    if (!value) return '-'
+    return familyNames.get(Number(value)) ?? value
   }
 
   // ═══════════════════════════════════════════════════════
@@ -331,7 +334,7 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle sx={{ fontWeight: 600, fontSize: '1.15rem' }}>
-        {group.id ? '编辑组合' : '新建组合'}
+        {group.id ? t('share.editGroup') : t('share.newGroup')}
       </DialogTitle>
 
       <DialogContent dividers>
@@ -344,7 +347,7 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
             {/* ── Basic info ── */}
             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'flex-start' }}>
               <TextField
-                label="名称"
+                label={t('share.groupName')}
                 size="small"
                 required
                 value={group.name}
@@ -352,7 +355,7 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
                 sx={{ minWidth: 240, flex: 1 }}
               />
               <TextField
-                label="描述"
+                label={t('share.groupDescription')}
                 size="small"
                 value={group.description}
                 onChange={e => setGroup(prev => ({ ...prev, description: e.target.value }))}
@@ -369,29 +372,29 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
                     size="small"
                   />
                 }
-                label={<Typography variant="body2" color="text.secondary">公开（所有用户可见）</Typography>}
+                label={<Typography variant="body2" color="text.secondary">{t('share.publicVisible')}</Typography>}
               />
             )}
 
             {/* ── Data point table ── */}
             <Box>
               <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-                数据点 ({group.items.length})
+                {t('share.dataPointsHeading', { count: group.items.length })}
               </Typography>
               {group.items.length === 0 ? (
                 <Typography variant="body2" color="text.disabled" sx={{ py: 1 }}>
-                  暂无数据点，请从下方添加
+                  {t('share.noDataPoints')}
                 </Typography>
               ) : (
                 <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 280 }}>
                   <Table size="small" stickyHeader>
                     <TableHead>
                       <TableRow>
-                        <TableCell sx={{ fontWeight: 600 }}>材料</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>{t('share.colMaterial')}</TableCell>
                         <TableCell sx={{ fontWeight: 600 }}>Tc (K)</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>压力 (GPa)</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>材料家族</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>来源</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>{t('share.pressureGpa')}</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>{t('share.materialFamily')}</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>{t('share.colSource')}</TableCell>
                         <TableCell sx={{ fontWeight: 600, width: 48 }} />
                       </TableRow>
                     </TableHead>
@@ -411,7 +414,7 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
                                 px: 1, py: 0.25, borderRadius: 1,
                               }}
                             >
-                              {it.source === 'kp' ? '数据库' : '自定义'}
+                              {it.source === 'kp' ? t('share.sourceDatabase') : t('share.sourceCustom')}
                             </Typography>
                           </TableCell>
                           <TableCell>
@@ -430,12 +433,12 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
             {/* ── Search from database ── */}
             <Paper variant="outlined" sx={{ p: 2 }}>
               <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-                从数据库添加
+                {t('share.addFromDatabase')}
               </Typography>
               <Box sx={{ display: 'flex', gap: 1 }}>
                 <TextField
                   size="small"
-                  placeholder="搜索材料名称..."
+                  placeholder={t('share.searchMaterialPlaceholder')}
                   value={kpSearch}
                   onChange={e => setKpSearch(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') handleSearchAndAdd() }}
@@ -448,7 +451,7 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
                   disabled={kpLoading || !kpSearch.trim()}
                 >
                   {kpLoading ? <CircularProgress size={16} sx={{ mr: 0.5 }} /> : null}
-                  搜索
+                  {t('common.search')}
                 </Button>
               </Box>
 
@@ -470,7 +473,7 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
                         <Typography variant="body2" fontWeight={600}>{kp.material}</Typography>
                         <Typography variant="caption" color="text.secondary">
                           Tc: {formatValue(kp.value_max ?? kp.value_number)}K · P: {formatValue(kp.material_state?.pressure_value_gpa)}GPa
-                          {kp.material_state?.material_family?.name ? ` · ${kp.material_state.material_family.name}` : ''}
+                          {kp.material_state?.material_family ? ` · ${familyName(kp.material_state.material_family, lang)}` : ''}
                         </Typography>
                       </Box>
                       <Add fontSize="small" color="action" />
@@ -483,11 +486,11 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
             {/* ── Add custom point ── */}
             <Paper variant="outlined" sx={{ p: 2 }}>
               <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-                添加自定义点
+                {t('share.addCustomPointTitle')}
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <TextField
-                  label="材料名"
+                  label={t('share.materialNameLabel')}
                   size="small"
                   value={customLabel}
                   onChange={e => setCustomLabel(e.target.value)}
@@ -503,7 +506,7 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
                   sx={{ width: 120 }}
                 />
                 <TextField
-                  label="压力 (GPa)"
+                  label={t('share.pressureGpa')}
                   size="small"
                   type="number"
                   value={customPressure}
@@ -512,25 +515,25 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
                   sx={{ width: 130 }}
                 />
                 <FormControl size="small" sx={{ minWidth: 160 }}>
-                  <InputLabel>材料家族</InputLabel>
-                  <Select value={customType} label="材料家族"
+                  <InputLabel>{t('share.materialFamily')}</InputLabel>
+                  <Select value={customType} label={t('share.materialFamily')}
                     onChange={e => setCustomType(e.target.value)}>
                     <MenuItem value="">--</MenuItem>
                     {families.map(family => (
-                      <MenuItem key={family.id} value={String(family.id)}>{family.name}</MenuItem>
+                      <MenuItem key={family.id} value={String(family.id)}>{familyName(family, lang)}</MenuItem>
                     ))}
                   </Select>
                 </FormControl>
                 <FormControl size="small" sx={{ minWidth: 100 }}>
-                  <InputLabel>实验/理论</InputLabel>
-                  <Select value={customArticleType} label="实验/理论"
+                  <InputLabel>{t('share.experimentalTheoretical')}</InputLabel>
+                  <Select value={customArticleType} label={t('share.experimentalTheoretical')}
                     onChange={e => setCustomArticleType(e.target.value)}>
                     <MenuItem value="">--</MenuItem>
-                    <MenuItem value="e">实验</MenuItem>
-                    <MenuItem value="t">理论</MenuItem>
+                    <MenuItem value="e">{t('share.typeExperimental')}</MenuItem>
+                    <MenuItem value="t">{t('share.typeTheoretical')}</MenuItem>
                   </Select>
                 </FormControl>
-                <TextField label="年份" size="small" type="number"
+                <TextField label={t('share.year')} size="small" type="number"
                   value={customYear} onChange={e => setCustomYear(e.target.value)}
                   inputProps={{ min: 1900, max: 2099 }}
                   sx={{ width: 100 }} />
@@ -542,7 +545,7 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
                   disabled={!customLabel.trim()}
                   sx={{ height: 40 }}
                 >
-                  添加
+                  {t('common.add')}
                 </Button>
               </Box>
             </Paper>
@@ -550,12 +553,12 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
           {/* ── Import from group ── */}
           <Paper variant="outlined" sx={{ p: 2 }}>
             <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-              从组合导入
+              {t('share.importFromGroupTitle')}
             </Typography>
             <Box sx={{ display: 'flex', gap: 1 }}>
               <Button variant="outlined" size="small" startIcon={<Add />}
                 onClick={() => { loadAvailableGroups(); setImportGroupOpen(!importGroupOpen); }}>
-                选择组合
+                {t('share.selectGroup')}
               </Button>
             </Box>
             {importGroupOpen && availableGroups.length > 0 && (
@@ -564,15 +567,15 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
                   <Paper key={g.id} variant="outlined" sx={{ p: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', '&:hover': { bgcolor: 'action.hover' } }}>
                     <Box>
                       <Typography variant="body2" fontWeight={600} noWrap>{g.name}</Typography>
-                      <Typography variant="caption" color="text.secondary">{g.item_count || (g.items?.length || 0)} 个数据点</Typography>
+                      <Typography variant="caption" color="text.secondary">{t('share.dataPointsCount', { count: g.item_count || (g.items?.length || 0) })}</Typography>
                     </Box>
-                    <Button size="small" onClick={() => importFromGroup(g)}>导入</Button>
+                    <Button size="small" onClick={() => importFromGroup(g)}>{t('share.importAction')}</Button>
                   </Paper>
                 ))}
               </Box>
             )}
             {importGroupOpen && availableGroups.length === 0 && (
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>没有可导入的组合</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>{t('share.noImportableGroups')}</Typography>
             )}
           </Paper>
         </Box>
@@ -580,14 +583,14 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
       </DialogContent>
 
       <DialogActions sx={{ px: 3, py: 1.5 }}>
-        <Button onClick={onClose} disabled={saving}>取消</Button>
+        <Button onClick={onClose} disabled={saving}>{t('common.cancel')}</Button>
         <Button
           variant="contained"
           onClick={handleSave}
           disabled={saving || loading}
           startIcon={saving ? <CircularProgress size={16} color="inherit" /> : undefined}
         >
-          保存
+          {t('common.save')}
         </Button>
       </DialogActions>
 

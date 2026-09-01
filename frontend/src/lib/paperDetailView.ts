@@ -11,7 +11,15 @@
  * 读 `key_properties[].structure_text` 更是恒空——该字段在 Go 侧标记 `gorm:"-"`，
  * 从不落库，详情接口也不输出。Issue #59 已在详情页修正过一次，但探索页与社区页
  * 各自留了一份旧实现，本模块把三处收敛为同一来源。
+ *
+ * 展示标签（Tc 判定方法、λ 名称）支持按语言解析：`collectPropertyRows(paper, t?)`
+ * 的第二个参数传入 `useLanguage().t`；缺省时回退中文字典，保证旧调用方
+ * （如 share.tsx，由 i18n 转换任务组负责接入）行为不变。
  */
+import { dictionaries } from '../i18n'
+
+/** 文案解析函数，与 useLanguage 返回的 t 签名对齐。 */
+export type TranslateFn = (key: string) => string
 
 /** 关键物性表的一行，来源已归一，展示侧不需要再判断字段出处。 */
 export interface PaperPropertyRow {
@@ -70,23 +78,28 @@ const tcValueText = (result: any): string => {
   return valueWithUnit(result?.value_raw, result?.unit_raw)
 }
 
-const TC_METHOD_LABELS: Record<string, string> = {
-  experimental: '实验测量',
-  resistivity: '电阻法',
-  magnetization: '磁化法',
-  specific_heat: '比热法',
-  calculated: '理论计算',
-  allen_dynes: 'Allen-Dynes',
-  mcmillan: 'McMillan',
-  eliashberg: 'Eliashberg',
+/**
+ * Tc 判定方法的显示标签。
+ *
+ * 实验测量方法（experimental、resistivity 等）查 paperDetail.tcMethods 字典；
+ * Allen-Dynes / McMillan / Eliashberg 等专有方法名两种语言下均保留原文。
+ * 传入 t 时按当前语言解析，缺省时回退中文字典，保证旧调用方行为不变。
+ */
+const tcMethodLabel = (method: string, t?: TranslateFn): string => {
+  const key = `paperDetail.tcMethods.${method}`
+  const translated = t
+    ? t(key)
+    : (dictionaries.zh.paperDetail.tcMethods as Record<string, string>)[method]
+  // t 在两侧字典都缺键时返回键名本身，此时回退方法枚举原文。
+  return translated && translated !== key ? translated : method
 }
 
 /** Tc 的判定方法作为备注，自定义方法优先于枚举值。 */
-const tcNote = (result: any): string => {
+const tcNote = (result: any, t?: TranslateFn): string => {
   const method = textOrNull(result?.tc_method_custom)
-    ?? (textOrNull(result?.tc_method) ? (TC_METHOD_LABELS[result.tc_method] || result.tc_method) : null)
+    ?? (textOrNull(result?.tc_method) ? tcMethodLabel(result.tc_method, t) : null)
   const uncertainty = result?.uncertainty_k != null ? `± ${result.uncertainty_k} K` : null
-  return [method, uncertainty].filter(Boolean).join('；') || '-'
+  return [method, uncertainty].filter(Boolean).join('; ') || '-'
 }
 
 /** 普通物性的数值：区间优先，其次解析值，最后原文。 */
@@ -105,8 +118,11 @@ const propertyValueText = (property: any): string => {
  * 顺序固定为 Tc → 计算参数 → 普通物性：Tc 是超导论文的核心结论，应排在最前。
  * 计算参数中数值全为 NULL 的记录不产生行——它们对读者没有信息量，但后端仍然
  * 返回（读取侧不擅自筛选，见 `calculationContextsToDict` 注释）。
+ *
+ * `t` 可选：传入 `useLanguage().t` 时展示标签按当前语言解析（如 Tc 判定方法、
+ * λ 名称）；缺省回退中文字典，旧调用方无需改动即可保持原行为。
  */
-export function collectPropertyRows(paper: any): PaperPropertyRow[] {
+export function collectPropertyRows(paper: any, t?: TranslateFn): PaperPropertyRow[] {
   const rows: PaperPropertyRow[] = []
   const states: any[] = Array.isArray(paper?.material_states) ? paper.material_states : []
 
@@ -121,13 +137,14 @@ export function collectPropertyRows(paper: any): PaperPropertyRow[] {
         label: 'Tc',
         value: tcValueText(result),
         condition,
-        note: tcNote(result),
+        note: tcNote(result, t),
       })
     }
 
     for (const context of (Array.isArray(state?.calculation_contexts) ? state.calculation_contexts : [])) {
+      const epcLabel = t ? t('paperDetail.epcLambda') : dictionaries.zh.paperDetail.epcLambda
       const params: Array<[string, unknown, string]> = [
-        ['λ (电声耦合)', context?.lambda_ep, ''],
+        [epcLabel, context?.lambda_ep, ''],
         ['ωlog', context?.omega_log_k, 'K'],
         ['μ*', context?.mu_star, ''],
       ]

@@ -57,9 +57,48 @@ function clearAuth() {
   localStorage.removeItem(USER_KEY)
 }
 
+/**
+ * 认证错误码机制。
+ *
+ * AuthContext 是模块（非组件渲染路径），不能使用 useLanguage。因此本文件抛出的
+ * Error.message 一律是稳定的机器键（如 'loginFailed'、'invalidCredentials'），
+ * 由消费组件（AuthDialog / AccountPage）在渲染时用 `t('account.' + message)`
+ * 映射为界面文案，从而随语言切换。
+ *
+ * 后端返回的中文 detail 是服务端数据（backend/api/auth_routes.py 的常量），
+ * 此处按已知常量归类为机器键；未知名回退到调用方传入的 fallback 机器键，
+ * 保证前端永远不直接展示后端原文。
+ */
+const SERVER_DETAIL_TO_CODE: Record<string, string> = {
+  '邮箱或密码错误': 'invalidCredentials',
+  '邮箱未验证，请先完成邮箱验证': 'emailNotVerified',
+  '您的管理员申请尚未通过审批，请耐心等待': 'approvalPending',
+  '该邮箱已注册': 'emailRegistered',
+  '该邮箱已占用其他用户名': 'emailTaken',
+  '用户名已被占用': 'usernameTaken',
+  '邮箱或用户名已被占用': 'emailOrUsernameTaken',
+  '发送验证码失败，请稍后重试': 'sendCodeFailed',
+  '用户不存在，请先注册': 'userNotFound',
+  '邮箱已验证，请直接登录': 'alreadyVerified',
+  '验证码错误': 'invalidCode',
+  '验证码已过期，请重新获取': 'codeExpired',
+  '登录已失效': 'sessionExpired',
+}
+
 async function responseError(res: Response, fallback: string): Promise<Error> {
   const data = await res.json().catch(() => ({}))
-  return new Error(data.error || data.detail || fallback)
+  const detail = data.error || data.detail
+  const code = typeof detail === 'string' ? SERVER_DETAIL_TO_CODE[detail] : undefined
+  return new Error(code || fallback)
+}
+
+/** 包装 fetch：网络层失败（TypeError）统一归类为机器键，避免浏览器英文原文透出。 */
+async function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init)
+  } catch {
+    throw new Error('networkError')
+  }
 }
 
 export function getStoredToken(): string | null {
@@ -82,9 +121,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else {
           setToken(savedToken)
           setUser(parsed)
-          void fetch('/api/auth/me', { headers: { Authorization: `Bearer ${savedToken}` } })
+          void authFetch('/api/auth/me', { headers: { Authorization: `Bearer ${savedToken}` } })
             .then(async response => {
-              if (!response.ok) throw new Error('登录状态已失效')
+              if (!response.ok) throw new Error('sessionExpired')
               const data = await response.json()
               saveAuth(savedToken, data.user)
               setUser(data.user)
@@ -103,13 +142,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [])
 
   const login = useCallback(async (email: string, password: string) => {
-    const res = await fetch('/api/auth/login', {
+    const res = await authFetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     })
     if (!res.ok) {
-      throw await responseError(res, '登录失败')
+      throw await responseError(res, 'loginFailed')
     }
     const data = await res.json()
     const loggedUser: User = data.user
@@ -120,13 +159,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [])
 
   const register = useCallback(async (email: string, password: string, username: string, realName: string) => {
-    const res = await fetch('/api/auth/register', {
+    const res = await authFetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password, username, real_name: realName || undefined }),
     })
     if (!res.ok) {
-      throw await responseError(res, '注册失败')
+      throw await responseError(res, 'registerFailed')
     }
     const data = await res.json()
     return { requiresEmailVerification: Boolean(data.requires_email_verification) }
@@ -140,25 +179,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateUsername = useCallback(async (username: string) => {
     const authToken = token || getStoredToken()
-    const res = await fetch('/api/auth/username', {
+    const res = await authFetch('/api/auth/username', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
       body: JSON.stringify({ username }),
     })
-    if (!res.ok) throw await responseError(res, '用户名修改失败')
+    if (!res.ok) throw await responseError(res, 'usernameUpdateFailed')
     const data = await res.json()
     const updatedUser: User = data.user
     replaceUser(updatedUser)
   }, [replaceUser, token])
 
   const verifyEmail = useCallback(async (email: string, code: string) => {
-    const res = await fetch('/api/auth/verify-email', {
+    const res = await authFetch('/api/auth/verify-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, code }),
     })
     if (!res.ok) {
-      throw await responseError(res, '验证失败')
+      throw await responseError(res, 'verifyFailed')
     }
     const data = await res.json()
     saveAuth(data.access_token, data.user)
@@ -167,12 +206,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [])
 
   const resendVerification = useCallback(async (email: string) => {
-    const res = await fetch('/api/auth/resend-verification', {
+    const res = await authFetch('/api/auth/resend-verification', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email }),
     })
-    if (!res.ok) throw await responseError(res, '验证码发送失败')
+    if (!res.ok) throw await responseError(res, 'resendFailed')
   }, [])
 
   const logout = useCallback(() => {

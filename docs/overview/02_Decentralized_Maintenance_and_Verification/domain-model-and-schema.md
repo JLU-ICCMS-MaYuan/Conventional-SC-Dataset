@@ -80,6 +80,10 @@ fresh 目标 Schema 已落实以下边界：
 
 这些约束已经在隔离 fresh MySQL 验证，但上传、重分块、Qdrant 和公开查询业务流程尚未切换。
 
+## 论文叙述字段的语言约定
+
+六个 LLM 叙述字段（`summary`、`keywords_tags`、`methodology`、`key_finding`、`research_motivation`、`knowledge_graph_title`）的事实来源是英文论文原文，因此内容语言统一为英文，不做双语存储（不存在 `*_en` 列），展示也不随界面语言变化（[Issue #74](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/74)）。界面语言（简体中文/英文）只作用于前端文案与固定枚举标签，与叙述字段内容无关。分类目录项（`material_families`、`structure_families`）则是真正的双语实体：seed 条目齐备 `name_zh` 与 `name_en`，用户自建条目只有中文名，英文界面缺 `name_en` 时回退中文名。
+
 ## 约束
 
 - 当前 Docker 部署要求 `DATABASE_URL` 指向 MySQL；Python 仍保留 SQLite fallback 逻辑，但 Go 服务要求可解析的 MySQL DSN。

@@ -9,6 +9,7 @@ import {
   Visibility, VisibilityOff, Close, Login as LoginIcon,
 } from '@mui/icons-material'
 import { useAuth } from '../context/AuthContext'
+import { useLanguage } from '../context/LanguageContext'
 import UsernameField from './UsernameField'
 
 type Step = 'form' | 'verify' | 'done'
@@ -20,6 +21,7 @@ interface Props {
 
 const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
   const { login, register, verifyEmail, resendVerification } = useAuth()
+  const { t } = useLanguage()
   const navigate = useNavigate()
 
   // tab
@@ -68,21 +70,32 @@ const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
     onClose()
   }
 
+  /**
+   * 错误消息映射：AuthContext 抛出的 Error.message 是机器键（如 'loginFailed'），
+   * 此处映射为 `account.*` 字典文案（随语言切换）；非机器键（如 api 层原文）原样显示。
+   */
+  const errorText = (error: unknown): string => {
+    const message = (error as Error).message
+    const key = `account.${message}`
+    const mapped = t(key)
+    return mapped === key ? message : mapped
+  }
+
   // ── Login ─────────────────────────────────────────
   const handleLogin = async () => {
     setError('')
-    if (!loginEmail || !loginPassword) { setError('请填写邮箱和密码'); return }
+    if (!loginEmail || !loginPassword) { setError(t('account.fillEmailPassword')); return }
     setLoading(true)
     try {
       const result = await login(loginEmail, loginPassword)
       if (result.needApproval) {
-        setDoneMessage('登录失败：您的管理员申请尚未通过审批')
+        setDoneMessage(t('account.loginApprovalPending'))
         setStep('done')
       } else {
         handleClose()
       }
     } catch (e: unknown) {
-      setError((e as Error).message || '登录失败')
+      setError(errorText(e) || t('account.loginFailed'))
     } finally {
       setLoading(false)
     }
@@ -91,8 +104,8 @@ const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
   // ── Register → verify ─────────────────────────────
   const handleRegister = async () => {
     setError('')
-    if (!regEmail || !regPassword || !regUsername) { setError('请填写邮箱、密码和用户名'); return }
-    if (regPassword.length < 10) { setError('密码至少 10 位'); return }
+    if (!regEmail || !regPassword || !regUsername) { setError(t('account.fillRegisterFields')); return }
+    if (regPassword.length < 10) { setError(t('account.passwordTooShort')); return }
     setLoading(true)
     try {
       const result = await register(regEmail, regPassword, regUsername, regRealName)
@@ -105,7 +118,7 @@ const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
         navigate('/account')
       }
     } catch (e: unknown) {
-      setError((e as Error).message || '注册失败')
+      setError(errorText(e) || t('account.registerFailed'))
     } finally {
       setLoading(false)
     }
@@ -113,14 +126,14 @@ const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
 
   const handleVerify = async () => {
     setError('')
-    if (!verifyCode) { setError('请输入验证码'); return }
+    if (!verifyCode) { setError(t('account.enterCode')); return }
     setLoading(true)
     try {
       await verifyEmail(regEmail, verifyCode)
       handleClose()
       navigate('/account')
     } catch (e: unknown) {
-      setError((e as Error).message || '验证失败')
+      setError(errorText(e) || t('account.verifyFailed'))
     } finally {
       setLoading(false)
     }
@@ -133,11 +146,11 @@ const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
     <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}
          onSubmit={e => { e.preventDefault(); handleLogin() }}>
       <TextField
-        label="邮箱" type="email" autoFocus fullWidth size="small"
+        label={t('account.email')} type="email" autoFocus fullWidth size="small"
         value={loginEmail} onChange={e => setLoginEmail(e.target.value)}
       />
       <TextField
-        label="密码" type={showLoginPw ? 'text' : 'password'} fullWidth size="small"
+        label={t('account.password')} type={showLoginPw ? 'text' : 'password'} fullWidth size="small"
         value={loginPassword} onChange={e => setLoginPassword(e.target.value)}
         InputProps={{
           endAdornment: (
@@ -154,7 +167,7 @@ const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
         variant="contained" fullWidth type="submit" disabled={loading}
         startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <LoginIcon />}
       >
-        登录
+        {t('nav.login')}
       </Button>
     </Box>
   )
@@ -164,17 +177,17 @@ const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
          onSubmit={e => { e.preventDefault(); handleRegister() }}>
       <UsernameField value={regUsername} onChange={setRegUsername} autoFocus />
       <TextField
-        label="真实姓名（选填，填写后公开）" fullWidth size="small"
+        label={t('account.realNameOptional')} fullWidth size="small"
         value={regRealName} onChange={e => setRegRealName(e.target.value)}
       />
       <TextField
-        label="邮箱" type="email" fullWidth size="small"
+        label={t('account.email')} type="email" fullWidth size="small"
         value={regEmail} onChange={e => setRegEmail(e.target.value)}
       />
       <TextField
-        label="密码" type={showRegPw ? 'text' : 'password'} fullWidth size="small"
+        label={t('account.password')} type={showRegPw ? 'text' : 'password'} fullWidth size="small"
         value={regPassword} onChange={e => setRegPassword(e.target.value)}
-        helperText="至少 10 位"
+        helperText={t('account.passwordMinHint')}
         InputProps={{
           endAdornment: (
             <InputAdornment position="end">
@@ -190,7 +203,7 @@ const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
         variant="outlined" fullWidth type="submit" disabled={loading}
         startIcon={loading ? <CircularProgress size={18} color="inherit" /> : undefined}
       >
-        注册
+        {t('account.register')}
       </Button>
     </Box>
   )
@@ -198,10 +211,10 @@ const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
   const verifyStep = (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1, alignItems: 'center' }}>
       <Alert severity="info" sx={{ width: '100%' }}>
-        验证码已发送至 <strong>{regEmail}</strong>，请查收邮件
+        {t('account.codeSentBefore')} <strong>{regEmail}</strong>{t('account.codeSentAfter')}
       </Alert>
       <TextField
-        label="6 位验证码" autoFocus fullWidth size="small"
+        label={t('account.codeLabel')} autoFocus fullWidth size="small"
         value={verifyCode} onChange={e => setVerifyCode(e.target.value)}
         inputProps={{ maxLength: 6 }}
         sx={{ maxWidth: 220 }}
@@ -212,7 +225,7 @@ const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
         onClick={handleVerify} disabled={loading}
         startIcon={loading ? <CircularProgress size={18} color="inherit" /> : undefined}
       >
-        验证
+        {t('account.verify')}
       </Button>
       <Button
         size="small"
@@ -224,13 +237,13 @@ const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
             await resendVerification(regEmail)
             setResendSeconds(60)
           } catch (e: unknown) {
-            setError((e as Error).message || '验证码发送失败')
+            setError(errorText(e) || t('account.resendFailed'))
           } finally {
             setLoading(false)
           }
         }}
       >
-        {resendSeconds > 0 ? `${resendSeconds} 秒后可重新发送` : '重新发送验证码'}
+        {resendSeconds > 0 ? t('account.resendIn', { seconds: resendSeconds }) : t('account.resendCode')}
       </Button>
     </Box>
   )
@@ -239,7 +252,7 @@ const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1, alignItems: 'center' }}>
       <Alert severity="success" sx={{ width: '100%' }}>{doneMessage}</Alert>
       <Button variant="contained" onClick={handleClose} sx={{ minWidth: 120 }}>
-        关闭
+        {t('common.close')}
       </Button>
     </Box>
   )
@@ -249,7 +262,7 @@ const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
     <Dialog open={open} onClose={handleClose} maxWidth="xs" fullWidth>
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 0, fontSize: '1.25rem', fontWeight: 600 }}>
         <Box component="span">
-          {step === 'verify' ? '验证邮箱' : step === 'done' ? '完成' : '登录 / 注册'}
+          {step === 'verify' ? t('account.verifyEmailTitle') : step === 'done' ? t('account.done') : t('account.authTitle')}
         </Box>
         <IconButton size="small" onClick={handleClose}><Close fontSize="small" /></IconButton>
       </DialogTitle>
@@ -259,8 +272,8 @@ const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
           <>
             <Tabs value={tab} onChange={(_, v) => { setTab(v); setError('') }}
                   variant="fullWidth" sx={{ mb: 1 }}>
-              <Tab label="登录" />
-              <Tab label="注册" />
+              <Tab label={t('nav.login')} />
+              <Tab label={t('account.register')} />
             </Tabs>
             {tab === 0 ? loginForm : registerForm}
           </>
@@ -272,7 +285,7 @@ const AuthDialog: React.FC<Props> = ({ open, onClose }) => {
       {step === 'form' && (
         <DialogActions sx={{ justifyContent: 'center', pb: 2 }}>
           <Typography variant="caption" color="text.disabled">
-            {tab === 0 ? '还没有账号？切换到「注册」标签' : '已有账号？切换到「登录」标签'}
+            {tab === 0 ? t('account.switchToRegisterHint') : t('account.switchToLoginHint')}
           </Typography>
         </DialogActions>
       )}

@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { Alert, Avatar, Box, Card, CardContent, Chip, CircularProgress, Stack, Typography } from '@mui/material'
 import { Business, Fingerprint, Science } from '@mui/icons-material'
 import { api } from '../lib/api'
+import { useLanguage } from '../context/LanguageContext'
 
 interface PublicProfile {
   username: string
@@ -17,6 +18,7 @@ interface PublicProfile {
 
 const PublicUserPage: React.FC = () => {
   const { username = '' } = useParams()
+  const { t } = useLanguage()
   const [profile, setProfile] = useState<PublicProfile | null>(null)
   const [error, setError] = useState('')
 
@@ -37,7 +39,7 @@ const PublicUserPage: React.FC = () => {
 
   return (
     <Box sx={{ maxWidth: 820, mx: 'auto', pt: 3 }}>
-      {profile.is_banned && <Alert severity="warning" sx={{ mb: 2 }}>账号已封禁。历史贡献仍保留，但该账号当前不能登录或写入内容。</Alert>}
+      {profile.is_banned && <Alert severity="warning" sx={{ mb: 2 }}>{t('account.bannedNotice')}</Alert>}
       <Card variant="outlined" sx={{ borderRadius: 4 }}>
         <CardContent sx={{ p: { xs: 3, md: 5 } }}>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} alignItems={{ sm: 'center' }}>
@@ -51,10 +53,10 @@ const PublicUserPage: React.FC = () => {
             </Box>
           </Stack>
           <Stack spacing={2.5} sx={{ mt: 4 }}>
-            {profile.affiliation && <Stack direction="row" spacing={1.5} alignItems="center"><Business color="action" /><Box><Typography variant="caption" color="text.secondary">所属机构</Typography><Typography>{profile.affiliation}</Typography></Box></Stack>}
+            {profile.affiliation && <Stack direction="row" spacing={1.5} alignItems="center"><Business color="action" /><Box><Typography variant="caption" color="text.secondary">{t('account.affiliation')}</Typography><Typography>{profile.affiliation}</Typography></Box></Stack>}
             {profile.orcid && <Stack direction="row" spacing={1.5} alignItems="center"><Fingerprint color="action" /><Box><Typography variant="caption" color="text.secondary">ORCID</Typography><Typography>{profile.orcid}</Typography></Box></Stack>}
-            {profile.research_interests && profile.research_interests.length > 0 && <Stack direction="row" spacing={1.5} alignItems="start"><Science color="action" sx={{ mt: 0.5 }} /><Box><Typography variant="caption" color="text.secondary">研究方向</Typography><Stack direction="row" gap={1} flexWrap="wrap" sx={{ mt: 0.5 }}>{profile.research_interests.map(item => <Chip key={item} size="small" label={item} />)}</Stack></Box></Stack>}
-            {!profile.affiliation && !profile.orcid && !profile.research_interests?.length && <Typography color="text.secondary">该用户尚未完善公开研究资料。</Typography>}
+            {profile.research_interests && profile.research_interests.length > 0 && <Stack direction="row" spacing={1.5} alignItems="start"><Science color="action" sx={{ mt: 0.5 }} /><Box><Typography variant="caption" color="text.secondary">{t('account.researchInterests')}</Typography><Stack direction="row" gap={1} flexWrap="wrap" sx={{ mt: 0.5 }}>{profile.research_interests.map(item => <Chip key={item} size="small" label={item} />)}</Stack></Box></Stack>}
+            {!profile.affiliation && !profile.orcid && !profile.research_interests?.length && <Typography color="text.secondary">{t('account.emptyPublicProfile')}</Typography>}
           </Stack>
         </CardContent>
       </Card>

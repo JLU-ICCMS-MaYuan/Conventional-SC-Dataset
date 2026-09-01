@@ -2,8 +2,10 @@ import React, { useState, useRef } from 'react'
 import { Box, Typography, Button, Chip, Paper, CircularProgress, LinearProgress } from '@mui/material'
 import CloudUploadIcon from '@mui/icons-material/CloudUpload'
 import { api } from '../lib/api'
+import { useLanguage } from '../context/LanguageContext'
 
 const TcPredictPage: React.FC = () => {
+  const { t } = useLanguage()
   const [contcarFile, setContcarFile] = useState<File | null>(null)
   const [pdosFiles, setPdosFiles] = useState<File[]>([])
   const [loading, setLoading] = useState(false)
@@ -24,7 +26,7 @@ const TcPredictPage: React.FC = () => {
       const data = await api.post<any>('/api/tc-predict/', form)
       setResult(data)
     } catch (err: any) {
-      setError(err.message || '预测失败')
+      setError(err.message || t('tcPredict.failed'))
     } finally {
       setLoading(false)
     }
@@ -36,9 +38,9 @@ const TcPredictPage: React.FC = () => {
       <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 3, alignItems: 'end', mb: 3 }}>
         <Box>
           <Typography variant="overline">Tc Estimation</Typography>
-          <Typography variant="h1">从结构和电子态输入估算 Tc</Typography>
+          <Typography variant="h1">{t('tcPredict.title')}</Typography>
           <Typography variant="body2" sx={{ mt: 1 }}>
-            预测结果只作为候选信息，不会自动进入公开数据库。
+            {t('tcPredict.disclaimer')}
           </Typography>
         </Box>
       </Box>
@@ -49,7 +51,7 @@ const TcPredictPage: React.FC = () => {
         <Box sx={{ display: 'grid', gap: 3 }}>
           {/* Input files card */}
           <Paper sx={{ p: 2.5, borderRadius: 4 }}>
-            <Typography variant="h2" gutterBottom>输入文件</Typography>
+            <Typography variant="h2" gutterBottom>{t('tcPredict.inputFiles')}</Typography>
             <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
               {/* CONTCAR */}
               <Box
@@ -62,7 +64,7 @@ const TcPredictPage: React.FC = () => {
               >
                 <CloudUploadIcon sx={{ fontSize: 32, color: 'text.secondary', mb: 1 }} />
                 <Typography variant="h3">CONTCAR</Typography>
-                <Chip label={contcarFile ? '已上传' : '点击上传'} size="small" color={contcarFile ? 'success' : 'default'} sx={{ mt: 1 }} />
+                <Chip label={contcarFile ? t('tcPredict.uploaded') : t('tcPredict.clickUpload')} size="small" color={contcarFile ? 'success' : 'default'} sx={{ mt: 1 }} />
                 <input type="file" hidden onChange={(e) => setContcarFile(e.target.files?.[0] || null)} />
               </Box>
               {/* PDOS */}
@@ -76,7 +78,7 @@ const TcPredictPage: React.FC = () => {
               >
                 <CloudUploadIcon sx={{ fontSize: 32, color: 'text.secondary', mb: 1 }} />
                 <Typography variant="h3">PDOS_H.dat</Typography>
-                <Chip label={pdosFiles.length > 0 ? `已上传 (${pdosFiles.length})` : '点击上传'} size="small" color={pdosFiles.length > 0 ? 'success' : 'default'} sx={{ mt: 1 }} />
+                <Chip label={pdosFiles.length > 0 ? t('tcPredict.uploadedCount', { count: pdosFiles.length }) : t('tcPredict.clickUpload')} size="small" color={pdosFiles.length > 0 ? 'success' : 'default'} sx={{ mt: 1 }} />
                 <input type="file" multiple hidden onChange={(e) => setPdosFiles([...(e.target.files || [])])} />
               </Box>
             </Box>
@@ -89,7 +91,7 @@ const TcPredictPage: React.FC = () => {
           p: 2.5, borderRadius: 4, alignSelf: 'start', position: 'sticky', top: 96,
           boxShadow: '0 6px 16px rgba(15,23,42,.16), 0 10px 24px rgba(15,23,42,.10)',
         }}>
-          <Typography variant="h2" gutterBottom>预测结果</Typography>
+          <Typography variant="h2" gutterBottom>{t('tcPredict.result')}</Typography>
 
           {loading && <LinearProgress sx={{ mb: 2, borderRadius: 999 }} />}
 
@@ -106,9 +108,9 @@ const TcPredictPage: React.FC = () => {
               </Typography>
               <Box sx={{ mt: 2, display: 'grid', gap: 1 }}>
                 <Typography variant="body2">f₂ = {result.f2_value}</Typography>
-                <Typography variant="body2">H 态密度占比 = {result.dos_h_ratio}</Typography>
-                <Typography variant="body2">H-H 键长均值 = {result.bonds_mean} Å</Typography>
-                <Typography variant="body2">H-H 键长方差 = {result.bonds_var}</Typography>
+                <Typography variant="body2">{t('tcPredict.dosRatio', { value: result.dos_h_ratio })}</Typography>
+                <Typography variant="body2">{t('tcPredict.bondMean', { value: result.bonds_mean })}</Typography>
+                <Typography variant="body2">{t('tcPredict.bondVariance', { value: result.bonds_var })}</Typography>
               </Box>
               <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
                 <Chip label="PREDICTED ONLY" color="warning" size="small" />
@@ -117,7 +119,7 @@ const TcPredictPage: React.FC = () => {
           ) : (
             <Paper sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                输入摘要显示结构元素、态密度文件和模型版本。失败原因会在这里显示，而不是只用临时提示。
+                {t('tcPredict.emptyHint')}
               </Typography>
             </Paper>
           )}
@@ -129,7 +131,7 @@ const TcPredictPage: React.FC = () => {
             disabled={!contcarFile || pdosFiles.length === 0 || loading}
             sx={{ mt: 2.5, borderRadius: 999 }}
           >
-            {loading ? '预测中...' : '运行预测'}
+            {loading ? t('tcPredict.predicting') : t('tcPredict.run')}
           </Button>
         </Paper>
       </Box>

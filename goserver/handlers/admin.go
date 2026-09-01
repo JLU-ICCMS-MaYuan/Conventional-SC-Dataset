@@ -35,7 +35,7 @@ var (
 		"doi", "title", "authors", "journal", "volume", "pages", "year", "abstract",
 		"summary", "paper_type", "theoretical_subtype", "keywords_tags",
 		"methodology", "key_finding", "research_motivation", "research_materials",
-		"material_relations", "builds_on",
+		"material_relations", "builds_on", "knowledge_graph_title",
 	}
 	// 请求字段 → superconductor_properties 真实列。
 	// Updates(map) 直接把键当列名，因此这里必须用数据库列名（material_raw / unit_raw）。
@@ -133,6 +133,18 @@ func GetPaperDetail(c *gin.Context) {
 	c.JSON(http.StatusOK, paper)
 }
 
+// paperUpdatesFromBody 从请求体提取白名单字段，供 UpdatePaper 使用。
+// 白名单之外（如 review_status）不得进入更新集，审核状态只能通过 ReviewPaper 修改。
+func paperUpdatesFromBody(body map[string]interface{}) map[string]interface{} {
+	updates := make(map[string]interface{})
+	for _, k := range paperUpdateFields {
+		if v, ok := body[k]; ok {
+			updates[k] = v
+		}
+	}
+	return updates
+}
+
 // UpdatePaper 编辑论文（含 key_properties 增删改）
 // PUT /api/admin/papers/:id
 func UpdatePaper(c *gin.Context) {
@@ -150,12 +162,7 @@ func UpdatePaper(c *gin.Context) {
 	}
 
 	// 审核状态只能通过 ReviewPaper 修改，避免普通编辑绕过审核动作。
-	updates := make(map[string]interface{})
-	for _, k := range paperUpdateFields {
-		if v, ok := body[k]; ok {
-			updates[k] = v
-		}
-	}
+	updates := paperUpdatesFromBody(body)
 
 	var paper models.Paper
 	err = database.DB.Transaction(func(tx *gorm.DB) error {

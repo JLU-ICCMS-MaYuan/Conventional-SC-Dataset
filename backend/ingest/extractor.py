@@ -31,8 +31,8 @@ SYSTEM_PROMPT = """你是一个材料科学专家，专门研究超导材料。�
   "year": 2024,
   "abstract": "摘要全文，找不到则 null",
   "paper_type": "theoretical / experimental / review / unknown",
-  "summary": "中文总结，100-200字，包含研究对象、计算方法/实验手段、主要结果（最高 Tc 数值)、结论",
-  "keywords_tags": ["超导", "LaH10", "高压", ...]
+  "summary": "English summary in 100-200 words covering the research subject, methods, main results (including the highest Tc), and conclusion",
+  "keywords_tags": ["superconductivity", "LaH10", "high pressure", ...]
 }
 
 ## 字段提取要点
@@ -46,8 +46,8 @@ SYSTEM_PROMPT = """你是一个材料科学专家，专门研究超导材料。�
 - year: 从 "Received/Accepted/Published" 日期、或 "year" 字段、或文件夹/文件名中的年份提取
 - abstract: 从 "Abstract" 或 "摘要" 后面提取完整段落
 - paper_type: 判定论文类型。theoretical=纯理论/计算，experimental=有实验合成/测量数据，review=综述，unknown=无法判断
-- summary: 中文总结 100-200 字，包含研究体系、核心方法与手段、最高 Tc 与对应的压力条件、主要突破
-- keywords_tags: 5-10 个中文关键词，包含材料名、方法名、关键物性类别"""
+- summary: write 100-200 words in English, covering the system, core methods, highest Tc and its pressure conditions, and the main advance
+- keywords_tags: provide 5-10 English keywords covering material names, methods, and key property categories"""
 
 
 def _openai_client() -> OpenAI:

@@ -5,6 +5,8 @@ import {
 } from '@mui/material'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import StructureViewer3D from './StructureViewer3D'
+import { useLanguage } from '../context/LanguageContext'
+import { familyName } from '../lib/classifications'
 
 interface PaperEditViewProps {
   // 论文数据与加载/错误分流由路由页面壳 PaperDetailPage 负责，本组件只负责展示。
@@ -13,11 +15,15 @@ interface PaperEditViewProps {
   onOpenMyPapers?: () => void
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  pending: '待审核', approved: '审核完成', rejected: '已拒绝', needs_revision: '待审核（旧状态）',
-}
+// 审核状态的颜色映射；标签文案按 value 查 dict.enums.reviewStatus。
 const STATUS_COLORS: Record<string, 'warning' | 'success' | 'error' | 'info'> = {
   pending: 'warning', approved: 'success', rejected: 'error', needs_revision: 'info',
+}
+
+// 按当前语言解析审核状态标签；字典未收录的值回退原文（后端 value 是接口契约，不翻译）。
+const reviewStatusLabel = (dict: any, value: string | null | undefined): string => {
+  const table: Record<string, string> = dict?.enums?.reviewStatus || {}
+  return (value && table[value]) || value || ''
 }
 
 // keywords_tags / methodology 在数据库里是 JSON 文本列，后端按原样透传（*string），
@@ -34,6 +40,8 @@ const toTextList = (value: unknown): string[] => {
 }
 
 const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPapers }) => {
+  const { t, lang, dict } = useLanguage()
+
   // 只读展示状态：用于展示的本地状态，切换论文时重新填充
   const [editTitle, setEditTitle] = useState('')
   const [editDoi, setEditDoi] = useState('')
@@ -56,14 +64,15 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
     setEditDoi(data.doi || '')
     setEditJournal(data.journal || '')
     setEditYear(data.year || '')
-    // authors 同为 JSON 文本列，直接展示会把 ["A","B"] 原样印到页面上。
-    setEditAuthors(toTextList(data.authors).join('、'))
+    // authors 同为 JSON 文本列，直接展示会把 ["A","B"] 原样印到页面上；
+    // 分隔符随界面语言：中文顿号、英文逗号。
+    setEditAuthors(toTextList(data.authors).join(lang === 'zh' ? '、' : ', '))
     setEditAbstract(data.abstract || '')
     setEditSummary(data.summary || '')
     setEditKnowledgeGraphTitle(data.knowledge_graph_title || '')
     setEditKeyFinding(data.key_finding || '')
     setEditResearchMotivation(data.research_motivation || '')
-  }, [paper])
+  }, [paper, lang])
 
   // 研究方法与关键词处理：转为可读列表
   const methodologyList = toTextList(paper?.methodology)
@@ -88,18 +97,18 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 3 }}>
         <Box>
           <Button size="small" startIcon={<ArrowBackIcon />} onClick={onBack} sx={{ mb: 1 }}>
-            返回上传列表
+            {t('paperDetail.backToUpload')}
           </Button>
-          <Typography variant="overline" color="text.secondary">只读模式</Typography>
-          <Typography variant="h4" fontWeight={800}>论文详情</Typography>
+          <Typography variant="overline" color="text.secondary">{t('paperDetail.readOnlyMode')}</Typography>
+          <Typography variant="h4" fontWeight={800}>{t('paperDetail.paperDetailTitle')}</Typography>
         </Box>
         {/* 离开详情页后仍能经界面回到任意已提交论文，无需手工拼接网址 */}
         {onOpenMyPapers && (
-          <Button size="small" variant="outlined" onClick={onOpenMyPapers}>我的论文</Button>
+          <Button size="small" variant="outlined" onClick={onOpenMyPapers}>{t('paperDetail.myPapers')}</Button>
         )}
       </Box>
 
-      <Alert severity="info" sx={{ mb: 2 }}>论文已提交审核。普通用户不能在这里直接修改正式记录。</Alert>
+      <Alert severity="info" sx={{ mb: 2 }}>{t('paperDetail.submittedNotice')}</Alert>
 
       <Box sx={{
         display: 'grid', gridTemplateColumns: '1fr 360px', gap: 3, alignItems: 'start',
@@ -113,50 +122,51 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
               border: '1px solid', borderColor: 'divider', borderRadius: 2, mb: 1.5, overflow: 'hidden',
             }}>
               <Box component="summary" sx={{ cursor: 'pointer', p: 2, fontSize: 18, fontWeight: 800 }}>
-                基础信息
+                {t('paperDetail.basicInfo')}
               </Box>
               <Box sx={{ px: 2, pb: 2, borderTop: '1px solid', borderColor: 'divider' }}>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                   <Box>
-                    <Typography variant="caption" color="text.secondary">标题</Typography>
+                    <Typography variant="caption" color="text.secondary">{t('paperDetail.fieldTitle')}</Typography>
                     <Typography variant="body2">{editTitle || '-'}</Typography>
                   </Box>
                   <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
                     <Box>
+                      {/* DOI 为专有名词，两种语言下写法一致 */}
                       <Typography variant="caption" color="text.secondary">DOI</Typography>
                       <Typography variant="body2">{editDoi || '-'}</Typography>
                     </Box>
                     <Box>
-                      <Typography variant="caption" color="text.secondary">年份</Typography>
+                      <Typography variant="caption" color="text.secondary">{t('paperDetail.fieldYear')}</Typography>
                       <Typography variant="body2">{editYear || '-'}</Typography>
                     </Box>
                   </Box>
                   <Box>
-                    <Typography variant="caption" color="text.secondary">期刊</Typography>
+                    <Typography variant="caption" color="text.secondary">{t('paperDetail.fieldJournal')}</Typography>
                     <Typography variant="body2">{editJournal || '-'}</Typography>
                   </Box>
                   <Box>
-                    <Typography variant="caption" color="text.secondary">作者</Typography>
+                    <Typography variant="caption" color="text.secondary">{t('paperDetail.fieldAuthors')}</Typography>
                     <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{editAuthors || '-'}</Typography>
                   </Box>
                   <Box>
-                    <Typography variant="caption" color="text.secondary">摘要</Typography>
+                    <Typography variant="caption" color="text.secondary">{t('paperDetail.fieldAbstract')}</Typography>
                     <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{editAbstract || '-'}</Typography>
                   </Box>
                   <Box>
-                    <Typography variant="caption" color="text.secondary">论文总结 (LLM)</Typography>
+                    <Typography variant="caption" color="text.secondary">{t('paperDetail.fieldSummary')}</Typography>
                     <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{editSummary || '-'}</Typography>
                   </Box>
                   {editKnowledgeGraphTitle && (
                     <Box>
-                      <Typography variant="caption" color="text.secondary">知识图谱标题 (LLM)</Typography>
+                      <Typography variant="caption" color="text.secondary">{t('paperDetail.fieldKgTitle')}</Typography>
                       <Typography variant="body2">{editKnowledgeGraphTitle}</Typography>
                     </Box>
                   )}
                   <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                    <Chip label={`审核状态: ${STATUS_LABELS[paper?.review_status] || paper?.review_status || '待审核'}`}
+                    <Chip label={`${t('paperDetail.reviewStatus')}: ${reviewStatusLabel(dict, paper?.review_status) || reviewStatusLabel(dict, 'pending')}`}
                       size="small" color={STATUS_COLORS[paper?.review_status] || 'default'} />
-                    <Chip label="数据来源: Local" size="small" color="primary" />
+                    <Chip label={`${t('paperDetail.dataSource')}: Local`} size="small" color="primary" />
                     {paper?.id && <Chip label={`ID: ${paper.id}`} size="small" variant="outlined" />}
                   </Box>
                 </Box>
@@ -169,7 +179,7 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
                 border: '1px solid', borderColor: 'divider', borderRadius: 2, mb: 1.5, overflow: 'hidden',
               }}>
                 <Box component="summary" sx={{ cursor: 'pointer', p: 2, fontSize: 18, fontWeight: 800 }}>
-                  材料状态
+                  {t('paperDetail.materialStates')}
                 </Box>
                 <Box sx={{ px: 2, pb: 2, borderTop: '1px solid', borderColor: 'divider', display: 'flex', flexDirection: 'column', gap: 3 }}>
                   {(paper.material_states || []).map((state: any, index: number) => (
@@ -178,49 +188,50 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
                     }}>
                       {/* 分类区 */}
                       <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>
-                        {state.material || `材料状态 #${index + 1}`}
+                        {state.material || t('paperDetail.materialStateFallback', { n: index + 1 })}
                       </Typography>
 
                       <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 1.5, mb: 2 }}>
                         {state.material_family && (
                           <Box>
-                            <Typography variant="caption" color="text.secondary">材料家族</Typography>
-                            <Typography variant="body2">{state.material_family.name}</Typography>
+                            <Typography variant="caption" color="text.secondary">{t('paperDetail.fieldMaterialFamily')}</Typography>
+                            <Typography variant="body2">{familyName(state.material_family, lang)}</Typography>
                           </Box>
                         )}
                         {state.element_count != null && (
                           <Box>
-                            <Typography variant="caption" color="text.secondary">不同元素种类数</Typography>
+                            <Typography variant="caption" color="text.secondary">{t('paperDetail.fieldElementCount')}</Typography>
                             <Typography variant="body2">{state.element_count}</Typography>
                           </Box>
                         )}
                         {state.material_dimensionality && (
                           <Box>
-                            <Typography variant="caption" color="text.secondary">材料维度</Typography>
+                            <Typography variant="caption" color="text.secondary">{t('paperDetail.fieldDimensionality')}</Typography>
+                            {/* 材料维度/晶系/超导类型展示后端枚举 value（接口契约，不翻译） */}
                             <Typography variant="body2">{state.material_dimensionality}</Typography>
                           </Box>
                         )}
                         {state.crystal_system && (
                           <Box>
-                            <Typography variant="caption" color="text.secondary">晶系</Typography>
+                            <Typography variant="caption" color="text.secondary">{t('paperDetail.fieldCrystalSystem')}</Typography>
                             <Typography variant="body2">{state.crystal_system}</Typography>
                           </Box>
                         )}
                         {state.reported_space_group_symbol && (
                           <Box>
-                            <Typography variant="caption" color="text.secondary">空间群符号</Typography>
+                            <Typography variant="caption" color="text.secondary">{t('paperDetail.fieldSpaceGroupSymbol')}</Typography>
                             <Typography variant="body2">{state.reported_space_group_symbol}</Typography>
                           </Box>
                         )}
                         {state.reported_space_group_number != null && (
                           <Box>
-                            <Typography variant="caption" color="text.secondary">空间群号</Typography>
+                            <Typography variant="caption" color="text.secondary">{t('paperDetail.fieldSpaceGroupNumber')}</Typography>
                             <Typography variant="body2">{state.reported_space_group_number}</Typography>
                           </Box>
                         )}
                         {state.superconductor_kind && (
                           <Box>
-                            <Typography variant="caption" color="text.secondary">超导类型</Typography>
+                            <Typography variant="caption" color="text.secondary">{t('paperDetail.fieldSuperconductorKind')}</Typography>
                             <Typography variant="body2">{state.superconductor_kind}</Typography>
                           </Box>
                         )}
@@ -229,10 +240,10 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
                       {/* 结构家族标签 */}
                       {(state.structure_families || []).length > 0 && (
                         <Box sx={{ mb: 2 }}>
-                          <Typography variant="caption" color="text.secondary">结构家族标签</Typography>
+                          <Typography variant="caption" color="text.secondary">{t('paperDetail.structureFamiliesLabel')}</Typography>
                           <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
                             {state.structure_families.map((family: any) => (
-                              <Chip key={family.id || family.name} size="small" label={family.name} />
+                              <Chip key={family.id || family.name} size="small" label={familyName(family, lang)} />
                             ))}
                           </Box>
                         </Box>
@@ -241,21 +252,21 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
                       {/* 压强区 */}
                       {(state.pressure_value_gpa != null || state.pressure_raw || state.pressure_min_gpa != null || state.pressure_max_gpa != null) && (
                         <Box sx={{ mb: 2 }}>
-                          <Typography variant="caption" color="text.secondary">压强条件</Typography>
+                          <Typography variant="caption" color="text.secondary">{t('paperDetail.pressureSection')}</Typography>
                           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mt: 0.5 }}>
                             {state.pressure_value_gpa != null && (
-                              <Typography variant="body2">压强：{state.pressure_value_gpa} GPa</Typography>
+                              <Typography variant="body2">{t('paperDetail.pressureValue', { value: state.pressure_value_gpa })}</Typography>
                             )}
                             {state.pressure_raw && (
                               <Typography variant="body2" color="text.secondary">
-                                原文：{state.pressure_raw}{state.pressure_unit_raw ? ` (${state.pressure_unit_raw})` : ''}
+                                {t('paperDetail.rawText', { value: `${state.pressure_raw}${state.pressure_unit_raw ? ` (${state.pressure_unit_raw})` : ''}` })}
                               </Typography>
                             )}
                             {state.pressure_min_gpa != null && (
-                              <Typography variant="body2">压强下限：{state.pressure_min_gpa} GPa</Typography>
+                              <Typography variant="body2">{t('paperDetail.pressureMin', { value: state.pressure_min_gpa })}</Typography>
                             )}
                             {state.pressure_max_gpa != null && (
-                              <Typography variant="body2">压强上限：{state.pressure_max_gpa} GPa</Typography>
+                              <Typography variant="body2">{t('paperDetail.pressureMax', { value: state.pressure_max_gpa })}</Typography>
                             )}
                           </Box>
                         </Box>
@@ -264,30 +275,30 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
                       {/* Tc 结果区 */}
                       {(state.tc_results || []).length > 0 && (
                         <Box sx={{ mb: 2 }}>
-                          <Typography variant="caption" color="text.secondary">临界温度 Tc</Typography>
+                          <Typography variant="caption" color="text.secondary">{t('paperDetail.tcSection')}</Typography>
                           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 0.5 }}>
                             {state.tc_results.map((tcr: any, tcIdx: number) => (
                               <Box key={tcIdx} sx={{ p: 1, bgcolor: 'background.paper', borderRadius: 1 }}>
                                 {tcr.result_kind && (
-                                  <Typography variant="caption" color="primary">类型：{tcr.result_kind}</Typography>
+                                  <Typography variant="caption" color="primary">{t('paperDetail.tcKind', { value: tcr.result_kind })}</Typography>
                                 )}
                                 {tcr.tc_value_k != null && (
-                                  <Typography variant="body2">Tc：{tcr.tc_value_k} K</Typography>
+                                  <Typography variant="body2">{t('paperDetail.tcValue', { value: tcr.tc_value_k })}</Typography>
                                 )}
                                 {(tcr.tc_min_k != null || tcr.tc_max_k != null) && (
                                   <Typography variant="body2">
-                                    Tc 区间：{tcr.tc_min_k ?? '-'} ~ {tcr.tc_max_k ?? '-'} K
+                                    {t('paperDetail.tcRange', { min: tcr.tc_min_k ?? '-', max: tcr.tc_max_k ?? '-' })}
                                   </Typography>
                                 )}
                                 {tcr.tc_method && (
-                                  <Typography variant="body2">判定方法：{tcr.tc_method}</Typography>
+                                  <Typography variant="body2">{t('paperDetail.tcMethod', { value: tcr.tc_method })}</Typography>
                                 )}
                                 {tcr.tc_method_custom && (
-                                  <Typography variant="body2">自定义方法：{tcr.tc_method_custom}</Typography>
+                                  <Typography variant="body2">{t('paperDetail.tcMethodCustom', { value: tcr.tc_method_custom })}</Typography>
                                 )}
                                 {tcr.value_raw && (
                                   <Typography variant="body2" color="text.secondary">
-                                    原文：{tcr.value_raw}{tcr.unit_raw ? ` ${tcr.unit_raw}` : ''}
+                                    {t('paperDetail.rawText', { value: `${tcr.value_raw}${tcr.unit_raw ? ` ${tcr.unit_raw}` : ''}` })}
                                   </Typography>
                                 )}
                               </Box>
@@ -299,24 +310,24 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
                       {/* 计算上下文（λ、ωlog、μ*） */}
                       {(state.calculation_contexts || []).length > 0 && (
                         <Box sx={{ mb: 2 }}>
-                          <Typography variant="caption" color="text.secondary">计算上下文</Typography>
+                          <Typography variant="caption" color="text.secondary">{t('paperDetail.calculationContexts')}</Typography>
                           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 0.5 }}>
                             {state.calculation_contexts.map((ctx: any, ctxIdx: number) => (
                               <Box key={ctxIdx} sx={{ p: 1, bgcolor: 'background.paper', borderRadius: 1 }}>
                                 {ctx.lambda_ep != null && (
-                                  <Typography variant="body2">电声耦合强度 λ：{ctx.lambda_ep}</Typography>
+                                  <Typography variant="body2">{t('paperDetail.epcStrength', { value: ctx.lambda_ep })}</Typography>
                                 )}
                                 {ctx.omega_log_k != null && (
-                                  <Typography variant="body2">对数声子频率 ωlog：{ctx.omega_log_k} K</Typography>
+                                  <Typography variant="body2">{t('paperDetail.omegaLog', { value: ctx.omega_log_k })}</Typography>
                                 )}
                                 {ctx.mu_star != null && (
-                                  <Typography variant="body2">库伦屏蔽常数 μ*：{ctx.mu_star}</Typography>
+                                  <Typography variant="body2">{t('paperDetail.muStar', { value: ctx.mu_star })}</Typography>
                                 )}
                                 {ctx.calculation_method && (
-                                  <Typography variant="body2" color="text.secondary">计算方法：{ctx.calculation_method}</Typography>
+                                  <Typography variant="body2" color="text.secondary">{t('paperDetail.calcMethod', { value: ctx.calculation_method })}</Typography>
                                 )}
                                 {ctx.lambda_ep == null && ctx.omega_log_k == null && ctx.mu_star == null && (
-                                  <Typography variant="body2" color="text.disabled">（数值全为空）</Typography>
+                                  <Typography variant="body2" color="text.disabled">{t('paperDetail.noValues')}</Typography>
                                 )}
                               </Box>
                             ))}
@@ -327,22 +338,22 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
                       {/* 普通物性 */}
                       {(state.key_properties || paper.key_properties?.filter((kp: any) => kp.material_state_id === state.id) || []).length > 0 && (
                         <Box>
-                          <Typography variant="caption" color="text.secondary">其他物性</Typography>
+                          <Typography variant="caption" color="text.secondary">{t('paperDetail.otherProperties')}</Typography>
                           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 0.5 }}>
                             {(state.key_properties || paper.key_properties?.filter((kp: any) => kp.material_state_id === state.id) || []).map((kp: any, kpIdx: number) => (
                               <Box key={kpIdx} sx={{ p: 1, bgcolor: 'background.paper', borderRadius: 1 }}>
-                                <Typography variant="body2" fontWeight={600}>{kp.name || kp.name_raw || '未命名物性'}</Typography>
+                                <Typography variant="body2" fontWeight={600}>{kp.name || kp.name_raw || t('paperDetail.unnamedProperty')}</Typography>
                                 {kp.value_raw && (
-                                  <Typography variant="body2">原始值：{kp.value_raw}</Typography>
+                                  <Typography variant="body2">{t('paperDetail.rawValue', { value: kp.value_raw })}</Typography>
                                 )}
                                 {kp.value_number != null && (
-                                  <Typography variant="body2">解析值：{kp.value_number}</Typography>
+                                  <Typography variant="body2">{t('paperDetail.parsedValue', { value: kp.value_number })}</Typography>
                                 )}
                                 {kp.unit && (
-                                  <Typography variant="body2">单位：{kp.unit}</Typography>
+                                  <Typography variant="body2">{t('paperDetail.unitLabel', { value: kp.unit })}</Typography>
                                 )}
                                 {kp.condition_note && (
-                                  <Typography variant="body2" color="text.secondary">条件说明：{kp.condition_note}</Typography>
+                                  <Typography variant="body2" color="text.secondary">{t('paperDetail.conditionNote', { value: kp.condition_note })}</Typography>
                                 )}
                               </Box>
                             ))}
@@ -354,7 +365,7 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
                 </Box>
               </Box>
             ) : (
-              <Alert severity="info" sx={{ mb: 1.5 }}>该论文暂无材料状态数据</Alert>
+              <Alert severity="info" sx={{ mb: 1.5 }}>{t('paperDetail.noMaterialStates')}</Alert>
             )}
 
             {/* 研究方法与发现 */}
@@ -362,12 +373,12 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
               border: '1px solid', borderColor: 'divider', borderRadius: 2, mb: 1.5, overflow: 'hidden',
             }}>
               <Box component="summary" sx={{ cursor: 'pointer', p: 2, fontSize: 18, fontWeight: 800 }}>
-                研究方法与发现
+                {t('paperDetail.methodsFindings')}
               </Box>
               <Box sx={{ px: 2, pb: 2, borderTop: '1px solid', borderColor: 'divider' }}>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                   <Box>
-                    <Typography variant="caption" color="text.secondary">研究方法</Typography>
+                    <Typography variant="caption" color="text.secondary">{t('paperDetail.methodology')}</Typography>
                     {methodologyList.length > 0 ? (
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mt: 0.5 }}>
                         {methodologyList.map((method, idx) => (
@@ -379,11 +390,11 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
                     )}
                   </Box>
                   <Box>
-                    <Typography variant="caption" color="text.secondary">关键发现</Typography>
+                    <Typography variant="caption" color="text.secondary">{t('paperDetail.keyFinding')}</Typography>
                     <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{editKeyFinding || '-'}</Typography>
                   </Box>
                   <Box>
-                    <Typography variant="caption" color="text.secondary">研究驱动力</Typography>
+                    <Typography variant="caption" color="text.secondary">{t('paperDetail.researchMotivation')}</Typography>
                     <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{editResearchMotivation || '-'}</Typography>
                   </Box>
                 </Box>
@@ -395,14 +406,14 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
         {/* Sidebar */}
         <Card sx={{ position: 'sticky', top: 20, boxShadow: 3 }}>
           <CardContent>
-            <Typography variant="overline" color="text.secondary">化学式</Typography>
+            <Typography variant="overline" color="text.secondary">{t('paperDetail.formulaLabel')}</Typography>
             <Typography variant="h5" fontWeight={700} sx={{ mb: 2, wordBreak: 'break-word' }}>
               {formula}
             </Typography>
 
             {keywordList.length > 0 && (
               <Box sx={{ mb: 2 }}>
-                <Typography variant="caption" color="text.secondary">关键词</Typography>
+                <Typography variant="caption" color="text.secondary">{t('paperDetail.keywordsLabel')}</Typography>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
                   {keywordList.map((kw, idx) => (
                     <Chip key={idx} label={kw} size="small" />
@@ -416,7 +427,7 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
                 {structures.map((s: any, i: number) => (
                   <Box key={i} sx={{ borderRadius: 2, overflow: 'hidden', border: '1px solid', borderColor: 'divider' }}>
                     <Box sx={{ p: 1.5, borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'grey.50' }}>
-                      <Typography variant="caption" color="text.secondary">结构 #{i + 1}</Typography>
+                      <Typography variant="caption" color="text.secondary">{t('paperDetail.structureIndex', { n: i + 1 })}</Typography>
                       <Typography variant="body2" fontWeight={700}>{s.material}</Typography>
                       {s.name_note && (
                         <Typography variant="caption" color="text.secondary">{s.name_note}</Typography>
@@ -452,7 +463,7 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
                 '&::after': { top: '58%', transform: 'rotate(-25deg)' },
               }}>
                 <Typography variant="body2" sx={{ position: 'absolute', bottom: 12, left: 12, color: 'text.secondary' }}>
-                  该记录暂无结构数据
+                  {t('paperDetail.noStructure')}
                 </Typography>
               </Box>
             )}

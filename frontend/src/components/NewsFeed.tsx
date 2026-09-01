@@ -2,15 +2,17 @@ import React, { useEffect, useState } from 'react'
 import { Alert, Box, Button, Chip, Drawer, FormControl, IconButton, InputLabel, Link, NativeSelect, Paper, Skeleton, Stack, Typography } from '@mui/material'
 import { Close as CloseIcon } from '@mui/icons-material'
 import { api } from '../lib/api'
+import { useLanguage } from '../context/LanguageContext'
+import type { Lang } from '../i18n'
 
 type Kind = '' | 'news' | 'preprint' | 'journal_article'
-const kinds: Record<Exclude<Kind, ''>, string> = { news: '新闻', preprint: '预印本', journal_article: '期刊论文' }
 const kindColors: Record<Exclude<Kind, ''>, { bg: string; color: string }> = {
   news: { bg: '#e3f2fd', color: '#1976d2' },
   preprint: { bg: '#f3e5f5', color: '#7b1fa2' },
   journal_article: { bg: '#e8f5e9', color: '#388e3c' }
 }
 const sourceNames: Record<string, string> = { arxiv: 'arXiv', crossref: 'Crossref', physorg: 'Phys.org' }
+type TFunc = (key: string, vars?: Record<string, string | number>) => string
 interface FeedItem {
   id: string; title: string; kind: Exclude<Kind, ''>; source: string; url: string
   summary: string; summary_source: string; authors: string[]; journal: string; doi: string
@@ -30,32 +32,40 @@ export function safeNewsLink(value: string): string | undefined {
   return undefined
 }
 
-function dateLabel(value: string, precision = 'day') {
-  if (!value) return '日期未提供'
-  if (precision === 'year') return value.slice(0, 4) + ' 年'
-  if (precision === 'month') return value.slice(0, 7) + '（仅提供月份）'
+function dateLabel(t: TFunc, value: string, precision = 'day') {
+  if (!value) return t('news.dateNotProvided')
+  if (precision === 'year') return t('news.yearOnly', { year: value.slice(0, 4) })
+  if (precision === 'month') return t('news.monthOnly', { month: value.slice(0, 7) })
   return value.slice(0, 10)
 }
 
-function timestamp(value: string) {
-  if (!value) return '暂无成功记录'
+function timestamp(t: TFunc, lang: Lang, value: string) {
+  if (!value) return t('news.noSuccessRecord')
   const parsed = new Date(value)
-  return Number.isNaN(parsed.getTime()) ? '时间未知' : parsed.toLocaleString('zh-CN', { hour12: false })
+  return Number.isNaN(parsed.getTime()) ? t('news.timeUnknown') : parsed.toLocaleString(lang === 'zh' ? 'zh-CN' : 'en-US', { hour12: false })
 }
 
-function sourceStatus(state: SourceState) {
-  if (state.status === 'failed') return '采集失败，将自动重试'
-  if (state.status === 'never') return '尚未采集'
+/** 来源是否需要用户关注：失败、从未采集、卡住或长时间未更新。 */
+function sourceNeedsAttention(state: SourceState) {
+  if (state.status === 'failed' || state.status === 'never') return true
+  if (state.status === 'running') return Date.now() - Date.parse(state.last_started_at) > 1000 * 1000
+  if (state.last_success_at && Date.now() - Date.parse(state.last_success_at) > 48 * 3600 * 1000) return true
+  return false
+}
+
+function sourceStatus(t: TFunc, state: SourceState) {
+  if (state.status === 'failed') return t('news.sourceFailed')
+  if (state.status === 'never') return t('news.sourceNever')
   if (state.status === 'running') {
-    return Date.now() - Date.parse(state.last_started_at) > 1000 * 1000 ? '上次采集未完成，等待恢复' : '正在采集'
+    return Date.now() - Date.parse(state.last_started_at) > 1000 * 1000 ? t('news.sourceStalled') : t('news.sourceRunning')
   }
-  if (state.last_success_at && Date.now() - Date.parse(state.last_success_at) > 48 * 3600 * 1000) return '超过 48 小时未更新'
-  return '已更新'
+  if (state.last_success_at && Date.now() - Date.parse(state.last_success_at) > 48 * 3600 * 1000) return t('news.sourceStale', { hours: 48 })
+  return t('news.sourceUpdated')
 }
 
-function FeedLoading() {
+function FeedLoading({ label }: { label: string }) {
   return <Box role="status" aria-live="polite" sx={{ py: 3 }}>
-    <Typography variant="body2">正在加载资讯…</Typography>
+    <Typography variant="body2">{label}</Typography>
     {[0, 1, 2].map(i => <Box key={i} sx={{ mt: 2 }}>
       <Skeleton animation={false} width="70%" height={28} />
       <Skeleton animation={false} width="95%" />
@@ -65,12 +75,18 @@ function FeedLoading() {
 }
 
 export default function NewsFeed() {
+  const { t, lang } = useLanguage()
   const [query, setQuery] = useState<{ kind: Kind; page: number }>({ kind: '', page: 1 })
   const [revision, setRevision] = useState(0)
   const [data, setData] = useState<FeedResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [selectedItem, setSelectedItem] = useState<FeedItem | null>(null)
+  const kinds: Record<Exclude<Kind, ''>, string> = {
+    news: t('news.kindNews'),
+    preprint: t('news.kindPreprint'),
+    journal_article: t('news.kindJournalArticle'),
+  }
 
   useEffect(() => {
     const controller = new AbortController()
@@ -92,28 +108,28 @@ export default function NewsFeed() {
   return <Box component="section" aria-labelledby="news-feed-heading" sx={{ mb: 6 }}>
     <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'center' }} gap={2} sx={{ mb: 2 }}>
       <Box>
-        <Typography id="news-feed-heading" component="h2" variant="h2">超导快讯与最新论文</Typography>
-        <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>官方来源每日采集 · 按发表时间排序</Typography>
+        <Typography id="news-feed-heading" component="h2" variant="h2">{t('news.feedTitle')}</Typography>
+        <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>{t('news.feedSubtitle')}</Typography>
       </Box>
       <FormControl variant="standard" sx={{ minWidth: 160 }}>
-        <InputLabel htmlFor="news-kind" shrink>资讯类型</InputLabel>
+        <InputLabel htmlFor="news-kind" shrink>{t('news.kindLabel')}</InputLabel>
         <NativeSelect value={query.kind} onChange={event => setQuery({ kind: event.target.value as Kind, page: 1 })} inputProps={{ id: 'news-kind' }}>
-          <option value="">全部资讯</option>
-          <option value="news">新闻</option>
-          <option value="preprint">预印本</option>
-          <option value="journal_article">期刊论文</option>
+          <option value="">{t('news.kindAll')}</option>
+          <option value="news">{t('news.kindNews')}</option>
+          <option value="preprint">{t('news.kindPreprint')}</option>
+          <option value="journal_article">{t('news.kindJournalArticle')}</option>
         </NativeSelect>
       </FormControl>
     </Stack>
     <Typography variant="body2" sx={{ mb: 2, color: 'text.primary' }}>
-      自动采集，未经本站审核
+      {t('news.autoCollected')}
     </Typography>
     <Paper variant="outlined" sx={{ px: { xs: 2, sm: 3 }, borderRadius: 2, boxShadow: 'none' }}>
-      {loading ? <FeedLoading /> : error ? <Alert severity="error" sx={{ my: 2 }} action={<Button color="inherit" onClick={() => setRevision(v => v + 1)}>重试</Button>}>
-        资讯读取失败，请重试。此状态不代表没有新闻。
+      {loading ? <FeedLoading label={t('news.loadingFeed')} /> : error ? <Alert severity="error" sx={{ my: 2 }} action={<Button color="inherit" onClick={() => setRevision(v => v + 1)}>{t('common.retry')}</Button>}>
+        {t('news.feedLoadFailed')}
       </Alert> : data?.items.length === 0 ? <Box sx={{ py: 5 }} role="status">
-        <Typography fontWeight={600}>当前筛选下暂无资讯</Typography>
-        <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>可切换资讯类型，或查看下方来源是否已成功采集。</Typography>
+        <Typography fontWeight={600}>{t('news.feedEmpty')}</Typography>
+        <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>{t('news.feedEmptyHint')}</Typography>
       </Box> : <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
         {data?.items.map(item => <Box
           component="li"
@@ -143,35 +159,35 @@ export default function NewsFeed() {
               }}
             />
             <Typography variant="body2" color="text.secondary">{sourceNames[item.source] || item.source}</Typography>
-            <Typography variant="body2" color="text.secondary">发表：{dateLabel(item.published_at, item.date_precision)}</Typography>
+            <Typography variant="body2" color="text.secondary">{t('news.publishedAt', { date: dateLabel(t, item.published_at, item.date_precision) })}</Typography>
             {item.kind === 'preprint' && item.version > 0 && <Typography variant="body2" color="text.secondary">v{item.version}</Typography>}
           </Stack>
           <Typography component="h3" variant="h3" sx={{ lineHeight: 1.5, maxWidth: '80ch', fontWeight: 600 }}>
             {item.title}
           </Typography>
           {(item.authors.length > 0 || item.journal) && <Typography variant="body2" sx={{ mt: 0.5, color: 'text.secondary' }}>
-            {item.authors.slice(0, 4).join('、')}{item.authors.length > 4 ? ' 等' : ''}{item.journal ? ' · ' + item.journal : ''}
+            {item.authors.slice(0, 4).join(lang === 'zh' ? '、' : ', ')}{item.authors.length > 4 ? t('news.etAl') : ''}{item.journal ? ' · ' + item.journal : ''}
           </Typography>}
         </Box>)}
       </Box>}
     </Paper>
     {!loading && !error && data && data.total > 0 && <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1} sx={{ mt: 2 }}>
-      <Typography variant="body2" aria-live="polite">共 {data.total} 条 · 第 {query.page} / {pages} 页</Typography>
+      <Typography variant="body2" aria-live="polite">{t('news.pageInfo', { total: data.total, page: query.page, pages })}</Typography>
       <Stack direction="row" gap={1}>
-        <Button variant="outlined" disabled={query.page <= 1} onClick={() => setQuery(q => ({ ...q, page: q.page - 1 }))}>上一页</Button>
-        <Button variant="outlined" disabled={query.page >= pages} onClick={() => setQuery(q => ({ ...q, page: q.page + 1 }))}>下一页</Button>
+        <Button variant="outlined" disabled={query.page <= 1} onClick={() => setQuery(q => ({ ...q, page: q.page - 1 }))}>{t('news.prevPage')}</Button>
+        <Button variant="outlined" disabled={query.page >= pages} onClick={() => setQuery(q => ({ ...q, page: q.page + 1 }))}>{t('news.nextPage')}</Button>
       </Stack>
     </Stack>}
     {data && <Box component="details" sx={{ mt: 2, color: 'text.secondary', fontSize: 13 }}>
-      <Box component="summary" sx={{ cursor: 'pointer', py: 1 }}>来源更新状态
-        {data.sources.some(s => s.status === 'failed' || s.status === 'never' || sourceStatus(s).includes('未')) ? ' · 有来源需要关注' : ''}
+      <Box component="summary" sx={{ cursor: 'pointer', py: 1 }}>{t('news.sourceStatusTitle')}
+        {data.sources.some(s => sourceNeedsAttention(s)) ? t('news.sourcesNeedAttention') : ''}
       </Box>
       <Stack gap={1} sx={{ pt: 1 }}>
         {data.sources.map(state => <Box key={state.source}>
-          <Typography variant="body2">{sourceNames[state.source]}：{sourceStatus(state)}{state.error_code ? '（' + state.error_code + '）' : ''}</Typography>
-          <Typography variant="body2">最后成功：{timestamp(state.last_success_at)}</Typography>
+          <Typography variant="body2">{t('news.sourceItem', { name: sourceNames[state.source] || state.source, status: sourceStatus(t, state) })}{state.error_code ? t('news.errorCode', { code: state.error_code }) : ''}</Typography>
+          <Typography variant="body2">{t('news.lastSuccess', { time: timestamp(t, lang, state.last_success_at) })}</Typography>
         </Box>)}
-        <Typography variant="body2">Phys.org 仅覆盖当前订阅窗口；停机期间已移除的历史新闻可能无法补回。</Typography>
+        <Typography variant="body2">{t('news.physorgNote')}</Typography>
       </Stack>
     </Box>}
 
@@ -209,33 +225,33 @@ export default function NewsFeed() {
           </Typography>
 
           {(selectedItem.authors.length > 0 || selectedItem.journal) && <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
-            <strong>作者：</strong>{selectedItem.authors.slice(0, 10).join('、')}{selectedItem.authors.length > 10 ? ' 等' : ''}
-            {selectedItem.journal && <><br /><strong>期刊：</strong>{selectedItem.journal}</>}
+            <strong>{t('news.authorLabel')}</strong>{selectedItem.authors.slice(0, 10).join(lang === 'zh' ? '、' : ', ')}{selectedItem.authors.length > 10 ? t('news.etAl') : ''}
+            {selectedItem.journal && <><br /><strong>{t('news.journalLabel')}</strong>{selectedItem.journal}</>}
           </Typography>}
 
           <Stack direction="row" useFlexGap flexWrap="wrap" gap={1.5} sx={{ mb: 3 }}>
-            <Typography variant="body2" color="text.secondary"><strong>来源：</strong>{sourceNames[selectedItem.source] || selectedItem.source}</Typography>
-            <Typography variant="body2" color="text.secondary"><strong>发表：</strong>{dateLabel(selectedItem.published_at, selectedItem.date_precision)}</Typography>
-            {selectedItem.kind === 'preprint' && selectedItem.version > 0 && <Typography variant="body2" color="text.secondary"><strong>版本：</strong>v{selectedItem.version}</Typography>}
-            <Typography variant="body2" color="text.secondary"><strong>采集：</strong>{dateLabel(selectedItem.last_seen_at)}</Typography>
+            <Typography variant="body2" color="text.secondary"><strong>{t('news.sourceLabel')}</strong>{sourceNames[selectedItem.source] || selectedItem.source}</Typography>
+            <Typography variant="body2" color="text.secondary"><strong>{t('news.publishedLabel')}</strong>{dateLabel(t, selectedItem.published_at, selectedItem.date_precision)}</Typography>
+            {selectedItem.kind === 'preprint' && selectedItem.version > 0 && <Typography variant="body2" color="text.secondary"><strong>{t('news.versionLabel')}</strong>v{selectedItem.version}</Typography>}
+            <Typography variant="body2" color="text.secondary"><strong>{t('news.collectedLabel')}</strong>{dateLabel(t, selectedItem.last_seen_at)}</Typography>
           </Stack>
 
           {selectedItem.summary && <>
-            <Typography variant="body1" fontWeight={600} sx={{ mb: 1.5 }}>摘要</Typography>
+            <Typography variant="body1" fontWeight={600} sx={{ mb: 1.5 }}>{t('news.summaryLabel')}</Typography>
             <Typography variant="body2" sx={{ lineHeight: 1.8, whiteSpace: 'pre-line', mb: 3, color: 'text.primary' }}>
               {selectedItem.summary}
             </Typography>
             {selectedItem.summary_source && <Typography variant="body2" sx={{ mb: 3, color: 'text.secondary', fontStyle: 'italic' }}>
-              摘要来源：{sourceNames[selectedItem.summary_source]}
+              {t('news.summarySourceLabel')}{sourceNames[selectedItem.summary_source]}
             </Typography>}
           </>}
 
           {selectedItem.doi && <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
-            <strong>DOI：</strong>{selectedItem.doi}
+            <strong>{t('news.doiLabel')}</strong>{selectedItem.doi}
           </Typography>}
 
           {selectedItem.links.filter(link => safeNewsLink(link.url)).length > 0 && <>
-            <Typography variant="body1" fontWeight={600} sx={{ mb: 1.5 }}>原文链接</Typography>
+            <Typography variant="body1" fontWeight={600} sx={{ mb: 1.5 }}>{t('news.originalLinks')}</Typography>
             <Stack gap={1} sx={{ mb: 3 }}>
               {selectedItem.links.filter(link => safeNewsLink(link.url)).map(link =>
                 <Link key={link.source} href={safeNewsLink(link.url)} target="_blank" rel="noopener noreferrer" variant="body2" sx={{ display: 'block' }}>
@@ -252,6 +268,7 @@ export default function NewsFeed() {
 interface ManualItem { id: number; title: string; summary: string; event_date: string; link: string }
 
 export function ManualNews() {
+  const { t } = useLanguage()
   const [items, setItems] = useState<ManualItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -269,10 +286,10 @@ export function ManualNews() {
     return () => controller.abort()
   }, [revision])
   return <Box component="section" aria-labelledby="manual-news-heading" sx={{ mb: 6 }}>
-    <Typography id="manual-news-heading" component="h2" variant="h2" sx={{ mb: 2 }}>人工快讯</Typography>
-    {loading ? <Typography role="status" variant="body2">正在加载人工快讯…</Typography> : error ?
-      <Alert severity="error" action={<Button color="inherit" onClick={() => setRevision(v => v + 1)}>重试人工快讯</Button>}>人工快讯读取失败</Alert> :
-      items.length === 0 ? <Typography variant="body2" color="text.secondary">暂无人工发布的快讯。</Typography> :
+    <Typography id="manual-news-heading" component="h2" variant="h2" sx={{ mb: 2 }}>{t('news.manualTitle')}</Typography>
+    {loading ? <Typography role="status" variant="body2">{t('news.loadingManual')}</Typography> : error ?
+      <Alert severity="error" action={<Button color="inherit" onClick={() => setRevision(v => v + 1)}>{t('news.retryManual')}</Button>}>{t('news.manualLoadFailed')}</Alert> :
+      items.length === 0 ? <Typography variant="body2" color="text.secondary">{t('news.manualEmpty')}</Typography> :
       <Stack gap={2}>{items.map(item => <Box key={item.id} sx={{ borderBottom: '1px solid', borderColor: 'divider', pb: 2, overflowWrap: 'anywhere' }}>
         <Typography variant="body2" color="text.secondary">{item.event_date}</Typography>
         <Typography component="h3" variant="h3" sx={{ mt: 1 }}>

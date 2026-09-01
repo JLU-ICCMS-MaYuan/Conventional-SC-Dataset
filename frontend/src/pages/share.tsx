@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Box, Typography, Card, CardContent, Button,
@@ -15,7 +15,8 @@ import {
   buildFamilyStyles, EMPTY_PRESSURE_DOMAIN, EMPTY_TC_DOMAIN, EMPTY_YEAR_DOMAIN,
   FamilyStyle, UNCLASSIFIED_FAMILY_ID,
 } from '../lib/scatterConfig'
-import { loadClassificationCatalogs } from '../lib/classifications'
+import { ClassificationTerm, familyName, loadClassificationCatalogs } from '../lib/classifications'
+import { useLanguage } from '../context/LanguageContext'
 import ChartScatter from '../components/ChartScatter'
 import StructureViewer3D from '../components/StructureViewer3D'
 import { collectPropertyRows, collectStructures, viewerFormat } from '../lib/paperDetailView'
@@ -78,8 +79,11 @@ const CHART_CONTROLS_HEIGHT = 56
 const SharePage: React.FC = () => {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { t, lang } = useLanguage()
 
   // ── 材料家族目录：分类维度由 material_families 动态决定，含用户自建家族 ──
+  // catalogFamilies 保留原始目录项（含 name_zh/name_en），供渲染期按语言取家族名。
+  const [catalogFamilies, setCatalogFamilies] = useState<ClassificationTerm[]>([])
   const [legendFamilies, setLegendFamilies] = useState<FamilyStyle[]>([])
   const [familyStyles, setFamilyStyles] = useState<Map<number, FamilyStyle>>(new Map())
   // null = 全部可见（跟随目录）；数组 = 用户显式选过的子集
@@ -113,11 +117,11 @@ const SharePage: React.FC = () => {
       setContributions(await api.get<ContributionSnapshot>(`/api/community/contributions${suffix}`))
       setContributionsError('')
     } catch {
-      setContributionsError('贡献榜单刷新失败，请稍后重试')
+      setContributionsError(t('share.leaderboardRefreshFailed'))
     } finally {
       setContributionsLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     void loadContributions()
@@ -139,6 +143,7 @@ const SharePage: React.FC = () => {
       .then(catalogs => {
         const families = catalogs.material_families ?? []
         const styles = buildFamilyStyles(families)
+        setCatalogFamilies(families)
         setFamilyStyles(styles)
         setLegendFamilies(
           [...families.map(f => styles.get(f.id)!), styles.get(UNCLASSIFIED_FAMILY_ID)!]
@@ -147,6 +152,7 @@ const SharePage: React.FC = () => {
       })
       .catch(() => {
         const styles = buildFamilyStyles([])
+        setCatalogFamilies([])
         setFamilyStyles(styles)
         setLegendFamilies([styles.get(UNCLASSIFIED_FAMILY_ID)!])
       })
@@ -157,18 +163,18 @@ const SharePage: React.FC = () => {
     setPressureError('')
     api.get<any>(`/api/papers/stats/tc-pressure?tc_field=${encodeURIComponent(pressureTcField)}`)
       .then(data => setPressureData(Array.isArray(data) ? data : []))
-      .catch(() => { setPressureData([]); setPressureError('Tc–Pressure 数据加载失败') })
+      .catch(() => { setPressureData([]); setPressureError(t('share.tcPressureLoadFailed')) })
       .finally(() => setPressureLoading(false))
-  }, [pressureTcField])
+  }, [pressureTcField, t])
 
   useEffect(() => {
     setYearLoading(true)
     setYearError('')
     api.get<any>(`/api/papers/stats/tc-year?tc_field=${encodeURIComponent(yearTcField)}`)
       .then(data => setYearData(Array.isArray(data) ? data : []))
-      .catch(() => { setYearData([]); setYearError('Tc–Year 数据加载失败') })
+      .catch(() => { setYearData([]); setYearError(t('share.tcYearLoadFailed')) })
       .finally(() => setYearLoading(false))
-  }, [yearTcField])
+  }, [yearTcField, t])
 
   // ── Fetch paper detail when paperId changes ──
   useEffect(() => {
@@ -178,13 +184,13 @@ const SharePage: React.FC = () => {
     setPaperDetail(null)
     api.get<any>(`/api/papers/${selectedPaperId}`)
       .then(data => setPaperDetail(data))
-      .catch(() => setDetailError('加载论文详情失败'))
+      .catch(() => setDetailError(t('share.paperDetailLoadFailed')))
       .finally(() => setDetailLoading(false))
-  }, [selectedPaperId])
+  }, [selectedPaperId, t])
 
   // Tc 与计算参数不在 key_properties 里，结构也不在 key_properties[].structure_text 里，
   // 两者都须跨材料状态汇总（见 lib/paperDetailView）
-  const detailPropertyRows = collectPropertyRows(paperDetail)
+  const detailPropertyRows = collectPropertyRows(paperDetail, t)
   const detailStructures = collectStructures(paperDetail)
 
   // ── 家族可见集：null 展开为目录全集，因此新增家族默认可见 ──
@@ -195,14 +201,40 @@ const SharePage: React.FC = () => {
   const visiblePressureFamilies = resolveVisible(pressureFamilies)
   const visibleYearFamilies = resolveVisible(yearFamilies)
 
+  // ── 渲染期本地化家族显示名 ──
+  // 目录项取 familyName(term, lang)（用户自建家族英文缺失时回退中文名）；
+  // 未分类档位（family_id=0）恒为字典文案，不复用数据常量 UNCLASSIFIED_FAMILY_NAME。
+  const localizedFamilyStyles = useMemo(() => {
+    const map = new Map<number, FamilyStyle>()
+    familyStyles.forEach((style, id) => {
+      if (id === UNCLASSIFIED_FAMILY_ID) {
+        map.set(id, { ...style, name: t('share.unclassifiedFamily') })
+      } else {
+        const term = catalogFamilies.find(c => c.id === id)
+        map.set(id, { ...style, name: term ? familyName(term, lang) : style.name })
+      }
+    })
+    return map
+  }, [familyStyles, catalogFamilies, lang, t])
+
+  // 图例与家族多选下拉共用本地化后的名称
+  const localizedLegendFamilies = legendFamilies.map(style => localizedFamilyStyles.get(style.id) ?? style)
+
   // ── Build background DataPoints from API data ──
+  // 数据点家族名同样按语言解析：目录内家族双语，未分类档位用字典文案，未知 id 回退原始名。
+  const resolveFamilyName = (familyId: number | null | undefined, rawName: string): string => {
+    if (familyId == null || familyId === UNCLASSIFIED_FAMILY_ID) return t('share.unclassifiedFamily')
+    const term = catalogFamilies.find(c => c.id === familyId)
+    return term ? familyName(term, lang) : rawName
+  }
+
   const buildBgPoints = (data: any[]): DataPoint[] =>
     (Array.isArray(data) ? data : []).map(d => ({
       x: d.x,
       y: d.y,
       material: d.label || d.formula || '?',
       familyId: d.family_id ?? UNCLASSIFIED_FAMILY_ID,
-      familyName: d.family_name || '其他',
+      familyName: resolveFamilyName(d.family_id, d.family_name || t('share.unclassifiedFamily')),
       articleType: d.type === 'experimental' ? 'e' : 't',
       year: d.year || null,
       doi: d.doi || null,
@@ -221,11 +253,11 @@ const SharePage: React.FC = () => {
   ) => (
     // labelId 让下拉有可访问名，否则屏幕阅读器只能读到当前值而不知这是什么字段
     <FormControl size="small" sx={{ width: TC_FIELD_SELECTOR_WIDTH, flexShrink: 0 }}>
-      <InputLabel id={`${id}-label`}>Tc 字段</InputLabel>
+      <InputLabel id={`${id}-label`}>{t('share.tcField')}</InputLabel>
       <Select
         labelId={`${id}-label`}
         value={value}
-        label="Tc 字段"
+        label={t('share.tcField')}
         onChange={event => onChange(event.target.value as TcField)}
       >
         {TC_FIELDS.map(field => (
@@ -313,7 +345,7 @@ const SharePage: React.FC = () => {
         }}
         renderValue={selected => renderFamilySummary(selected as number[])}
       >
-        {legendFamilies.map(style => (
+        {localizedLegendFamilies.map(style => (
           <MenuItem key={style.id} value={style.id}>
             <Checkbox size="small" checked={visible.has(style.id)} />
             <Box component="span" sx={{ mr: 0.75, color: style.color }}>{style.icon}</Box>
@@ -327,11 +359,24 @@ const SharePage: React.FC = () => {
   // 选中项名称拼接后常常超出固定宽度。超长时折叠为「已选 N 项」而非截断：
   // 截断会让用户无法得知选了几项，信息量更低。
   const renderFamilySummary = (ids: number[]): string => {
-    if (legendFamilies.length > 0 && ids.length === legendFamilies.length) return '全部'
-    if (ids.length === 0) return '未选择'
-    const names = legendFamilies.filter(style => ids.includes(style.id)).map(style => style.name)
-    const joined = names.join('、')
-    return joined.length > FAMILY_SUMMARY_MAX_CHARS ? `已选 ${ids.length} 项` : joined
+    if (legendFamilies.length > 0 && ids.length === legendFamilies.length) return t('common.all')
+    if (ids.length === 0) return t('share.unselected')
+    const names = localizedLegendFamilies.filter(style => ids.includes(style.id)).map(style => style.name)
+    const joined = names.join(t('share.listSeparator'))
+    return joined.length > FAMILY_SUMMARY_MAX_CHARS ? t('share.selectedCount', { n: ids.length }) : joined
+  }
+
+  // 当前用户排名文案：有排名/无排名两种形态，榜名与单位取自字典。
+  const rankText = (
+    boardLabelKey: string,
+    unitKey: string,
+    entry: ContributionRank | null | undefined,
+  ): string => {
+    const board = t(boardLabelKey)
+    const unit = t(unitKey)
+    return entry
+      ? `${board}${t('share.rankDetail', { rank: entry.rank, count: entry.contribution_count, unit })}`
+      : `${board}${t('share.noRankDetail', { unit })}`
   }
 
   const renderLeaderboard = (title: string, rows: ContributionRank[], unit: string) => {
@@ -340,7 +385,7 @@ const SharePage: React.FC = () => {
       <Card variant="outlined" sx={{ flex: { xs: '1 1 100%', md: 1 }, minWidth: { xs: 0, md: 280 } }}>
         <CardContent>
           <Typography variant="h6" sx={{ mb: 1.5 }}>{title}</Typography>
-          {rows.length === 0 ? <Typography color="text.secondary">暂无贡献记录</Typography> : rows.map((row, index) => (
+          {rows.length === 0 ? <Typography color="text.secondary">{t('share.noContributions')}</Typography> : rows.map((row, index) => (
             <React.Fragment key={row.user_id}>
               <Box sx={{ py: 1 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -350,7 +395,7 @@ const SharePage: React.FC = () => {
                     noWrap
                     onClick={() => row.account_status !== 'deactivated' && navigate(`/users/${row.username}`)}
                     sx={{ flex: 1, minWidth: 0, fontWeight: 650, cursor: row.account_status === 'deactivated' ? 'default' : 'pointer', '&:hover': row.account_status === 'deactivated' ? undefined : { color: 'primary.main' } }}
-                  >{row.username}{row.account_status === 'banned' ? ' · 已封禁' : ''}</Typography>
+                  >{row.username}{row.account_status === 'banned' ? ` · ${t('share.banned')}` : ''}</Typography>
                   <Typography fontWeight={800} sx={{ flexShrink: 0 }}>{row.contribution_count} {unit}</Typography>
                 </Box>
                 <Box sx={{ ml: 7.75, mt: 0.75, height: 8, overflow: 'hidden', borderRadius: 999, bgcolor: 'action.hover' }}>
@@ -379,22 +424,22 @@ const SharePage: React.FC = () => {
       <Typography variant="overline">Community</Typography>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, gap: 2, mb: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
         <Box>
-          <Typography variant="h1">社区</Typography>
-          <Typography color="text.secondary">公共数据，个人图表偏好仅保存在当前浏览器。</Typography>
+          <Typography variant="h1">{t('share.title')}</Typography>
+          <Typography color="text.secondary">{t('share.subtitle')}</Typography>
         </Box>
-        <Button variant="outlined" onClick={restoreDefaults}>恢复默认</Button>
+        <Button variant="outlined" onClick={restoreDefaults}>{t('share.restoreDefaults')}</Button>
       </Box>
 
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap', mb: 2 }}>
             <Box>
-              <Typography variant="h5" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><EmojiEvents color="primary" />贡献排行榜</Typography>
-              <Typography color="text.secondary">已有 {contributions?.participant_count ?? '—'} 位研究者参与数据库建设</Typography>
-              {contributions?.generated_at && <Typography variant="caption" color="text.secondary">最后更新：{new Date(contributions.generated_at).toLocaleString()}</Typography>}
+              <Typography variant="h5" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><EmojiEvents color="primary" />{t('share.leaderboardTitle')}</Typography>
+              <Typography color="text.secondary">{t('share.participantCount', { n: contributions?.participant_count ?? '—' })}</Typography>
+              {contributions?.generated_at && <Typography variant="caption" color="text.secondary">{t('share.lastUpdated', { time: new Date(contributions.generated_at).toLocaleString(lang === 'zh' ? 'zh-CN' : 'en-US') })}</Typography>}
             </Box>
             <Button variant="outlined" startIcon={contributionsLoading ? <CircularProgress size={16} /> : <Refresh />}
-              disabled={contributionsLoading} onClick={() => void loadContributions(true)}>刷新榜单</Button>
+              disabled={contributionsLoading} onClick={() => void loadContributions(true)}>{t('share.refreshLeaderboard')}</Button>
           </Box>
           {contributionsError && <Alert severity="warning" sx={{ mb: 2 }}>{contributionsError}</Alert>}
           {contributionsLoading && !contributions ? (
@@ -406,14 +451,14 @@ const SharePage: React.FC = () => {
                   data-testid="current-user-ranking"
                   sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: { xs: 'wrap', md: 'nowrap' }, p: 2, mb: 2, bgcolor: 'action.hover', borderRadius: 2 }}
                 >
-                  <Typography fontWeight={800} sx={{ flexShrink: 0 }}>我的排名</Typography>
-                  <Chip label={`上传榜：${contributions.current_user?.upload ? `第 ${contributions.current_user.upload.rank} 名 · ${contributions.current_user.upload.contribution_count} 篇` : '暂无排名 · 0 篇'}`} />
-                  <Chip label={`审核榜：${contributions.current_user?.review ? `第 ${contributions.current_user.review.rank} 名 · ${contributions.current_user.review.contribution_count} 次` : '暂无排名 · 0 次'}`} />
+                  <Typography fontWeight={800} sx={{ flexShrink: 0 }}>{t('share.myRanking')}</Typography>
+                  <Chip label={rankText('share.uploadBoardLabel', 'share.unitPapers', contributions.current_user?.upload)} />
+                  <Chip label={rankText('share.reviewBoardLabel', 'share.unitReviews', contributions.current_user?.review)} />
                 </Box>
               )}
               <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                {renderLeaderboard('贡献上传榜 Top 20', contributions.upload_leaderboard, '篇')}
-                {renderLeaderboard('贡献审核榜 Top 20', contributions.review_leaderboard, '次')}
+                {renderLeaderboard(t('share.uploadLeaderboardTitle'), contributions.upload_leaderboard, t('share.unitPapers'))}
+                {renderLeaderboard(t('share.reviewLeaderboardTitle'), contributions.review_leaderboard, t('share.unitReviews'))}
               </Box>
             </>
           )}
@@ -426,12 +471,12 @@ const SharePage: React.FC = () => {
       <Card sx={{ minWidth: 0 }}>
         <CardContent>
           <Typography variant="h6" gutterBottom>
-            Tc-Pressure 分布
+            {t('share.chartPressureTitle')}
           </Typography>
           {/* 定高且不换行：控件内容长度不得影响图表纵向位置（两图对齐） */}
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'nowrap', height: CHART_CONTROLS_HEIGHT, alignItems: 'center' }}>
             {renderTcFieldSelector('pressure-tc-field', pressureTcField, changePressureTcField)}
-            {renderFamilySelector('pressure-families', '材料家族', visiblePressureFamilies, changePressureFamilies)}
+            {renderFamilySelector('pressure-families', t('share.materialFamily'), visiblePressureFamilies, changePressureFamilies)}
           </Box>
           <Box sx={{ mt: 1 }}>
             {/* 空数据仍渲染坐标系与品质因子分区，只在图内提示无数据点 */}
@@ -439,18 +484,18 @@ const SharePage: React.FC = () => {
             : pressureError ? <Alert severity="error">{pressureError}</Alert>
             : <ChartScatter
               data={chart1Data}
-              xLabel="Pressure (GPa)"
+              xLabel={t('share.axisPressure')}
               yLabel="Tc (K)"
               tcFieldLabel={TC_FIELD_LABELS[pressureTcField]}
               qualityFactorContours
               minHeight={390}
               xDomain={EMPTY_PRESSURE_DOMAIN}
               yDomain={EMPTY_TC_DOMAIN}
-              familyStyles={familyStyles}
-              legendFamilies={legendFamilies}
+              familyStyles={localizedFamilyStyles}
+              legendFamilies={localizedLegendFamilies}
               visibleFamilies={visiblePressureFamilies}
               onToggleFamily={toggleFamily(visiblePressureFamilies, changePressureFamilies)}
-              emptyHint="当前 Tc 字段暂无可公开数据点"
+              emptyHint={t('share.emptyTcFieldHint')}
               onPointClick={(p) => { if (p.paperId) setSelectedPaperId(p.paperId) }}
             />}
           </Box>
@@ -461,11 +506,11 @@ const SharePage: React.FC = () => {
       <Card sx={{ minWidth: 0 }}>
         <CardContent>
           <Typography variant="h6" gutterBottom>
-            Tc-Year 演变
+            {t('share.chartYearTitle')}
           </Typography>
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'nowrap', height: CHART_CONTROLS_HEIGHT, alignItems: 'center' }}>
             {renderTcFieldSelector('year-tc-field', yearTcField, changeYearTcField)}
-            {renderFamilySelector('year-families', '材料家族', visibleYearFamilies, changeYearFamilies)}
+            {renderFamilySelector('year-families', t('share.materialFamily'), visibleYearFamilies, changeYearFamilies)}
           </Box>
           <Box sx={{ mt: 1 }}>
             {/* 年份图不画品质因子分区：S 依赖压强，在年份轴上无物理意义 */}
@@ -473,18 +518,18 @@ const SharePage: React.FC = () => {
             : yearError ? <Alert severity="error">{yearError}</Alert>
             : <ChartScatter
               data={chart2Data}
-              xLabel="Year"
+              xLabel={t('share.axisYear')}
               yLabel="Tc (K)"
               tcFieldLabel={TC_FIELD_LABELS[yearTcField]}
               minHeight={390}
               temperatureBands
               xDomain={EMPTY_YEAR_DOMAIN}
               yDomain={EMPTY_TC_DOMAIN}
-              familyStyles={familyStyles}
-              legendFamilies={legendFamilies}
+              familyStyles={localizedFamilyStyles}
+              legendFamilies={localizedLegendFamilies}
               visibleFamilies={visibleYearFamilies}
               onToggleFamily={toggleFamily(visibleYearFamilies, changeYearFamilies)}
-              emptyHint="当前 Tc 字段暂无可公开数据点"
+              emptyHint={t('share.emptyTcFieldHint')}
               onPointClick={(p) => { if (p.paperId) setSelectedPaperId(p.paperId) }}
             />}
           </Box>
@@ -502,7 +547,7 @@ const SharePage: React.FC = () => {
         <Box sx={{ p: 3, height: '100%', overflow: 'auto' }}>
           {/* Header */}
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-            <Typography variant="h6" fontWeight={700}>论文详情</Typography>
+            <Typography variant="h6" fontWeight={700}>{t('share.paperDetailTitle')}</Typography>
             <IconButton
               onClick={() => { setSelectedPaperId(null); setPaperDetail(null); setDetailError('') }}
             >
@@ -522,42 +567,42 @@ const SharePage: React.FC = () => {
             <>
               {/* 基础信息 */}
               <Box component="details" open sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, mb: 1.5, overflow: 'hidden' }}>
-                <Box component="summary" sx={{ cursor: 'pointer', p: 2, fontSize: 16, fontWeight: 800 }}>基础信息</Box>
+                <Box component="summary" sx={{ cursor: 'pointer', p: 2, fontSize: 16, fontWeight: 800 }}>{t('share.basicInfo')}</Box>
                 <Box sx={{ px: 2, pb: 2, borderTop: '1px solid', borderColor: 'divider' }}>
                   <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
                     <Box><Typography variant="caption" color="text.secondary">Formula</Typography>
                       <Typography fontWeight={600}>{paperDetail.key_properties?.[0]?.material || '-'}</Typography></Box>
-                    <Box><Typography variant="caption" color="text.secondary">年份</Typography>
+                    <Box><Typography variant="caption" color="text.secondary">{t('share.year')}</Typography>
                       <Typography fontWeight={600}>{paperDetail.year || '-'}</Typography></Box>
                     <Box><Typography variant="caption" color="text.secondary">DOI</Typography>
                       <Typography fontWeight={600} noWrap>{paperDetail.doi || '-'}</Typography></Box>
-                    <Box><Typography variant="caption" color="text.secondary">期刊</Typography>
+                    <Box><Typography variant="caption" color="text.secondary">{t('share.journal')}</Typography>
                       <Typography fontWeight={600}>{paperDetail.journal || '-'}</Typography></Box>
-                    <Box sx={{ gridColumn: '1/-1' }}><Typography variant="caption" color="text.secondary">论文标题</Typography>
+                    <Box sx={{ gridColumn: '1/-1' }}><Typography variant="caption" color="text.secondary">{t('share.paperTitle')}</Typography>
                       <Typography fontWeight={600}>{paperDetail.title || '-'}</Typography></Box>
                     {paperDetail.summary && (
-                      <Box sx={{ gridColumn: '1/-1' }}><Typography variant="caption" color="text.secondary">论文总结</Typography>
+                      <Box sx={{ gridColumn: '1/-1' }}><Typography variant="caption" color="text.secondary">{t('share.summary')}</Typography>
                         <Typography variant="body2" sx={{ fontSize: 12, lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>{paperDetail.summary}</Typography></Box>
                     )}
                   </Box>
                   {paperDetail.doi && (
                     <Button size="small" variant="outlined" sx={{ mt: 1.5 }}
                       onClick={() => window.open(`https://doi.org/${paperDetail.doi}`, '_blank')}
-                      endIcon={<OpenInNew />}>打开原文</Button>
+                      endIcon={<OpenInNew />}>{t('share.openOriginal')}</Button>
                   )}
                 </Box>
               </Box>
 
               {/* 关键物性 */}
               <Box component="details" open sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, mb: 1.5, overflow: 'hidden' }}>
-                <Box component="summary" sx={{ cursor: 'pointer', p: 2, fontSize: 16, fontWeight: 800 }}>关键物性</Box>
+                <Box component="summary" sx={{ cursor: 'pointer', p: 2, fontSize: 16, fontWeight: 800 }}>{t('share.keyProperties')}</Box>
                 <Box sx={{ px: 2, pb: 2, borderTop: '1px solid', borderColor: 'divider', overflowX: 'auto' }}>
                   {detailPropertyRows.length > 0 ? (
                     <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, mt: 1 }}>
                       <Box component="thead">
                         <Box component="tr">
-                          {['材料', '物性', '数值', '条件', '备注'].map(h => (
-                            <Box key={h} component="th" sx={{ p: '4px 8px', borderBottom: '2px solid', borderColor: 'divider', textAlign: 'left', color: 'text.secondary', fontSize: 11, whiteSpace: 'nowrap' }}>{h}</Box>
+                          {['share.colMaterial', 'share.colProperty', 'share.colValue', 'share.colCondition', 'share.colNote'].map(h => (
+                            <Box key={h} component="th" sx={{ p: '4px 8px', borderBottom: '2px solid', borderColor: 'divider', textAlign: 'left', color: 'text.secondary', fontSize: 11, whiteSpace: 'nowrap' }}>{t(h)}</Box>
                           ))}
                         </Box>
                       </Box>
@@ -574,14 +619,14 @@ const SharePage: React.FC = () => {
                       </Box>
                     </Box>
                   ) : (
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>该论文暂无结构化物性数据</Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>{t('share.noPropertyData')}</Typography>
                   )}
                 </Box>
               </Box>
 
               {/* 结构预览：数据源为 material_states[].structures[]（structure_models 表）*/}
               <Box component="details" open sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, mb: 1.5, overflow: 'hidden' }}>
-                <Box component="summary" sx={{ cursor: 'pointer', p: 2, fontSize: 16, fontWeight: 800 }}>结构预览</Box>
+                <Box component="summary" sx={{ cursor: 'pointer', p: 2, fontSize: 16, fontWeight: 800 }}>{t('share.structurePreview')}</Box>
                 <Box sx={{ px: 2, pb: 2, borderTop: '1px solid', borderColor: 'divider' }}>
                   {detailStructures.length > 0 ? (
                     detailStructures.map((s, i) => (
@@ -590,7 +635,7 @@ const SharePage: React.FC = () => {
                           {s.material}{s.name_note ? ` · ${s.name_note}` : ''}{s.pressure_gpa != null ? ` @ ${s.pressure_gpa} GPa` : ''}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          格式 {s.structure_format} · 拖拽旋转 · 滚轮缩放
+                          {t('share.structureFormat', { format: s.structure_format })} · {t('share.structureHint')}
                         </Typography>
                         <Box sx={{ mt: 1 }}>
                           <StructureViewer3D data={s.structure_text} format={viewerFormat(s.structure_format)} height={240} />
@@ -598,18 +643,18 @@ const SharePage: React.FC = () => {
                       </Box>
                     ))
                   ) : (
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>该论文暂无结构数据</Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>{t('share.noStructureData')}</Typography>
                   )}
                 </Box>
               </Box>
 
               {/* 研究方法与发现 */}
               <Box component="details" sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, mb: 1.5, overflow: 'hidden' }}>
-                <Box component="summary" sx={{ cursor: 'pointer', p: 2, fontSize: 16, fontWeight: 800 }}>研究方法与发现</Box>
+                <Box component="summary" sx={{ cursor: 'pointer', p: 2, fontSize: 16, fontWeight: 800 }}>{t('share.methodsAndFindings')}</Box>
                 <Box sx={{ px: 2, pb: 2, borderTop: '1px solid', borderColor: 'divider' }}>
                   <Box sx={{ display: 'grid', gap: 1.5, mt: 1 }}>
                     <Box>
-                      <Typography variant="caption" color="text.secondary">研究方法</Typography>
+                      <Typography variant="caption" color="text.secondary">{t('share.methods')}</Typography>
                       <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', mt: 0.5 }}>
                         {(() => {
                           try {
@@ -622,7 +667,7 @@ const SharePage: React.FC = () => {
                       </Box>
                     </Box>
                     <Box>
-                      <Typography variant="caption" color="text.secondary">核心发现</Typography>
+                      <Typography variant="caption" color="text.secondary">{t('share.keyFindings')}</Typography>
                       {/* 用户按「一个要点一行」录入，换行是内容结构，须保留。
                           字号字重与同区块的论文总结一致：正文用 body2(13px) 不加粗 */}
                       <Typography variant="body2" sx={{ fontSize: 12, lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>

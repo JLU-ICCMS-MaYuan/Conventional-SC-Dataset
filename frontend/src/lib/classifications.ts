@@ -5,6 +5,10 @@ export type ClassificationStatus = 'confirmed' | 'pending'
 export interface ClassificationTerm {
   id: number
   name: string
+  /** 规范中文名。目录接口在 `name` 之外增量返回，旧响应可能缺失。 */
+  name_zh?: string
+  /** 规范英文名。用户自建家族只写中文名，此项为空字符串。 */
+  name_en?: string
   aliases: string[]
 }
 
@@ -63,6 +67,24 @@ export function refreshClassificationCatalogs(): Promise<ClassificationCatalogs>
 
 export function selectionForTerm(term: ClassificationTerm): ClassificationSelection {
   return { id: term.id, name: term.name, status: 'confirmed' }
+}
+
+/**
+ * 按语言取分类家族名。
+ *
+ * 英文缺失时回退中文名而非留空：用户自建家族只有中文名（后端 resolveMaterialFamily
+ * 创建时不写 name_en），留空会使下拉项不可辨认。
+ *
+ * 论文叙述字段只有统一英文内容，不参与这里的双语取值与回退。
+ */
+export function familyName(
+  term: { name_zh?: string; name_en?: string; name?: string } | null | undefined,
+  lang: 'zh' | 'en',
+): string {
+  if (!term) return ''
+  const zh = term.name_zh?.trim() || term.name?.trim() || ''
+  if (lang === 'zh') return zh
+  return term.name_en?.trim() || zh
 }
 
 export function pendingSelection(name: string): ClassificationSelection | null {

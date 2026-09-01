@@ -31,6 +31,55 @@ func TestPaperUpdateFieldsExcludeReviewState(t *testing.T) {
 	if !fields["theoretical_subtype"] {
 		t.Fatal("论文更新必须支持 theoretical_subtype")
 	}
+	if !fields["knowledge_graph_title"] {
+		t.Fatal("管理员论文更新必须支持 knowledge_graph_title")
+	}
+}
+
+func TestPatchPaperAllowsKnowledgeGraphTitle(t *testing.T) {
+	if !paperPatchFieldAllowed("knowledge_graph_title") {
+		t.Fatal("普通论文更新必须支持 knowledge_graph_title")
+	}
+}
+
+// T042：PUT /api/admin/papers/:id 的更新集必须接受并携带 knowledge_graph_title，
+// 且白名单外字段（review_status）不得混入。
+func TestUpdatePaperExtractsKnowledgeGraphTitle(t *testing.T) {
+	body := map[string]interface{}{
+		"knowledge_graph_title": "Discovery of Superconductivity in Mercury",
+		"summary":               "summary text",
+		"review_status":         "approved",
+	}
+	updates := paperUpdatesFromBody(body)
+	if got := updates["knowledge_graph_title"]; got != "Discovery of Superconductivity in Mercury" {
+		t.Fatalf("knowledge_graph_title = %#v, want the submitted value", got)
+	}
+	if got := updates["summary"]; got != "summary text" {
+		t.Fatalf("summary = %#v, want the submitted value", got)
+	}
+	if _, ok := updates["review_status"]; ok {
+		t.Fatal("审核状态不得通过普通编辑进入更新集")
+	}
+}
+
+// T042：PATCH /api/papers/:id 的更新集必须接受 knowledge_graph_title，
+// 且白名单外字段被丢弃。
+func TestPatchPaperExtractsKnowledgeGraphTitle(t *testing.T) {
+	body := map[string]interface{}{
+		"knowledge_graph_title": "Graph title",
+		"review_status":         "approved",
+		"unknown_field":         "value",
+	}
+	updates := paperPatchUpdatesFromBody(body)
+	if got := updates["knowledge_graph_title"]; got != "Graph title" {
+		t.Fatalf("knowledge_graph_title = %#v, want the submitted value", got)
+	}
+	if _, ok := updates["review_status"]; ok {
+		t.Fatal("PATCH 不得接受 review_status")
+	}
+	if _, ok := updates["unknown_field"]; ok {
+		t.Fatal("PATCH 不得接受白名单外字段")
+	}
 }
 
 func TestReviewStatusWhitelist(t *testing.T) {

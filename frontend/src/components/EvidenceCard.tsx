@@ -1,4 +1,5 @@
 import React from 'react'
+import { useLanguage } from '../context/LanguageContext'
 
 /* ========== 类型定义 ========== */
 
@@ -55,6 +56,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 /* ========== 主组件 ========== */
 
 const EvidenceCard: React.FC<EvidenceCardProps> = ({ idea, review, paperSeqMap }) => {
+  const { t } = useLanguage()
   return (
     <div style={s.card}>
       {/* 标题栏 */}
@@ -63,7 +65,7 @@ const EvidenceCard: React.FC<EvidenceCardProps> = ({ idea, review, paperSeqMap }
         <span style={{ flex: 1 }}>{idea.title}</span>
         {idea.feasibility && (
           <span style={{ fontSize: 12, fontWeight: 400, color: '#94a3b8' }}>
-            可行性 <Stars n={idea.feasibility.overall} />
+            {t('upload.feasibility')} <Stars n={idea.feasibility.overall} />
           </span>
         )}
       </div>
@@ -71,7 +73,7 @@ const EvidenceCard: React.FC<EvidenceCardProps> = ({ idea, review, paperSeqMap }
       {/* 灵感来源 — 引文片段 */}
       {idea.fragments.length > 0 && (
         <div style={s.section}>
-          <SectionLabel>📎 灵感来源</SectionLabel>
+          <SectionLabel>{t('upload.inspirationSource')}</SectionLabel>
           {idea.fragments.map((f, i) => (
             <div key={i} style={s.fragment}>
               <div style={s.quote}>
@@ -93,7 +95,7 @@ const EvidenceCard: React.FC<EvidenceCardProps> = ({ idea, review, paperSeqMap }
       {/* 推理链 */}
       {idea.reasoning_chain && (
         <div style={s.section}>
-          <SectionLabel>🔗 推理链</SectionLabel>
+          <SectionLabel>{t('upload.reasoningChain')}</SectionLabel>
           <div style={s.textBlock}>{idea.reasoning_chain}</div>
         </div>
       )}
@@ -101,7 +103,7 @@ const EvidenceCard: React.FC<EvidenceCardProps> = ({ idea, review, paperSeqMap }
       {/* 假设前提 */}
       {idea.assumptions.length > 0 && (
         <div style={s.section}>
-          <SectionLabel>⚠️ 假设前提</SectionLabel>
+          <SectionLabel>{t('upload.assumptions')}</SectionLabel>
           <ul style={s.assumptionList}>
             {idea.assumptions.map((a, i) => (
               <li key={i} style={s.assumptionItem}>{a}</li>
@@ -114,9 +116,9 @@ const EvidenceCard: React.FC<EvidenceCardProps> = ({ idea, review, paperSeqMap }
       {review && (
         <div style={s.review}>
           <div style={s.reviewHeader}>
-            <span>🔍 审稿意见</span>
+            <span>{t('upload.reviewComment')}</span>
             <span style={{ fontWeight: 400, fontSize: 12 }}>
-              综合可行性 <Stars n={review.feasibility_score} />
+              {t('upload.overallFeasibility')} <Stars n={review.feasibility_score} />
             </span>
           </div>
 
@@ -124,7 +126,7 @@ const EvidenceCard: React.FC<EvidenceCardProps> = ({ idea, review, paperSeqMap }
           {review.flaws.map((f, i) => (
             <div key={i} style={s.flawItem}>
               <span style={{ ...s.flawBadge, ...(severityBadge[f.severity] || severityBadge.low) }}>
-                {f.severity === 'high' ? '严重' : f.severity === 'medium' ? '中等' : '轻微'}
+                {f.severity === 'high' ? t('upload.severityHigh') : f.severity === 'medium' ? t('upload.severityMedium') : t('upload.severityLow')}
               </span>
               <span style={{ color: '#475569', lineHeight: 1.55 }}>{f.description}</span>
             </div>
@@ -133,12 +135,12 @@ const EvidenceCard: React.FC<EvidenceCardProps> = ({ idea, review, paperSeqMap }
           {/* 三维评分 */}
           <div style={s.dimensionBar}>
             {([
-              { key: 'theory', label: '理论自洽' },
-              { key: 'synthesis', label: '合成可达' },
-              { key: 'measurement', label: '测量可验' },
-            ] as const).map(({ key, label }) => (
+              { key: 'theory', labelKey: 'dimensionTheory' },
+              { key: 'synthesis', labelKey: 'dimensionSynthesis' },
+              { key: 'measurement', labelKey: 'dimensionMeasurement' },
+            ] as const).map(({ key, labelKey }) => (
               <div key={key} style={s.dimensionItem}>
-                <span style={{ fontSize: 11, color: '#94a3b8' }}>{label}</span>
+                <span style={{ fontSize: 11, color: '#94a3b8' }}>{t('upload.' + labelKey)}</span>
                 <Stars n={review.dimensions[key]} max={5} />
               </div>
             ))}

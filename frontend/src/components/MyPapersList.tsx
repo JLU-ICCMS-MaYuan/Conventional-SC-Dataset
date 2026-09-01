@@ -4,6 +4,7 @@ import {
   Box, Button, Chip, CircularProgress, Stack, Typography,
 } from '@mui/material'
 import { api } from '../lib/api'
+import { useLanguage } from '../context/LanguageContext'
 
 interface MyPaper {
   id: number
@@ -15,9 +16,7 @@ interface MyPaper {
   created_at: string | null
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  pending: '待审核', approved: '审核完成', rejected: '已拒绝', needs_revision: '待审核（旧状态）',
-}
+// 审核状态的颜色映射；标签文案按 value 查 dict.enums.reviewStatus。
 const STATUS_COLORS: Record<string, 'warning' | 'success' | 'error' | 'info'> = {
   pending: 'warning', approved: 'success', rejected: 'error', needs_revision: 'info',
 }
@@ -26,6 +25,7 @@ const STATUS_COLORS: Record<string, 'warning' | 'success' | 'error' | 'info'> = 
 // 「上传解析记录」性质不同，因此单独放在用户中心，不混入上传工作区。
 const MyPapersList: React.FC = () => {
   const navigate = useNavigate()
+  const { t, dict } = useLanguage()
   const [items, setItems] = useState<MyPaper[] | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -37,11 +37,11 @@ const MyPapersList: React.FC = () => {
       const data = await api.get<{ items?: MyPaper[] }>('/api/papers/my-uploads')
       setItems(Array.isArray(data?.items) ? data.items : [])
     } catch (e: any) {
-      setError(e?.message || '加载我的论文失败')
+      setError(e?.message || t('paperDetail.loadMyPapersFailed'))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => { void load() }, [load])
 
@@ -57,7 +57,7 @@ const MyPapersList: React.FC = () => {
     return (
       <Box sx={{ py: 2 }}>
         <Typography color="error" variant="body2" gutterBottom>{error}</Typography>
-        <Button size="small" onClick={() => void load()}>重试</Button>
+        <Button size="small" onClick={() => void load()}>{t('common.retry')}</Button>
       </Box>
     )
   }
@@ -65,7 +65,7 @@ const MyPapersList: React.FC = () => {
   if (!items || items.length === 0) {
     return (
       <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-        还没有提交过论文。上传并提交审核后，论文会出现在这里，可随时只读复查。
+        {t('paperDetail.emptyMyPapers')}
       </Typography>
     )
   }
@@ -92,7 +92,7 @@ const MyPapersList: React.FC = () => {
           <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
             <Box sx={{ minWidth: 0 }}>
               <Typography variant="body2" fontWeight={700} noWrap>
-                {paper.title || `论文 #${paper.id}`}
+                {paper.title || t('paperDetail.paperIndexFallback', { n: paper.id })}
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 {[paper.journal, paper.year, paper.doi].filter(Boolean).join(' · ') || '—'}
@@ -100,7 +100,7 @@ const MyPapersList: React.FC = () => {
             </Box>
             <Chip
               size="small"
-              label={STATUS_LABELS[paper.review_status || ''] || paper.review_status || '待审核'}
+              label={(dict.enums.reviewStatus as Record<string, string>)[paper.review_status || ''] || paper.review_status || (dict.enums.reviewStatus as Record<string, string>).pending}
               color={STATUS_COLORS[paper.review_status || ''] || 'default'}
             />
           </Stack>

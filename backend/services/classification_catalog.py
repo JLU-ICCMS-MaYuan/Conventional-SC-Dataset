@@ -170,6 +170,8 @@ async def load_active_catalogs(session) -> dict[str, Any]:
         return {
             "id": term.id,
             "name": term.name_zh,
+            "name_zh": term.name_zh,
+            "name_en": term.name_en or "",
             "aliases": sorted({alias.alias for alias in term.aliases}),
         }
 

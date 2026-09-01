@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { flushSync } from 'react-dom'
 import { api } from './api'
+import { useLanguage } from '../context/LanguageContext'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -82,6 +83,7 @@ function saveMeta(cid: string, meta: CachedMeta) {
 }
 
 export function useStreamingChat() {
+  const { t } = useLanguage()
   const [convs, setConvs] = useState<Conversation[]>(load)
   const [activeId, setActiveId] = useState<string>(() => convs[0]?.id || '')
   const [loading, setLoading] = useState(false)
@@ -122,7 +124,7 @@ export function useStreamingChat() {
   useEffect(() => { save(convs) }, [convs])
 
   const newConversation = useCallback((switchTo = true) => {
-    const c: Conversation = { id: uid(), title: '新对话', messages: [], createdAt: Date.now() }
+    const c: Conversation = { id: uid(), title: t('rag.newConversation'), messages: [], createdAt: Date.now() }
     setConvs((prev) => [c, ...prev])
     if (switchTo) {
     setActiveId(c.id)
@@ -134,7 +136,7 @@ export function useStreamingChat() {
     setStatusLog([])
     setSavedPapers([])
     }
-  }, [])
+  }, [t])
 
   const switchConversation = useCallback((id: string) => {
     setActiveId(id)
@@ -195,7 +197,7 @@ export function useStreamingChat() {
     setTop10([])
     setStatusLog([])
     if (explore) {
-      setInspiration({ active: true, mode: '', modeLabel: '探索模式', statusMessage: '正在分析问题...', sessionId: '', ideasCount: 0 })
+      setInspiration({ active: true, mode: '', modeLabel: t('rag.exploreMode'), statusMessage: t('rag.analyzingQuestion'), sessionId: '', ideasCount: 0 })
       setIdeas([])
       setReviews([])
     }
@@ -247,14 +249,14 @@ export function useStreamingChat() {
                 mode: data.mode,
                 modeLabel: data.mode_label,
                 sessionId: data.session_id,
-                statusMessage: '正在分析...',
+                statusMessage: t('rag.analyzing'),
                 ideasCount: 0,
               })
             } else if (eventType === 'inspire_mode') {
               setInspiration(prev => ({ ...prev, mode: data.mode, modeLabel: data.label }))
             } else if (eventType === 'curation') {
               keptIdsRef.current = (data.keep_paper_ids || []).map(String)
-              setInspiration(prev => ({ ...prev, statusMessage: `筛选文献: ${data.keep_paper_ids?.length || 0} 篇 - ${data.summary?.slice(0, 60) || ''}` }))
+              setInspiration(prev => ({ ...prev, statusMessage: t('rag.filteringPapers', { n: data.keep_paper_ids?.length || 0, s: data.summary?.slice(0, 60) || '' }) }))
             } else if (eventType === 'inspire_exit') {
               setInspiration({ active: false, mode: '', modeLabel: '', statusMessage: '', sessionId: '', ideasCount: 0 })
             } else if (eventType === 'evidence_card') {
@@ -282,12 +284,12 @@ export function useStreamingChat() {
               }
             } else if (eventType === 'tool_start') {
               const name = data.name || ''
-              const msg = `🔍 正在查询: ${name}`
+              const msg = t('rag.querying', { name })
               flushSync(() => { setStatusLog(prev => [...prev, msg]) })
               setInspiration(prev => prev.active ? { ...prev, statusMessage: msg } : prev)
             } else if (eventType === 'tool_end') {
               const name = data.name || ''
-              const msg = `✅ 查询完成: ${name}`
+              const msg = t('rag.queryDone', { name })
               flushSync(() => { setStatusLog(prev => [...prev, msg]) })
               setInspiration(prev => prev.active ? { ...prev, statusMessage: msg } : prev)
             } else if (eventType === 'done') {
@@ -299,7 +301,7 @@ export function useStreamingChat() {
               }
               if (!data.papers && !data.top10 && data.source) {
                 const label = data.source.startsWith('inspire_') ? '' : ` (${data.source})`
-                setInspiration(prev => ({ ...prev, statusMessage: `✅ 探索完成${label}` }))
+                setInspiration(prev => ({ ...prev, statusMessage: t('rag.exploreDone', { label }) }))
               }
               // accumulate papers into savedPapers (deduplicated, sequential numbering)
               if (data.papers) {
@@ -334,7 +336,7 @@ export function useStreamingChat() {
                 finalInspiration = ins
               }
             } else if (eventType === 'error') {
-              throw new Error(data.message || 'AI 错误')
+              throw new Error(data.message || t('rag.aiError'))
             }
           } catch { /* skip */ }
         }
@@ -359,7 +361,7 @@ export function useStreamingChat() {
       ),
     } : c))
     if (cid) saveMeta(cid, { papers: receivedPapers, top10: receivedTop10, inspiration: finalInspiration, ideas: receivedIdeas, reviews: receivedReviews, savedPapers: savedPapersAcc })
-  }, [activeId, convs, loading])
+  }, [activeId, convs, loading, t])
 
   return {
     convs, activeId, messages, loading, papers, top10, streamRef, inspiration,

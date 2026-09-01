@@ -10,6 +10,7 @@ import {
   Replay as ReplayIcon, EditNote as EditNoteIcon, KeyboardArrowUp as KeyboardArrowUpIcon,
 } from '@mui/icons-material'
 import { useAuth } from '../context/AuthContext'
+import { useLanguage } from '../context/LanguageContext'
 import AuthDialog from '../components/AuthDialog'
 import UploadTaskCenter from '../components/UploadTaskCenter'
 import MultiFileUploadPanel from '../components/MultiFileUploadPanel'
@@ -32,11 +33,11 @@ interface ParsedGroup {
 const ACCEPTED_TYPES = ['.json', '.pdf', '.txt', '.md']
 const ACCEPTED_STR = ACCEPTED_TYPES.join(',')
 const MAX_PAPER_UPLOAD_BYTES = 50 * 1024 * 1024
-const FILE_TOO_LARGE_MESSAGE = '文件超过 50 MB 限制'
 
 /* ═══════════════════════════════════════════════ */
 const UploadPage: React.FC = () => {
   const { user } = useAuth()
+  const { t } = useLanguage()
   const navigate = useNavigate()
   const fileInput = useRef<HTMLInputElement>(null)
   const uploadXhr = useRef<XMLHttpRequest | null>(null)
@@ -76,6 +77,12 @@ const UploadPage: React.FC = () => {
   const isJsonFile = (f: File) => fileSuffix(f).endsWith('.json')
   const formatSize = (s: number) =>
     s > 1024 * 1024 ? `${(s / 1024 / 1024).toFixed(1)} MB` : `${(s / 1024).toFixed(1)} KB`
+
+  // 处理阶段标签统一走 upload.step.<stage.key>（与处理流程组件保持一致）
+  const stageLabel = (key: string): string => {
+    const stage = PROCESSING_STAGES.find(item => item.key === key)
+    return stage ? t('upload.step.' + stage.key) : key
+  }
 
   const taskStorageKey = user ? `scwiki_active_upload_task:${user.id}` : null
 
@@ -126,7 +133,7 @@ const UploadPage: React.FC = () => {
           setActiveTaskId(null)
           setTaskState(null)
         } else {
-          setError(reason.message || '处理进度查询失败，稍后将自动重试')
+          setError(reason.message || t('upload.progressQueryFailed'))
           timer = window.setTimeout(poll, 2000)
         }
       } finally {
@@ -151,7 +158,7 @@ const UploadPage: React.FC = () => {
       try {
         const data = JSON.parse(e.target?.result as string)
         if (!data.name && !data.items) {
-          setError('JSON 格式不正确：需要 name 和 items 字段')
+          setError(t('upload.jsonInvalid'))
           return
         }
         const g: ParsedGroup = {
@@ -162,7 +169,7 @@ const UploadPage: React.FC = () => {
         setParsed(g)
         setName(g.name)
         setDescription(g.description)
-      } catch { setError('文件解析失败：不是有效的 JSON') }
+      } catch { setError(t('upload.jsonParseFailed')) }
     }
     reader.readAsText(f)
   }
@@ -175,12 +182,12 @@ const UploadPage: React.FC = () => {
       setFile(f); setFileType('json'); parseJson(f)
     } else if (isPaperFile(f)) {
       if (f.size > MAX_PAPER_UPLOAD_BYTES) {
-        setFile(null); setFileType(''); setError(FILE_TOO_LARGE_MESSAGE)
+        setFile(null); setFileType(''); setError(t('upload.fileTooLarge'))
         return
       }
       setFile(f); setFileType('paper')
     } else {
-      setFile(null); setFileType(''); setError(`不支持的文件类型。支持: ${ACCEPTED_STR}`)
+      setFile(null); setFileType(''); setError(t('upload.unsupportedFileType', { types: ACCEPTED_STR }))
     }
   }
 
@@ -199,7 +206,7 @@ const UploadPage: React.FC = () => {
   const handleUploadPaper = () => {
     if (!file) return
     if (file.size > MAX_PAPER_UPLOAD_BYTES) {
-      setError(FILE_TOO_LARGE_MESSAGE)
+      setError(t('upload.fileTooLarge'))
       return
     }
     setUploading(true)
@@ -229,7 +236,7 @@ const UploadPage: React.FC = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
           const data = JSON.parse(xhr.responseText) as UploadAcceptedResponse
-          if (!data.task_id) throw new Error('上传响应缺少任务编号')
+          if (!data.task_id) throw new Error(t('upload.responseMissingTask'))
           setActiveTaskId(data.task_id)
           setTaskState({
             task_id: data.task_id,
@@ -243,24 +250,24 @@ const UploadPage: React.FC = () => {
             total_chunks: data.total_chunks || 0,
           })
           if (taskStorageKey) localStorage.setItem(taskStorageKey, data.task_id)
-          setSnackbar('文件已保存，正在解析论文')
+          setSnackbar(t('upload.fileSavedParsing'))
           setFile(null); setFileType('')
         } catch {
-          setError('响应解析失败')
+          setError(t('upload.responseParseFailed'))
         }
       } else {
         if (xhr.status === 413) {
-          setError(FILE_TOO_LARGE_MESSAGE)
+          setError(t('upload.fileTooLarge'))
           return
         }
         try {
           const err = JSON.parse(xhr.responseText)
           const detail = err.detail
           const message = typeof detail === 'string' ? detail : (detail?.message || detail?.detail || err.message)
-          setError(message || '上传失败')
+          setError(message || t('upload.uploadFailed'))
         } catch {
           const plainText = xhr.responseText.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
-          setError(plainText || `上传失败（HTTP ${xhr.status}）`)
+          setError(plainText || t('upload.uploadFailedHttp', { status: xhr.status }))
         }
       }
     }
@@ -268,7 +275,7 @@ const UploadPage: React.FC = () => {
     xhr.onerror = () => {
       setUploading(false)
       uploadXhr.current = null
-      setError('网络错误，上传失败')
+      setError(t('upload.networkError'))
     }
 
     xhr.onabort = () => {
@@ -288,9 +295,9 @@ const UploadPage: React.FC = () => {
         ...current, processing_status: 'processing', processing_error: null,
       } : current)
       setTaskPollTick(value => value + 1)
-      setSnackbar('已重新开始解析失败或未完成的段落')
+      setSnackbar(t('upload.retryStarted'))
     } catch (reason: any) {
-      setError(reason.message || '重新解析失败')
+      setError(reason.message || t('upload.retryParseFailed'))
     } finally {
       setTaskLoading(false)
     }
@@ -304,9 +311,9 @@ const UploadPage: React.FC = () => {
       setTaskState(current => current ? {
         ...current, stage: 'ready', stage_index: 5, processing_status: 'succeeded', processing_error: null,
       } : current)
-      setSnackbar('已打开手动填写草稿')
+      setSnackbar(t('upload.manualDraftOpened'))
     } catch (reason: any) {
-      setError(reason.message || '无法打开手动草稿')
+      setError(reason.message || t('upload.manualDraftFailed'))
     } finally {
       setTaskLoading(false)
     }
@@ -317,7 +324,7 @@ const UploadPage: React.FC = () => {
     if (taskStorageKey) localStorage.removeItem(taskStorageKey)
     setActiveTaskId(null)
     setTaskState(null)
-    setSnackbar('已提交管理员审核')
+    setSnackbar(t('upload.submittedForReview'))
     navigate(`/papers/${paperId}`)
   }
 
@@ -345,9 +352,9 @@ const UploadPage: React.FC = () => {
         })
         localStorage.setItem('scwiki_local_groups', JSON.stringify(stored))
       }
-      setSnackbar('组合导入成功')
+      setSnackbar(t('upload.groupImportSuccess'))
       setTimeout(() => navigate('/share'), 500)
-    } catch (e: any) { setError(e.message || '保存失败') }
+    } catch (e: any) { setError(e.message || t('upload.groupSaveFailed')) }
     finally { setSaving(false) }
   }
 
@@ -365,13 +372,13 @@ const UploadPage: React.FC = () => {
     return (
       <Box sx={{ maxWidth: 560, mx: 'auto', textAlign: 'center', py: 8 }}>
         <CloudUpload sx={{ fontSize: 64, color: 'text.disabled', mb: 3 }} />
-        <Typography variant="h5" fontWeight={700} gutterBottom>请登录后使用上传功能</Typography>
+        <Typography variant="h5" fontWeight={700} gutterBottom>{t('upload.loginRequired')}</Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-          登录后可以上传超导论文 PDF/TXT/MD 文件，系统会自动解析并富化物性数据。
+          {t('upload.loginHint')}
         </Typography>
         <Button variant="contained" size="large" onClick={() => setAuthOpen(true)}
           sx={{ borderRadius: '999px', px: 6, py: 1.5, fontSize: 16 }}>
-          登录 / 注册
+          {t('upload.loginRegister')}
         </Button>
         <AuthDialog open={authOpen} onClose={() => setAuthOpen(false)} />
       </Box>
@@ -386,15 +393,15 @@ const UploadPage: React.FC = () => {
       <Box sx={{ mb: 3 }}>
         <Box>
           <Typography variant="overline" color="text.secondary">Upload</Typography>
-          <Typography variant="h4" fontWeight={800}>上传</Typography>
+          <Typography variant="h4" fontWeight={800}>{t('upload.pageTitle')}</Typography>
         </Box>
       </Box>
 
       {/* Tabs: Paper / JSON */}
       <Tabs value={tab} onChange={(_, v) => { setTab(v); setFile(null); setError(''); setParsed(null); }}
         sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}>
-        <Tab label="论文上传" />
-        <Tab label="组合导入 (JSON)" />
+        <Tab label={t('upload.tabPaper')} />
+        <Tab label={t('upload.tabJson')} />
       </Tabs>
 
       {/* ── TAB 0: Paper upload ── */}
@@ -411,7 +418,7 @@ const UploadPage: React.FC = () => {
             <Box sx={{ mb: 3 }}>
               <Card variant="outlined" sx={{ overflow: 'visible' }}>
                 <CardContent>
-                  <Box role="region" aria-label="当前解析任务操作" sx={{
+                  <Box role="region" aria-label={t('upload.taskActionsAria')} sx={{
                     position: 'sticky', top: '80px', zIndex: theme => theme.zIndex.appBar - 1,
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2,
                     mx: -2, mt: -2, mb: 2, px: 2, py: 1.5,
@@ -419,11 +426,15 @@ const UploadPage: React.FC = () => {
                     boxShadow: '0 1px 2px rgba(15,23,42,0.08)',
                   }}>
                     <Box sx={{ minWidth: 0, flex: 1 }}>
-                      <Typography variant="h6" fontWeight={700} noWrap>{taskState?.filename || '正在读取上传任务'}</Typography>
+                      <Typography variant="h6" fontWeight={700} noWrap>{taskState?.filename || t('upload.readingTask')}</Typography>
                       <Typography variant="body2" color="text.secondary">
                         {taskState
-                          ? `第 ${taskState.stage_index}/${taskState.stage_total} 步：${PROCESSING_STAGES.find(item => item.key === taskState.stage)?.label || taskState.stage}`
-                          : '正在恢复处理进度…'}
+                          ? t('upload.stageProgress', {
+                              index: taskState.stage_index,
+                              total: taskState.stage_total,
+                              label: stageLabel(taskState.stage),
+                            })
+                          : t('upload.restoringProgress')}
                       </Typography>
                     </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
@@ -432,10 +443,10 @@ const UploadPage: React.FC = () => {
                         size="small"
                         variant="contained"
                         startIcon={<KeyboardArrowUpIcon />}
-                        aria-label="收起当前解析详情"
+                        aria-label={t('upload.collapseDetailAria')}
                         onClick={collapseActiveTask}
                         sx={{ minHeight: 44, flexShrink: 0 }}
-                      >收起解析</Button>
+                      >{t('upload.collapseDetail')}</Button>
                     </Box>
                   </Box>
 
@@ -453,7 +464,7 @@ const UploadPage: React.FC = () => {
                             bgcolor: complete || active ? 'primary.main' : 'action.disabledBackground',
                           }}>{complete ? '✓' : index + 1}</Box>
                           <Typography variant="caption" color={active ? 'text.primary' : 'text.secondary'}
-                            sx={{ fontWeight: active ? 700 : 400, overflowWrap: 'anywhere' }}>{item.label}</Typography>
+                            sx={{ fontWeight: active ? 700 : 400, overflowWrap: 'anywhere' }}>{t('upload.step.' + item.key)}</Typography>
                         </Box>
                       )
                     })}
@@ -462,7 +473,7 @@ const UploadPage: React.FC = () => {
                   {taskState?.stage === 'reading' && taskState.total_chunks > 0 && (
                     <Box sx={{ mt: 2 }}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                        <Typography variant="caption" color="text.secondary">全文分段阅读进度</Typography>
+                        <Typography variant="caption" color="text.secondary">{t('upload.chunkReadingProgress')}</Typography>
                         <Typography variant="caption" fontWeight={700}>
                           {taskState.completed_chunks}/{taskState.total_chunks}
                         </Typography>
@@ -474,29 +485,29 @@ const UploadPage: React.FC = () => {
 
                   {taskState?.processing_status === 'processing' && (
                     <Alert severity="info" sx={{ mt: 2 }}>
-                      当前进度来自服务器。关闭或刷新页面不会中断处理，再次打开本页会继续显示。
+                      {t('upload.serverProgressNote')}
                     </Alert>
                   )}
                   {taskState?.processing_status === 'failed' && (
                     <Alert severity="error" sx={{ mt: 2 }}>
                       <Typography variant="body2" fontWeight={700}>
-                        第 {taskState.stage_index}/{taskState.stage_total} 步失败
+                        {t('upload.stageFailed', { index: taskState.stage_index, total: taskState.stage_total })}
                       </Typography>
-                      <Typography variant="body2">{taskState.processing_error || '服务器没有返回具体失败原因'}</Typography>
+                      <Typography variant="body2">{taskState.processing_error || t('upload.noFailureReason')}</Typography>
                       <Box sx={{ display: 'flex', gap: 1, mt: 1.5, flexWrap: 'wrap' }}>
                         <Button size="small" variant="contained" startIcon={<ReplayIcon />}
-                          disabled={taskLoading} onClick={() => void retryTask()}>重新解析</Button>
+                          disabled={taskLoading} onClick={() => void retryTask()}>{t('upload.retryParse')}</Button>
                         <Button size="small" variant="outlined" startIcon={<EditNoteIcon />}
-                          disabled={taskLoading} onClick={() => void openManualDraft()}>手动填写</Button>
+                          disabled={taskLoading} onClick={() => void openManualDraft()}>{t('upload.manualFill')}</Button>
                       </Box>
                     </Alert>
                   )}
                   {taskState?.duplicate && taskState.existing_paper_id && (
                     <Alert severity="warning" sx={{ mt: 2 }}
                       action={taskState.allowed_actions?.includes('view')
-                        ? <Button color="inherit" size="small" onClick={() => openExistingPaper(taskState.existing_paper_id!)}>打开已有论文</Button>
+                        ? <Button color="inherit" size="small" onClick={() => openExistingPaper(taskState.existing_paper_id!)}>{t('upload.openExistingPaper')}</Button>
                         : undefined}>
-                      {taskState.duplicate_reason || '数据库中已有相同 DOI，未创建重复论文。'}
+                      {taskState.duplicate_reason || t('upload.duplicateExisting')}
                     </Alert>
                   )}
                   {activeTaskId && <UploadParsingDetail taskId={activeTaskId} onSubmitted={handleTaskSubmitted} />}
@@ -525,13 +536,13 @@ const UploadPage: React.FC = () => {
               }}>
               <CardContent sx={{ textAlign: 'center', py: 8 }}>
                 <Code sx={{ fontSize: 48, color: 'text.disabled', mb: 2 }} />
-                <Typography variant="h6" gutterBottom>导入 JSON 组合文件</Typography>
+                <Typography variant="h6" gutterBottom>{t('upload.importJsonTitle')}</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  需要包含 name 和 items 字段，用于 Tc-P 图表可视化
+                  {t('upload.importJsonHint')}
                 </Typography>
                 <input ref={fileInput} type="file" accept=".json" hidden onChange={handleFileChange} />
                 <Button variant="outlined" onClick={(e) => { e.stopPropagation(); fileInput.current?.click() }}>
-                  选择 JSON 文件
+                  {t('upload.chooseJsonFile')}
                 </Button>
               </CardContent>
             </Card>
@@ -539,16 +550,16 @@ const UploadPage: React.FC = () => {
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <Card variant="outlined">
                 <CardContent>
-                  <Typography variant="h6" fontWeight={600} gutterBottom>组合预览</Typography>
+                  <Typography variant="h6" fontWeight={600} gutterBottom>{t('upload.groupPreview')}</Typography>
                   <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, mb: 2 }}>
-                    <TextField label="组合名称" size="small" value={name}
+                    <TextField label={t('upload.groupName')} size="small" value={name}
                       onChange={e => setName(e.target.value)} />
-                    <TextField label="描述" size="small" value={description}
+                    <TextField label={t('upload.groupDescription')} size="small" value={description}
                       onChange={e => setDescription(e.target.value)} />
                   </Box>
                   <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-                    <Chip size="small" label={`${parsed.items.length} 个数据点`} variant="outlined" />
-                    <Chip size="small" label={user ? '保存到数据库' : '保存到本地'}
+                    <Chip size="small" label={t('upload.dataPoints', { count: parsed.items.length })} variant="outlined" />
+                    <Chip size="small" label={user ? t('upload.saveToDatabase') : t('upload.saveToLocal')}
                       color={user ? 'primary' : 'default'} variant="outlined" />
                   </Box>
                   {parsed.items.length > 0 && (
@@ -558,7 +569,7 @@ const UploadPage: React.FC = () => {
                       }}>
                         <Box component="thead">
                           <Box component="tr">
-                            {['材料', 'Tc(K)', 'P(GPa)', '类型'].map(h => (
+                            {[t('upload.colMaterial'), 'Tc(K)', 'P(GPa)', t('upload.colType')].map(h => (
                               <Box key={h} component="th" sx={{
                                 p: '8px 12px', borderBottom: '2px solid', borderColor: 'divider',
                                 textAlign: 'left', color: 'text.secondary', fontSize: 12,
@@ -596,11 +607,11 @@ const UploadPage: React.FC = () => {
               </Card>
               <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
                 <Button variant="outlined" onClick={() => { setParsed(null); setFile(null); setError('') }}>
-                  重新上传
+                  {t('upload.reUpload')}
                 </Button>
                 <Button variant="contained" onClick={handleSaveGroup} disabled={saving || !name.trim()}
                   startIcon={saving ? <CircularProgress size={18} /> : <Check />}>
-                  {saving ? '保存中…' : '保存组合'}
+                  {saving ? t('common.saving') : t('upload.saveGroup')}
                 </Button>
               </Box>
             </Box>

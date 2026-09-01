@@ -115,21 +115,23 @@ tc_method 只能取给定枚举；论文方法无法归入枚举时填 other，�
 方法原文，其余情况 tc_method_custom 必须为 null。
 properties 需提取 energy above hull：name 固定为 "energy above hull"，unit 固定为 "eV/atom"；
 论文明确声明 thermodynamically stable 或 on the convex hull 时值为 0；原文未提及则不生成该条目。
+summary、keywords_tags、methodology、key_finding、research_motivation、knowledge_graph_title 必须使用英文输出。
+这些字段必须忠实依据英文论文原文；缺少原文依据时返回空字符串或空数组，不得编造，也不得先翻译成中文。
 research_motivation 写作者开展这项研究的驱动力，不是本文的结论，也不是你的分类依据。
 依据引言、背景与动机相关段落归纳：该领域此前存在什么问题、悬而未决的争议或技术瓶颈，
-以及作者据此想解决什么。按 "1. " "2. " "3. " 分条，每条一个独立动因，总长不超过 500 字。
+以及作者据此想解决什么。按 "1. " "2. " "3. " 分条，每条一个独立动因，总长不超过 300 个英文词。
 只写原文支持的内容；引言未交代研究动机时返回空字符串，不要用摘要或结论倒推填充。
 
-knowledge_graph_title 用于知识图谱节点显示，高度凝练论文的核心贡献，限 15-30 字（中文）或 10-15 词（英文）。
+knowledge_graph_title 用于知识图谱节点显示，必须用 10-15 个英文词高度凝练论文的核心贡献。
 格式要求：
 - 必须包含：核心发现/贡献 + 材料/体系名称
 - 优先突出：历史地位（"首次"/"第一个"）、突破性质（"高温"/"常压"）、独特性质
 - 避免：冗长修饰、系列编号（"Further..."/"Part II"）、通用描述
 示例：
-  - "Further experiments with liquid helium. V" → "首次发现超导体 Hg"
-  - "High-temperature superconductivity in cuprates" → "铜氧化物高温超导"
-  - "BCS theory of superconductivity" → "BCS 超导理论"
-  - "Iron-based superconductor LaFeAsO" → "铁基超导体 LaFeAsO"
+  - "Further experiments with liquid helium. V" → "First Discovery of Superconductivity in Hg"
+  - "High-temperature superconductivity in cuprates" → "High-Temperature Superconductivity in Cuprates"
+  - "BCS theory of superconductivity" → "BCS Theory of Superconductivity"
+  - "Iron-based superconductor LaFeAsO" → "Iron-Based Superconductivity in LaFeAsO"
 key_finding 保留原有格式，提供完整的核心发现描述。
 
 返回结构：
@@ -1111,6 +1113,7 @@ def _normalize_draft(raw: dict[str, Any]) -> dict[str, Any]:
         "theoretical_subtype": subtype,
         "keywords_tags": keywords or _normalize_text_items(parsed.keywords_tags, "keyword", "value", "name")[0],
         "methodology": methodology,
+        "knowledge_graph_title": raw_paper.get("knowledge_graph_title") or "",
         "key_finding": raw_paper.get("key_finding") or "",
         "research_motivation": raw_paper.get("research_motivation") or "",
         "research_materials": research_materials,

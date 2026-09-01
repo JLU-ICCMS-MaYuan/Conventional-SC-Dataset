@@ -4,6 +4,7 @@ import SendIcon from '@mui/icons-material/Send'
 import { useStreamingChat } from '../lib/useStreamingChat'
 import MarkdownMessage from '../components/MarkdownMessage'
 import EvidenceCard from '../components/EvidenceCard'
+import { useLanguage } from '../context/LanguageContext'
 
 function citationOrder(content: string): string[] {
   const ids: string[] = []
@@ -13,9 +14,10 @@ function citationOrder(content: string): string[] {
   return ids
 }
 
-const SUGGESTIONS = ['LaH10 的 Tc 是多少?', '超导温度高于 200K 的有哪些?', '笼状氢化物是什么?']
-
 const RagPage: React.FC = () => {
+  const { t } = useLanguage()
+  const suggestions = [t('rag.suggestion1'), t('rag.suggestion2'), t('rag.suggestion3')]
+
   const {
     convs, activeId, messages, loading, papers, top10,
     ideas, reviews, statusLog, savedPapers, inspiration,
@@ -38,11 +40,11 @@ const RagPage: React.FC = () => {
   // 对话被命名后自动创建新的空对话（不切换）
   useEffect(() => {
     const active = convs.find((c) => c.id === activeId)
-    if (active && active.title !== '新对话' && active.messages.length > 0) {
-      const hasEmpty = convs.some((c) => c.messages.length === 0 && c.title === '新对话')
+    if (active && active.title !== t('rag.newConversation') && active.messages.length > 0) {
+      const hasEmpty = convs.some((c) => c.messages.length === 0 && c.title === t('rag.newConversation'))
       if (!hasEmpty) newConversation(false)
     }
-  }, [convs])
+  }, [convs, t])
   useEffect(() => {
     chatBoxRef.current?.scrollTo(0, chatBoxRef.current.scrollHeight)
   }, [messages, loading, ideas])
@@ -74,9 +76,9 @@ const RagPage: React.FC = () => {
       <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 3, alignItems: 'end', mb: 3 }}>
         <Box>
           <Typography variant="overline">RAG Question Answering</Typography>
-          <Typography variant="h1">回答必须能追溯到证据</Typography>
+          <Typography variant="h1">{t('rag.pageTitle')}</Typography>
           <Typography variant="body2" sx={{ mt: 1 }}>
-            对话流、引用标记和证据 Side Sheet 联动，候选结构化记录明确标注为待审核。
+            {t('rag.pageDescription')}
           </Typography>
         </Box>
       </Box>
@@ -86,11 +88,11 @@ const RagPage: React.FC = () => {
         {/* Left: Conversation List */}
         <Paper sx={{ p: 1.5, borderRadius: 4, height: 'calc(100vh - 300px)', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-            <Typography variant="h3">会话</Typography>
-            <Chip label={deleteMode ? '完成' : '删除'} size="small" color={deleteMode ? 'error' : 'default'} onClick={() => setDeleteMode(!deleteMode)} />
+            <Typography variant="h3">{t('rag.conversations')}</Typography>
+            <Chip label={deleteMode ? t('rag.done') : t('common.delete')} size="small" color={deleteMode ? 'error' : 'default'} onClick={() => setDeleteMode(!deleteMode)} />
           </Box>
           {convs.length === 0 ? (
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>暂无会话</Typography>
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>{t('rag.noConversations')}</Typography>
           ) : (
             convs.map((c) => (
               <Box key={c.id} sx={{ position: 'relative', mb: 1, '&:hover .del-btn': { opacity: 1 } }}>
@@ -120,7 +122,7 @@ const RagPage: React.FC = () => {
         {/* Center: Chat */}
         <Box sx={{ display: 'flex', flexDirection: 'column' }}>
           <Paper sx={{ p: 2.5, borderRadius: 4, boxShadow: '0 2px 6px rgba(15,23,42,.14), 0 4px 12px rgba(15,23,42,.08)', height: 'calc(100vh - 300px)', display: 'flex', flexDirection: 'column' }}>
-            <Typography variant="h2" gutterBottom>对话流</Typography>
+            <Typography variant="h2" gutterBottom>{t('rag.chatStream')}</Typography>
             {inspiration.active && inspiration.statusMessage && (
               <Box sx={{ mb: 1, p: '6px 12px', borderRadius: 1, bgcolor: '#eef2ff', display: 'flex', alignItems: 'center', gap: 1 }}>
                 <CircularProgress size={14} sx={{ color: '#4f46e5' }} />
@@ -133,10 +135,10 @@ const RagPage: React.FC = () => {
               {messages.length === 0 && (
                 <Paper sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 4, mb: 2 }}>
                   <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    可以问我一个超导问题，回答会带证据引用。
+                    {t('rag.emptyHint')}
                   </Typography>
                   <Box sx={{ mt: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                    {SUGGESTIONS.map((s) => (
+                    {suggestions.map((s) => (
                       <Chip key={s} label={s} onClick={() => send(s, exploreMode)} size="small" />
                     ))}
                   </Box>
@@ -187,7 +189,7 @@ const RagPage: React.FC = () => {
                             <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#999', animation: 'blink 1.2s infinite' }} />
                             <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#999', animation: 'blink 1.2s infinite', animationDelay: '0.2s' }} />
                             <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#999', animation: 'blink 1.2s infinite', animationDelay: '0.4s' }} />
-                            <Typography variant="body2" color="text.secondary" sx={{ ml: 0.5, fontSize: 12 }}>等待响应...</Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ ml: 0.5, fontSize: 12 }}>{t('rag.waitingResponse')}</Typography>
                           </Box>
                         )}
                       </Box>
@@ -208,7 +210,7 @@ const RagPage: React.FC = () => {
                 fullWidth
                 variant="outlined"
                 size="small"
-                placeholder={exploreMode ? '说说你的想法...' : '输入问题'}
+                placeholder={exploreMode ? t('rag.inputPlaceholderExplore') : t('rag.inputPlaceholder')}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -221,7 +223,7 @@ const RagPage: React.FC = () => {
                 onClick={() => setExploreMode(!exploreMode)}
                 sx={{ borderRadius: '18px', flexShrink: 0, textTransform: 'none' }}
               >
-                🔬 探索
+                {t('rag.explore')}
               </Button>
               <IconButton
                 onClick={handleSend}
@@ -239,17 +241,17 @@ const RagPage: React.FC = () => {
           p: 2.5, borderRadius: 4, height: 'calc(100vh - 300px)', overflowY: 'auto',
           boxShadow: '0 6px 16px rgba(15,23,42,.16), 0 10px 24px rgba(15,23,42,.10)',
         }}>
-          <Typography variant="h2" gutterBottom>证据面板</Typography>
+          <Typography variant="h2" gutterBottom>{t('rag.evidencePanel')}</Typography>
 
           {top10.length > 0 && (
             <Box sx={{ mb: 2 }}>
-              <Typography variant="caption">Top 结果</Typography>
+              <Typography variant="caption">{t('rag.topResults')}</Typography>
               <Box component="table" sx={{ width: '100%', fontSize: 12, borderCollapse: 'collapse', mt: 1 }}>
                 <Box component="thead">
                   <Box component="tr" sx={{ borderBottom: '2px solid', borderColor: 'divider' }}>
-                    <Box component="th" sx={{ p: '4px 6px', textAlign: 'left' }}>化合物</Box>
-                    <Box component="th" sx={{ p: '4px 6px', textAlign: 'left' }}>数值</Box>
-                    <Box component="th" sx={{ p: '4px 6px', textAlign: 'left' }}>文献</Box>
+                    <Box component="th" sx={{ p: '4px 6px', textAlign: 'left' }}>{t('rag.topHeaders.compound')}</Box>
+                    <Box component="th" sx={{ p: '4px 6px', textAlign: 'left' }}>{t('rag.topHeaders.value')}</Box>
+                    <Box component="th" sx={{ p: '4px 6px', textAlign: 'left' }}>{t('rag.topHeaders.reference')}</Box>
                   </Box>
                 </Box>
                 <Box component="tbody">
@@ -272,7 +274,7 @@ const RagPage: React.FC = () => {
           {(savedPapers.length > 0 || Object.keys(papers).length > 0) ? (
             <Box>
               <Typography variant="caption" sx={{ mb: 1, display: 'block' }}>
-                筛选文献 ({savedPapers.length || Object.keys(papers).length})
+                {t('rag.filteredPapers', { count: savedPapers.length || Object.keys(papers).length })}
               </Typography>
               {(savedPapers.length > 0 ? savedPapers.map(({ pid, info: p }, i) => (
                 <Paper key={pid} sx={{ p: 1.5, mb: 1, bgcolor: 'grey.50', borderRadius: 2 }}>
@@ -303,7 +305,7 @@ const RagPage: React.FC = () => {
           ) : (
             <Paper sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
               <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: 13 }}>
-                {loading ? '正在检索证据...' : '发送问题后显示证据。'}
+                {loading ? t('rag.searchingEvidence') : t('rag.evidenceEmptyHint')}
               </Typography>
             </Paper>
           )}

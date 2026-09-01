@@ -197,12 +197,13 @@ export interface UploadAcceptedResponse extends Partial<UploadTaskState> {
   task_id: string
 }
 
+// label 已弃用为机器键，渲染方应使用 t('upload.step.' + key) 取标签（upload 字典由 upload 域提供）。
 export const PROCESSING_STAGES: Array<{ key: ProcessingStage; label: string }> = [
-  { key: 'saving_file', label: '保存原始文件' },
-  { key: 'extracting', label: '提取论文正文' },
-  { key: 'reading', label: 'AI 分段阅读' },
-  { key: 'summarizing', label: 'AI 汇总草稿' },
-  { key: 'ready', label: '等待用户校对' },
+  { key: 'saving_file', label: 'saving_file' },
+  { key: 'extracting', label: 'extracting' },
+  { key: 'reading', label: 'reading' },
+  { key: 'summarizing', label: 'summarizing' },
+  { key: 'ready', label: 'ready' },
 ]
 
 export function unwrapData<T>(response: T | { data: T }): T {

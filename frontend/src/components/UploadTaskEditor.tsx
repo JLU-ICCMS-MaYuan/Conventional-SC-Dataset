@@ -14,14 +14,16 @@ import {
   ClassificationCatalogs,
   ClassificationTerm,
   DEFAULT_MATERIAL_DIMENSIONALITIES,
+  familyName,
   loadClassificationCatalogs,
   pendingSelection,
   selectionForTerm,
 } from '../lib/classifications'
+import { useLanguage } from '../context/LanguageContext'
 import ClassificationAutocomplete from './ClassificationAutocomplete'
 import StructureCandidatePanel from './StructureCandidatePanel'
 import {
-  CrystalSystem, DraftKeyProperty, DraftMaterialState, DraftTcResult, SourceEvidence, StructureCandidate, UploadDraft,
+  CRYSTAL_SYSTEM_VALUES, CrystalSystem, DraftKeyProperty, DraftMaterialState, DraftTcResult, SourceEvidence, StructureCandidate, UploadDraft,
   evidenceList, normalizeUploadDraft, unwrapData,
 } from '../lib/paperProcessing'
 
@@ -41,28 +43,15 @@ interface SubmitResponse {
 
 type AuthorRoleField = 'corresponding_authors' | 'co_first_authors'
 
-const PAPER_TYPE_OPTIONS = [
-  { value: 'theoretical', label: '理论文章' },
-  { value: 'experimental', label: '实验文章' },
-  { value: 'review', label: '综述文章' },
-  { value: 'unknown', label: '暂不确定' },
-]
+// 枚举下拉不再携带中文 label：渲染时按 value 查 dict.enums.<组>.<value>（enums.ts）
+const PAPER_TYPE_VALUES = ['theoretical', 'experimental', 'review', 'unknown'] as const
 
-const SUPERCONDUCTOR_KIND_OPTIONS = [
-  { value: 'conventional', label: '常规超导体（BCS超导体）' },
-  { value: 'unconventional', label: '非常规超导体' },
-]
+const SUPERCONDUCTOR_KIND_VALUES = ['conventional', 'unconventional'] as const
 
-const TC_METHOD_OPTIONS = [
-  { value: 'unknown', label: '未知' },
-  { value: 'experimental', label: '实验测量' },
-  { value: 'mcmillan', label: 'McMillan' },
-  { value: 'allen_dynes', label: 'Allen-Dynes-McMillan' },
-  { value: 'isotropic_eliashberg', label: 'isotropic Migdal-Eliashberg' },
-  { value: 'anisotropic_eliashberg', label: 'anisotropic Migdal-Eliashberg' },
-  { value: 'scdft', label: 'SCDFT' },
-  { value: 'other', label: '其他' },
-]
+const TC_METHOD_VALUES = [
+  'unknown', 'experimental', 'mcmillan', 'allen_dynes',
+  'isotropic_eliashberg', 'anisotropic_eliashberg', 'scdft', 'other',
+] as const
 
 const ENERGY_ABOVE_HULL_NAME = 'energy above hull'
 
@@ -70,17 +59,6 @@ interface SpaceGroupOption {
   number: number
   symbol: string
 }
-
-const CRYSTAL_SYSTEM_OPTIONS: Array<{ value: CrystalSystem; label: string }> = [
-  { value: 'triclinic', label: '三斜' },
-  { value: 'monoclinic', label: '单斜' },
-  { value: 'orthorhombic', label: '正交' },
-  { value: 'tetragonal', label: '四方' },
-  { value: 'trigonal', label: '三方' },
-  { value: 'hexagonal', label: '六方' },
-  { value: 'cubic', label: '立方' },
-  { value: 'unknown', label: '未知' },
-]
 
 // 晶系↔群号静态范围表（与 backend/services/space_groups.py 一致；群号是晶系的权威来源）
 const CRYSTAL_SYSTEM_NUMBER_RANGES: Array<{ value: Exclude<CrystalSystem, 'unknown'>; min: number; max: number }> = [
@@ -99,12 +77,6 @@ const crystalSystemForNumber = (value: number): CrystalSystem => (
 
 const toLines = (value: string[] | undefined) => (value || []).join('\n')
 const fromLines = (value: string) => value.split(/[\n,，]/).map(item => item.trim()).filter(Boolean)
-const displayValue = (value: unknown) => {
-  if (value == null || value === '') return '未提供'
-  if (Array.isArray(value)) return value.join('、') || '未提供'
-  if (typeof value === 'object') return JSON.stringify(value)
-  return String(value)
-}
 
 // 默认折叠规则：卡片数 ≤2 全部展开，否则仅第一张展开
 const defaultCollapsedStates = (count: number): Record<number, boolean> => (
@@ -128,10 +100,19 @@ const backendErrorReason = (reason: unknown): { message: string; code?: string }
 }
 
 // 保存/提交失败的横幅文案：优先展示后端具体原因（可附 code），否则回退通用文案
-const failureMessage = (action: '保存' | '提交', reason: unknown, fallback: string): string => {
+const failureMessage = (
+  t: (key: string, vars?: Record<string, string | number>) => string,
+  action: 'save' | 'submit',
+  reason: unknown,
+  fallback: string,
+): string => {
   const reasonDetail = backendErrorReason(reason)
   if (!reasonDetail) return fallback
-  return `${action}失败：${reasonDetail.message}${reasonDetail.code ? `（${reasonDetail.code}）` : ''}`
+  return t('upload.failedWithDetail', {
+    action: t(action === 'save' ? 'upload.saveAction' : 'upload.submitAction'),
+    message: reasonDetail.message,
+    code: reasonDetail.code ? t('upload.codeSuffix', { code: reasonDetail.code }) : '',
+  })
 }
 
 // 一条校验问题。stateIndex 为空表示论文级问题；field 用于在 DOM 中定位出错输入框
@@ -160,6 +141,7 @@ const EvidenceNotes: React.FC<{
   aiValue?: unknown
   evidence?: SourceEvidence | SourceEvidence[] | null
 }> = ({ label, aiValue, evidence }) => {
+  const { t } = useLanguage()
   const items = evidenceList(evidence)
   const contentId = useId()
   const contentRef = useRef<HTMLDivElement>(null)
@@ -167,6 +149,13 @@ const EvidenceNotes: React.FC<{
   const [isOverflowing, setIsOverflowing] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
+
+  const displayValue = (value: unknown) => {
+    if (value == null || value === '') return t('common.notProvided')
+    if (Array.isArray(value)) return value.join(t('upload.listSeparator')) || t('common.notProvided')
+    if (typeof value === 'object') return JSON.stringify(value)
+    return String(value)
+  }
 
   const measureOverflow = useCallback(() => {
     const nextOverflowing = (contentRef.current?.scrollHeight || 0) > COLLAPSED_EVIDENCE_HEIGHT
@@ -225,13 +214,13 @@ const EvidenceNotes: React.FC<{
                 ? { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
                 : { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
             >
-              AI 建议：{displayValue(aiValue)}
+              {t('upload.aiSuggestion', { value: displayValue(aiValue) })}
             </Typography>
           )}
           {items.map((item, index) => (
             <Typography key={index} variant="caption" color="text.secondary" display="block" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-              {[item.section, item.page ? `第 ${item.page} 页` : ''].filter(Boolean).join(' · ') || '原文'}
-              {item.quote ? `：“${item.quote}”` : ''}
+              {[item.section, item.page ? t('upload.pageRef', { page: item.page }) : ''].filter(Boolean).join(' · ') || t('upload.originalText')}
+              {item.quote ? t('upload.quoteSuffix', { quote: item.quote }) : ''}
             </Typography>
           ))}
         </Box>
@@ -242,7 +231,10 @@ const EvidenceNotes: React.FC<{
             size="small"
             aria-expanded={expanded}
             aria-controls={contentId}
-            aria-label={`${expanded ? '收起' : '展开'} ${label}的 AI 解释`}
+            aria-label={t('upload.toggleAiExplainAria', {
+              action: expanded ? t('upload.collapse') : t('upload.expand'),
+              label,
+            })}
             onClick={() => setExpanded(value => !value)}
             endIcon={<ExpandMoreIcon sx={{
               transform: expanded ? 'rotate(180deg)' : 'none',
@@ -250,7 +242,7 @@ const EvidenceNotes: React.FC<{
             }} />}
             sx={{ minHeight: 28, px: 1 }}
           >
-            {expanded ? '收起 AI 解释' : '展开 AI 解释'}
+            {expanded ? t('upload.collapseAiExplain') : t('upload.expandAiExplain')}
           </Button>
         </Box>
       )}
@@ -261,6 +253,7 @@ const EvidenceNotes: React.FC<{
 const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
   taskId, onSubmitted, draftOverride, readOnly = false, statusNote,
 }) => {
+  const { t, lang, dict } = useLanguage()
   const [draft, setDraft] = useState<UploadDraft | null>(null)
   const [loading, setLoading] = useState(true)
   const [dirty, setDirty] = useState(false)
@@ -292,7 +285,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
         setCatalogError('')
       })
       .catch((reason: Error) => {
-        if (active) setCatalogError(reason.message || '分类目录加载失败')
+        if (active) setCatalogError(reason.message || t('upload.catalogLoadFailed'))
       })
       .finally(() => {
         if (active) setCatalogLoading(false)
@@ -335,7 +328,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
       setDirty(false)
       setError('')
     }).catch((reason: Error) => {
-      if (reason.name !== 'AbortError') setError(reason.message || '草稿加载失败')
+      if (reason.name !== 'AbortError') setError(reason.message || t('upload.draftLoadFailed'))
     }).finally(() => setLoading(false))
     return () => controller.abort()
   }, [taskId, draftOverride])
@@ -475,7 +468,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
       }))
       setError('')
     } catch (reason) {
-      const message = reason instanceof Error ? reason.message : '结构附件上传失败'
+      const message = reason instanceof Error ? reason.message : t('upload.structureUploadFailed')
       setError(message)
     } finally {
       setStructureUploading(current => ({ ...current, [stateIndex]: false }))
@@ -620,16 +613,16 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
     try {
       await api.put(`/api/rag/upload-tasks/${taskId}/draft`, draft)
       if (revision === revisionRef.current) setDirty(false)
-      setLastSavedAt(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }))
+      setLastSavedAt(new Date().toLocaleTimeString(lang === 'zh' ? 'zh-CN' : 'en-US', { hour: '2-digit', minute: '2-digit' }))
       if (showResult) setError('')
       return true
     } catch (reason) {
-      setError(failureMessage('保存', reason, '草稿保存失败'))
+      setError(failureMessage(t, 'save', reason, t('upload.draftSaveFailed')))
       return false
     } finally {
       setSaving(false)
     }
-  }, [dirty, draft, saving, taskId, readOnly])
+  }, [dirty, draft, saving, taskId, readOnly, t, lang])
 
   useEffect(() => {
     if (!dirty || !draft || saving) return
@@ -643,31 +636,31 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
     if (!draft) return []
     const issues: ValidationIssue[] = []
     if (!draft.paper.title?.trim()) {
-      issues.push({ field: 'paper.title', message: '标题不能为空' })
+      issues.push({ field: 'paper.title', message: t('upload.titleRequired') })
     }
     if (draft.paper.doi && !/^10\.\d{4,9}\/\S+$/i.test(draft.paper.doi.trim())) {
-      issues.push({ field: 'paper.doi', message: 'DOI 格式不正确' })
+      issues.push({ field: 'paper.doi', message: t('upload.doiInvalid') })
     }
     if (!draft.paper.paper_type || draft.paper.paper_type === 'unknown') {
-      issues.push({ field: 'paper.paper_type', message: '请选择论文整体类型' })
+      issues.push({ field: 'paper.paper_type', message: t('upload.paperTypeRequired') })
     }
     if (draft.paper.paper_type === 'theoretical' && !draft.paper.theoretical_subtype) {
-      issues.push({ field: 'paper.theoretical_subtype', message: '理论文章必须选择理论二级类型' })
+      issues.push({ field: 'paper.theoretical_subtype', message: t('upload.theoreticalSubtypeRequired') })
     }
     if (draft.paper.paper_type !== 'review' && draft.material_states.length === 0) {
-      issues.push({ field: 'material_states', message: '非综述文章至少需要一个材料状态' })
+      issues.push({ field: 'material_states', message: t('upload.materialStateRequired') })
     }
     draft.material_states.forEach((state, stateIndex) => {
-      const label = `第 ${stateIndex + 1} 个材料状态`
+      const label = t('upload.materialStateLabel', { index: stateIndex + 1 })
       if (!state.material?.trim()) {
-        issues.push({ stateIndex, field: `material_states[${stateIndex}].material`, message: `${label}缺少材料` })
+        issues.push({ stateIndex, field: `material_states[${stateIndex}].material`, message: t('upload.missingMaterial', { label }) })
       }
       if (state.reported_space_group_number != null &&
         (state.reported_space_group_number < 1 || state.reported_space_group_number > 230)) {
         issues.push({
           stateIndex,
           field: `material_states[${stateIndex}].reported_space_group_number`,
-          message: `${label}的空间群号必须在 1–230 之间`,
+          message: t('upload.spaceGroupRangeInvalid', { label }),
         })
       }
       if ([state.calculation_context?.lambda_ep, state.calculation_context?.omega_log_k, state.calculation_context?.mu_star]
@@ -675,7 +668,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
         issues.push({
           stateIndex,
           field: `material_states[${stateIndex}].calculation_context`,
-          message: `${label}的计算参数不能为负数`,
+          message: t('upload.negativeCalcParam', { label }),
         })
       }
       const invalidTc = (state.tc_results || []).findIndex(item =>
@@ -684,7 +677,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
         issues.push({
           stateIndex,
           field: `material_states[${stateIndex}].tc_results`,
-          message: `${label}的第 ${invalidTc + 1} 条 Tc 缺少数值`,
+          message: t('upload.tcMissingValue', { label, n: invalidTc + 1 }),
         })
       }
       const invalidProperty = (state.properties || []).findIndex(item =>
@@ -694,7 +687,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
         issues.push({
           stateIndex,
           field: `material_states[${stateIndex}].properties`,
-          message: `${label}的第 ${invalidProperty + 1} 条普通物性不完整`,
+          message: t('upload.propertyIncomplete', { label, n: invalidProperty + 1 }),
         })
       }
     })
@@ -725,7 +718,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
   const submit = async () => {
     const validationIssues = validate()
     if (validationIssues.length > 0) {
-      setError(validationIssues.map(item => item.message).join('；'))
+      setError(validationIssues.map(item => item.message).join(t('upload.sentenceSeparator')))
       revealIssues(validationIssues)
       return
     }
@@ -738,9 +731,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
         response = await api.post<SubmitResponse | { data: SubmitResponse }>(`/api/rag/upload-tasks/${taskId}/submit`)
       } catch (reason) {
         const apiError = reason as ApiError
-        if (apiError.code !== 'consistency_ack_required' || !window.confirm(
-          '正文与附件的标题、DOI 或作者存在差异。确认这些文件属于同一篇论文并继续提交吗？',
-        )) throw reason
+        if (apiError.code !== 'consistency_ack_required' || !window.confirm(t('upload.consistencyConfirm'))) throw reason
         response = await api.post<SubmitResponse | { data: SubmitResponse }>(
           `/api/rag/upload-tasks/${taskId}/submit`,
           { consistency_acknowledged: true },
@@ -750,9 +741,9 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
     } catch (reason) {
       const apiError = reason as ApiError
       if (apiError.status === 409 && apiError.existingPaperId) {
-        setError(`该 DOI 已存在（论文 #${apiError.existingPaperId}），没有创建重复记录。`)
+        setError(t('upload.doiExists', { id: apiError.existingPaperId }))
       } else {
-        setError(failureMessage('提交', reason, '提交审核失败'))
+        setError(failureMessage(t, 'submit', reason, t('upload.submitReviewFailed')))
         // 后端独有的校验规则（材料家族、压强区间等）也要能定位到卡片
         const backendReason = apiError.status === 400 ? backendErrorReason(reason) : null
         const backendStateIndex = backendReason ? stateIndexFromMessage(backendReason.message) : undefined
@@ -772,7 +763,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
   if (loading) {
     return <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box>
   }
-  if (!draft) return <Alert severity="error">{error || '草稿不存在或已过期'}</Alert>
+  if (!draft) return <Alert severity="error">{error || t('upload.draftMissing')}</Alert>
 
   const ai = draft.ai_original || {}
   const aiPaper = ai.paper || {}
@@ -800,22 +791,22 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
     <Box sx={{ mt: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, mb: 2, flexWrap: 'wrap' }}>
         <Box>
-          <Typography variant="h6" fontWeight={700}>{readOnly ? 'AI 草稿（实时生成中）' : '检查 AI 草稿'}</Typography>
+          <Typography variant="h6" fontWeight={700}>{readOnly ? t('upload.aiDraftTitle') : t('upload.checkAiDraftTitle')}</Typography>
           <Typography variant="body2" color="text.secondary">
-            {readOnly ? (statusNote || 'AI 正在生成草稿，内容与最终校对表单一致。') : '核对后保存，确认无误再提交管理员审核。'}
+            {readOnly ? (statusNote || t('upload.defaultNote')) : t('upload.editorSubtitle')}
           </Typography>
         </Box>
         {readOnly ? (
-          <Chip size="small" color="info" label="只读预览" />
+          <Chip size="small" color="info" label={t('upload.readOnlyBadge')} />
         ) : (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
           <Typography variant="caption" color={error ? 'error' : 'text.secondary'}>
-            {saving ? '保存中…' : dirty ? '有修改，5 秒后自动保存' : lastSavedAt ? `${lastSavedAt} 已保存` : '草稿已加载'}
+            {saving ? t('common.saving') : dirty ? t('upload.autoSaveHint') : lastSavedAt ? t('upload.savedAt', { time: lastSavedAt }) : t('upload.draftLoaded')}
           </Typography>
           <Button variant="outlined" startIcon={saving ? <CircularProgress size={16} /> : <SaveIcon />}
-            disabled={saving || submitting} onClick={() => void saveDraft(true)}>立即保存</Button>
+            disabled={saving || submitting} onClick={() => void saveDraft(true)}>{t('upload.saveNow')}</Button>
           <Button variant="contained" startIcon={submitting ? <CircularProgress size={16} /> : <SendIcon />}
-            disabled={saving || submitting} onClick={() => void submit()}>提交审核</Button>
+            disabled={saving || submitting} onClick={() => void submit()}>{t('upload.submitReview')}</Button>
         </Box>
         )}
       </Box>
@@ -825,10 +816,10 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
       <Box sx={readOnly ? { pointerEvents: 'none', '& .MuiButton-root': { display: 'none' } } : undefined}>
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, '& > *': { minWidth: 0 } }}>
         <Box>
-          <TextField fullWidth label="标题" value={draft.paper.title || ''}
+          <TextField fullWidth label={t('upload.title')} value={draft.paper.title || ''}
             {...issueProps('paper.title')}
             onChange={event => setPaperField('title', event.target.value)} />
-          <EvidenceNotes label="标题" aiValue={aiPaper.title} />
+          <EvidenceNotes label={t('upload.title')} aiValue={aiPaper.title} />
         </Box>
         <Box>
           <TextField fullWidth label="DOI" value={draft.paper.doi || ''}
@@ -850,22 +841,22 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
             renderTags={(values, getTagProps) => values.map((author, index) => {
               const { key, ...tagProps } = getTagProps({ index })
               const roles = [
-                draft.paper.corresponding_authors?.includes(author) ? '通讯作者' : '',
-                draft.paper.co_first_authors?.includes(author) ? '共同第一作者' : '',
+                draft.paper.corresponding_authors?.includes(author) ? t('upload.correspondingAuthor') : '',
+                draft.paper.co_first_authors?.includes(author) ? t('upload.coFirstAuthor') : '',
               ].filter(Boolean)
               return (
                 <Chip
                   {...tagProps}
                   key={key}
                   label={[author, ...roles].join(' · ')}
-                  title="点击设置作者身份"
+                  title={t('upload.setAuthorRoleTitle')}
                   onClick={event => setAuthorMenu({ author, anchorEl: event.currentTarget })}
                   onDelete={() => setAuthors(values.filter(item => item !== author))}
                 />
               )
             })}
             renderInput={params => (
-              <TextField {...params} label="作者" placeholder={(draft.paper.authors || []).length ? '' : '输入姓名后按 Enter'} onKeyDown={event => { if ((event.key === 'Enter' || event.key === ',' || event.key === '，') && authorInput.trim()) { event.preventDefault(); commitAuthorInput() } }} />
+              <TextField {...params} label={t('upload.authorsField')} placeholder={(draft.paper.authors || []).length ? '' : t('upload.authorPlaceholder')} onKeyDown={event => { if ((event.key === 'Enter' || event.key === ',' || event.key === '，') && authorInput.trim()) { event.preventDefault(); commitAuthorInput() } }} />
             )}
             sx={{
               '& .MuiOutlinedInput-root': {
@@ -880,8 +871,8 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
           />
           <Menu anchorEl={authorMenu?.anchorEl} open={Boolean(authorMenu)} onClose={() => setAuthorMenu(null)}>
             {authorMenu && ([
-              ['corresponding_authors', '通讯作者'],
-              ['co_first_authors', '共同第一作者'],
+              ['corresponding_authors', t('upload.correspondingAuthor')],
+              ['co_first_authors', t('upload.coFirstAuthor')],
             ] as const).map(([field, label]) => (
               <MenuItem key={field} onClick={() => toggleAuthorRole(field, authorMenu.author)}>
                 <Checkbox checked={(draft.paper[field] || []).includes(authorMenu.author)} />
@@ -889,51 +880,51 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
               </MenuItem>
             ))}
           </Menu>
-          <EvidenceNotes label="作者" aiValue={aiPaper.authors} />
+          <EvidenceNotes label={t('upload.authorsField')} aiValue={aiPaper.authors} />
         </Box>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: '2fr 1fr 1fr 1fr' }, gap: 1 }}>
-          <TextField label="期刊" value={draft.paper.journal || ''}
+          <TextField label={t('upload.journal')} value={draft.paper.journal || ''}
             onChange={event => setPaperField('journal', event.target.value)} />
-          <TextField label="年份" type="number" value={draft.paper.year ?? ''}
+          <TextField label={t('upload.year')} type="number" value={draft.paper.year ?? ''}
             onChange={event => setPaperField('year', event.target.value ? Number(event.target.value) : null)} />
-          <TextField label="卷" value={draft.paper.volume || ''}
+          <TextField label={t('upload.volume')} value={draft.paper.volume || ''}
             onChange={event => setPaperField('volume', event.target.value)} />
-          <TextField label="页" value={draft.paper.pages || ''}
+          <TextField label={t('upload.pages')} value={draft.paper.pages || ''}
             onChange={event => setPaperField('pages', event.target.value)} />
           <Box sx={{ gridColumn: '1 / -1' }}>
-            <EvidenceNotes label="期刊信息" aiValue={[aiPaper.journal, aiPaper.year, aiPaper.volume, aiPaper.pages].filter(Boolean).join(' · ')} />
+            <EvidenceNotes label={t('upload.journalInfo')} aiValue={[aiPaper.journal, aiPaper.year, aiPaper.volume, aiPaper.pages].filter(Boolean).join(' · ')} />
           </Box>
         </Box>
       </Box>
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mt: 2, '& > *': { minWidth: 0 } }}>
         <FormControl fullWidth error={hasIssue('paper.paper_type')} data-issue-field="paper.paper_type">
-          <InputLabel>论文整体类型</InputLabel>
-          <Select label="论文整体类型" value={draft.paper.paper_type || 'unknown'}
+          <InputLabel>{t('upload.paperTypeField')}</InputLabel>
+          <Select label={t('upload.paperTypeField')} value={draft.paper.paper_type || 'unknown'}
             onChange={event => setPaperField('paper_type', event.target.value)}>
-            {PAPER_TYPE_OPTIONS.map(option => <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>)}
+            {PAPER_TYPE_VALUES.map(value => <MenuItem key={value} value={value}>{dict.enums.paperType[value]}</MenuItem>)}
           </Select>
           <IssueText field="paper.paper_type" />
-          <EvidenceNotes label="论文整体类型" aiValue={aiPaper.paper_type} evidence={classificationEvidence} />
+          <EvidenceNotes label={t('upload.paperTypeField')} aiValue={aiPaper.paper_type} evidence={classificationEvidence} />
         </FormControl>
         <FormControl fullWidth disabled={draft.paper.paper_type !== 'theoretical'}
           error={hasIssue('paper.theoretical_subtype')} data-issue-field="paper.theoretical_subtype">
-          <InputLabel>理论二级类型</InputLabel>
-          <Select label="理论二级类型" value={draft.paper.theoretical_subtype || ''}
+          <InputLabel>{t('upload.theoreticalSubtypeField')}</InputLabel>
+          <Select label={t('upload.theoreticalSubtypeField')} value={draft.paper.theoretical_subtype || ''}
             onChange={event => setPaperField('theoretical_subtype', event.target.value || null)}>
-            <MenuItem value="calculation">计算类</MenuItem>
-            <MenuItem value="method">方法类</MenuItem>
-            <MenuItem value="theory">理论模型与机制</MenuItem>
+            <MenuItem value="calculation">{dict.enums.theoreticalSubtype.calculation}</MenuItem>
+            <MenuItem value="method">{dict.enums.theoreticalSubtype.method}</MenuItem>
+            <MenuItem value="theory">{dict.enums.theoreticalSubtype.theory}</MenuItem>
           </Select>
           <IssueText field="paper.theoretical_subtype" />
-          <EvidenceNotes label="理论二级类型" aiValue={aiPaper.theoretical_subtype} />
+          <EvidenceNotes label={t('upload.theoreticalSubtypeField')} aiValue={aiPaper.theoretical_subtype} />
         </FormControl>
       </Box>
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mt: 2, '& > *': { minWidth: 0 } }}>
         {[
-          ['keywords_tags', '关键词（每行一个）'],
-          ['methodology', '研究方法（每行一项）'],
+          ['keywords_tags', t('upload.keywordsLabel')],
+          ['methodology', t('upload.methodologyLabel')],
         ].map(([field, label]) => (
           <Box key={field}>
             <TextField fullWidth label={label} multiline minRows={3}
@@ -949,9 +940,9 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
       </Box>
 
       {[
-        ['abstract', '论文摘要', 4],
-        ['summary', '中文总结', 3],
-        ['key_finding', '核心发现', 3],
+        ['abstract', t('upload.abstractLabel'), 4],
+        ['summary', t('upload.summaryLabel'), 3],
+        ['key_finding', t('upload.keyFindingLabel'), 3],
       ].map(([field, label, rows]) => (
         <Box key={String(field)} sx={{ mt: 2 }}>
           <TextField fullWidth label={String(label)} multiline minRows={Number(rows)}
@@ -962,20 +953,20 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
       ))}
 
       <Box sx={{ mt: 2 }}>
-        <TextField fullWidth label="研究驱动力" multiline minRows={3}
+        <TextField fullWidth label={t('upload.researchMotivationLabel')} multiline minRows={3}
           value={draft.research_motivation || ''}
           onChange={event => setDraftField('research_motivation', event.target.value)} />
-        <EvidenceNotes label="研究驱动力" aiValue={ai.research_motivation} evidence={classificationEvidence} />
+        <EvidenceNotes label={t('upload.researchMotivationLabel')} aiValue={ai.research_motivation} evidence={classificationEvidence} />
       </Box>
 
       <Box sx={{ mt: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-          <Typography variant="h6" fontWeight={700}>材料状态与计算条件</Typography>
+          <Typography variant="h6" fontWeight={700}>{t('upload.materialStatesTitle')}</Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
             {draft.material_states.length > 0 && (
               <>
-                <Button size="small" onClick={() => setAllCollapsed(true)}>全部折叠</Button>
-                <Button size="small" onClick={() => setAllCollapsed(false)}>全部展开</Button>
+                <Button size="small" onClick={() => setAllCollapsed(true)}>{t('common.collapseAll')}</Button>
+                <Button size="small" onClick={() => setAllCollapsed(false)}>{t('common.expandAll')}</Button>
               </>
             )}
             <Button startIcon={<AddIcon />} onClick={() => changeDraft(current => ({
@@ -1000,7 +991,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
               tc_results: [],
               properties: [],
             }],
-            }))}>添加材料状态</Button>
+            }))}>{t('upload.addMaterialState')}</Button>
           </Box>
         </Box>
 
@@ -1032,7 +1023,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
                       transform: isCollapsed ? 'none' : 'rotate(180deg)',
                       transition: 'transform 180ms ease',
                     }} />
-                    <Typography variant="subtitle2" fontWeight={700}>材料状态 #{index + 1}</Typography>
+                    <Typography variant="subtitle2" fontWeight={700}>{t('upload.materialStateNumber', { index: index + 1 })}</Typography>
                     {state.material?.trim() && (
                       <Typography variant="body2" color="text.secondary" noWrap>{state.material}</Typography>
                     )}
@@ -1043,7 +1034,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
                       <Button size="small" onClick={event => {
                         event.stopPropagation()
                         applyClassificationToSameMaterial(index)
-                      }}>应用到同材料</Button>
+                      }}>{t('upload.applyToSameMaterial')}</Button>
                     )}
                   </Box>
                   <Button size="small" color="error" startIcon={<DeleteIcon />}
@@ -1053,16 +1044,16 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
                         ...current,
                         material_states: current.material_states.filter((_, itemIndex) => itemIndex !== index),
                       }))
-                    }}>删除</Button>
+                    }}>{t('common.delete')}</Button>
                 </Box>
                 <Collapse in={!isCollapsed} timeout="auto" id={`material-state-${index}-content`}>
                 <Box>
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: 'repeat(3, 1fr)' }, gap: 1.5 }}>
-                  <TextField label="材料" value={state.material || ''}
+                  <TextField label={t('upload.materialField')} value={state.material || ''}
                     {...issueProps(`material_states[${index}].material`)}
                     onChange={event => updateMaterialState(index, 'material', event.target.value)} />
                   <ClassificationAutocomplete
-                    label="材料家族"
+                    label={t('upload.materialFamilyField')}
                     options={catalogs?.material_families || []}
                     value={state.material_family}
                     loading={catalogLoading}
@@ -1070,22 +1061,22 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
                     onChange={value => updateMaterialState(index, 'material_family', value)}
                   />
                   <TextField
-                    label="不同元素种类数"
+                    label={t('upload.elementCountField')}
                     value={elementCountEdits[index]?.text ?? (state.element_count ?? '')}
                     error={Boolean(elementCountEdits[index]?.invalid)}
-                    helperText={elementCountEdits[index]?.invalid ? '请输入 1–118 的整数' : '自动计算，可手动修改'}
+                    helperText={elementCountEdits[index]?.invalid ? t('upload.elementCountInvalid') : t('upload.elementCountAuto')}
                     onChange={event => changeElementCount(index, event.target.value)}
                   />
                   <FormControl fullWidth>
-                    <InputLabel id={`material-dimensionality-${index}-label`}>材料维度</InputLabel>
+                    <InputLabel id={`material-dimensionality-${index}-label`}>{t('upload.materialDimensionalityField')}</InputLabel>
                     <Select
                       labelId={`material-dimensionality-${index}-label`}
-                      label="材料维度"
+                      label={t('upload.materialDimensionalityField')}
                       value={state.material_dimensionality || 'unknown'}
                       onChange={event => updateMaterialState(index, 'material_dimensionality', event.target.value)}
                     >
                       {(catalogs?.material_dimensionalities || DEFAULT_MATERIAL_DIMENSIONALITIES).map(option => (
-                        <MenuItem key={option.value} value={option.value}>{option.name}</MenuItem>
+                        <MenuItem key={option.value} value={option.value}>{dict.enums.materialDimensionality[option.value]}</MenuItem>
                       ))}
                     </Select>
                   </FormControl>
@@ -1094,12 +1085,12 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
                     freeSolo
                     options={catalogs?.structure_families || []}
                     loading={catalogLoading}
-                    value={(state.structure_families || []).map(selection => (
-                      selection.id == null
-                        ? selection.name
-                        : catalogs?.structure_families.find(option => option.id === selection.id) || selection.name
-                    ))}
-                    getOptionLabel={option => typeof option === 'string' ? option : option.name}
+                    value={(state.structure_families || []).map(selection => {
+                      if (selection.id == null) return selection.name
+                      const option = catalogs?.structure_families.find(item => item.id === selection.id)
+                      return option || selection.name
+                    })}
+                    getOptionLabel={option => typeof option === 'string' ? option : familyName(option, lang)}
                     isOptionEqualToValue={(option, value) => (
                       typeof option !== 'string' && typeof value !== 'string' && option.id === value.id
                     )}
@@ -1110,20 +1101,20 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
                         return selection ? { ...selection, is_primary: false } : null
                       }).filter(Boolean))
                     }}
-                    renderInput={params => <TextField {...params} label="更多类型标签（可以填写不止一个类型）" error={Boolean(catalogError)} />}
+                    renderInput={params => <TextField {...params} label={t('upload.structureFamiliesField')} error={Boolean(catalogError)} />}
                   />
-                  <TextField label="压强 (GPa)" type="number" value={state.pressure_value_gpa ?? ''} helperText={state.pressure_value_gpa == null && state.pressure_raw ? '原文压力：' + state.pressure_raw + ' ' + (state.pressure_unit_raw || '') : undefined}
+                  <TextField label={t('upload.pressureField')} type="number" value={state.pressure_value_gpa ?? ''} helperText={state.pressure_value_gpa == null && state.pressure_raw ? t('upload.pressureRaw', { raw: state.pressure_raw, unit: state.pressure_unit_raw || '' }) : undefined}
                     onChange={event => updateMaterialState(index, 'pressure_value_gpa', event.target.value ? Number(event.target.value) : null)} />
                   <FormControl fullWidth>
-                    <InputLabel id={`crystal-system-${index}-label`}>晶系</InputLabel>
+                    <InputLabel id={`crystal-system-${index}-label`}>{t('upload.crystalSystemField')}</InputLabel>
                     <Select
                       labelId={`crystal-system-${index}-label`}
-                      label="晶系"
+                      label={t('upload.crystalSystemField')}
                       value={crystalSystem}
                       onChange={event => updateMaterialState(index, 'crystal_system', event.target.value)}
                     >
-                      {CRYSTAL_SYSTEM_OPTIONS.map(option => (
-                        <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                      {CRYSTAL_SYSTEM_VALUES.map(value => (
+                        <MenuItem key={value} value={value}>{dict.enums.crystalSystem[value]}</MenuItem>
                       ))}
                     </Select>
                   </FormControl>
@@ -1152,41 +1143,42 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
                         updateMaterialState(index, 'reported_space_group_symbol', value || null)
                       }
                     }}
-                    renderInput={params => <TextField {...params} label="空间群符号" />}
+                    renderInput={params => <TextField {...params} label={t('upload.spaceGroupSymbolField')} />}
                   />
-                  <TextField label="空间群号" type="number" value={state.reported_space_group_number ?? ''}
+                  <TextField label={t('upload.spaceGroupNumberField')} type="number" value={state.reported_space_group_number ?? ''}
                     {...issueProps(`material_states[${index}].reported_space_group_number`)}
                     onChange={event => changeSpaceGroupNumber(index, event.target.value)}
                     slotProps={{ htmlInput: { min: 1, max: 230 } }} />
                   <FormControl fullWidth>
-                    <InputLabel id={`superconductor-kind-${index}-label`}>超导类型</InputLabel>
+                    <InputLabel id={`superconductor-kind-${index}-label`}>{t('upload.superconductorKindField')}</InputLabel>
                     <Select
                       labelId={`superconductor-kind-${index}-label`}
-                      label="超导类型"
+                      label={t('upload.superconductorKindField')}
                       value={state.superconductor_kind === 'conventional' || state.superconductor_kind === 'unconventional'
                         ? state.superconductor_kind
                         : ''}
                       displayEmpty
-                      renderValue={value => SUPERCONDUCTOR_KIND_OPTIONS.find(option => option.value === value)?.label
-                        ?? <Box component="span" sx={{ color: 'text.secondary' }}>请选择</Box>}
+                      renderValue={value => value
+                        ? dict.enums.superconductorKind[value as 'conventional' | 'unconventional'] || t('upload.selectPlaceholder')
+                        : <Box component="span" sx={{ color: 'text.secondary' }}>{t('upload.selectPlaceholder')}</Box>}
                       onChange={event => updateMaterialState(index, 'superconductor_kind', event.target.value)}
                     >
-                      {SUPERCONDUCTOR_KIND_OPTIONS.map(option => (
-                        <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                      {SUPERCONDUCTOR_KIND_VALUES.map(value => (
+                        <MenuItem key={value} value={value}>{dict.enums.superconductorKind[value]}</MenuItem>
                       ))}
                     </Select>
                   </FormControl>
                 </Box>
                 <EvidenceNotes
-                  label={`材料状态 #${index + 1}`}
+                  label={t('upload.materialStateNumber', { index: index + 1 })}
                   aiValue={aiState ? `${aiState.material || ''} ${aiState.pressure_value_gpa ?? ''} GPa`.trim() : undefined}
                   evidence={state.space_group_evidence || aiState?.space_group_evidence}
                 />
 
                 <Box data-issue-field={`material_states[${index}].calculation_context`}
                   sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography variant="subtitle2" fontWeight={700}>临界温度 Tc</Typography>
-                  <Button size="small" startIcon={<AddIcon />} onClick={() => addTcResult(index)}>添加 Tc</Button>
+                  <Typography variant="subtitle2" fontWeight={700}>{t('upload.criticalTempTitle')}</Typography>
+                  <Button size="small" startIcon={<AddIcon />} onClick={() => addTcResult(index)}>{t('upload.addTc')}</Button>
                 </Box>
                 <IssueText field={`material_states[${index}].calculation_context`} />
                 <Box data-issue-field={`material_states[${index}].tc_results`}>
@@ -1195,46 +1187,46 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
                 {(state.tc_results || []).map((result, resultIndex) => (
                   isConventional ? (
                     <Box key={resultIndex} sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: 'repeat(3, 1fr)' }, gap: 1, mt: 1 }}>
-                      <TextField size="small" label="电声耦合强度 λ" type="number" value={result.calculation_context?.lambda_ep ?? ''}
+                      <TextField size="small" label={t('upload.lambdaLabel')} type="number" value={result.calculation_context?.lambda_ep ?? ''}
                         onChange={event => updateTcCalculationContext(index, resultIndex, 'lambda_ep', event.target.value ? Number(event.target.value) : null)}
                         slotProps={{ htmlInput: { min: 0, step: 'any' } }} />
-                      <TextField size="small" label="对数声子频率 ωlog (K)" type="number" value={result.calculation_context?.omega_log_k ?? ''}
+                      <TextField size="small" label={t('upload.omegaLogLabel')} type="number" value={result.calculation_context?.omega_log_k ?? ''}
                         onChange={event => updateTcCalculationContext(index, resultIndex, 'omega_log_k', event.target.value ? Number(event.target.value) : null)}
                         slotProps={{ htmlInput: { min: 0, step: 'any' } }} />
-                      <TextField size="small" label="库伦屏蔽常数 μ*" type="number" value={result.calculation_context?.mu_star ?? ''}
+                      <TextField size="small" label={t('upload.muStarLabel')} type="number" value={result.calculation_context?.mu_star ?? ''}
                         onChange={event => updateTcCalculationContext(index, resultIndex, 'mu_star', event.target.value ? Number(event.target.value) : null)}
                         slotProps={{ htmlInput: { min: 0, step: 'any' } }} />
-                      <TextField size="small" label="Tc 数值 (K)" type="number" value={result.tc_value_k ?? ''}
+                      <TextField size="small" label={t('upload.tcValueLabel')} type="number" value={result.tc_value_k ?? ''}
                         onChange={event => updateTcResult(index, resultIndex, 'tc_value_k', event.target.value ? Number(event.target.value) : null)} />
                       <FormControl size="small">
-                        <InputLabel id={`tc-method-${index}-${resultIndex}-label`}>Tc 方法</InputLabel>
+                        <InputLabel id={`tc-method-${index}-${resultIndex}-label`}>{t('upload.tcMethodField')}</InputLabel>
                         <Select
                           labelId={`tc-method-${index}-${resultIndex}-label`}
-                          label="Tc 方法"
+                          label={t('upload.tcMethodField')}
                           value={result.tc_method || 'unknown'}
                           onChange={event => updateTcResult(index, resultIndex, 'tc_method', event.target.value)}
                         >
-                          {TC_METHOD_OPTIONS.map(option => <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>)}
+                          {TC_METHOD_VALUES.map(value => <MenuItem key={value} value={value}>{dict.enums.tcMethod[value]}</MenuItem>)}
                         </Select>
                       </FormControl>
                       {result.tc_method === 'other' && (
-                        <TextField size="small" label="自定义 Tc 方法" value={result.tc_method_custom || ''}
+                        <TextField size="small" label={t('upload.tcMethodCustomField')} value={result.tc_method_custom || ''}
                           onChange={event => updateTcResult(index, resultIndex, 'tc_method_custom', event.target.value || null)} />
                       )}
-                      <Button size="small" color="error" onClick={() => removeTcResult(index, resultIndex)}>删除</Button>
+                      <Button size="small" color="error" onClick={() => removeTcResult(index, resultIndex)}>{t('common.delete')}</Button>
                     </Box>
                   ) : (
                     <Box key={resultIndex} sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr auto' }, gap: 1, mt: 1 }}>
-                      <TextField size="small" label="Tc 数值 (K)" type="number" value={result.tc_value_k ?? ''}
+                      <TextField size="small" label={t('upload.tcValueLabel')} type="number" value={result.tc_value_k ?? ''}
                         onChange={event => updateTcResult(index, resultIndex, 'tc_value_k', event.target.value ? Number(event.target.value) : null)} />
-                      <Button size="small" color="error" onClick={() => removeTcResult(index, resultIndex)}>删除</Button>
+                      <Button size="small" color="error" onClick={() => removeTcResult(index, resultIndex)}>{t('common.delete')}</Button>
                     </Box>
                   )
                 ))}
 
                 <Box data-issue-field={`material_states[${index}].properties`}
                   sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography variant="subtitle2" fontWeight={700}>其他普通物性</Typography>
+                  <Typography variant="subtitle2" fontWeight={700}>{t('upload.otherPropertiesTitle')}</Typography>
                   <Box sx={{ display: 'flex', gap: 1 }}>
                     <Button size="small" startIcon={<AddIcon />} disabled={hasEnergyAboveHull}
                       onClick={() => addEnergyAboveHull(index)}>{ENERGY_ABOVE_HULL_NAME}</Button>
@@ -1244,24 +1236,24 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
                         ...item,
                         properties: [...(item.properties || []), { name: '', name_raw: '', value_raw: '', unit: '' }],
                       } : item),
-                    }))}>添加普通物性</Button>
+                    }))}>{t('upload.addProperty')}</Button>
                   </Box>
                 </Box>
                 <IssueText field={`material_states[${index}].properties`} />
                 {(state.properties || []).map((property, propertyIndex) => (
                   <Box key={propertyIndex} sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 2fr 1fr auto' }, gap: 1, mt: 1 }}>
-                    <TextField size="small" label={`物性 #${propertyIndex + 1} 名称`} value={property.name_raw || property.name || ''}
+                    <TextField size="small" label={t('upload.propertyNameLabel', { index: propertyIndex + 1 })} value={property.name_raw || property.name || ''}
                       onChange={event => updateProperty(index, propertyIndex, 'name_raw', event.target.value)} />
-                    <TextField size="small" label="原始值" value={property.value_raw || ''}
+                    <TextField size="small" label={t('upload.rawValueField')} value={property.value_raw || ''}
                       onChange={event => updateProperty(index, propertyIndex, 'value_raw', event.target.value)} />
-                    <TextField size="small" label="单位" value={property.unit || ''}
+                    <TextField size="small" label={t('upload.unitField')} value={property.unit || ''}
                       onChange={event => updateProperty(index, propertyIndex, 'unit', event.target.value)} />
                     <Button size="small" color="error" onClick={() => changeDraft(current => ({
                       ...current,
                       material_states: current.material_states.map((item, itemIndex) => itemIndex === index ? {
                         ...item, properties: (item.properties || []).filter((_, propIndex) => propIndex !== propertyIndex),
                       } : item),
-                    }))}>删除</Button>
+                    }))}>{t('common.delete')}</Button>
                   </Box>
                 ))}
 
@@ -1283,7 +1275,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
           )
         })}
         {draft.material_states.length === 0 && !readOnly && (
-          <Alert severity="info">AI 没有提取到材料状态。综述可以直接提交，其他论文请补充后提交。</Alert>
+          <Alert severity="info">{t('upload.noMaterialStates')}</Alert>
         )}
       </Box>
     </Box>

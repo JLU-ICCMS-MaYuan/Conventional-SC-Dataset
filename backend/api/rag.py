@@ -1042,6 +1042,7 @@ async def _create_pending_paper(
                     theoretical_subtype=paper_data.get("theoretical_subtype"),
                     keywords_tags=json.dumps(paper_data.get("keywords_tags") or [], ensure_ascii=False),
                     methodology=json.dumps(paper_data.get("methodology") or [], ensure_ascii=False),
+                    knowledge_graph_title=paper_data.get("knowledge_graph_title"),
                     key_finding=paper_data.get("key_finding"),
                     research_motivation=draft.get("research_motivation") or paper_data.get("research_motivation"),
                     research_materials=paper_data.get("research_materials") or [],

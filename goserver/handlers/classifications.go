@@ -85,7 +85,7 @@ func serializeCatalog(items interface{}) []gin.H {
 			for _, alias := range item.Aliases {
 				aliases = append(aliases, alias.Alias)
 			}
-			result = append(result, gin.H{"id": item.ID, "name": item.NameZH, "aliases": aliases})
+			result = append(result, gin.H{"id": item.ID, "name": item.NameZH, "name_zh": item.NameZH, "name_en": item.NameEN, "aliases": aliases})
 		}
 	case []models.StructureFamily:
 		for _, item := range values {
@@ -93,7 +93,7 @@ func serializeCatalog(items interface{}) []gin.H {
 			for _, alias := range item.Aliases {
 				aliases = append(aliases, alias.Alias)
 			}
-			result = append(result, gin.H{"id": item.ID, "name": item.NameZH, "aliases": aliases})
+			result = append(result, gin.H{"id": item.ID, "name": item.NameZH, "name_zh": item.NameZH, "name_en": item.NameEN, "aliases": aliases})
 		}
 	}
 	return result

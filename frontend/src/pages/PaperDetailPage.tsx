@@ -5,17 +5,18 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import { api } from '../lib/api'
 import type { ApiError } from '../lib/api'
 import PaperEditView from '../components/PaperEditView'
+import { useLanguage } from '../context/LanguageContext'
 
 // 论文可见性完全由后端 GET /api/papers/{id} 逐篇裁决（canViewPaper）。
 // 本页不读取用户角色、不判断 review_status，只按状态码分流提示，避免权限规则出现两份实现。
-const FAILURE_MESSAGES: Record<'invalid' | 'forbidden' | 'missing' | 'error', string> = {
-  invalid: '论文编号无效',
-  forbidden: '无权查看该论文',
-  missing: '论文不存在',
-  error: '加载论文失败',
+const FAILURE_KEYS: Record<'invalid' | 'forbidden' | 'missing' | 'error', string> = {
+  invalid: 'paperDetail.failure.invalid',
+  forbidden: 'paperDetail.failure.forbidden',
+  missing: 'paperDetail.failure.missing',
+  error: 'paperDetail.failure.error',
 }
 
-type FailureKind = keyof typeof FAILURE_MESSAGES
+type FailureKind = keyof typeof FAILURE_KEYS
 
 // 路径参数由用户任意输入，先在本地拦截非正整数，避免无意义的网络往返。
 const parsePaperId = (raw: string | undefined): number | null => {
@@ -35,6 +36,7 @@ const failureKindOf = (reason: unknown): FailureKind => {
 const PaperDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { t } = useLanguage()
   const paperId = parsePaperId(id)
 
   const [loading, setLoading] = useState(paperId !== null)
@@ -75,8 +77,8 @@ const PaperDetailPage: React.FC = () => {
   if (failure || !paper) {
     return (
       <Box sx={{ textAlign: 'center', py: 8 }}>
-        <Typography color="error" gutterBottom>{FAILURE_MESSAGES[failure || 'error']}</Typography>
-        <Button onClick={handleBack} startIcon={<ArrowBackIcon />}>返回上传列表</Button>
+        <Typography color="error" gutterBottom>{t(FAILURE_KEYS[failure || 'error'])}</Typography>
+        <Button onClick={handleBack} startIcon={<ArrowBackIcon />}>{t('paperDetail.backToUpload')}</Button>
       </Box>
     )
   }

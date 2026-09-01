@@ -6,6 +6,7 @@ import {
 } from '@mui/material'
 import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
+import { useLanguage } from '../context/LanguageContext'
 
 interface GovernanceUser {
   id: number
@@ -50,11 +51,9 @@ interface AuditEvent {
   created_at: string
 }
 
-const roleLabel = { user: '用户', admin: '管理员', superadmin: '超级管理员' }
-const statusLabel = { active: '正常', banned: '已封禁', deactivated: '已注销' }
-
 const SuperAdminGovernance: React.FC = () => {
   const { user } = useAuth()
+  const { t, dict } = useLanguage()
   const [section, setSection] = useState(0)
   const [users, setUsers] = useState<GovernanceUser[]>([])
   const [applications, setApplications] = useState<AdminApplication[]>([])
@@ -62,6 +61,20 @@ const SuperAdminGovernance: React.FC = () => {
   const [auditKind, setAuditKind] = useState('governance')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  // 按 value 取枚举标签；未知值原样展示。
+  const roleLabel = (value: string): string => {
+    const labels = dict.enums.role
+    return labels[value as keyof typeof labels] || value
+  }
+  const userStatusLabel = (value: string): string => {
+    const labels = dict.admin.userStatus
+    return labels[value as keyof typeof labels] || value
+  }
+  const applicationStatusLabel = (value: string): string => {
+    const labels = dict.admin.applicationStatus
+    return labels[value as keyof typeof labels] || value
+  }
 
   const loadUsers = useCallback(async () => setUsers(await api.get<GovernanceUser[]>('/api/superadmin/users')), [])
   const loadApplications = useCallback(async () => setApplications(await api.get<AdminApplication[]>('/api/superadmin/admin-applications')), [])
@@ -93,52 +106,54 @@ const SuperAdminGovernance: React.FC = () => {
   }
 
   const reason = (label: string) => {
-    const value = window.prompt(`${label}原因（必填，将永久写入审计记录）`)?.trim()
+    const value = window.prompt(`${label}${t('admin.reasonSuffix')}`)?.trim()
     return value || null
   }
 
   const changeRole = (target: GovernanceUser, role: GovernanceUser['role']) => {
     if (role === target.role) return
-    const why = reason(`将 ${target.username} 的角色改为${roleLabel[role]}`)
-    if (!why || !window.confirm(`确认修改 ${target.username} 的角色？该用户现有登录会立即失效。`)) return
+    const why = reason(t('admin.changeRolePrompt', { username: target.username, role: roleLabel(role) }))
+    if (!why || !window.confirm(t('admin.confirmRoleChange', { username: target.username }))) return
     void act(() => api.post(`/api/superadmin/users/${target.id}/role`, { role, reason: why }))
   }
 
   const changeStatus = (target: GovernanceUser, action: 'ban' | 'unban' | 'deactivate') => {
-    const labels = { ban: '封禁', unban: '解除封禁', deactivate: '注销账号' }
-    const why = reason(`${labels[action]} ${target.username}`)
-    if (!why || !window.confirm(`确认${labels[action]}账号 ${target.username}？此操作会立即撤销其登录状态。`)) return
+    const labels = { ban: t('admin.ban'), unban: t('admin.unban'), deactivate: t('admin.deactivate') }
+    const why = reason(t('admin.statusActionPrompt', { action: labels[action], username: target.username }))
+    if (!why || !window.confirm(t('admin.confirmStatusAction', { action: labels[action], username: target.username }))) return
     void act(() => api.post(`/api/superadmin/users/${target.id}/${action}`, { reason: why }))
   }
+
+  const pendingCount = applications.filter(item => item.status === 'pending').length
 
   return (
     <Box>
       <Tabs value={section} onChange={(_, value) => setSection(value)} sx={{ mb: 2 }}>
-        <Tab label={`管理员申请${applications.filter(item => item.status === 'pending').length ? ` (${applications.filter(item => item.status === 'pending').length})` : ''}`} />
-        <Tab label="用户与权限" />
-        <Tab label="审计记录" />
+        <Tab label={`${t('admin.applicationsTab')}${pendingCount ? ` (${pendingCount})` : ''}`} />
+        <Tab label={t('admin.usersPermissions')} />
+        <Tab label={t('admin.auditTab')} />
       </Tabs>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {loading && <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}><CircularProgress size={24} /></Box>}
 
       {section === 0 && !loading && (
         <TableContainer component={Paper} variant="outlined"><Table size="small">
-          <TableHead><TableRow><TableCell>申请人快照</TableCell><TableCell>机构 / ORCID</TableCell><TableCell>状态</TableCell><TableCell>提交时间</TableCell><TableCell align="right">操作</TableCell></TableRow></TableHead>
-          <TableBody>{applications.map(item => <TableRow key={item.id} hover><TableCell><Typography fontWeight={650}>{item.real_name_snapshot}</Typography><Typography variant="caption" color="text.secondary">用户 #{item.user_id}</Typography></TableCell><TableCell>{item.affiliation_snapshot}<br /><Typography variant="caption">{item.orcid_snapshot || '未填写 ORCID'}</Typography></TableCell><TableCell><Chip size="small" label={item.status === 'pending' ? '待审核' : item.status === 'approved' ? '已通过' : item.status === 'rejected' ? '已拒绝' : '已撤回'} color={item.status === 'pending' ? 'warning' : item.status === 'approved' ? 'success' : 'default'} />{item.rejection_reason && <Typography variant="caption" color="error" display="block">{item.rejection_reason}</Typography>}</TableCell><TableCell>{new Date(item.submitted_at).toLocaleString()}</TableCell><TableCell align="right">{item.status === 'pending' && <Stack direction="row" spacing={1} justifyContent="flex-end"><Button size="small" color="success" onClick={() => { if (window.confirm('确认批准该管理员申请？申请人角色将立即变为管理员。')) void act(() => api.post(`/api/superadmin/admin-applications/${item.id}/approve`)) }}>通过</Button><Button size="small" color="error" onClick={() => { const why = reason('拒绝管理员申请'); if (why) void act(() => api.post(`/api/superadmin/admin-applications/${item.id}/reject`, { reason: why })) }}>拒绝</Button></Stack>}</TableCell></TableRow>)}</TableBody>
+          <TableHead><TableRow><TableCell>{t('admin.thApplicantSnapshot')}</TableCell><TableCell>{t('admin.thAffiliationOrcid')}</TableCell><TableCell>{t('admin.thStatus')}</TableCell><TableCell>{t('admin.thSubmittedAt')}</TableCell><TableCell align="right">{t('common.operations')}</TableCell></TableRow></TableHead>
+          <TableBody>{applications.map(item => <TableRow key={item.id} hover><TableCell><Typography fontWeight={650}>{item.real_name_snapshot}</Typography><Typography variant="caption" color="text.secondary">{t('admin.userHash', { id: item.user_id })}</Typography></TableCell><TableCell>{item.affiliation_snapshot}<br /><Typography variant="caption">{item.orcid_snapshot || t('admin.orcidNotProvided')}</Typography></TableCell><TableCell><Chip size="small" label={applicationStatusLabel(item.status)} color={item.status === 'pending' ? 'warning' : item.status === 'approved' ? 'success' : 'default'} />{item.rejection_reason && <Typography variant="caption" color="error" display="block">{item.rejection_reason}</Typography>}</TableCell><TableCell>{new Date(item.submitted_at).toLocaleString()}</TableCell><TableCell align="right">{item.status === 'pending' && <Stack direction="row" spacing={1} justifyContent="flex-end"><Button size="small" color="success" onClick={() => { if (window.confirm(t('admin.confirmApproveApplication'))) void act(() => api.post(`/api/superadmin/admin-applications/${item.id}/approve`)) }}>{t('admin.approve')}</Button><Button size="small" color="error" onClick={() => { const why = reason(t('admin.rejectApplicationReason')); if (why) void act(() => api.post(`/api/superadmin/admin-applications/${item.id}/reject`, { reason: why })) }}>{t('admin.reject')}</Button></Stack>}</TableCell></TableRow>)}</TableBody>
         </Table></TableContainer>
       )}
 
       {section === 1 && !loading && (
         <TableContainer component={Paper} variant="outlined"><Table size="small">
-          <TableHead><TableRow><TableCell>用户</TableCell><TableCell>实名 / 机构</TableCell><TableCell>角色</TableCell><TableCell>状态</TableCell><TableCell align="right">治理操作</TableCell></TableRow></TableHead>
-          <TableBody>{users.map(item => <TableRow key={item.id} hover><TableCell><Typography fontWeight={650}>{item.username}{item.id === user?.id ? '（当前账号）' : ''}</Typography><Typography variant="caption" color="text.secondary">{item.email}</Typography></TableCell><TableCell>{item.real_name || '-'}<br /><Typography variant="caption" color="text.secondary">{item.affiliation || '-'}</Typography></TableCell><TableCell><FormControl size="small" sx={{ minWidth: 128 }} disabled={item.id === user?.id || item.account_status !== 'active'}><InputLabel>角色</InputLabel><Select value={item.role} label="角色" onChange={event => changeRole(item, event.target.value as GovernanceUser['role'])}><MenuItem value="user">用户</MenuItem><MenuItem value="admin">管理员</MenuItem><MenuItem value="superadmin">超级管理员</MenuItem></Select></FormControl></TableCell><TableCell><Chip size="small" label={statusLabel[item.account_status]} color={item.account_status === 'active' ? 'success' : item.account_status === 'banned' ? 'warning' : 'default'} /></TableCell><TableCell align="right">{item.id !== user?.id && item.account_status === 'active' && <><Button size="small" color="warning" onClick={() => changeStatus(item, 'ban')}>封禁</Button><Button size="small" color="error" onClick={() => changeStatus(item, 'deactivate')}>注销</Button></>}{item.id !== user?.id && item.account_status === 'banned' && <><Button size="small" onClick={() => changeStatus(item, 'unban')}>解除封禁</Button><Button size="small" color="error" onClick={() => changeStatus(item, 'deactivate')}>注销</Button></>}</TableCell></TableRow>)}</TableBody>
+          <TableHead><TableRow><TableCell>{t('admin.thUser')}</TableCell><TableCell>{t('admin.thRealNameAffiliation')}</TableCell><TableCell>{t('admin.fieldRole')}</TableCell><TableCell>{t('admin.thStatus')}</TableCell><TableCell align="right">{t('admin.thGovernanceActions')}</TableCell></TableRow></TableHead>
+          <TableBody>{users.map(item => <TableRow key={item.id} hover><TableCell><Typography fontWeight={650}>{item.username}{item.id === user?.id ? t('admin.currentAccountSuffix') : ''}</Typography><Typography variant="caption" color="text.secondary">{item.email}</Typography></TableCell><TableCell>{item.real_name || '-'}<br /><Typography variant="caption" color="text.secondary">{item.affiliation || '-'}</Typography></TableCell><TableCell><FormControl size="small" sx={{ minWidth: 128 }} disabled={item.id === user?.id || item.account_status !== 'active'}><InputLabel>{t('admin.fieldRole')}</InputLabel><Select value={item.role} label={t('admin.fieldRole')} onChange={event => changeRole(item, event.target.value as GovernanceUser['role'])}><MenuItem value="user">{roleLabel('user')}</MenuItem><MenuItem value="admin">{roleLabel('admin')}</MenuItem><MenuItem value="superadmin">{roleLabel('superadmin')}</MenuItem></Select></FormControl></TableCell><TableCell><Chip size="small" label={userStatusLabel(item.account_status)} color={item.account_status === 'active' ? 'success' : item.account_status === 'banned' ? 'warning' : 'default'} /></TableCell><TableCell align="right">{item.id !== user?.id && item.account_status === 'active' && <><Button size="small" color="warning" onClick={() => changeStatus(item, 'ban')}>{t('admin.ban')}</Button><Button size="small" color="error" onClick={() => changeStatus(item, 'deactivate')}>{t('admin.deactivate')}</Button></>}{item.id !== user?.id && item.account_status === 'banned' && <><Button size="small" onClick={() => changeStatus(item, 'unban')}>{t('admin.unban')}</Button><Button size="small" color="error" onClick={() => changeStatus(item, 'deactivate')}>{t('admin.deactivate')}</Button></>}</TableCell></TableRow>)}</TableBody>
         </Table></TableContainer>
       )}
 
       {section === 2 && !loading && (
         <Box>
-          <Stack direction="row" spacing={1} sx={{ mb: 2 }}><Chip label="角色与账号" clickable color={auditKind === 'governance' ? 'primary' : 'default'} onClick={() => { setAuditKind('governance'); void loadAudits('governance') }} /><Chip label="实名与机构" clickable color={auditKind === 'profile' ? 'primary' : 'default'} onClick={() => { setAuditKind('profile'); void loadAudits('profile') }} /><Chip label="用户名" clickable color={auditKind === 'username' ? 'primary' : 'default'} onClick={() => { setAuditKind('username'); void loadAudits('username') }} /></Stack>
-          <TableContainer component={Paper} variant="outlined"><Table size="small"><TableHead><TableRow><TableCell>时间</TableCell><TableCell>目标用户</TableCell><TableCell>变更</TableCell><TableCell>操作人</TableCell><TableCell>原因</TableCell></TableRow></TableHead><TableBody>{audits.map(item => <TableRow key={`${auditKind}-${item.id}`}><TableCell>{new Date(item.created_at).toLocaleString()}</TableCell><TableCell>#{item.target_user_id}</TableCell><TableCell>{item.event_type || item.field_name || '用户名'}：{item.old_username || item.old_value || item.old_role || item.old_status || '空'} → {item.new_username || item.new_value || item.new_role || item.new_status || '空'}</TableCell><TableCell>{item.changed_by_username || `#${item.actor_user_id || item.changed_by_user_id || '-'}`}</TableCell><TableCell>{item.reason || '-'}</TableCell></TableRow>)}</TableBody></Table></TableContainer>
+          <Stack direction="row" spacing={1} sx={{ mb: 2 }}><Chip label={t('admin.auditKindGovernance')} clickable color={auditKind === 'governance' ? 'primary' : 'default'} onClick={() => { setAuditKind('governance'); void loadAudits('governance') }} /><Chip label={t('admin.auditKindProfile')} clickable color={auditKind === 'profile' ? 'primary' : 'default'} onClick={() => { setAuditKind('profile'); void loadAudits('profile') }} /><Chip label={t('admin.auditKindUsername')} clickable color={auditKind === 'username' ? 'primary' : 'default'} onClick={() => { setAuditKind('username'); void loadAudits('username') }} /></Stack>
+          <TableContainer component={Paper} variant="outlined"><Table size="small"><TableHead><TableRow><TableCell>{t('admin.thTime')}</TableCell><TableCell>{t('admin.thTargetUser')}</TableCell><TableCell>{t('admin.thChange')}</TableCell><TableCell>{t('admin.thActor')}</TableCell><TableCell>{t('admin.thReason')}</TableCell></TableRow></TableHead><TableBody>{audits.map(item => <TableRow key={`${auditKind}-${item.id}`}><TableCell>{new Date(item.created_at).toLocaleString()}</TableCell><TableCell>#{item.target_user_id}</TableCell><TableCell>{t('admin.auditChange', { field: item.event_type || item.field_name || t('admin.auditKindUsername'), old: item.old_username || item.old_value || item.old_role || item.old_status || t('admin.auditEmpty'), new: item.new_username || item.new_value || item.new_role || item.new_status || t('admin.auditEmpty') })}</TableCell><TableCell>{item.changed_by_username || `#${item.actor_user_id || item.changed_by_user_id || '-'}`}</TableCell><TableCell>{item.reason || '-'}</TableCell></TableRow>)}</TableBody></Table></TableContainer>
         </Box>
       )}
     </Box>

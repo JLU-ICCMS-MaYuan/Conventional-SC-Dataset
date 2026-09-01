@@ -3,29 +3,41 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { AppBar, Avatar, Box, Button, ListItemIcon, Menu, MenuItem, Toolbar, Typography } from '@mui/material'
 import { Logout as LogoutIcon, Person as PersonIcon } from '@mui/icons-material'
 import { useAuth } from '../context/AuthContext'
+import { useLanguage } from '../context/LanguageContext'
+import type { Lang } from '../i18n'
 import AuthDialog from './AuthDialog'
 
+// 导航项的标签走字典键，path 是路由契约不随语言变化。
 const NAV_ITEMS = [
-  { label: '热点', path: '/news' },
-  { label: '探索', path: '/search' },
-  { label: '脉络', path: '/knowledge' },
-  { label: '社区', path: '/share' },
-  { label: '上传', path: '/upload' },
-  { label: '对话', path: '/rag' },
-  { label: '预测', path: '/tc-predict' },
+  { key: 'nav.news', path: '/news' },
+  { key: 'nav.search', path: '/search' },
+  { key: 'nav.knowledge', path: '/knowledge' },
+  { key: 'nav.share', path: '/share' },
+  { key: 'nav.upload', path: '/upload' },
+  { key: 'nav.rag', path: '/rag' },
+  { key: 'nav.tcPredict', path: '/tc-predict' },
 ]
 
-const ROLE_LABELS: Record<string, string> = { superadmin: '超级管理员', admin: '管理员', user: '用户' }
 const APP_BAR_HEIGHT = 72
 
 const AppShell: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const { user, logout } = useAuth()
+  const { lang, setLang, t } = useLanguage()
   const [authOpen, setAuthOpen] = useState(false)
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
-  const navItems = user ? [...NAV_ITEMS, { label: ROLE_LABELS[user.role] || user.role, path: '/account' }] : NAV_ITEMS
+  const navItems = user
+    ? [...NAV_ITEMS, { key: `enums.role.${user.role}`, path: '/account' }]
+    : NAV_ITEMS
   const activeIndex = navItems.findIndex(item => location.pathname.startsWith(item.path))
+
+  // 语言切换：两段式按钮。aria-pressed 表达当前生效语言——仅靠颜色高亮
+  // 对读屏与色觉障碍用户不可达。
+  const languageOptions: Array<{ value: Lang; shortKey: string; labelKey: string }> = [
+    { value: 'zh', shortKey: 'nav.langZhShort', labelKey: 'nav.switchToZh' },
+    { value: 'en', shortKey: 'nav.langEnShort', labelKey: 'nav.switchToEn' },
+  ]
 
   const handleLogout = () => {
     setAnchorEl(null)
@@ -42,27 +54,63 @@ const AppShell: React.FC = () => {
             <Typography fontWeight={700} sx={{ cursor: 'pointer' }} onClick={() => navigate('/')}>SC-Wiki</Typography>
           </Box>
 
-          {user ? (
-            <>
-              <Button aria-label="打开账户菜单" onClick={event => setAnchorEl(event.currentTarget)} sx={{ minWidth: 44, p: 0.5, borderRadius: '50%' }}>
-                <Avatar src={user.avatar_url || undefined} sx={{ width: 36, height: 36, bgcolor: 'primary.main', fontSize: 14, fontWeight: 700 }}>
-                  {user.username.charAt(0).toUpperCase()}
-                </Avatar>
-              </Button>
-              <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)} anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }} transformOrigin={{ horizontal: 'right', vertical: 'top' }} slotProps={{ paper: { sx: { minWidth: 160, mt: 1 } } }}>
-                <MenuItem onClick={handleLogout} sx={{ color: 'error.main' }}>
-                  <ListItemIcon><LogoutIcon fontSize="small" color="error" /></ListItemIcon>
-                  退出登录
-                </MenuItem>
-              </Menu>
-            </>
-          ) : (
-            <Button variant="outlined" size="small" startIcon={<PersonIcon />} onClick={() => setAuthOpen(true)} sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600 }}>登录</Button>
-          )}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            {/* 语言切换控件位于头像左侧。Issue #73 的 AI 供应商切换器将排在本控件左侧。 */}
+            <Box
+              role="group"
+              aria-label={t('nav.languageGroup')}
+              sx={{
+                display: 'flex', border: '1px solid', borderColor: 'divider',
+                borderRadius: '10px', overflow: 'hidden',
+              }}
+            >
+              {languageOptions.map(option => {
+                const isActive = lang === option.value
+                return (
+                  <Box
+                    key={option.value}
+                    component="button"
+                    type="button"
+                    aria-pressed={isActive}
+                    aria-label={t(option.labelKey)}
+                    onClick={() => setLang(option.value)}
+                    sx={{
+                      border: 0, px: 1.25, py: 0.5, cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                      bgcolor: isActive ? 'primary.main' : 'transparent',
+                      color: isActive ? 'primary.contrastText' : 'text.secondary',
+                      transition: 'background-color 0.2s, color 0.2s',
+                      '&:hover': { bgcolor: isActive ? 'primary.dark' : 'action.hover' },
+                      '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 },
+                    }}
+                  >
+                    {t(option.shortKey)}
+                  </Box>
+                )
+              })}
+            </Box>
+
+            {user ? (
+              <>
+                <Button aria-label={t('nav.accountMenu')} onClick={event => setAnchorEl(event.currentTarget)} sx={{ minWidth: 44, p: 0.5, borderRadius: '50%' }}>
+                  <Avatar src={user.avatar_url || undefined} sx={{ width: 36, height: 36, bgcolor: 'primary.main', fontSize: 14, fontWeight: 700 }}>
+                    {user.username.charAt(0).toUpperCase()}
+                  </Avatar>
+                </Button>
+                <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)} anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }} transformOrigin={{ horizontal: 'right', vertical: 'top' }} slotProps={{ paper: { sx: { minWidth: 160, mt: 1 } } }}>
+                  <MenuItem onClick={handleLogout} sx={{ color: 'error.main' }}>
+                    <ListItemIcon><LogoutIcon fontSize="small" color="error" /></ListItemIcon>
+                    {t('nav.logout')}
+                  </MenuItem>
+                </Menu>
+              </>
+            ) : (
+              <Button variant="outlined" size="small" startIcon={<PersonIcon />} onClick={() => setAuthOpen(true)} sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600 }}>{t('nav.login')}</Button>
+            )}
+          </Box>
         </Toolbar>
       </AppBar>
 
-      <Box component="nav" aria-label="主导航" sx={{
+      <Box component="nav" aria-label={t('nav.mainNav')} sx={{
         bgcolor: 'background.paper', borderRight: '1px solid', borderColor: 'divider',
         display: 'flex', flexDirection: 'column', gap: 1, p: '16px 10px',
         position: 'sticky', top: `${APP_BAR_HEIGHT}px`, alignSelf: 'start',
@@ -74,7 +122,7 @@ const AppShell: React.FC = () => {
           const isActive = location.pathname.startsWith(item.path)
           return (
             <Box key={item.path} component="button" onClick={() => navigate(item.path)} sx={{ border: 0, width: 68, minHeight: 60, borderRadius: '18px', display: 'grid', placeItems: 'center', position: 'relative', zIndex: 1, color: isActive ? '#312e81' : 'text.secondary', bgcolor: 'transparent', fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'color 0.25s', '&:hover': { color: '#312e81' } }}>
-              {item.label}
+              {t(item.key)}
             </Box>
           )
         })}
