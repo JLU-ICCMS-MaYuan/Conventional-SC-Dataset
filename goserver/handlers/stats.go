@@ -186,24 +186,63 @@ func CommunityContributions(c *gin.Context) {
 
 const defaultTcField = "experimental_tc"
 
+// chartTcColumns 把对外的 tc_field 契约映射到条件化模型的 tc_results.tc_method 取值。
+// 旧模型每种 Tc 是 superconductor_records 上的一列，故字段名映射到列名；该表迁移后已删除，
+// Tc 现在是 tc_results 的行，方法存在 tc_method 里，所以映射目标从「列」变成「行过滤值」。
+// 对外白名单与默认值保持不变，前端偏好无需迁移。
 var chartTcColumns = map[string]string{
-	"experimental_tc":           "sr.experimental_tc",
-	"anisotropic_eliashberg_tc": "sr.anisotropic_eliashberg_tc",
-	"isotropic_eliashberg_tc":   "sr.isotropic_eliashberg_tc",
-	"allen_dynes_tc":            "sr.allen_dynes_tc",
-	"mcmillan_tc":               "sr.mcmillan_tc",
+	"experimental_tc":           "experimental",
+	"anisotropic_eliashberg_tc": "anisotropic_eliashberg",
+	"isotropic_eliashberg_tc":   "isotropic_eliashberg",
+	"allen_dynes_tc":            "allen_dynes",
+	"mcmillan_tc":               "mcmillan",
 }
 
+// resolveChartTcField 返回 (对外字段名, tc_results.tc_method 取值, 是否合法)。
 func resolveChartTcField(value string) (string, string, bool) {
 	field := strings.TrimSpace(value)
 	if field == "" {
 		field = defaultTcField
 	}
-	column, ok := chartTcColumns[field]
+	method, ok := chartTcColumns[field]
 	if !ok {
 		return "", "", false
 	}
-	return field, column, true
+	return field, method, true
+}
+
+// 图表点的公共可见性边界：论文审核通过，且数据属于已批准的那一版内容。
+// tc_results/material_states 按 (paper_id, paper_revision) 绑定版本，不加版本条件会把
+// 审核后又被编辑出的新版本数据混进公共图表。
+const chartApprovedJoin = `
+	FROM tc_results t
+	JOIN material_states ms ON ms.id = t.material_state_id
+	JOIN superconductors sc ON sc.id = ms.superconductor_id
+	JOIN papers p ON p.id = t.paper_id
+		AND p.review_status = 'approved'
+		AND t.paper_revision = p.content_revision
+	LEFT JOIN material_families mf ON mf.id = ms.material_family_id`
+
+// 只有区间没有单值的 Tc 条目取区间中点，否则这些数据永远上不了图。
+const chartTcValueExpr = `CAST(COALESCE(t.tc_value_k, (t.tc_min_k + t.tc_max_k) / 2) AS DOUBLE)`
+
+// 分类维度取材料家族（material_families），支持用户自建家族；
+// 未分类的状态归入 family_id = 0 的「其他」。
+//
+// 注意：这两个字段必须直接声明在各 row 结构体上。GORM 的 Raw().Scan() 走
+// 原始列名匹配，不会填充匿名嵌入结构体的字段，嵌入会让家族恒为 NULL。
+func chartFamilyID(id *uint) uint {
+	if id == nil {
+		return 0
+	}
+	return *id
+}
+
+func chartFamilyName(name *string) string {
+	if name == nil || *name == "" {
+		return "其他"
+	}
+	return *name
 }
 
 func chartCacheKey(chart, field string) string {
@@ -217,7 +256,7 @@ func chartCacheKey(chart, field string) string {
 // TcPressureChart Tc-P 散点图数据
 // GET /api/papers/stats/tc-pressure
 func TcPressureChart(c *gin.Context) {
-	tcField, tcColumn, ok := resolveChartTcField(c.Query("tc_field"))
+	tcField, tcMethod, ok := resolveChartTcField(c.Query("tc_field"))
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "不支持的 Tc 字段"})
 		return
@@ -230,39 +269,43 @@ func TcPressureChart(c *gin.Context) {
 	}
 
 	type row struct {
-		Material string  `gorm:"column:material"`
-		Tc       float64 `gorm:"column:y"`
-		Pressure float64 `gorm:"column:x"`
-		SCType   string  `gorm:"column:sc_type"`
-		Type     string  `gorm:"column:type"`
-		PaperID  uint    `gorm:"column:paper_id"`
-		DOI      string  `gorm:"column:doi"`
-		Year     int     `gorm:"column:year"`
+		Material   string  `gorm:"column:material"`
+		Tc         float64 `gorm:"column:y"`
+		Pressure   float64 `gorm:"column:x"`
+		FamilyID   *uint   `gorm:"column:family_id"`
+		FamilyName *string `gorm:"column:family_name"`
+		Type       string  `gorm:"column:type"`
+		PaperID    uint    `gorm:"column:paper_id"`
+		DOI        string  `gorm:"column:doi"`
+		Year       int     `gorm:"column:year"`
 	}
 	var rows []row
 	query := fmt.Sprintf(`
-		SELECT sc.chemical_formula AS material, %s AS y, sr.pressure_gpa AS x,
-			COALESCE(sr.superconductor_type,'others') AS sc_type,
-			CASE WHEN sr.article_type='e' THEN 'experimental' ELSE 'theoretical' END AS type,
-			sr.paper_id, COALESCE(p.doi,'') AS doi, COALESCE(p.year,0) AS year
-		FROM superconductor_records sr
-		JOIN superconductors sc ON sc.id = sr.superconductor_id
-		JOIN papers p ON p.id = sr.paper_id AND p.review_status = 'approved'
-		WHERE sr.show_in_chart = true AND %s IS NOT NULL
-			AND sr.pressure_gpa IS NOT NULL
-	`, tcColumn, tcColumn)
-	database.DB.Raw(query).Scan(&rows)
+		SELECT sc.chemical_formula AS material,
+			%s AS y, CAST(ms.pressure_value_gpa AS DOUBLE) AS x,
+			ms.material_family_id AS family_id, mf.name_zh AS family_name,
+			t.result_kind AS type,
+			t.paper_id AS paper_id, COALESCE(p.doi,'') AS doi, COALESCE(p.year,0) AS year
+		%s
+		WHERE t.tc_method = ?
+			AND %s IS NOT NULL
+			AND ms.pressure_value_gpa IS NOT NULL
+	`, chartTcValueExpr, chartApprovedJoin, chartTcValueExpr)
+	if err := database.DB.Raw(query, tcMethod).Scan(&rows).Error; err != nil {
+		// 静默返回空数组会把 schema 漂移伪装成「暂无数据」，#30 的旧表查询正是这样
+		// 在条件化模型迁移后无声失效的。这里必须让错误浮出来，且不缓存失败结果。
+		log.Printf("Tc-Pressure 图表查询失败 (tc_field=%s): %v", tcField, err)
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "图表数据暂不可用"})
+		return
+	}
 
 	result = make([]gin.H, 0, len(rows))
 	for _, r := range rows {
-		t := r.Type
-		if t == "" {
-			t = "theoretical"
-		}
 		item := gin.H{
 			"formula": r.Material,
 			"y":       r.Tc, "x": r.Pressure,
-			"sc_type": r.SCType, "type": t, "tc_field": tcField,
+			"family_id": chartFamilyID(r.FamilyID), "family_name": chartFamilyName(r.FamilyName),
+			"type": chartResultType(r.Type), "tc_field": tcField,
 			"doi": r.DOI, "year": r.Year,
 		}
 		if r.PaperID > 0 {
@@ -274,10 +317,19 @@ func TcPressureChart(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
+// chartResultType 把 tc_results.result_kind 归一到图表的实验/计算两分。
+// 旧实现依据 superconductor_records.article_type='e'，该列已随表删除。
+func chartResultType(resultKind string) string {
+	if resultKind == "experimental" {
+		return "experimental"
+	}
+	return "theoretical"
+}
+
 // TcYearChart Tc-Year 散点图数据
 // GET /api/papers/stats/tc-year
 func TcYearChart(c *gin.Context) {
-	tcField, tcColumn, ok := resolveChartTcField(c.Query("tc_field"))
+	tcField, tcMethod, ok := resolveChartTcField(c.Query("tc_field"))
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "不支持的 Tc 字段"})
 		return
@@ -290,39 +342,44 @@ func TcYearChart(c *gin.Context) {
 	}
 
 	type row struct {
-		Year     int     `gorm:"column:x"`
-		Tc       float64 `gorm:"column:y"`
-		Type     string  `gorm:"column:type"`
-		SCType   string  `gorm:"column:sc_type"`
-		Material string  `gorm:"column:formula"`
-		DOI      string  `gorm:"column:doi"`
-		PaperID  uint    `gorm:"column:paper_id"`
-		Pressure float64 `gorm:"column:pressure_gpa"`
+		Year       int      `gorm:"column:x"`
+		Tc         float64  `gorm:"column:y"`
+		Type       string   `gorm:"column:type"`
+		FamilyID   *uint    `gorm:"column:family_id"`
+		FamilyName *string  `gorm:"column:family_name"`
+		Material   string   `gorm:"column:formula"`
+		DOI        string   `gorm:"column:doi"`
+		PaperID    uint     `gorm:"column:paper_id"`
+		Pressure   *float64 `gorm:"column:pressure_gpa"`
 	}
 	var rows []row
 	query := fmt.Sprintf(`
 		SELECT p.year AS x, %s AS y,
-			CASE WHEN sr.article_type='e' THEN 'experimental' ELSE 'theoretical' END AS type,
-			COALESCE(sr.superconductor_type,'others') AS sc_type,
+			t.result_kind AS type,
+			ms.material_family_id AS family_id, mf.name_zh AS family_name,
 			sc.chemical_formula AS formula, COALESCE(p.doi,'') AS doi,
-			sr.paper_id AS paper_id, sr.pressure_gpa
-		FROM superconductor_records sr
-		JOIN superconductors sc ON sc.id = sr.superconductor_id
-		JOIN papers p ON p.id = sr.paper_id AND p.review_status = 'approved'
-		WHERE sr.show_in_chart = true AND %s IS NOT NULL AND p.year IS NOT NULL
-	`, tcColumn, tcColumn)
-	database.DB.Raw(query).Scan(&rows)
+			t.paper_id AS paper_id, CAST(ms.pressure_value_gpa AS DOUBLE) AS pressure_gpa
+		%s
+		WHERE t.tc_method = ?
+			AND %s IS NOT NULL
+			AND p.year IS NOT NULL
+	`, chartTcValueExpr, chartApprovedJoin, chartTcValueExpr)
+	if err := database.DB.Raw(query, tcMethod).Scan(&rows).Error; err != nil {
+		log.Printf("Tc-Year 图表查询失败 (tc_field=%s): %v", tcField, err)
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "图表数据暂不可用"})
+		return
+	}
 
 	result = make([]gin.H, 0, len(rows))
 	for _, r := range rows {
-		t := r.Type
-		if t == "" {
-			t = "theoretical"
-		}
 		item := gin.H{
-			"x": r.Year, "y": r.Tc, "type": t,
-			"sc_type": r.SCType, "formula": r.Material, "doi": r.DOI,
-			"year": r.Year, "pressure_gpa": r.Pressure, "tc_field": tcField,
+			"x": r.Year, "y": r.Tc, "type": chartResultType(r.Type),
+			"family_id": chartFamilyID(r.FamilyID), "family_name": chartFamilyName(r.FamilyName),
+			"formula": r.Material, "doi": r.DOI,
+			"year": r.Year, "tc_field": tcField,
+		}
+		if r.Pressure != nil {
+			item["pressure_gpa"] = *r.Pressure
 		}
 		if r.PaperID > 0 {
 			item["paper_id"] = r.PaperID

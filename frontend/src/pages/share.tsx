@@ -2,21 +2,25 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Box, Typography, Card, CardContent, Button,
-  Select, MenuItem, FormControl, InputLabel, IconButton, Tooltip,
+  Select, MenuItem, FormControl, InputLabel, IconButton,
   Drawer, CircularProgress, Chip, Alert, Snackbar, Avatar, Divider,
+  Checkbox, ListItemText,
 } from '@mui/material'
 import {
-  Edit, ContentCopy, FileDownload, Close, OpenInNew, Refresh, EmojiEvents,
+  Close, OpenInNew, Refresh, EmojiEvents,
 } from '@mui/icons-material'
 import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
-import { SC_TYPE_CONFIG } from '../lib/scatterConfig'
+import {
+  buildFamilyStyles, EMPTY_PRESSURE_DOMAIN, EMPTY_TC_DOMAIN, EMPTY_YEAR_DOMAIN,
+  FamilyStyle, UNCLASSIFIED_FAMILY_ID,
+} from '../lib/scatterConfig'
+import { loadClassificationCatalogs } from '../lib/classifications'
 import ChartScatter from '../components/ChartScatter'
-import ChartGroupEditor from '../components/ChartGroupEditor'
 import StructureViewer3D from '../components/StructureViewer3D'
 import { collectPropertyRows, collectStructures, viewerFormat } from '../lib/paperDetailView'
 import {
-  clearChartPreferences, DEFAULT_CHART_PREFERENCES, readChartPreferences,
+  clearChartPreferences, DEFAULT_CHART_PREFERENCES, FamilySelection, readChartPreferences,
   TC_FIELDS, TC_FIELD_LABELS, TcField, writeChartPreferences,
 } from '../lib/chartPreferences'
 
@@ -25,12 +29,11 @@ interface DataPoint {
   x: number
   y: number
   material: string
-  scType: string
+  familyId: number
+  familyName: string
   articleType: string | null
   year: number | null
   doi: string | null
-  isInGroup: boolean
-  isCustom: boolean
   label: string
   paperId?: number
 }
@@ -58,27 +61,30 @@ const contributionBarWidth = (count: number, maxCount: number): number => {
   return Math.min(100, Math.max(0, (count / maxCount) * 100))
 }
 
-// ── Constants ──
-const ALL_SC_TYPES = [
-  'hydride', 'cuprate', 'iron_based', 'nickel_based',
-  'carbon', 'organic', 'others',
-]
-
-const SC_TYPE_SHAPE_ICONS: Record<string, string> = {
-  hydride: '▲', cuprate: '■', iron_based: '◆',
-  nickel_based: '●', carbon: '▼', organic: '⬢',
-  others: '✚',
-}
+// ── 两图对齐用的固定尺寸 ──
+//
+// 错位的根因是控件显示文本的长度会影响布局高度：家族多选框文本变长后换行撑高控件，
+// 把下方图表整体下推，左右两图坐标系就不在同一水平线。
+//
+// 「同步两图选择内容」的方案与两图独立选择的设计冲突，因此改为固定容器尺寸，
+// 让内容长度变化被容器吸收。固定高度必须与固定宽度 + 超长折叠配套，
+// 否则长文本在定高容器里会被裁切。
+const TC_FIELD_SELECTOR_WIDTH = 210
+const FAMILY_SELECTOR_WIDTH = 190
+const FAMILY_SUMMARY_MAX_CHARS = 10
+const CHART_CONTROLS_HEIGHT = 56
 
 // ═══════════════════════════════════════════════════════
 const SharePage: React.FC = () => {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const isAdmin = user?.role === 'admin' || user?.role === 'superadmin'
 
-  const [visibleTypes, setVisibleTypes] = useState<Set<string>>(
-    new Set(ALL_SC_TYPES),
-  )
+  // ── 材料家族目录：分类维度由 material_families 动态决定，含用户自建家族 ──
+  const [legendFamilies, setLegendFamilies] = useState<FamilyStyle[]>([])
+  const [familyStyles, setFamilyStyles] = useState<Map<number, FamilyStyle>>(new Map())
+  // null = 全部可见（跟随目录）；数组 = 用户显式选过的子集
+  const [pressureFamilies, setPressureFamilies] = useState<FamilySelection>(null)
+  const [yearFamilies, setYearFamilies] = useState<FamilySelection>(null)
 
   // ── Raw data from APIs ──
   const [pressureData, setPressureData] = useState<any[]>([])
@@ -90,45 +96,15 @@ const SharePage: React.FC = () => {
   const [pressureError, setPressureError] = useState('')
   const [yearError, setYearError] = useState('')
 
-  // ── Chart groups ──
-  const [groups, setGroups] = useState<any[]>([])
   const [contributions, setContributions] = useState<ContributionSnapshot | null>(null)
   const [contributionsLoading, setContributionsLoading] = useState(true)
   const [contributionsError, setContributionsError] = useState('')
-
-  // ── Each chart has independent group selection ──
-  const [chart1, setChart1] = useState<{
-    groupId: number | null
-    groupName: string
-  }>({ groupId: null, groupName: '' })
-  const [chart2, setChart2] = useState<{
-    groupId: number | null
-    groupName: string
-  }>({ groupId: null, groupName: '' })
 
   // ── Paper detail drawer ──
   const [selectedPaperId, setSelectedPaperId] = useState<number | null>(null)
   const [paperDetail, setPaperDetail] = useState<any>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState('')
-
-  // ── Editor dialog ──
-  const [editorOpen, setEditorOpen] = useState(false)
-  const [editingGroupId, setEditingGroupId] = useState<number | null>(null)
-
-  // ── Load data on mount ──
-  const loadAllGroups = () => {
-    api.get<any[]>('/api/chart-groups')
-      .then(remote => {
-        const local = JSON.parse(localStorage.getItem('scwiki_local_groups') || '[]')
-        setGroups([...local, ...(Array.isArray(remote) ? remote : [])])
-      })
-      .catch(() => {})
-  }
-
-  useEffect(() => {
-    loadAllGroups()
-  }, [])
 
   const loadContributions = useCallback(async (force = false) => {
     setContributionsLoading(true)
@@ -153,7 +129,28 @@ const SharePage: React.FC = () => {
     const preferences = user ? readChartPreferences(user.id) : DEFAULT_CHART_PREFERENCES
     setPressureTcField(preferences.pressureTcField)
     setYearTcField(preferences.yearTcField)
+    setPressureFamilies(preferences.pressureFamilies)
+    setYearFamilies(preferences.yearFamilies)
   }, [user?.id])
+
+  // 目录不可用时仍要能画图：至少保留「其他」档位，图表退化为不分家族。
+  useEffect(() => {
+    loadClassificationCatalogs()
+      .then(catalogs => {
+        const families = catalogs.material_families ?? []
+        const styles = buildFamilyStyles(families)
+        setFamilyStyles(styles)
+        setLegendFamilies(
+          [...families.map(f => styles.get(f.id)!), styles.get(UNCLASSIFIED_FAMILY_ID)!]
+            .filter(Boolean),
+        )
+      })
+      .catch(() => {
+        const styles = buildFamilyStyles([])
+        setFamilyStyles(styles)
+        setLegendFamilies([styles.get(UNCLASSIFIED_FAMILY_ID)!])
+      })
+  }, [])
 
   useEffect(() => {
     setPressureLoading(true)
@@ -190,163 +187,47 @@ const SharePage: React.FC = () => {
   const detailPropertyRows = collectPropertyRows(paperDetail)
   const detailStructures = collectStructures(paperDetail)
 
-  // ── Refresh groups ──
-  const refreshGroups = () => { loadAllGroups() }
+  // ── 家族可见集：null 展开为目录全集，因此新增家族默认可见 ──
+  const allFamilyIds = legendFamilies.map(style => style.id)
+  const resolveVisible = (selection: FamilySelection): Set<number> =>
+    new Set(selection ?? allFamilyIds)
 
-  // ── Toggle sc type visibility ──
-  const toggleType = (st: string) => {
-    setVisibleTypes(prev => {
-      const next = new Set(prev)
-      if (next.has(st)) next.delete(st)
-      else next.add(st)
-      return next
-    })
-  }
+  const visiblePressureFamilies = resolveVisible(pressureFamilies)
+  const visibleYearFamilies = resolveVisible(yearFamilies)
 
   // ── Build background DataPoints from API data ──
-  const buildBgPoints = (
-    data: any[],
-    _xKey: 'x',
-    _chartKpIds: Set<number>,
-  ): DataPoint[] => {
-    return (Array.isArray(data) ? data : [])
-      .filter(d => {
-        const st = d.sc_type || 'others'
-        return visibleTypes.has(st)
-      })
-      .map(d => ({
-        x: d.x,
-        y: d.y,
-        material: d.label || d.formula || '?',
-        scType: d.sc_type || 'others',
-        articleType:
-          d.type === 'experimental' ? 'e'
-          : d.type === 'theoretical' ? 't'
-          : 't',
-        year: d.year || null,
-        doi: d.doi || null,
-        isInGroup: false,
-        isCustom: false,
-        label: d.label || d.formula || '?',
-        paperId: d.paper_id || undefined,
-      }))
-  }
-
-  // ── Build group DataPoints from selected group ──
-  const buildGroupPoints = (
-    chartState: { groupId: number | null },
-    xField: 'pressure' | 'year' = 'pressure',
-  ): DataPoint[] => {
-    if (!chartState.groupId) return []
-    const g = groups.find(gr => gr.id === chartState.groupId)
-    if (!g?.items) return []
-    return g.items
-      .filter((it: any) => visibleTypes.has(it.type || 'others'))
-      .map((it: any) => ({
-        x: xField === 'year' ? (it.year ?? 0) : (it.pressure ?? 0),
-        y: it.tc ?? 0,
-        material: it.material,
-        scType: it.type || 'others',
-        articleType: it.article_type,
-        year: it.year,
-        doi: it.doi,
-        isInGroup: true,
-        isCustom: it.source === 'custom',
-        label: it.material,
-        paperId: it.paper_id || undefined,
-      }))
-  }
+  const buildBgPoints = (data: any[]): DataPoint[] =>
+    (Array.isArray(data) ? data : []).map(d => ({
+      x: d.x,
+      y: d.y,
+      material: d.label || d.formula || '?',
+      familyId: d.family_id ?? UNCLASSIFIED_FAMILY_ID,
+      familyName: d.family_name || '其他',
+      articleType: d.type === 'experimental' ? 'e' : 't',
+      year: d.year || null,
+      doi: d.doi || null,
+      label: d.label || d.formula || '?',
+      paperId: d.paper_id || undefined,
+    }))
 
   // ── Chart data composition ──
-  const chart1Data: DataPoint[] = [
-    ...buildBgPoints(pressureData, 'x', new Set()),
-    ...buildGroupPoints(chart1),
-  ]
+  const chart1Data: DataPoint[] = buildBgPoints(pressureData)
+  const chart2Data: DataPoint[] = buildBgPoints(yearData)
 
-  const chart2Data: DataPoint[] = [
-    ...buildBgPoints(yearData, 'x', new Set()),
-    ...buildGroupPoints(chart2, 'year'),
-  ]
-
-  // ── Shared group selector UI ──
-  const renderGroupSelector = (
-    state: { groupId: number | null; groupName: string },
-    setState: React.Dispatch<
-      React.SetStateAction<{ groupId: number | null; groupName: string }>
-    >,
+  const renderTcFieldSelector = (
+    id: string,
+    value: TcField,
+    onChange: (field: TcField) => void,
   ) => (
-    <Box
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 1,
-        flexWrap: 'wrap',
-      }}
-    >
-      <FormControl size="small" sx={{ minWidth: 200 }}>
-        <InputLabel>组合</InputLabel>
-        <Select
-          value={state.groupId ?? ''}
-          label="组合"
-          onChange={e => {
-            const gid = e.target.value ? Number(e.target.value) : null
-            setState({
-              groupId: gid,
-              groupName:
-                groups.find(gr => gr.id === gid)?.name || '',
-            })
-          }}
-        >
-          <MenuItem value="">(无组合)</MenuItem>
-          {groups.map(g => (
-            <MenuItem key={g.id} value={g.id}>
-              {g.name}
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
-      {isAdmin && (
-        <Tooltip title="编辑">
-          <IconButton size="small"
-            onClick={() => { setEditingGroupId(state.groupId); setEditorOpen(true) }}>
-            <Edit />
-          </IconButton>
-        </Tooltip>
-      )}
-      {state.groupId && isAdmin && (
-        <>
-          <Tooltip title="复制">
-            <IconButton size="small"
-              onClick={async () => { await api.post(`/api/chart-groups/${state.groupId}/copy`); refreshGroups() }}>
-              <ContentCopy />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="导出">
-            <IconButton size="small"
-              onClick={async () => {
-                const d = await api.get<any>(`/api/chart-groups/${state.groupId}/export`)
-                const blob = new Blob([JSON.stringify(d, null, 2)], { type: 'application/json' })
-                const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
-                a.download = `${state.groupName || 'group'}.json`; a.click(); URL.revokeObjectURL(a.href)
-              }}>
-              <FileDownload />
-            </IconButton>
-          </Tooltip>
-        </>
-      )}
-      {isAdmin && (
-        <Button size="small" variant="outlined"
-          onClick={() => { setEditingGroupId(null); setEditorOpen(true) }}>
-          + 新建
-        </Button>
-      )}
-    </Box>
-  )
-
-  const renderTcFieldSelector = (value: TcField, onChange: (field: TcField) => void) => (
-    <FormControl size="small" sx={{ minWidth: 220 }}>
-      <InputLabel>Tc 字段</InputLabel>
-      <Select value={value} label="Tc 字段" onChange={event => onChange(event.target.value as TcField)}>
+    // labelId 让下拉有可访问名，否则屏幕阅读器只能读到当前值而不知这是什么字段
+    <FormControl size="small" sx={{ width: TC_FIELD_SELECTOR_WIDTH, flexShrink: 0 }}>
+      <InputLabel id={`${id}-label`}>Tc 字段</InputLabel>
+      <Select
+        labelId={`${id}-label`}
+        value={value}
+        label="Tc 字段"
+        onChange={event => onChange(event.target.value as TcField)}
+      >
         {TC_FIELDS.map(field => (
           <MenuItem key={field} value={field}>{TC_FIELD_LABELS[field]}</MenuItem>
         ))}
@@ -354,20 +235,103 @@ const SharePage: React.FC = () => {
     </FormControl>
   )
 
+  const persist = (overrides: Partial<Omit<typeof DEFAULT_CHART_PREFERENCES, 'version'>>) => {
+    if (!user) return
+    writeChartPreferences(user.id, {
+      version: 2,
+      pressureTcField, yearTcField, pressureFamilies, yearFamilies,
+      ...overrides,
+    })
+  }
+
   const changePressureTcField = (field: TcField) => {
     setPressureTcField(field)
-    if (user) writeChartPreferences(user.id, { version: 1, pressureTcField: field, yearTcField })
+    persist({ pressureTcField: field })
   }
 
   const changeYearTcField = (field: TcField) => {
     setYearTcField(field)
-    if (user) writeChartPreferences(user.id, { version: 1, pressureTcField, yearTcField: field })
+    persist({ yearTcField: field })
+  }
+
+  // 全选时存回 null，让后续新增的家族继续自动可见。
+  const normalizeSelection = (ids: number[]): FamilySelection =>
+    ids.length === allFamilyIds.length ? null : ids
+
+  const changePressureFamilies = (ids: number[]) => {
+    const selection = normalizeSelection(ids)
+    setPressureFamilies(selection)
+    persist({ pressureFamilies: selection })
+  }
+
+  const changeYearFamilies = (ids: number[]) => {
+    const selection = normalizeSelection(ids)
+    setYearFamilies(selection)
+    persist({ yearFamilies: selection })
+  }
+
+  // 图例点击与多选下拉共享同一份状态，两者天然同步。
+  const toggleFamily = (
+    current: Set<number>,
+    apply: (ids: number[]) => void,
+  ) => (familyId: number) => {
+    const next = new Set(current)
+    if (next.has(familyId)) next.delete(familyId)
+    else next.add(familyId)
+    apply(Array.from(next))
   }
 
   const restoreDefaults = () => {
     if (user) clearChartPreferences(user.id)
     setPressureTcField(DEFAULT_CHART_PREFERENCES.pressureTcField)
     setYearTcField(DEFAULT_CHART_PREFERENCES.yearTcField)
+    setPressureFamilies(DEFAULT_CHART_PREFERENCES.pressureFamilies)
+    setYearFamilies(DEFAULT_CHART_PREFERENCES.yearFamilies)
+  }
+
+  const renderFamilySelector = (
+    id: string,
+    label: string,
+    visible: Set<number>,
+    apply: (ids: number[]) => void,
+  ) => (
+    // 固定宽度而非 minWidth：MUI Select 的显示宽度由 renderValue 结果撑开，
+    // 只设下限时选中项越多控件越宽，两图控件不等宽且会把图表推错位。
+    <FormControl size="small" sx={{ width: FAMILY_SELECTOR_WIDTH, flexShrink: 0 }}>
+      <InputLabel id={`${id}-label`}>{label}</InputLabel>
+      <Select
+        multiple
+        // displayEmpty 是必需的：MUI 在值为空时会跳过 renderValue 直接渲染零宽空格，
+        // 「未选择」提示就不会出现，用户看到的是一个空控件。
+        displayEmpty
+        labelId={`${id}-label`}
+        value={legendFamilies.filter(style => visible.has(style.id)).map(style => style.id)}
+        label={label}
+        onChange={event => {
+          const value = event.target.value as unknown as number[]
+          apply(value.map(Number))
+        }}
+        renderValue={selected => renderFamilySummary(selected as number[])}
+      >
+        {legendFamilies.map(style => (
+          <MenuItem key={style.id} value={style.id}>
+            <Checkbox size="small" checked={visible.has(style.id)} />
+            <Box component="span" sx={{ mr: 0.75, color: style.color }}>{style.icon}</Box>
+            <ListItemText primary={style.name} />
+          </MenuItem>
+        ))}
+      </Select>
+    </FormControl>
+  )
+
+  // 选中项名称拼接后常常超出固定宽度。超长时折叠为「已选 N 项」而非截断：
+  // 截断会让用户无法得知选了几项，信息量更低。
+  const renderFamilySummary = (ids: number[]): string => {
+    if (legendFamilies.length > 0 && ids.length === legendFamilies.length) return '全部'
+    if (ids.length === 0) return '未选择'
+    const names = legendFamilies.filter(style => ids.includes(style.id)).map(style => style.name)
+    const joined = names.join('、')
+    return joined.length > FAMILY_SUMMARY_MAX_CHARS ? `已选 ${ids.length} 项` : joined
   }
 
   const renderLeaderboard = (title: string, rows: ContributionRank[], unit: string) => {
@@ -464,25 +428,29 @@ const SharePage: React.FC = () => {
           <Typography variant="h6" gutterBottom>
             Tc-Pressure 分布
           </Typography>
-          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-            {renderTcFieldSelector(pressureTcField, changePressureTcField)}
-            {renderGroupSelector(chart1, setChart1)}
+          {/* 定高且不换行：控件内容长度不得影响图表纵向位置（两图对齐） */}
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'nowrap', height: CHART_CONTROLS_HEIGHT, alignItems: 'center' }}>
+            {renderTcFieldSelector('pressure-tc-field', pressureTcField, changePressureTcField)}
+            {renderFamilySelector('pressure-families', '材料家族', visiblePressureFamilies, changePressureFamilies)}
           </Box>
           <Box sx={{ mt: 1 }}>
+            {/* 空数据仍渲染坐标系与品质因子分区，只在图内提示无数据点 */}
             {pressureLoading ? <Box sx={{ display: 'grid', placeItems: 'center', minHeight: 360 }}><CircularProgress /></Box>
             : pressureError ? <Alert severity="error">{pressureError}</Alert>
-            : pressureData.length === 0 && !chart1.groupId ? <Alert severity="info">当前 Tc 字段暂无可公开数据，请切换字段。</Alert>
             : <ChartScatter
-              title="Tc-Pressure 分布"
               data={chart1Data}
               xLabel="Pressure (GPa)"
               yLabel="Tc (K)"
               tcFieldLabel={TC_FIELD_LABELS[pressureTcField]}
               qualityFactorContours
               minHeight={390}
-              visibleTypes={visibleTypes}
-              showBackground={!chart1.groupId}
-              onToggleType={toggleType}
+              xDomain={EMPTY_PRESSURE_DOMAIN}
+              yDomain={EMPTY_TC_DOMAIN}
+              familyStyles={familyStyles}
+              legendFamilies={legendFamilies}
+              visibleFamilies={visiblePressureFamilies}
+              onToggleFamily={toggleFamily(visiblePressureFamilies, changePressureFamilies)}
+              emptyHint="当前 Tc 字段暂无可公开数据点"
               onPointClick={(p) => { if (p.paperId) setSelectedPaperId(p.paperId) }}
             />}
           </Box>
@@ -495,25 +463,28 @@ const SharePage: React.FC = () => {
           <Typography variant="h6" gutterBottom>
             Tc-Year 演变
           </Typography>
-          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-            {renderTcFieldSelector(yearTcField, changeYearTcField)}
-            {renderGroupSelector(chart2, setChart2)}
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'nowrap', height: CHART_CONTROLS_HEIGHT, alignItems: 'center' }}>
+            {renderTcFieldSelector('year-tc-field', yearTcField, changeYearTcField)}
+            {renderFamilySelector('year-families', '材料家族', visibleYearFamilies, changeYearFamilies)}
           </Box>
           <Box sx={{ mt: 1 }}>
+            {/* 年份图不画品质因子分区：S 依赖压强，在年份轴上无物理意义 */}
             {yearLoading ? <Box sx={{ display: 'grid', placeItems: 'center', minHeight: 360 }}><CircularProgress /></Box>
             : yearError ? <Alert severity="error">{yearError}</Alert>
-            : yearData.length === 0 && !chart2.groupId ? <Alert severity="info">当前 Tc 字段暂无可公开数据，请切换字段。</Alert>
             : <ChartScatter
-              title="Tc-Year 演变"
               data={chart2Data}
               xLabel="Year"
               yLabel="Tc (K)"
               tcFieldLabel={TC_FIELD_LABELS[yearTcField]}
               minHeight={390}
-              xDomain={[1900, 'auto']}
-              visibleTypes={visibleTypes}
-              showBackground={!chart2.groupId}
-              onToggleType={toggleType}
+              temperatureBands
+              xDomain={EMPTY_YEAR_DOMAIN}
+              yDomain={EMPTY_TC_DOMAIN}
+              familyStyles={familyStyles}
+              legendFamilies={legendFamilies}
+              visibleFamilies={visibleYearFamilies}
+              onToggleFamily={toggleFamily(visibleYearFamilies, changeYearFamilies)}
+              emptyHint="当前 Tc 字段暂无可公开数据点"
               onPointClick={(p) => { if (p.paperId) setSelectedPaperId(p.paperId) }}
             />}
           </Box>
@@ -652,7 +623,8 @@ const SharePage: React.FC = () => {
                     </Box>
                     <Box>
                       <Typography variant="caption" color="text.secondary">核心发现</Typography>
-                      {/* 用户按「一个要点一行」录入，换行是内容结构，须保留 */}
+                      {/* 用户按「一个要点一行」录入，换行是内容结构，须保留。
+                          字号字重与同区块的论文总结一致：正文用 body2(13px) 不加粗 */}
                       <Typography variant="body2" sx={{ fontSize: 12, lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
                         {(() => {
                           try { return JSON.parse(paperDetail?.key_finding || '""') || '-' }
@@ -673,13 +645,6 @@ const SharePage: React.FC = () => {
         <Alert severity="error" variant="filled" onClose={() => setDetailError('')}>{detailError}</Alert>
       </Snackbar>
 
-      {/* ═══ Group Editor Dialog ═══ */}
-      <ChartGroupEditor
-        open={editorOpen}
-        groupId={editingGroupId}
-        onClose={() => setEditorOpen(false)}
-        onSaved={refreshGroups}
-      />
     </Box>
   )
 }

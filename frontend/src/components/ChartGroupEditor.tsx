@@ -10,6 +10,7 @@ import {
 import { Delete, Add } from '@mui/icons-material'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
+import { ClassificationTerm, loadClassificationCatalogs } from '../lib/classifications'
 
 // ── Types ──
 
@@ -48,20 +49,6 @@ interface Props {
 
 // ── Constants ──
 
-const SC_TYPE_OPTIONS: { value: string; label: string }[] = [
-  { value: 'hydride', label: '氢化物' },
-  { value: 'cuprate', label: '铜基' },
-  { value: 'iron_based', label: '铁基' },
-  { value: 'nickel_based', label: '镍基' },
-  { value: 'carbon', label: '碳基' },
-  { value: 'organic', label: '有机' },
-  { value: 'others', label: '其他' },
-]
-
-const SC_TYPE_LABEL_MAP: Record<string, string> = Object.fromEntries(
-  SC_TYPE_OPTIONS.map(o => [o.value, o.label])
-)
-
 const emptyGroup: LocalGroup = { name: '', description: '', is_public: false, items: [] }
 
 // ── Component ──
@@ -94,6 +81,17 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
   // ── Import from group ──
   const [importGroupOpen, setImportGroupOpen] = useState(false)
   const [availableGroups, setAvailableGroups] = useState<any[]>([])
+
+  // ── 材料家族目录：分类选项随目录变化，含用户自建家族 ──
+  const [families, setFamilies] = useState<ClassificationTerm[]>([])
+  const familyNames = new Map(families.map(family => [family.id, family.name]))
+
+  useEffect(() => {
+    if (!open) return
+    loadClassificationCatalogs()
+      .then(catalogs => setFamilies(catalogs.material_families ?? []))
+      .catch(() => setFamilies([]))
+  }, [open])
 
   const loadAvailableGroups = () => {
     api.get<any[]>('/api/chart-groups')
@@ -201,7 +199,9 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
       setSnackbar({ message: '该数据点已在组合中', severity: 'error' })
       return
     }
-    // 压强与类型属材料状态，不在物性上；物性表没有这两列。
+    // 压强与分类属材料状态，不在物性上；物性表没有这两列。
+    // 分类维度取 material_family（材料家族），不是 state_kind——后者是
+    // theoretical/experimental/mixed/unknown，属数据来源性质，与家族分类无关。
     const newItem: LocalItem = {
       sort_order: group.items.length,
       source: 'kp',
@@ -209,7 +209,9 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
       material: kp.material,
       tc: kp.value_max ?? kp.value_number ?? null,
       pressure: kp.material_state?.pressure_value_gpa ?? null,
-      type: kp.material_state?.state_kind ?? null,
+      type: kp.material_state?.material_family?.id != null
+        ? String(kp.material_state.material_family.id)
+        : null,
       year: null,
     }
     setGroup(prev => ({ ...prev, items: [...prev.items, newItem] }))
@@ -316,9 +318,11 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
     return Number.isInteger(v) ? String(v) : v.toFixed(2)
   }
 
+  // 组合点的分类值存材料家族 id（字符串形式，沿用 custom_type 列）。
+  // 目录是动态的，标签必须查目录，不能硬编码。
   const typeLabel = (t: string | null): string => {
     if (!t) return '-'
-    return SC_TYPE_LABEL_MAP[t] || t
+    return familyNames.get(Number(t)) ?? t
   }
 
   // ═══════════════════════════════════════════════════════
@@ -386,7 +390,7 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
                         <TableCell sx={{ fontWeight: 600 }}>材料</TableCell>
                         <TableCell sx={{ fontWeight: 600 }}>Tc (K)</TableCell>
                         <TableCell sx={{ fontWeight: 600 }}>压力 (GPa)</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>类型</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>材料家族</TableCell>
                         <TableCell sx={{ fontWeight: 600 }}>来源</TableCell>
                         <TableCell sx={{ fontWeight: 600, width: 48 }} />
                       </TableRow>
@@ -466,7 +470,7 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
                         <Typography variant="body2" fontWeight={600}>{kp.material}</Typography>
                         <Typography variant="caption" color="text.secondary">
                           Tc: {formatValue(kp.value_max ?? kp.value_number)}K · P: {formatValue(kp.material_state?.pressure_value_gpa)}GPa
-                          {kp.material_state?.state_kind ? ` · ${typeLabel(kp.material_state.state_kind)}` : ''}
+                          {kp.material_state?.material_family?.name ? ` · ${kp.material_state.material_family.name}` : ''}
                         </Typography>
                       </Box>
                       <Add fontSize="small" color="action" />
@@ -507,13 +511,13 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
                   inputProps={{ step: 0.1 }}
                   sx={{ width: 130 }}
                 />
-                <FormControl size="small" sx={{ minWidth: 120 }}>
-                  <InputLabel>超导类型</InputLabel>
-                  <Select value={customType} label="超导类型"
+                <FormControl size="small" sx={{ minWidth: 160 }}>
+                  <InputLabel>材料家族</InputLabel>
+                  <Select value={customType} label="材料家族"
                     onChange={e => setCustomType(e.target.value)}>
                     <MenuItem value="">--</MenuItem>
-                    {SC_TYPE_OPTIONS.map(opt => (
-                      <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
+                    {families.map(family => (
+                      <MenuItem key={family.id} value={String(family.id)}>{family.name}</MenuItem>
                     ))}
                   </Select>
                 </FormControl>
