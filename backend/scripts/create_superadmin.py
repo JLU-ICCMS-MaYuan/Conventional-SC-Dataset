@@ -7,7 +7,7 @@ python -m backend.scripts.create_superadmin
 或设置环境变量后自动创建：
 SUPERADMIN_EMAIL=admin@example.com
 SUPERADMIN_PASSWORD=your_password
-SUPERADMIN_USERNAME=AdminLead
+SUPERADMIN_USERNAME=Superadmin_mayuan
 SUPERADMIN_NAME=可选实名
 """
 from backend.database import SessionLocal

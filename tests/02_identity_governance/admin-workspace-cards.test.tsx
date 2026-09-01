@@ -62,7 +62,7 @@ describe('工作台卡片式导航', () => {
   })
 
   it('超级管理员看到全部 5 个可点击入口，且均具备按钮语义', async () => {
-    currentUser = { id: 1, username: 'AdminLead', role: 'superadmin', is_admin: true, is_superadmin: true }
+    currentUser = { id: 1, username: 'Superadmin_mayuan', role: 'superadmin', is_admin: true, is_superadmin: true }
     render(<AdminPage mode="superadmin" />)
 
     for (const label of ['用户与权限', '论文审核', '待审批管理员', '图表管理', '快讯管理']) {
