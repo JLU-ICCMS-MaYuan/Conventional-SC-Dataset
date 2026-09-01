@@ -42,6 +42,11 @@
 ## 阶段 4：用户故事 2——探索页详情读取修正（P1）
 
 - [x] T021 [US2] summary 的 `Typography` 加 `whiteSpace:'pre-wrap'`（FR-003）
+- [x] ~~T021b 核心发现与社区页的同类修复~~ **移交
+  [Issue #68](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/68)**：本 Issue 只做了
+  T021 一处，未先枚举范围，漏了探索页 key_finding 与社区页两处，共四处中的三处。
+  完整修复、范围枚举与断言 computed style 的回归测试见
+  `docs/specs/68-preserve-multiline-text/`。
 - [x] T022 [US2] 结构提取改调 `collectStructures`，删除原 `key_properties` 过滤逻辑
 - [x] T023 [US2] 详情渲染前计算 `propertyRows = collectPropertyRows(paperDetail)`
 - [x] T024 [US2] 物性表改渲染 `propertyRows`，五列改用归一后的 `row.*` 字段
@@ -74,6 +79,8 @@
 - [x] T042 用例：`viewerFormat` 五种输入的映射
 - [x] T043 新建 `search-page-defaults.test.tsx`，3 个用例覆盖无参、Formula 框、显式传参
   （SC-001）
+- [x] ~~T043b `multiline-text-preserved.test.tsx`~~ 随 T021b 一同移交
+  [Issue #68](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/68)
 
 ## 阶段 7：验证
 
@@ -111,7 +118,7 @@
 | 来源 | 任务 | 验证 |
 |------|------|------|
 | FR-001、FR-002（默认不预选） | T020 | T043（3 例） |
-| FR-003（总结换行） | T021 | 库中 `\n` 已确认 + 人工核对 |
+| FR-003（探索页总结换行） | T021 | 库中 `\n` 已确认 + 人工核对；其余三处见 [#68](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/68) |
 | FR-004（三类来源汇总） | T012-T016、T024 | T032、T035、T036 |
 | FR-005（NULL 不成行） | T015 | T034 |
 | FR-006（结构来源） | T017、T022 | T039、T040（反向用例） |

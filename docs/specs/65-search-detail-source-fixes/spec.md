@@ -68,6 +68,7 @@ API 侧数据完好，问题全在前端读取与渲染：
 
 4. **假如** 论文总结在库中含换行，**当** 打开详情，**那么** 分条结构保持原有换行，
    与详情页 `PaperEditView` 的 `pre-wrap` 行为一致。
+   （核心发现与社区页的同类场景移交 [Issue #68](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/68)）
 
 ### 用户故事 3：社区页访客查看论文详情（优先级：P2）
 
@@ -101,6 +102,12 @@ API 侧数据完好，问题全在前端读取与渲染：
 - **FR-002**：探索页在 URL 显式带 `elements` 参数时须按参数预选，行为不变。
 
 - **FR-003**：探索页详情的论文总结须以 `whiteSpace: 'pre-wrap'` 渲染，保留库中原有换行。
+
+  **2026-08-31 范围移交**：本条只修了探索页 `summary` 一处。同类缺陷实际有四处
+  （`summary` 与 `key_finding` 各在探索页、社区页），因未先枚举范围而漏了三处，本 Issue
+  关闭后用户复测才发现核心发现仍被挤成一段。完整修复与回归测试见
+  [Issue #68](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/68)
+  （`docs/specs/68-preserve-multiline-text/`）。
 
 - **FR-004**：关键物性表须覆盖三类来源，顺序为 Tc → 计算参数 → 普通物性：
 
@@ -162,8 +169,11 @@ API 侧数据完好，问题全在前端读取与渲染：
   含伪造的 `structure_text` 也不得被当作来源。
   **已验证**：反向用例断言构造了 `key_properties[].structure_text` 时返回空数组。
 
-- **SC-006**：论文总结保留换行。
+- **SC-006**：探索页论文总结保留换行。
   **已验证**：库中 summary 经 `cat -A` 确认含 `\n`，渲染改为 `pre-wrap`。
+  其余三处（探索页核心发现、社区页两字段）随 FR-003 移交
+  [Issue #68](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/68)，并在那里补了断言
+  computed style 的回归测试。
 
 - **SC-007**：TypeScript 编译无错误，既有测试不回退。
   **已验证**：`tsc --noEmit` 通过；全量 104 例中 103 通过（唯一失败为 Issue #63 在建

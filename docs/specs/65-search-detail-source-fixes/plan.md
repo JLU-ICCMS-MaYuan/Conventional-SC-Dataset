@@ -44,7 +44,7 @@ docs/overview/03_.../paper-and-property-results.md  [修改] 回写
 |------|------|----------|
 | FR-001 | `searchParams.get('elements') \|\| ''`，移除 `'La,H'` 兜底 | Vitest 断言「未选择」可见 |
 | FR-002 | 读参逻辑本身不变，只改兜底值 | Vitest 用 `?elements=Nb,Ti` 断言仍预选 |
-| FR-003 | summary 的 `Typography` 加 `whiteSpace:'pre-wrap'` | 库中 `cat -A` 确认有 `\n`；人工核对 |
+| FR-003 | 探索页 summary 的 `Typography` 加 `whiteSpace:'pre-wrap'`（其余三处移交 [#68](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/68)） | 库中 `cat -A` 确认有 `\n`；人工核对 |
 | FR-004 | `collectPropertyRows` 依次遍历 `tc_results`、`calculation_contexts`、`key_properties` | 用例断言 Tc 值与标签顺序 |
 | FR-005 | 参数值 `== null` 时 `continue`，不 push 行 | 用例断言 `μ*` 不在标签列表 |
 | FR-006 | `collectStructures` 只遍历 `material_states[].structures[]` | 反向用例：伪造 `key_properties[].structure_text` 应返回空 |
@@ -103,9 +103,9 @@ docs/overview/03_.../paper-and-property-results.md  [修改] 回写
 |------|------|
 | 提取逻辑用例 | 12 例通过（7ms，纯函数无需 DOM） |
 | 探索页默认值用例 | 3 例通过 |
-| 前端全量 | 104 例中 103 通过 |
+| 前端全量 | 104 例中 103 通过（本 Issue 完成时的基线；[#68](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/68) 补测试后为 107 例） |
 | `tsc --noEmit` | 通过 |
-| 产物核对 | `SearchPage-CWN2g1gA.js` 中 `La,H` 出现 0 次；`paperDetailView-CXqmR4Me.js` 已生成并被引用 |
+| 产物核对 | `La,H` 出现 0 次；`paperDetailView` chunk 已生成并被引用 |
 | 真实 API | `GET /api/papers/9`：`tc_value_k: 4.2`、`I4/mmm` CIF 816 字节、summary 含 `\n`、`key_properties: []` |
 
 **关于 NewsFeed 失败**：`tests/08_news/NewsFeed.test.tsx` 属 Issue #63 每日新闻在建代码，
@@ -120,3 +120,15 @@ docs/overview/03_.../paper-and-property-results.md  [修改] 回写
 
 **JSX 注释位置错误。** 把 `{/* ... */}` 写进了 `{cond && (...)}` 的括号内，esbuild 报
 `Expected ")" but found "sx"`。JSX 表达式容器内只能有一个表达式，注释须移到条件之外。
+
+**修换行只修了一个字段一个页面。** 本 Issue 只给探索页的 `summary` 加了 `pre-wrap`，漏了
+同一区块内的 `key_finding`，也漏了社区页的两处 —— 本 Issue 关闭后用户复测时，核心发现的
+分条要点仍被挤成一段。
+
+教训与本 Issue 的主题一致：同一缺陷在多个页面各存一份时，逐个字段修必然漏。第一次动手
+就该先枚举「哪些字段是多行的、在哪些页面渲染」，再一次改完。这是第二次犯同类错误
+（前一次是 Issue #59 只修了三个页面中的一个）。
+
+完整修复、范围枚举与回归测试见
+[Issue #68](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/68)
+（`docs/specs/68-preserve-multiline-text/`）。

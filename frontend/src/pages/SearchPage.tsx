@@ -646,7 +646,7 @@ const SearchPage: React.FC = () => {
                   <Box sx={{ gridColumn:'1/-1' }}><Typography variant="caption">论文标题</Typography><Typography fontWeight={600}>{paperDetail?.title || r.title}</Typography></Box>
                   {/* summary 常含分条结构的真实换行，pre-wrap 须保留；否则多条记录会被挤成一段 */}
                   {paperDetail?.summary && (
-                    <Box sx={{ gridColumn:'1/-1' }}><Typography variant="caption">论文总结</Typography><Typography variant="body2" sx={{ lineHeight:1.8,whiteSpace:'pre-wrap' }}>{paperDetail.summary}</Typography></Box>
+                    <Box sx={{ gridColumn:'1/-1' }}><Typography variant="caption">论文总结</Typography><Typography variant="body2" sx={{ fontSize:12,lineHeight:1.8,whiteSpace:'pre-wrap' }}>{paperDetail.summary}</Typography></Box>
                   )}
                   <Box><Typography variant="caption">审核状态</Typography><Chip label={r.status} size="small" color={r.status==='Approved'?'success':'warning'} /></Box>
                   <Box><Typography variant="caption">数据来源</Typography><Chip label={r.source} size="small" color="primary" /></Box>
@@ -691,13 +691,15 @@ const SearchPage: React.FC = () => {
                   <Box>
                     <Typography variant="caption">研究方法</Typography>
                     <Box sx={{ display:'flex',gap:0.75,flexWrap:'wrap',mt:0.5 }}>
-                      {(() => { try { const m = JSON.parse(paperDetail?.methodology || '[]'); return Array.isArray(m) && m.length ? m.map((x: string) => <Chip key={x} label={x} size="small" variant="outlined" />) : <Typography fontWeight={600}>-</Typography> } catch { return <Typography fontWeight={600}>{paperDetail?.methodology || '-'}</Typography> } })()}
+                      {(() => { try { const m = JSON.parse(paperDetail?.methodology || '[]'); return Array.isArray(m) && m.length ? m.map((x: string) => <Chip key={x} label={x} size="small" variant="outlined" />) : <Typography variant="body2">-</Typography> } catch { return <Typography variant="body2">{paperDetail?.methodology || '-'}</Typography> } })()}
                     </Box>
                   </Box>
                   <Box>
                     <Typography variant="caption">核心发现</Typography>
-                    {/* 用户按「一个要点一行」录入，换行是内容结构，须保留 */}
-                    <Typography fontWeight={600} sx={{ lineHeight:1.8,whiteSpace:'pre-wrap' }}>
+                    {/* 用户按「一个要点一行」录入，换行是内容结构，须保留。
+                        标签是 caption(12px/600)，正文不加粗且不超过标签字号，避免层级颠倒；
+                        与同区块的论文总结保持一致 */}
+                    <Typography variant="body2" sx={{ fontSize:12,lineHeight:1.8,whiteSpace:'pre-wrap' }}>
                       {(() => { try { return JSON.parse(paperDetail?.key_finding || '""') || '-' } catch { return paperDetail?.key_finding || '-' } })()}
                     </Typography>
                   </Box>

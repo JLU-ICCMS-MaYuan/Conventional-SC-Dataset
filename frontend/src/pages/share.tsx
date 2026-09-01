@@ -566,7 +566,7 @@ const SharePage: React.FC = () => {
                       <Typography fontWeight={600}>{paperDetail.title || '-'}</Typography></Box>
                     {paperDetail.summary && (
                       <Box sx={{ gridColumn: '1/-1' }}><Typography variant="caption" color="text.secondary">论文总结</Typography>
-                        <Typography variant="body2" sx={{ lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>{paperDetail.summary}</Typography></Box>
+                        <Typography variant="body2" sx={{ fontSize: 12, lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>{paperDetail.summary}</Typography></Box>
                     )}
                   </Box>
                   {paperDetail.doi && (
@@ -645,15 +645,15 @@ const SharePage: React.FC = () => {
                             const m = JSON.parse(paperDetail?.methodology || '[]')
                             return Array.isArray(m) && m.length
                               ? m.map((x: string) => <Chip key={x} label={x} size="small" variant="outlined" />)
-                              : <Typography fontWeight={600}>-</Typography>
-                          } catch { return <Typography fontWeight={600}>{paperDetail?.methodology || '-'}</Typography> }
+                              : <Typography variant="body2">-</Typography>
+                          } catch { return <Typography variant="body2">{paperDetail?.methodology || '-'}</Typography> }
                         })()}
                       </Box>
                     </Box>
                     <Box>
                       <Typography variant="caption" color="text.secondary">核心发现</Typography>
                       {/* 用户按「一个要点一行」录入，换行是内容结构，须保留 */}
-                      <Typography fontWeight={600} sx={{ lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
+                      <Typography variant="body2" sx={{ fontSize: 12, lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
                         {(() => {
                           try { return JSON.parse(paperDetail?.key_finding || '""') || '-' }
                           catch { return paperDetail?.key_finding || '-' }
