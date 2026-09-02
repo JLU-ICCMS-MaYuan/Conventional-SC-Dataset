@@ -532,7 +532,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
           </Select>
           <EvidenceNotes label={t('upload.superconductorKindField')} aiValue={aiPaper.superconductor_kind} evidence={classificationEvidence} />
         </FormControl>
-        <Box data-issue-field="paper.material_families" sx={{ gridColumn: '1 / -1' }}>
+        <Box data-issue-field="paper.material_families">
           <Autocomplete<ClassificationTerm | string, true, false, true>
             multiple
             freeSolo

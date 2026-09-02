@@ -83,6 +83,19 @@ afterEach(() => {
 })
 
 describe('上传校对页布局与材料状态折叠', () => {
+  it('论文级 Material family 与 Superconductor type 在同一分类网格行', async () => {
+    render(<UploadTaskEditor taskId={'0'.repeat(32)} onSubmitted={vi.fn()} draftOverride={makeDraft([makeState()])} />)
+
+    await screen.findByLabelText('超导类型')
+    const kindField = document.querySelector('[data-issue-field="paper.superconductor_kind"]')
+    const familyField = document.querySelector('[data-issue-field="paper.material_families"]')
+
+    expect(kindField).not.toBeNull()
+    expect(familyField).not.toBeNull()
+    expect(kindField!.parentElement).toBe(familyField!.parentElement)
+    expect(familyField).not.toHaveStyle({ gridColumn: '1 / -1' })
+  })
+
   it('不显示研究材料输入框，关键词与研究方法在同一并排容器中且等高', async () => {
     render(<UploadTaskEditor taskId={'a'.repeat(32)} onSubmitted={vi.fn()} draftOverride={makeDraft([makeState()])} />)
 
