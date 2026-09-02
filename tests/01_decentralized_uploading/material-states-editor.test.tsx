@@ -9,10 +9,11 @@
 
 import '@testing-library/jest-dom/vitest'
 import React from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import MaterialStatesEditor from '../../frontend/src/components/MaterialStatesEditor'
+import UploadTaskEditor from '../../frontend/src/components/UploadTaskEditor'
 import type { DraftMaterialState } from '../../frontend/src/lib/paperProcessing'
 import { api } from '../../frontend/src/lib/api'
 
@@ -114,5 +115,184 @@ describe('MaterialStatesEditor 共享组件（T017）', () => {
     expect(nextStates[0]).toEqual(expect.objectContaining({ material: 'H3S' }))
     expect(nextStates[1]).toEqual(expect.objectContaining({ material: 'MgB2', element_count: 2 }))
     expect(nextStates[0]).not.toBe(nextStates[1])
+  })
+})
+
+describe('未分配结构候选的分配与确认（Issue #77）', () => {
+  const unassignedCandidate = (overrides: Record<string, unknown> = {}) => ({
+    candidate_id: 'cand-unassigned-1',
+    material_state_ref: 'unassigned:file-1',
+    source_kind: 'attachment',
+    status: 'valid',
+    confirmation: 'unreviewed',
+    original_format: 'vasp',
+    original_text: null,
+    validation: { ase_valid: true, structure_hash: 'h1', atom_count: 1 },
+    derivation: null,
+    representations: { conventional: { cif: { text: 'data_Hg', available: true } } },
+    sources: [{ file_id: 'file-1', filename: 'Hg-R-3m.vasp', role: 'attachment' }],
+    conflicts: [],
+    user_note: null,
+    ...overrides,
+  })
+
+  const renderWithCandidates = (overrides: Partial<React.ComponentProps<typeof MaterialStatesEditor>> = {}) => {
+    const onStructureCandidatesChange = vi.fn()
+    const utils = render(
+      <MaterialStatesEditor
+        states={[makeState({ material: 'Hg' })]}
+        onChange={vi.fn()}
+        catalogs={null}
+        taskId={'5'.repeat(32)}
+        structureCandidates={[unassignedCandidate()]}
+        onStructureCandidatesChange={onStructureCandidatesChange}
+        {...overrides}
+      />,
+    )
+    return { onStructureCandidatesChange, ...utils }
+  }
+
+  afterEach(() => {
+    cleanup()
+    vi.clearAllMocks()
+  })
+
+  it('T004：存在 unassigned 候选时渲染未分配区（文件名与校验状态可见）', () => {
+    renderWithCandidates()
+    const region = document.querySelector('[data-testid="unassigned-candidates"]')
+    expect(region).not.toBeNull()
+    expect(region).toHaveTextContent('Hg-R-3m.vasp')
+    expect(region).toHaveTextContent('待确认')
+  })
+
+  it('T005：选择材料状态并「采用」后候选被分配确认', () => {
+    const { onStructureCandidatesChange } = renderWithCandidates()
+
+    fireEvent.mouseDown(screen.getByLabelText('分配到材料状态'))
+    fireEvent.click(screen.getByRole('option', { name: /材料状态 #1/ }))
+    fireEvent.click(screen.getByRole('button', { name: '采用此结构' }))
+
+    expect(onStructureCandidatesChange).toHaveBeenCalledTimes(1)
+    const next = onStructureCandidatesChange.mock.calls[0][0] as Array<Record<string, unknown>>
+    expect(next[0]).toMatchObject({
+      candidate_id: 'cand-unassigned-1',
+      material_state_ref: 'material_states[0]',
+      confirmation: 'confirmed',
+      status: 'confirmed',
+    })
+  })
+
+  it('T006：无材料状态时采用禁用并提示先创建', () => {
+    renderWithCandidates({ states: [] })
+    const region = document.querySelector('[data-testid="unassigned-candidates"]')
+    expect(region).toHaveTextContent('请先创建材料状态后再分配结构')
+    expect(screen.getByRole('button', { name: '采用此结构' })).toBeDisabled()
+  })
+
+  it('T007：blocked 候选采用禁用并显示校验失败原因', () => {
+    renderWithCandidates({
+      structureCandidates: [unassignedCandidate({
+        status: 'blocked',
+        validation: { ase_valid: false, message: '无法解析结构', code: 'structure_read_failed' },
+      })],
+    })
+    const region = document.querySelector('[data-testid="unassigned-candidates"]')
+    expect(region).toHaveTextContent('需要人工处理')
+    expect(region).toHaveTextContent('校验失败：无法解析结构')
+    // blocked 候选不提供采用入口（不得确认，FR-004）
+    expect(screen.queryByRole('button', { name: '采用此结构' })).not.toBeInTheDocument()
+  })
+
+  it('T008：排除后候选标记 excluded 且不再显示', () => {
+    const { onStructureCandidatesChange, rerender } = renderWithCandidates()
+    fireEvent.click(screen.getByRole('button', { name: '不采用' }))
+    expect(onStructureCandidatesChange).toHaveBeenCalledTimes(1)
+    const next = onStructureCandidatesChange.mock.calls[0][0] as Array<Record<string, unknown>>
+    expect(next[0]).toMatchObject({ confirmation: 'excluded', status: 'excluded' })
+
+    // 排除后重新渲染：未分配区消失
+    rerender(
+      <MaterialStatesEditor
+        states={[makeState({ material: 'Hg' })]}
+        onChange={vi.fn()}
+        catalogs={null}
+        taskId={'5'.repeat(32)}
+        structureCandidates={[{ ...unassignedCandidate(), confirmation: 'excluded', status: 'excluded' }]}
+        onStructureCandidatesChange={onStructureCandidatesChange}
+      />,
+    )
+    expect(document.querySelector('[data-testid="unassigned-candidates"]')).toBeNull()
+  })
+
+  it('T009：readOnly 下不渲染未分配区', () => {
+    renderWithCandidates({ readOnly: true })
+    expect(document.querySelector('[data-testid="unassigned-candidates"]')).toBeNull()
+  })
+})
+
+
+describe('T010：UploadTaskEditor 集成（Issue #77）', () => {
+  const unassignedCandidate = (overrides: Record<string, unknown> = {}) => ({
+    candidate_id: 'cand-unassigned-1',
+    material_state_ref: 'unassigned:file-1',
+    source_kind: 'attachment',
+    status: 'valid',
+    confirmation: 'unreviewed',
+    original_format: 'vasp',
+    original_text: null,
+    validation: { ase_valid: true, structure_hash: 'h1', atom_count: 1 },
+    derivation: null,
+    representations: { conventional: { cif: { text: 'data_Hg', available: true } } },
+    sources: [{ file_id: 'file-1', filename: 'Hg-R-3m.vasp', role: 'attachment' }],
+    conflicts: [],
+    user_note: null,
+    ...overrides,
+  })
+
+  const draftWithUnassigned = {
+    paper: {
+      title: 'Hg study', authors: [], paper_type: 'experimental',
+      research_materials: ['Hg'], keywords_tags: [], methodology: [],
+    },
+    material_states: [{
+      material: 'Hg', material_family: null, structure_families: [],
+      element_count: 1, material_dimensionality: 'unknown',
+      tc_results: [], properties: [],
+    }],
+    structure_candidates: [unassignedCandidate()],
+    classification_evidence: [], field_evidence: {},
+  }
+
+  afterEach(() => {
+    cleanup()
+    vi.clearAllMocks()
+  })
+
+  it('校对页展示未分配候选；分配确认后保存草稿的 structure_candidates 含 confirmed 候选', async () => {
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (String(url).includes('/space-groups')) {
+        return Promise.resolve({ space_groups: [] } as never)
+      }
+      return Promise.resolve({ ok: true, data: structuredClone(draftWithUnassigned) } as never)
+    })
+    vi.mocked(api.put).mockResolvedValue({ ok: true } as never)
+
+    render(<UploadTaskEditor taskId={'c'.repeat(32)} onSubmitted={vi.fn()} draftOverride={draftWithUnassigned} />)
+
+    const region = await screen.findByTestId('unassigned-candidates')
+    expect(region).toHaveTextContent('Hg-R-3m.vasp')
+
+    fireEvent.mouseDown(screen.getByLabelText('分配到材料状态'))
+    fireEvent.click(await screen.findByRole('option', { name: /材料状态 #1/ }))
+    fireEvent.click(screen.getByRole('button', { name: '采用此结构' }))
+
+    fireEvent.click(screen.getByRole('button', { name: '立即保存' }))
+    await waitFor(() => expect(api.put).toHaveBeenCalledTimes(1))
+    const body = api.put.mock.calls[0][1] as { structure_candidates: Array<Record<string, unknown>> }
+    expect(body.structure_candidates[0]).toMatchObject({
+      material_state_ref: 'material_states[0]',
+      confirmation: 'confirmed',
+      status: 'confirmed',
+    })
   })
 })

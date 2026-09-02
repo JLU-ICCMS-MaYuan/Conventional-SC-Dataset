@@ -153,3 +153,17 @@ describe('T027：待审核论文科学数据原地编辑', () => {
     expect(await screen.findByText(/论文级字段校验失败/)).toBeVisible()
   })
 })
+
+describe('T013：管理端编辑弹窗结构候选集成（Issue #77）', () => {
+  it('编辑弹窗渲染未分配候选区（共用 MaterialStatesEditor），无候选时不误渲染', async () => {
+    const user = await openEditDialog()
+
+    // 管理端编辑的是已提交论文：草稿级 unassigned 候选已随提交清理，
+    // 正常不携带未分配候选——未分配区不应误渲染
+    expect(document.querySelector('[data-testid="unassigned-candidates"]')).toBeNull()
+
+    // 保存链路仍正常（C1 body 含 structure_candidates 键，契约不破坏）
+    await user.click(screen.getByRole('button', { name: '保存修改' }))
+    await waitFor(() => expect(mockedApi.put.mock.calls.filter(c => c[0] === '/api/rag/papers/88/scientific-draft')).toHaveLength(1))
+  })
+})

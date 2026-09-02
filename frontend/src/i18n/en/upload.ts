@@ -165,6 +165,10 @@ export default {
   clearList: 'Clear',
 
   // ── StructureCandidatePanel ──
+  unassignedCandidatesTitle: 'Unassigned structure candidates',
+  unassignedTargetLabel: 'Assign to material state',
+  unassignedNeedState: 'Create a material state first, then assign the structure',
+  unassignedValidationFailed: 'Validation failed: {message}',
   structureAttachmentTitle: 'Structure attachment',
   structureAttachmentHint: 'Validated automatically after upload, and previewed for the current material state',
   validating: 'Validating',

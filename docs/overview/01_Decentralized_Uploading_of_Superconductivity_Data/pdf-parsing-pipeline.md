@@ -28,6 +28,7 @@
 
 - PDF 经 `pdf_extractor.py` 转为带页标记（`<!-- page: N -->`）的 Markdown；TXT/MD 直接读取；已提取过的文件直接复用缓存的 `.md`。
 - CIF/POSCAR 原生附件不走文本提取，而是经 ASE 校验（`structure_extractor.build_structure_candidate`）生成结构候选；校验失败的候选标记为 `blocked`，等待人工处理。
+- 任务解析生成的结构候选以 `material_state_ref="unassigned:*"` 标记，需在校对页「未分配结构候选」区分配到具体材料状态并确认（`material_state_ref` 变为 `material_states[N]`、`confirmation=confirmed`）后才会在提交时写入 `structure_models`；未确认的候选只作为附件文件保存，不落库。（[Issue #77](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/77)）
 - 非结构 PDF 的正文还会经 `extract_structure_candidates` 从文本中抽取结构候选。
 - 多文件任务逐文件处理并更新 `extraction_status`，全部完成后用 `compare_file_identities` 做身份一致性检查（同一论文的 DOI/标题线索），结果写入状态 `consistency`。
 - 正文为空时直接失败（`论文正文为空，无法生成可校对草稿`）。

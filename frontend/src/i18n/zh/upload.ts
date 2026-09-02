@@ -167,6 +167,10 @@ export default {
   clearList: '清空',
 
   // ── StructureCandidatePanel ──
+  unassignedCandidatesTitle: '未分配结构候选',
+  unassignedTargetLabel: '分配到材料状态',
+  unassignedNeedState: '请先创建材料状态后再分配结构',
+  unassignedValidationFailed: '校验失败：{message}',
   structureAttachmentTitle: '结构附件',
   structureAttachmentHint: '上传后自动校验，并在当前材料状态下预览',
   validating: '校验中',

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import {
-  Alert, Autocomplete, Box, Button, Card, CardContent, Collapse, FormControl,
+  Alert, Autocomplete, Box, Button, Card, CardContent, Chip, Collapse, FormControl,
   FormHelperText, InputLabel, MenuItem, Select, TextField, Typography, useMediaQuery,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
@@ -240,6 +240,8 @@ const MaterialStatesEditor: React.FC<MaterialStatesEditorProps> = ({
   const [collapsedStates, setCollapsedStates] = useState<Record<number, boolean>>({})
   const [elementCountEdits, setElementCountEdits] = useState<Record<number, { text: string; invalid: boolean }>>({})
   const [structureUploading, setStructureUploading] = useState<Record<number, boolean>>({})
+  // 未分配候选的目标材料状态下标（纯 UI 态，不写入草稿）
+  const [unassignedTarget, setUnassignedTarget] = useState<number | null>(null)
 
   // 只读模式下任何编辑都不应触达父级：变更函数统一在此拦截
   const emitStates = (nextStates: DraftMaterialState[]) => {
@@ -472,6 +474,30 @@ const MaterialStatesEditor: React.FC<MaterialStatesEditorProps> = ({
     onStructureCandidatesChange?.((structureCandidates || []).map(candidate =>
       candidate.candidate_id === candidateId ? { ...candidate, ...changes } : candidate,
     ))
+  }
+
+  // 未分配候选：随任务解析生成、尚未分配到具体材料状态（material_state_ref 以 unassigned: 开头）。
+  // 排除的候选不再显示（R4）。
+  const unassignedCandidates = (structureCandidates || []).filter(candidate =>
+    String(candidate.material_state_ref || '').startsWith('unassigned:')
+    && candidate.confirmation !== 'excluded'
+  )
+
+  // 分配并确认：把候选的 material_state_ref 改为 material_states[N] 并标记 confirmed，
+  // 使提交链路 _confirmed_candidates_by_state 能把它写入 structure_models（R1、FR-002）。
+  const assignUnassignedCandidate = (candidate: StructureCandidate) => {
+    if (readOnly || unassignedTarget == null) return
+    onStructureCandidatesChange?.((structureCandidates || []).map(item =>
+      item.candidate_id === candidate.candidate_id
+        ? {
+            ...item,
+            material_state_ref: `material_states[${unassignedTarget}]`,
+            confirmation: 'confirmed',
+            status: 'confirmed',
+          }
+        : item,
+    ))
+    setUnassignedTarget(null)
   }
 
   // 材料状态数组变化时调和折叠状态：保留已有卡片的手动选择，新卡片按默认规则初始化
@@ -790,6 +816,83 @@ const MaterialStatesEditor: React.FC<MaterialStatesEditorProps> = ({
           })}
           {states.length === 0 && !readOnly && (
             <Alert severity="info">{t('upload.noMaterialStates')}</Alert>
+          )}
+
+          {!readOnly && unassignedCandidates.length > 0 && (
+            <Box data-testid="unassigned-candidates" sx={{ mt: 2 }}>
+              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
+                {t('upload.unassignedCandidatesTitle')}
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                {unassignedCandidates.map(candidate => {
+                  const blocked = candidate.status === 'blocked'
+                  const sourceName = candidate.sources?.find?.(item => item && typeof item === 'object' && 'filename' in item)
+                    ?.filename as string | undefined
+                  return (
+                    <Card key={candidate.candidate_id} variant="outlined" sx={{ p: 1.5 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                        <Typography variant="body2" fontWeight={600} sx={{ minWidth: 0, flex: '1 1 180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {sourceName || candidate.candidate_id}
+                        </Typography>
+                        <Chip
+                          size="small"
+                          label={blocked ? t('upload.structureStatusBlocked') : t('upload.structureStatusValid')}
+                          color={blocked ? 'warning' : 'default'}
+                        />
+                        {blocked && candidate.validation?.message && (
+                          <Typography variant="caption" color="warning.main" sx={{ flexBasis: '100%' }}>
+                            {t('upload.unassignedValidationFailed', { message: candidate.validation.message })}
+                          </Typography>
+                        )}
+                      </Box>
+                      {!blocked && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1, flexWrap: 'wrap' }}>
+                          <FormControl size="small" sx={{ minWidth: 220, flex: '1 1 220px' }}>
+                            <InputLabel id={`unassigned-target-${candidate.candidate_id}-label`}>
+                              {t('upload.unassignedTargetLabel')}
+                            </InputLabel>
+                            <Select
+                              labelId={`unassigned-target-${candidate.candidate_id}-label`}
+                              label={t('upload.unassignedTargetLabel')}
+                              value={unassignedTarget ?? ''}
+                              disabled={states.length === 0}
+                              onChange={event => setUnassignedTarget(Number(event.target.value))}
+                            >
+                              {states.map((state, index) => (
+                                <MenuItem key={index} value={index}>
+                                  {t('upload.materialStateNumber', { index: index + 1 })}
+                                  {state.material?.trim() ? ` · ${state.material}` : ''}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                            {states.length === 0 && (
+                              <FormHelperText>{t('upload.unassignedNeedState')}</FormHelperText>
+                            )}
+                          </FormControl>
+                          <Button
+                            size="small"
+                            variant="contained"
+                            color="success"
+                            disabled={states.length === 0 || unassignedTarget == null}
+                            onClick={() => assignUnassignedCandidate(candidate)}
+                          >
+                            {t('upload.adoptStructure')}
+                          </Button>
+                          <Button
+                            size="small"
+                            color="inherit"
+                            disabled={candidate.confirmation === 'excluded'}
+                            onClick={() => updateStructureCandidate(candidate.candidate_id, { confirmation: 'excluded', status: 'excluded' })}
+                          >
+                            {t('upload.excludeStructure')}
+                          </Button>
+                        </Box>
+                      )}
+                    </Card>
+                  )
+                })}
+              </Box>
+            </Box>
           )}
         </Box>
       </Box>
