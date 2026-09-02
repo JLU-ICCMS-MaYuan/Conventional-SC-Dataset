@@ -246,6 +246,10 @@ def _validate_draft(
     if not str(paper.get("title") or "").strip():
         raise _upload_error(400, "title_required", "论文标题不能为空")
 
+    year = paper.get("year")
+    if isinstance(year, bool) or not isinstance(year, int):
+        raise _upload_error(400, "year_required", "论文年份不能为空且必须是整数")
+
     doi = str(paper.get("doi") or "").strip()
     if doi and not DOI_PATTERN.match(doi):
         raise _upload_error(400, "invalid_doi", "DOI 格式不正确")
@@ -819,6 +823,8 @@ async def put_upload_draft(
     _reject_legacy_classification_contract(draft)
     previous = get_draft(task_id) or {}
     normalized = _normalize_draft(draft)
+    # citation_extraction 是服务端 GROBID 产物，不能接受浏览器回传值覆盖。
+    normalized["citation_extraction"] = previous.get("citation_extraction")
     if isinstance(previous.get("ai_original"), dict):
         normalized["ai_original"] = _normalize_draft(previous["ai_original"])
     async with async_session_factory() as session:
@@ -1103,6 +1109,11 @@ async def _create_pending_paper(
                     paper_files[str(source.get("file_id") or index)] = paper_file
 
                 scientific_targets = await persist_scientific_draft(session, paper, draft)
+                from backend.services.citation_graph import persist_reference_extraction
+
+                citation_extraction = draft.get("citation_extraction")
+                if isinstance(citation_extraction, dict):
+                    await persist_reference_extraction(session, paper, citation_extraction)
 
                 extracted_root = md_path.parent / task_id
                 if source_files and extracted_root.is_dir():
@@ -1581,6 +1592,52 @@ async def rewrite_paper_scientific_draft(
             )
 
 
+async def _reextract_main_pdf_references(session, paper: Paper) -> dict[str, Any]:
+    """为即将生成的新版本重新解析主 PDF，避免沿用旧版本引用事实。"""
+    from backend.rag.config import settings
+    from backend.services.citation_graph import extract_references_from_pdf
+
+    stored_path = await session.scalar(
+        select(PaperFile.stored_path).where(
+            PaperFile.paper_id == paper.id,
+            PaperFile.paper_revision == paper.content_revision,
+            PaperFile.role == "main",
+        )
+    )
+    if not stored_path:
+        return {
+            "status": "unavailable",
+            "parser_name": "grobid",
+            "parser_version": None,
+            "error_message": "当前版本没有可用的主文件",
+            "references": [],
+        }
+
+    pdf_path = Path(str(stored_path))
+    if not pdf_path.is_absolute():
+        pdf_path = settings.sc_wiki_data_dir / pdf_path
+    if pdf_path.suffix.lower() != ".pdf":
+        return {
+            "status": "unavailable",
+            "parser_name": "grobid",
+            "parser_version": None,
+            "error_message": "当前版本的主文件不是 PDF",
+            "references": [],
+        }
+
+    try:
+        # GROBID 是本次管理员操作的一部分；放到线程中避免阻塞异步事件循环。
+        return await asyncio.to_thread(extract_references_from_pdf, pdf_path)
+    except Exception as exc:
+        return {
+            "status": "failed",
+            "parser_name": "grobid",
+            "parser_version": None,
+            "error_message": f"GROBID 解析异常：{exc}",
+            "references": [],
+        }
+
+
 async def _rewrite_paper_scientific_draft_in_tx(
     session,
     paper_id: int,
@@ -1627,10 +1684,15 @@ async def _rewrite_paper_scientific_draft_in_tx(
     paper.superconductor_kind = full_draft["paper"]["superconductor_kind"]
 
     bumped = paper.review_status == "approved"
+    citation_extraction = await _reextract_main_pdf_references(session, paper) if bumped else None
     await delete_scientific_entities(session, paper.id)
     if bumped:
         await bump_paper_revision(session, paper)
     await persist_scientific_draft(session, paper, full_draft)
+    if citation_extraction is not None:
+        from backend.services.citation_graph import persist_reference_extraction
+
+        await persist_reference_extraction(session, paper, citation_extraction)
     if bumped:
         await record_revision_event(session, paper, current_user.id)
 
@@ -1689,6 +1751,18 @@ async def publish_approved_paper(
             select(PaperChunk).where(PaperChunk.paper_id == paper_id).order_by(PaperChunk.chunk_index)
         )
         chunks = list(result.scalars())
+
+    # 引用匹配只使用 GROBID 已保存的字段。它与向量发布独立，因此不会用 LLM
+    # 的 builds_on 文本制造图边。
+    try:
+        from backend.services.citation_graph import reconcile_after_paper_approval
+
+        async with async_session_factory() as session:
+            async with session.begin():
+                await reconcile_after_paper_approval(session, paper_id)
+    except Exception as exc:
+        # 审核状态已由 Go 事务提交；匹配失败可在后续论文审核时重试，不能阻断发布。
+        print(f"[citation-graph] paper {paper_id} reconciliation failed: {exc}")
 
     chunk_data = [
         {

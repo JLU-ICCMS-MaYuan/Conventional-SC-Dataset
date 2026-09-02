@@ -148,6 +148,14 @@ RAG 文本切片元数据，当前约 28432 条；向量本体位于 Qdrant。
 
 字段为 `id`、`paper_id`、`chunk_index`、`section_name`、`heading`、`content`、`token_count`、`paper_file_id`、`page_start`、`page_end`。`paper_id` 关联 `papers.id`，`paper_file_id` 关联 `paper_files.id`。
 
+### 引用图谱表
+
+- `paper_reference_extractions`：按 `(paper_id, paper_revision)` 保存 GROBID 解析状态、解析器版本和错误信息。
+- `paper_references`：按论文版本保存原始引文、DOI、题名、作者、年份、匹配状态和可选的 `cited_paper_id`。原始引文不因未入库而丢失，同一来源和目标的重复引文只在图投影和被引计数中去重。
+- `paper_graph_marks`：保存管理员维护的 `origin`、`breakthrough` 标记。
+
+引用图只投影当前已审核版本，`papers.year` 为非空字段；`paper_references.year` 允许为空，因为外部参考文献可能无法解析年份。详细契约见 `docs/specs/81-citation-graph/data-model.md`。
+
 ### `paper_evidences`
 
 字段提取证据及其原文定位，当前约 0 条。

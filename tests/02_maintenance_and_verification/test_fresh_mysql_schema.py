@@ -38,7 +38,7 @@ def _config(database_url=None):
 def test_alembic_has_one_ordered_head():
     script = ScriptDirectory.from_config(_config())
 
-    assert script.get_heads() == ["paper_superconductor_kind"]
+    assert script.get_heads() == ["paper_citation_graph"]
     assert script.get_revision("revision_cascade_chain").down_revision == "add_kg_title"
     assert script.get_revision("add_kg_title").down_revision == "20260831_0066"
     assert script.get_revision("20260831_0066").down_revision == "20260831_0065"
@@ -113,9 +113,9 @@ def test_fresh_mysql_upgrade_downgrade_guard_and_constraints():
                 text(
                     """
                     INSERT INTO papers
-                        (id, doi, title, authors, uploaded_by_user_id, review_status)
+                        (id, doi, title, authors, year, uploaded_by_user_id, review_status)
                     VALUES
-                        (1, '10.0000/guard', 'Guard paper', :authors, 1, 'pending')
+                        (1, '10.0000/guard', 'Guard paper', :authors, 2024, 1, 'pending')
                     """
                 ),
                 {"authors": json.dumps(["Guard"])},
@@ -159,11 +159,11 @@ def _seed_constraint_rows(engine):
         connection.execute(
             text(
                 """
-                INSERT INTO papers
-                    (id, doi, title, authors, uploaded_by_user_id, review_status,
-                     content_revision, approved_revision)
-                VALUES
-                    (1, '10.0000/schema', 'Schema paper', :authors, 1, 'pending', 1, NULL)
+                    INSERT INTO papers
+                        (id, doi, title, authors, uploaded_by_user_id, review_status,
+                         year, content_revision, approved_revision)
+                    VALUES
+                        (1, '10.0000/schema', 'Schema paper', :authors, 2024, 1, 'pending', 1, NULL)
                 """
             ),
             {"authors": json.dumps(["Schema"])},
@@ -349,10 +349,10 @@ def _assert_cross_paper_evidence_is_rejected(engine):
             text(
                 """
                 INSERT INTO papers
-                    (id, doi, title, authors, uploaded_by_user_id, review_status,
+                    (id, doi, title, authors, year, uploaded_by_user_id, review_status,
                      content_revision, approved_revision)
                 VALUES
-                    (2, '10.0000/schema-2', 'Second paper', :authors, 1,
+                    (2, '10.0000/schema-2', 'Second paper', :authors, 2024, 1,
                      'pending', 1, NULL)
                 """
             ),

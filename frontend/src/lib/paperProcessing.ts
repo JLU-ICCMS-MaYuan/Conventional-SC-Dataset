@@ -19,6 +19,25 @@ export interface UploadTaskFile {
   error?: string | null
 }
 
+export type CitationExtractionStatus = 'succeeded' | 'partial' | 'failed' | 'unavailable'
+
+export interface CitationReference {
+  reference_index: number
+  raw_citation: string
+  doi?: string | null
+  title?: string | null
+  authors?: string[] | null
+  year?: number | null
+}
+
+export interface CitationExtraction {
+  status: CitationExtractionStatus
+  parser_name: string
+  parser_version?: string | null
+  error_message?: string | null
+  references: CitationReference[]
+}
+
 export interface SourceEvidence {
   section?: string | null
   page?: number | null
@@ -160,6 +179,7 @@ export interface PaperDraftFields {
 export interface UploadDraft {
   paper: PaperDraftFields
   material_states: DraftMaterialState[]
+  citation_extraction?: CitationExtraction | null
   structure_candidates?: StructureCandidate[]
   research_motivation?: string
   classification_evidence?: SourceEvidence[]
@@ -251,6 +271,44 @@ function embeddedEvidence(value: unknown): SourceEvidence[] {
   })
 }
 
+function normalizeCitationExtraction(value: unknown): CitationExtraction | null {
+  if (!value || typeof value !== 'object') return null
+  const raw = value as Record<string, unknown>
+  const statuses: CitationExtractionStatus[] = ['succeeded', 'partial', 'failed', 'unavailable']
+  const status = statuses.includes(raw.status as CitationExtractionStatus)
+    ? raw.status as CitationExtractionStatus
+    : null
+  if (!status) return null
+  const references = Array.isArray(raw.references)
+    ? raw.references.flatMap((item, index) => {
+      if (!item || typeof item !== 'object') return []
+      const reference = item as Record<string, unknown>
+      const rawCitation = String(reference.raw_citation || '').trim()
+      if (!rawCitation) return []
+      const authors = Array.isArray(reference.authors)
+        ? reference.authors.map(author => String(author).trim()).filter(Boolean)
+        : null
+      return [{
+        reference_index: Number.isSafeInteger(reference.reference_index)
+          ? Number(reference.reference_index)
+          : index,
+        raw_citation: rawCitation,
+        doi: reference.doi ? String(reference.doi) : null,
+        title: reference.title ? String(reference.title) : null,
+        authors,
+        year: Number.isInteger(reference.year) ? Number(reference.year) : null,
+      }]
+    })
+    : []
+  return {
+    status,
+    parser_name: String(raw.parser_name || 'grobid'),
+    parser_version: raw.parser_version ? String(raw.parser_version) : null,
+    error_message: raw.error_message ? String(raw.error_message) : null,
+    references,
+  }
+}
+
 function normalizePaperFields(value: unknown): PaperDraftFields {
   const empty = emptyUploadDraft().paper
   const paper = value && typeof value === 'object'
@@ -306,6 +364,7 @@ export function normalizeUploadDraft(value: unknown): UploadDraft {
   return {
     ...empty,
     ...raw,
+    citation_extraction: normalizeCitationExtraction(raw.citation_extraction),
     paper: normalizePaperFields({
       ...rawPaper,
       material_families: [
@@ -353,6 +412,7 @@ export function normalizeUploadDraft(value: unknown): UploadDraft {
       ...aiRaw,
       paper: normalizePaperFields(aiRaw.paper),
       material_states: Array.isArray(aiRaw.material_states) ? aiRaw.material_states : [],
+      citation_extraction: normalizeCitationExtraction(aiRaw.citation_extraction),
     } : null,
   }
 }

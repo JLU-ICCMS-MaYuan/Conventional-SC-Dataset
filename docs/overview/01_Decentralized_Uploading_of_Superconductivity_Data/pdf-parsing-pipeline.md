@@ -43,6 +43,7 @@
 
 - `_summary_classification_candidates` 先过滤掉非当前论文的过期证据，再把分段候选交给 `complete_json(SUMMARY_SYSTEM_PROMPT, ...)` 汇总为一份结构化草稿。
 - 汇总 prompt（`SUMMARY_SYSTEM_PROMPT`）与正文提取（`extractor.py`）都要求以英文产出六个叙述字段（`summary`、`keywords_tags`、`methodology`、`key_finding`、`research_motivation`、`knowledge_graph_title`），与英文论文原文语言一致；某字段无原文依据时保持为空，不编造内容。（[Issue #74](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/74)）
+- 正文 PDF 在 Worker 中额外提交给本地 GROBID 的 `processFulltextDocument` 接口。GROBID 返回的 TEI `biblStruct` 会提取 DOI、题名、作者、年份和原始引文，随论文版本保存到 `paper_references`；GROBID 不可用或解析不完整时保存状态，不由 LLM 猜造引用边。（[Issue #81](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/81)）
 - `_normalize_draft` 把草稿归一化为当前数据契约：论文元信息（含单选 `superconductor_kind` 和多选 Material family）、`material_states`（材料、压强/温度/磁场、计算与实验上下文、`tc_results`、More type labels）、分类证据等。旧草稿的状态级 `superconductor_kind` 只在读取时一次性提升：唯一的非 `unknown` 值保留，冲突时回退 `unknown`；新提交拒绝该旧字段。
 - 汇总后执行查重：先按归一化 DOI（`normalize_doi`）查 `papers`，再按原始文件 SHA-256 查；命中即进入 `_handle_duplicate`，任务以 `duplicate` 状态短路结束。
 - 草稿写入 Redis（`save_draft`），同时把 `ai_values` 与证据快照（分类证据、材料状态各字段证据）写入 `review_artifacts/{task_id}/result.json`。
@@ -69,7 +70,7 @@
 
 ## 当前边界与待核验
 
-- Neo4j 知识图谱同步（`backend/ingest/sync_neo4j.py`，提供 `sync_single(paper_id)` 等入口）**不在**上传、提交或发布链路中自动触发；当前代码下需要独立运行该同步，是否存在定时触发待核验。
+- 旧 Neo4j 材料/作者图谱同步（`backend/ingest/sync_neo4j.py`）仍不在上传链路中自动触发；Issue #81 的论文引用图不依赖该同步，公开查询直接读取 MySQL 中的 `paper_references`。
 - `backend/ingest/PIPELINE.md` 描述的 `enrich_papers.py` → `clean_results/*.json` → `key_properties` 链路属于旧 `pipeline.py` 摄入路径；当前多文件上传链路不经过 `enrich_single` 与 `key_properties`。
 - 解析质量依赖 LLM 配置（`DEEPSEEK_*` / `OPENAI_*`）；向量化发布依赖 Embedding 配置（`EMBEDDING_*`）与 Qdrant；缺省配置时对应阶段失败。
 

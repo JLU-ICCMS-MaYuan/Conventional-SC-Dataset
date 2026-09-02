@@ -9,10 +9,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func stringPointer(value string) *string { return &value }
+func statsStringPointer(value string) *string { return &value }
 
 func TestChartFamilyIDsSupportsPaperLevelMultipleLabels(t *testing.T) {
-	ids := chartFamilyIDs(stringPointer("1,8,13"))
+	ids := chartFamilyIDs(statsStringPointer("1,8,13"))
 	if len(ids) != 3 || ids[0] != 1 || ids[1] != 8 || ids[2] != 13 {
 		t.Fatalf("chartFamilyIDs = %#v", ids)
 	}

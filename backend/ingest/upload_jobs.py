@@ -36,6 +36,7 @@ from backend.ingest.structure_extractor import extract_structure_candidates
 from backend.models import Paper, PaperFile
 from backend.rag.llm import complete_json
 from backend.services.space_groups import CRYSTAL_SYSTEMS, crystal_system_for_number, lookup_number
+from backend.services.citation_graph import extract_references_from_pdf
 from backend.services.structure_candidates import (
     StructureCandidateError,
     build_structure_candidate,
@@ -511,6 +512,9 @@ def _parse_partial_draft(text: str) -> dict[str, Any] | None:
         return None
     if "paper" not in value and "material_states" not in value:
         return None
+    # 引用事实只能来自 GROBID。LLM 的流式草稿即使返回同名字段，也不能进入
+    # Redis 或后续论文持久化流程。
+    value.pop("citation_extraction", None)
     return value
 
 
@@ -533,6 +537,36 @@ def _build_candidate_draft(chunks: list[dict[str, Any]]) -> dict[str, Any]:
             return
         bucket.add(key)
         paper.setdefault(field, []).append(value)
+
+    def _append_material_family(value: Any) -> None:
+        if isinstance(value, str):
+            name = value.strip()
+            selection = {"id": None, "name": name, "status": "pending"}
+        elif isinstance(value, dict):
+            name = str(value.get("name") or value.get("value") or "").strip()
+            if not name or value.get("scope") == "referenced_work":
+                return
+            selection = {
+                "id": value.get("id"),
+                "name": name,
+                "status": "confirmed" if value.get("id") not in (None, "") else "pending",
+            }
+            if isinstance(value.get("evidence"), dict):
+                selection["evidence"] = value["evidence"]
+        else:
+            return
+        if not selection["name"]:
+            return
+        key = (
+            f"id:{selection['id']}"
+            if selection["id"] not in (None, "")
+            else f"name:{selection['name'].lower()}"
+        )
+        family_seen = seen.setdefault("material_families", set())
+        if key in family_seen:
+            return
+        family_seen.add(key)
+        paper.setdefault("material_families", []).append(selection)
 
     for chunk in chunks:
         result = chunk.get("result")
@@ -572,14 +606,11 @@ def _build_candidate_draft(chunks: list[dict[str, Any]]) -> dict[str, Any]:
             if state is None:
                 continue
             family = state.get("material_family")
+            _append_material_family(family)
             candidate_state = {
                 key: value for key, value in state.items()
                 if key not in {"evidence", "scope", "material_family", "structure_families"}
             }
-            candidate_state["material_family"] = (
-                {"id": None, "name": family.get("name"), "status": "pending"}
-                if isinstance(family, dict) and family.get("name") else None
-            )
             candidate_state["structure_families"] = [
                 {"id": None, "name": structure.get("name"), "is_primary": bool(structure.get("is_primary", True)), "status": "pending"}
                 for structure in state.get("structure_families") or []
@@ -652,6 +683,9 @@ def public_parsing_detail(task_id: str) -> dict[str, Any]:
         "stage": state.get("stage"),
         "processing_error": state.get("processing_error"),
         "failed_stage": state.get("failed_stage"),
+        "citation_extraction_status": state.get("citation_extraction_status"),
+        "citation_extraction_error": state.get("citation_extraction_error"),
+        "citation_reference_count": state.get("citation_reference_count", 0),
         "files": [
             {key: file.get(key) for key in (
                 "file_id", "role", "original_filename", "upload_status", "extraction_status", "error",
@@ -1087,7 +1121,9 @@ def _apply_methodology_inference(
                     result["tc_method"] = inferred_method
 
 
-def _normalize_draft(raw: dict[str, Any]) -> dict[str, Any]:
+def _normalize_draft(
+    raw: dict[str, Any], *, preserve_citation_extraction: bool = True,
+) -> dict[str, Any]:
     parsed = _parse_result(raw)
     raw_paper = raw.get("paper") if isinstance(raw.get("paper"), dict) else raw
     paper_type = str(raw_paper.get("paper_type") or parsed.paper_type or "unknown").strip().lower()
@@ -1194,6 +1230,11 @@ def _normalize_draft(raw: dict[str, Any]) -> dict[str, Any]:
     return {
         "paper": paper,
         "material_states": material_states,
+        "citation_extraction": (
+            raw.get("citation_extraction")
+            if preserve_citation_extraction and isinstance(raw.get("citation_extraction"), dict)
+            else None
+        ),
         "structure_candidates": [
             item for item in _as_list(raw.get("structure_candidates"))
             if isinstance(item, dict)
@@ -1356,6 +1397,24 @@ def process_upload_task(task_id: str) -> dict[str, Any]:
             "file_id": "main", "role": "main", "original_filename": state.get("filename"),
             "kind": state.get("file_kind"), "stored_path": str(source),
         }]
+        citation_extraction: dict[str, Any] | None = None
+        citation_source = next(
+            (
+                Path(str(item.get("stored_path") or source))
+                for item in sources
+                if item.get("role") == "main"
+                and str(item.get("kind") or Path(str(item.get("stored_path") or source)).suffix.lstrip(".")).lower() == "pdf"
+            ),
+            None,
+        )
+        if citation_source is not None:
+            citation_extraction = extract_references_from_pdf(citation_source)
+            update_state(
+                task_id,
+                citation_extraction_status=citation_extraction["status"],
+                citation_extraction_error=citation_extraction.get("error_message"),
+                citation_reference_count=len(citation_extraction["references"]),
+            )
         extracted_root = data_path("parsed_markdown") / task_id
         extracted_root.mkdir(parents=True, exist_ok=True)
         all_chunks: list[tuple[dict[str, Any], Chunk]] = []
@@ -1513,8 +1572,9 @@ def process_upload_task(task_id: str) -> dict[str, Any]:
             json.dumps(summary_candidates, ensure_ascii=False),
             on_partial=_on_summary_partial,
         )
-        draft = _normalize_draft(raw_draft)
+        draft = _normalize_draft(raw_draft, preserve_citation_extraction=False)
         draft["structure_candidates"] = structure_candidates
+        draft["citation_extraction"] = citation_extraction
         current_state = get_state(task_id) or state
         existing = _find_existing_paper(draft["paper"].get("doi")) or _find_existing_by_hash(current_state)
         if existing:

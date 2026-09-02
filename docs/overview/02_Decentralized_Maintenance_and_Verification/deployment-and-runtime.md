@@ -8,10 +8,10 @@
 
 ### 生产：Docker Compose
 
-- 生产编排文件为 `docker/compose.yaml`，包含 frontend、goserver、python、mysql、redis、neo4j 和 qdrant 七个服务。
+- 生产编排文件为 `docker/compose.yaml`，包含 frontend、goserver、python、worker、mysql、redis、neo4j、qdrant 和 grobid 服务；GROBID 通过 `/api/isalive` 健康检查后才允许 Python/Worker 启动。
 - frontend 使用 Nginx 提供前端静态资源并反向代理；Go 服务提供主要公开 API；未匹配的 Python 能力通过 Go 转发到 Python 服务。
-- Go 服务挂载 `graph.json`、`htsc2025.json`、`clean_results` 和持久化头像目录 `/data/avatars`；Python 服务挂载上传文件、富化结果和属性映射缓存。
-- MySQL、Redis、Neo4j 和 Qdrant 使用 Docker volume 或数据目录持久化。服务通过 healthcheck 和 `depends_on` 控制启动顺序。
+- Go 服务挂载 `graph.json`、`htsc2025.json`、`clean_results` 和持久化头像目录 `/data/avatars`；Python/Worker 服务挂载上传文件、富化结果和属性映射缓存，并通过 `GROBID_URL=http://grobid:8070` 调用引用解析服务。
+- MySQL、Redis、Neo4j、Qdrant 和 GROBID 使用 Docker volume 或数据目录持久化。服务通过 healthcheck 和 `depends_on` 控制启动顺序。
 - 当前仓库只包含 `docker/compose.yaml`；源码构建可分别使用 `docker/*.Dockerfile`，不存在 `docker/compose.dev.yaml`。
 
 ### 本地开发：宿主机进程（[Issue #71](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/71)）
@@ -65,7 +65,7 @@
 
 - `docker/compose.yaml` 依赖预置镜像和外部数据目录，不等同于从空目录自动构建完整数据集。
 - RAG 需要 Qdrant、RAG 数据库、Embedding 和 LLM 配置；主业务数据库可用不代表 RAG 可用。
-- Neo4j 图谱、`graph.json` 快照和 MySQL 数据的同步时机不由 Compose 自动解决。
+- 旧 Neo4j 图谱、`graph.json` 快照和 MySQL 数据的同步时机不由 Compose 自动解决；Issue #81 的论文引用图直接由 MySQL 查询，不需要 Neo4j 同步。
 - 密钥只能通过环境变量注入，文档不记录实际凭据。Go 邮件配置支持 `SMTP_HOST`、`SMTP_PORT`、`SMTP_USER`/`SMTP_USERNAME`、`SMTP_PASSWORD`、`SMTP_FROM` 和 `SMTP_TLS_MODE`。
 - `AVATAR_DIR` 默认为数据目录下 `avatars`，Compose 固定为 `/data/avatars` 并挂载宿主 `docker/data/avatars`；部署备份需包含该目录。
 - `docker/deploy/README.md` 中的镜像标签、归档文件和导入命令属于交付包说明，发布前需要按实际归档核验。

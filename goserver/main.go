@@ -109,6 +109,7 @@ func main() {
 	{
 		kg.GET("/overview", handlers.KGOverview)
 		kg.GET("/papers/:paperId/neighbors", handlers.KGPaperNeighbors)
+		kg.GET("/search", handlers.KGSearch)
 		kg.GET("/stats", handlers.KGStats)
 	}
 
@@ -176,6 +177,7 @@ func main() {
 		admin.GET("/papers/:id", handlers.GetPaperDetail)
 		admin.PUT("/papers/:id", handlers.UpdatePaper)
 		admin.POST("/papers/:id/review", handlers.ReviewPaper)
+		admin.PUT("/papers/:paperId/graph-marks", handlers.ReplacePaperGraphMarks)
 		admin.DELETE("/papers/:id", middleware.SuperAdminRequired, handlers.DeletePaper)
 		admin.POST("/papers/batch-review", handlers.BatchReview)
 		admin.POST("/papers/batch-delete", middleware.SuperAdminRequired, handlers.BatchDelete)

@@ -10,7 +10,7 @@ from sqlalchemy.engine import make_url
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-HEAD = "paper_superconductor_kind"
+HEAD = "paper_citation_graph"
 REMOVED_TABLES = {
     "classification_proposals",
     "classification_evidences",
@@ -30,7 +30,7 @@ def test_issue51_migrations_have_one_ordered_head():
     script = ScriptDirectory.from_config(_config())
 
     assert script.get_heads() == [HEAD]
-    assert script.get_revision(HEAD).down_revision == "paper_material_families"
+    assert script.get_revision(HEAD).down_revision == "paper_superconductor_kind"
 
 
 def test_fresh_mysql_84_can_upgrade_to_simplified_classification_schema():
@@ -56,6 +56,9 @@ def test_fresh_mysql_84_can_upgrade_to_simplified_classification_schema():
             "material_state_structure_families",
             "paper_material_families",
             "paper_review_events",
+            "paper_reference_extractions",
+            "paper_references",
+            "paper_graph_marks",
         } <= tables
 
         material_columns = {item["name"] for item in inspector.get_columns("material_families")}

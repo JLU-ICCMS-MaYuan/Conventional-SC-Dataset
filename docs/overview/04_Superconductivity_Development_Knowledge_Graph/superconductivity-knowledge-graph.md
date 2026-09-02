@@ -2,40 +2,31 @@
 
 ## 功能说明
 
-展示超导文献知识图谱快照，并提供论文节点展开、关系筛选、上下文详情和 Neo4j 工具查询入口。
+`/knowledge` 展示 SC-Wiki 已审核论文的引用发展图。它用于查看一个材料家族或超导类型的论文演化、识别库内重要论文，并按需查看单篇论文的来源和重要分支。
 
 ## 当前行为
 
-- Go 服务启动时从 `SC_WIKI_DATA_DIR/graph.json` 加载图谱快照，公开 `/api/knowledge-graph/overview`、`/papers/:paper_id`、`/papers/:paper_id/neighbors` 和 `/stats`。
-- 前端 `/knowledge` 使用 `vis-network` 渲染图谱，按关系类型着色，支持点击节点、边、展开邻居和按关系类型筛选。
-- 点击论文节点后，前端会调用 `/api/papers/:id` 加载论文详情并在侧栏展示。
-- Python 侧另有 `/api/kg/*` 接口，委托 `backend.rag.tools.neo4j` 查询 Neo4j，支持论文搜索、论文上下文、材料上下文、多跳遍历和最短路径。
-- 历史总结曾记录 639 篇论文、1459 种材料等数据规模；这些是特定数据快照，不作为当前部署的实时数量，当前数量需从运行中的图数据库和 `graph.json` 重新核验。
+- Go API 直接查询 MySQL，不读取 `graph.json` 或代理 Neo4j：
+  - `GET /api/knowledge-graph/overview`
+  - `GET /api/knowledge-graph/papers/:paperId/neighbors`
+  - `GET /api/knowledge-graph/search`
+  - `GET /api/knowledge-graph/stats`
+- 概览默认最多返回 30 个节点；可按论文级 Material family 多选和 `papers.superconductor_kind` 筛选。 `unknown` 不进入常规/非常规筛选，但仍可被搜索并固定。
+- 节点短标题优先使用 `knowledge_graph_title`，同时返回原标题、年份、Material family、Superconductor type、库内被引次数和人工里程碑标记。
+- 边方向固定为 `citing_paper_id -> cited_paper_id`。上游是当前论文引用的论文，下游是引用当前论文的论文。
+- 邻居接口单方向分页，默认每次 5 篇，按库内被引次数降序、`paper_id` 升序排序，并返回 `remaining_count`。服务端不递归加载整棵图。
+- 标题或 DOI 搜索从全部当前已审核论文中执行，搜索到的节点可以加入当前图视图。
 
-## 工作流程
+## 数据约束
 
-公开页面优先请求 Go 知识图谱快照接口；Go 服务从内存中的 `graph.json` 节点和边生成概览或邻居数据。需要图数据库上下文时，Python KG 接口通过 Neo4j driver 执行 Cypher 查询并返回论文、材料、属性或路径信息。
-
-## 约束
-
-- Go 页面图谱依赖 `graph.json` 是否存在和格式是否正确。
-- Python Neo4j 工具依赖 `NEO4J_URI`、`NEO4J_USER`、`NEO4J_PASSWORD` 和图数据库数据。
-- Go 快照图谱和 Python Neo4j 图谱是两条不同数据路径，二者同步关系需单独核验。
+- 公开节点和边的两端都必须是 `review_status=approved` 且 `approved_revision=content_revision` 的当前论文。
+- `papers.year` 在数据库和提交/审核流程中必须有值；参考文献的 `paper_references.year` 可以为空，因为外部引文可能解析不到年份。
+- 被引次数是 `COUNT(DISTINCT citing_paper_id)`，只统计库内当前已审核论文。同一来源重复列出目标论文不会增加计数。
+- 节点唯一键为 `paper_id`，不是树路径。循环或时间异常的原始引用不被删除，查询侧按已访问论文避免重复。
 
 ## 代码与测试
 
-- Go API：`goserver/handlers/knowledge_graph.go`
-- Go 路由：`goserver/main.go`
-- Python API：`backend/api/kg.py`
-- Neo4j 工具：`backend/rag/tools/neo4j.py`
+- API：`goserver/handlers/knowledge_graph.go`
+- 管理标记：`goserver/handlers/paper_graph_marks.go`
 - 页面：`frontend/src/pages/KnowledgeGraphPage.tsx`
-- 测试：`tests/04_superconductivity_knowledge_graph/`
-
-## 相关变更记录
-
-当前未发现可链接的已完成 Feature 或 Debug 记录。
-
-## 已知问题
-
-- `graph.json`、MySQL 和 Neo4j 三者之间的数据同步时机待核验。
-- 旧版“关系提取、论文富化、Neo4j 同步”脚本在当前仓库中未找到，不能把历史流水线描述为当前可执行入口。
+- 测试：`goserver/handlers/knowledge_graph_test.go`、`backend/tests/test_citation_graph.py`

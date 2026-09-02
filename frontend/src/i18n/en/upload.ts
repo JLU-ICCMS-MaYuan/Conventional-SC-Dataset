@@ -288,4 +288,10 @@ export default {
   rawValueField: 'Raw value',
   unitField: 'Unit',
   noMaterialStates: 'AI did not extract any material states. Reviews can be submitted directly; for other papers please add them first.',
+  citationExtractionTitle: 'Reference extraction',
+  citationStatus: { succeeded: 'Extracted', partial: 'Partially extracted', failed: 'Extraction failed', unavailable: 'Parser unavailable' },
+  citationReferenceCount: '{count} references extracted',
+  citationNoReferences: 'No references to display.',
+  citationShowMore: 'Show the remaining {count}',
+  citationShowLess: 'Show fewer references',
 } as const

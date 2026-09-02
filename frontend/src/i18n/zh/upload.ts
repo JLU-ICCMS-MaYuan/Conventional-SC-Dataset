@@ -290,4 +290,10 @@ export default {
   rawValueField: '原始值',
   unitField: '单位',
   noMaterialStates: 'AI 没有提取到材料状态。综述可以直接提交，其他论文请补充后提交。',
+  citationExtractionTitle: '参考文献解析',
+  citationStatus: { succeeded: '解析完成', partial: '部分解析', failed: '解析失败', unavailable: '解析服务不可用' },
+  citationReferenceCount: '已解析 {count} 条参考文献',
+  citationNoReferences: '没有可显示的参考文献。',
+  citationShowMore: '查看其余 {count} 条',
+  citationShowLess: '收起其余参考文献',
 } as const

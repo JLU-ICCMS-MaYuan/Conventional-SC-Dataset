@@ -245,7 +245,9 @@ def _state_with_material(material):
 def _minimal_non_review_draft(material_states, research_materials=None):
     paper = {
         "title": "测试论文",
+        "year": 2024,
         "paper_type": "experimental",
+        "superconductor_kind": "unknown",
         "material_families": [{"id": None, "name": "氢化物", "status": "pending"}],
     }
     if research_materials is not None:

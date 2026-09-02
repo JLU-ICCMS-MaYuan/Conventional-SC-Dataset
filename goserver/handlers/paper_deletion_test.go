@@ -47,6 +47,10 @@ func newDeletionTestDB(t *testing.T) *gorm.DB {
 		&models.StructureModelEvidence{},
 		&models.SuperconductorPropertyEvidence{},
 		&models.MaterialStateStructureFamily{},
+		&models.PaperReferenceExtraction{},
+		&models.PaperReference{},
+		&models.PaperGraphMark{},
+		&models.PaperMaterialFamily{},
 	); err != nil {
 		t.Fatalf("迁移失败: %v", err)
 	}
@@ -160,6 +164,24 @@ func seedPaperGraph(t *testing.T, db *gorm.DB, doi string) (uint, uint) {
 		}
 	}
 
+	if err := db.Create(&models.PaperReferenceExtraction{
+		PaperID: paper.ID, PaperRevision: 1, Status: "succeeded", ParserName: "grobid",
+	}).Error; err != nil {
+		t.Fatalf("创建引用解析状态失败: %v", err)
+	}
+	if err := db.Create(&models.PaperReference{
+		PaperID: paper.ID, PaperRevision: 1, ReferenceIndex: 0,
+		RawCitation: "self reference", CitedPaperID: &paper.ID,
+		MatchStatus: "matched",
+	}).Error; err != nil {
+		t.Fatalf("创建引用记录失败: %v", err)
+	}
+	if err := db.Create(&models.PaperGraphMark{
+		PaperID: paper.ID, MarkType: "origin", CreatedByUserID: 1,
+	}).Error; err != nil {
+		t.Fatalf("创建图谱里程碑失败: %v", err)
+	}
+
 	return paper.ID, sc.ID
 }
 
@@ -199,6 +221,9 @@ func TestCascadeDeleteInDBRemovesEveryRelation(t *testing.T) {
 		{"tc_result_evidences", &models.TcResultEvidence{}},
 		{"structure_model_evidences", &models.StructureModelEvidence{}},
 		{"superconductor_property_evidences", &models.SuperconductorPropertyEvidence{}},
+		{"paper_reference_extractions", &models.PaperReferenceExtraction{}},
+		{"paper_references", &models.PaperReference{}},
+		{"paper_graph_marks", &models.PaperGraphMark{}},
 	}
 	for _, rel := range relations {
 		if n := countBy(t, db, rel.model, paperID); n != 0 {

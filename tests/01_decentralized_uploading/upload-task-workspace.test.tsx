@@ -119,6 +119,9 @@ describe('论文上传工作区', () => {
         status: 'extracting',
         stage: 'extracting',
         files: [{ file_id: 'main', role: 'main', original_filename: 'paper.pdf', extraction_status: 'processing' }],
+        citation_extraction_status: 'unavailable',
+        citation_extraction_error: 'GROBID 尚未就绪',
+        citation_reference_count: 0,
         chunks: [],
         summary: { status: 'extracting', completed: 0, total: 0 },
         next_poll_ms: null,
@@ -131,6 +134,9 @@ describe('论文上传工作区', () => {
     expect(screen.getByRole('tab', { name: '分段解析与证据' })).toBeVisible()
     expect(await screen.findByText('只读预览')).toBeVisible()
     expect(screen.getByText('正在提取论文正文，完成后逐段解析。')).toBeVisible()
+    expect(screen.getByText('参考文献解析')).toBeVisible()
+    expect(screen.getByText('解析服务不可用 · 已解析 0 条参考文献')).toBeVisible()
+    expect(screen.getByText('GROBID 尚未就绪')).toBeVisible()
     expect(screen.queryByRole('button', { name: '提交审核' })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('tab', { name: '分段解析与证据' }))

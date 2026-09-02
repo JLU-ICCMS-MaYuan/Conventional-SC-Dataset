@@ -329,7 +329,7 @@ class Paper(Base):
     journal = Column(String(255))
     volume = Column(String(100))
     pages = Column(String(100))
-    year = Column(Integer, index=True)
+    year = Column(Integer, index=True, nullable=False)
     abstract = Column(Text)
     authors = Column(JSON, nullable=True)
     uploaded_by_user_id = Column(
@@ -410,6 +410,22 @@ class Paper(Base):
     review_events = relationship("PaperReviewEvent", back_populates="paper")
     material_family_links = relationship(
         "PaperMaterialFamily",
+        back_populates="paper",
+        cascade="all, delete-orphan",
+    )
+    reference_extractions = relationship(
+        "PaperReferenceExtraction",
+        back_populates="paper",
+        cascade="all, delete-orphan",
+    )
+    outgoing_references = relationship(
+        "PaperReference",
+        back_populates="citing_paper",
+        foreign_keys="PaperReference.paper_id",
+        cascade="all, delete-orphan",
+    )
+    graph_marks = relationship(
+        "PaperGraphMark",
         back_populates="paper",
         cascade="all, delete-orphan",
     )
@@ -773,6 +789,129 @@ class PaperMaterialFamily(Base):
 
     paper = relationship("Paper", back_populates="material_family_links")
     material_family = relationship("MaterialFamily", back_populates="paper_links")
+
+
+class PaperReferenceExtraction(Base):
+    """GROBID 对一篇论文当前内容版本的整次参考文献解析。"""
+
+    __tablename__ = "paper_reference_extractions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["paper_id", "paper_revision"],
+            ["papers.id", "papers.content_revision"],
+            name="fk_paper_reference_extractions_paper_revision",
+            ondelete="RESTRICT",
+            onupdate="CASCADE",
+        ),
+        CheckConstraint(
+            "status IN ('succeeded', 'partial', 'failed', 'unavailable')",
+            name="ck_paper_reference_extractions_status",
+        ),
+    )
+
+    paper_id = Column(Integer, primary_key=True)
+    paper_revision = Column(Integer, primary_key=True)
+    status = Column(String(20), nullable=False)
+    parser_name = Column(String(32), nullable=False, default="grobid", server_default="grobid")
+    parser_version = Column(String(64))
+    error_message = Column(Text)
+    processed_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    paper = relationship("Paper", back_populates="reference_extractions")
+
+
+class PaperReference(Base):
+    """一条可复核的原始引文，以及它到 SC-Wiki Paper 的保守匹配结果。"""
+
+    __tablename__ = "paper_references"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["paper_id", "paper_revision"],
+            ["papers.id", "papers.content_revision"],
+            name="fk_paper_references_citing_revision",
+            ondelete="RESTRICT",
+            onupdate="CASCADE",
+        ),
+        CheckConstraint("reference_index >= 0", name="ck_paper_references_index"),
+        CheckConstraint(
+            "match_status IN ('matched', 'unmatched', 'ambiguous')",
+            name="ck_paper_references_match_status",
+        ),
+        CheckConstraint(
+            "match_method IS NULL OR match_method IN ('doi', 'title_year', 'manual')",
+            name="ck_paper_references_match_method",
+        ),
+        CheckConstraint(
+            "(match_status = 'matched' AND cited_paper_id IS NOT NULL AND match_method IS NOT NULL) "
+            "OR (match_status IN ('unmatched', 'ambiguous') AND cited_paper_id IS NULL AND match_method IS NULL)",
+            name="ck_paper_references_match_consistency",
+        ),
+        UniqueConstraint(
+            "paper_id",
+            "paper_revision",
+            "reference_index",
+            name="uq_paper_references_source_index",
+        ),
+        Index("ix_paper_references_source_revision", "paper_id", "paper_revision"),
+        Index("ix_paper_references_doi", "doi"),
+        Index("ix_paper_references_normalized_title", "normalized_title"),
+        Index("ix_paper_references_year", "year"),
+        Index("ix_paper_references_cited_paper", "cited_paper_id"),
+    )
+
+    id = Column(BIGINT_ID, primary_key=True, autoincrement=True)
+    paper_id = Column(Integer, nullable=False)
+    paper_revision = Column(Integer, nullable=False)
+    reference_index = Column(Integer, nullable=False)
+    raw_citation = Column(LONG_TEXT, nullable=False)
+    doi = Column(String(255))
+    title = Column(Text)
+    normalized_title = Column(String(512))
+    authors = Column(JSON)
+    year = Column(Integer)
+    cited_paper_id = Column(Integer, ForeignKey("papers.id", ondelete="RESTRICT"), nullable=True)
+    match_status = Column(String(20), nullable=False, default="unmatched", server_default="unmatched")
+    match_method = Column(String(20))
+    match_checked_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    citing_paper = relationship(
+        "Paper",
+        back_populates="outgoing_references",
+        foreign_keys=[paper_id],
+    )
+    cited_paper = relationship("Paper", foreign_keys=[cited_paper_id])
+
+
+class PaperGraphMark(Base):
+    """由管理员确认的领域里程碑，不参与自动引用匹配。"""
+
+    __tablename__ = "paper_graph_marks"
+    __table_args__ = (
+        CheckConstraint(
+            "mark_type IN ('origin', 'breakthrough')",
+            name="ck_paper_graph_marks_type",
+        ),
+    )
+
+    paper_id = Column(Integer, ForeignKey("papers.id", ondelete="RESTRICT"), primary_key=True)
+    mark_type = Column(String(20), primary_key=True)
+    created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    paper = relationship("Paper", back_populates="graph_marks")
 
 
 class StructureFamily(Base):

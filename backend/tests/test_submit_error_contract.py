@@ -92,7 +92,9 @@ def test_missing_material_contract_names_chemical_formula(client):
     draft = {
         "paper": {
             "title": "测试论文",
+            "year": 2024,
             "paper_type": "experimental",
+            "superconductor_kind": "unknown",
             "research_materials": ["LaH10"],
             "material_families": [
                 {"id": None, "name": "氢基超导体", "status": "pending"}

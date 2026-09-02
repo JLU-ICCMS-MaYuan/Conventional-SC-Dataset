@@ -14,7 +14,7 @@ SC-Wiki 是面向超导材料研究的数据检索与知识服务应用。当前
 | [超导数据去中心化上传](01_Decentralized_Uploading_of_Superconductivity_Data/README.md) | PDF/TXT/MD 与结构附件的上传、五阶段 AI 解析、校对提交落库 | RQ Worker、Redis、LLM、MySQL、Qdrant |
 | [去中心化维护与验证](02_Decentralized_Maintenance_and_Verification/README.md) | 领域模型、迁移、导入导出、部署，论文审核、管理员审批、结构校验 | GORM、SQLAlchemy、Alembic、MySQL |
 | [超导数据搜索与数据库发现](03_Superconductivity_Data_Search_and_Database_Discovery/README.md) | 本地与外部材料检索、结果分享导出、代表结构下载、Tc 统计图表 | Go API、主业务数据库、外部数据表 |
-| [超导发展知识图谱](04_Superconductivity_Development_Knowledge_Graph/README.md) | `graph.json` 快照展示与 Neo4j 多跳遍历 | Go API、Python KG API、Neo4j |
+| [超导论文引用发展知识图谱](04_Superconductivity_Development_Knowledge_Graph/README.md) | 基于 MySQL 引用事实的分类概览、搜索和分页展开 | Go API、Python Worker、GROBID、MySQL |
 | [检索增强 AI 问答](05_Retrieval-Augmented_AI_Question_Answering/README.md) | 混合检索、流式问答、证据展示和灵感探索 | Python FastAPI、MySQL、Qdrant、LLM 配置 |
 | [AI 辅助 Tc 估算](06_AI_Assisted_Tc_Estimation/README.md) | 根据 CONTCAR 与 PDOS 文件计算实验性 Tc 估算和解释特征 | pymatgen、NumPy、上传文件 |
 | [研究者社区论坛](07_Researcher_Community_Forum/README.md) | 注册登录身份体系与研究者贡献排行 | Go API、JWT、Redis |
@@ -26,7 +26,7 @@ flowchart LR
     U["用户与管理员"] --> FE["React/Vite 前端"]
     FE --> GO["Go Gin API"]
     GO --> DB["MySQL 主业务数据"]
-    GO --> KGJSON["graph.json 知识图谱快照"]
+    GO --> KGDB["MySQL 引用图投影"]
     GO --> PY["Python FastAPI"]
     PY --> RAG["RAG 服务"]
     RAG --> QD["Qdrant 向量库"]
@@ -44,14 +44,14 @@ flowchart LR
 
 ## 当前边界
 
-- Docker 部署入口使用 Nginx 前端、Go API、Python RAG、MySQL、Redis、Neo4j、Qdrant 七类服务；本地直接运行 Python FastAPI 时只包含 Python 注册的接口。
+- Docker 部署入口使用 Nginx 前端、Go API、Python RAG、上传 Worker、MySQL、Redis、Neo4j、Qdrant、GROBID 和迁移服务；本地直接运行 Python FastAPI 时只包含 Python 注册的接口。
 - 本地开发已移除 Docker 依赖：八个服务跑在宿主机，由 `make start` 编排，前端/Python/goserver 均支持热重载，数据存放仓库内 `.data/`。本地链路以 Vite 代理替代 Nginx；由于生产镜像会重新构建源码，本地改动不会因此丢失，但 nginx 特有的上传体积与缓冲配置、以及仅构建期生效的分包与预取优化在本地不成立，两条链路的行为差异见[部署与运行时](02_Decentralized_Maintenance_and_Verification/deployment-and-runtime.md)。使用说明见 `docs/local-dev.md`。
 - `backend/main.py` 当前 include `tc_predict`、`structures`、`rag`、`upload_tasks`、`kg` 五类 Python 路由；canonical `/api/upload-tasks` 由 Go 未匹配路由转发到 Python。邮箱验证、用户中心、公开资料与管理员治理由 Go 直接承载；图表组合导入/导出/复制/搜索等前端调用仍需按实际部署链路继续核验。
 - RAG 已从 Chroma 迁移到 Qdrant 封装，但部分兼容命名仍保留 `chroma` 字样。
 - 晶体结构后端 API 已实现，前端在论文详情中按材料状态下的 `structures`（来自 `structure_models`）展示结构，完整结构审核工作台仍未从当前路由中确认。当前全库无结构模型记录，只验证过空态。（[Issue #57](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/57)）
 - “社区”当前是公共图表、图表组合、贡献榜单和论文详情抽屉，不包含帖子、评论或关注等论坛能力。
 - Tc 估算由代码明确标记为实验页面，不构成模型科学有效性的保证。
-- Neo4j 知识图谱同步不在上传链路中自动触发，需独立运行 `backend/ingest/sync_neo4j.py`；自动触发机制待核验。
+- 引用发展图不依赖 Neo4j：GROBID 在上传 Worker 中解析参考文献，MySQL 保存原始记录和匹配状态，Go API 直接查询公开引用图。旧 Neo4j 图谱仍供历史材料/作者关系功能使用。
 - 账号身份与分级工作台变更已通过 Go 全量测试、Vitest、前端生产构建和 Alembic MySQL 离线迁移 SQL 生成；真实 SMTP、持久化 MySQL 与完整部署链路仍需在目标环境验收。
 - 界面支持简体中文与英文切换：顶栏头像左侧 `CH / EN` 控件，偏好存浏览器 `localStorage`（键 `sc-wiki.language`），默认中文，未登录也可切换；仅界面文案与固定枚举标签跟随语言。六个 LLM 叙述字段（`summary`、`keywords_tags`、`methodology`、`key_finding`、`research_motivation`、`knowledge_graph_title`）在数据层统一为英文存储，不随界面语言变化，无双语列。（[Issue #74](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/74)）
 

@@ -83,10 +83,10 @@ def _seed_paper(engine):
         )
         connection.execute(
             text(
-                "INSERT INTO papers (id, doi, title, authors, uploaded_by_user_id,"
+                "INSERT INTO papers (id, doi, title, authors, year, uploaded_by_user_id,"
                 " review_status, content_revision, approved_revision, paper_type,"
                 " research_materials) VALUES"
-                " (10, '10.0000/structure', 'Structure paper', :authors, 1,"
+                " (10, '10.0000/structure', 'Structure paper', :authors, 2024, 1,"
                 " 'pending', 1, NULL, 'experimental', :materials)"
             ),
             {"authors": json.dumps(["Author"]), "materials": json.dumps(["Si"])},

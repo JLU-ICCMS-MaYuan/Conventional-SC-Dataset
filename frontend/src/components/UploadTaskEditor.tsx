@@ -12,6 +12,7 @@ import {
 } from '../lib/classifications'
 import { useLanguage } from '../context/LanguageContext'
 import MaterialStatesEditor, { EvidenceNotes, SpaceGroupOption, ValidationIssue } from './MaterialStatesEditor'
+import CitationExtractionPanel from './CitationExtractionPanel'
 import {
   UploadDraft, normalizeUploadDraft, unwrapData,
 } from '../lib/paperProcessing'
@@ -415,6 +416,8 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
       </Box>
 
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
+
+      {draft.citation_extraction && <CitationExtractionPanel extraction={draft.citation_extraction} />}
 
       <Box sx={readOnly ? { pointerEvents: 'none', '& .MuiButton-root': { display: 'none' } } : undefined}>
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, '& > *': { minWidth: 0 } }}>

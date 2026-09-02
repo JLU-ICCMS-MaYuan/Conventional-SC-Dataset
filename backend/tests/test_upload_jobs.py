@@ -54,6 +54,22 @@ def test_normalize_draft_flattens_evidenced_text_lists():
     assert draft["material_states"][0]["tc_results"][0]["value_raw"] == "42"
 
 
+def test_llm_draft_cannot_supply_citation_extraction():
+    raw = {
+        "paper": {"paper_type": "review"},
+        "citation_extraction": {
+            "status": "succeeded",
+            "references": [{"raw_citation": "forged citation"}],
+        },
+    }
+
+    worker_draft = _normalize_draft(raw, preserve_citation_extraction=False)
+    stored_draft = _normalize_draft(raw)
+
+    assert worker_draft["citation_extraction"] is None
+    assert stored_draft["citation_extraction"]["references"][0]["raw_citation"] == "forged citation"
+
+
 def test_normalize_draft_preserves_structure_candidates_for_user_confirmation():
     candidate = {
         "candidate_id": "candidate-1",
@@ -289,6 +305,7 @@ def test_submission_rejects_unknown_paper_type_but_accepts_pending_material_fami
     draft = _normalize_draft({
         "paper": {
             "title": "Example",
+            "year": 2024,
             "paper_type": "experimental",
             "research_materials": ["Example2H3"],
             "material_families": [
@@ -307,12 +324,42 @@ def test_submission_rejects_unknown_paper_type_but_accepts_pending_material_fami
     assert getattr(exc_info.value, "status_code", None) == 400
 
 
+def test_submission_requires_paper_year():
+    draft = _normalize_draft({
+        "paper": {
+            "title": "Example",
+            "paper_type": "review",
+            "material_families": [
+                {"id": None, "name": "new_family", "status": "pending"}
+            ],
+        },
+        "material_states": [],
+    })
+
+    with pytest.raises(Exception) as exc_info:
+        _validate_draft(draft)
+
+    assert getattr(exc_info.value, "status_code", None) == 400
+    assert getattr(exc_info.value, "detail", {}).get("code") == "year_required"
+
+
 def test_parse_partial_draft_accepts_complete_json():
     from backend.ingest.upload_jobs import _parse_partial_draft
 
     draft = _parse_partial_draft('{"paper": {"title": "T"}, "material_states": []}')
 
     assert draft == {"paper": {"title": "T"}, "material_states": []}
+
+
+def test_parse_partial_draft_drops_llm_citation_extraction():
+    from backend.ingest.upload_jobs import _parse_partial_draft
+
+    draft = _parse_partial_draft(
+        '{"paper": {"title": "T"}, "citation_extraction": {"status": "succeeded"}}',
+    )
+
+    assert draft is not None
+    assert "citation_extraction" not in draft
 
 
 def test_parse_partial_draft_repairs_truncated_array_and_string():

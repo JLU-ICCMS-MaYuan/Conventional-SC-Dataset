@@ -96,6 +96,30 @@ describe('上传校对页布局与材料状态折叠', () => {
     expect(familyField).not.toHaveStyle({ gridColumn: '1 / -1' })
   })
 
+  it('参考文献解析默认只展示前五条，展开后才显示其余原始引文', async () => {
+    const draft = makeDraft([makeState()])
+    draft.citation_extraction = {
+      status: 'succeeded', parser_name: 'grobid', parser_version: '0.8.1', error_message: null,
+      references: Array.from({ length: 6 }, (_, index) => ({
+        reference_index: index,
+        raw_citation: `Raw citation ${index + 1}`,
+      })),
+    }
+    render(<UploadTaskEditor taskId={'a'.repeat(32)} onSubmitted={vi.fn()} draftOverride={draft} />)
+
+    const extraction = await screen.findByText('参考文献解析')
+    expect(screen.getByText('已解析 6 条参考文献')).toBeVisible()
+    expect(screen.getByText('Raw citation 1')).not.toBeVisible()
+
+    fireEvent.click(extraction)
+    expect(screen.getByText('Raw citation 1')).toBeVisible()
+    expect(screen.getByText('Raw citation 5')).toBeVisible()
+    expect(screen.queryByText('Raw citation 6')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '查看其余 1 条' }))
+    expect(screen.getByText('Raw citation 6')).toBeVisible()
+  })
+
   it('不显示研究材料输入框，关键词与研究方法在同一并排容器中且等高', async () => {
     render(<UploadTaskEditor taskId={'a'.repeat(32)} onSubmitted={vi.fn()} draftOverride={makeDraft([makeState()])} />)
 

@@ -107,30 +107,72 @@ type Paper struct {
 	CreatedAt         time.Time  `json:"created_at"`
 	UpdatedAt         time.Time  `json:"updated_at"`
 	// LLM 富化字段
-	Summary              *string `json:"summary"`
-	PaperType            *string `gorm:"size:20" json:"paper_type"`
-	TheoreticalSubtype   *string `gorm:"size:20" json:"theoretical_subtype"`
-	SuperconductorKind   string  `gorm:"size:32;not null;default:unknown" json:"superconductor_kind"`
-	KeywordsTags         *string `json:"keywords_tags"`
-	Methodology          *string `json:"methodology"`
-	KnowledgeGraphTitle  *string `gorm:"size:200" json:"knowledge_graph_title"`
-	KeyFinding           *string `json:"key_finding"`
-	ResearchMotivation   *string `json:"research_motivation"`
-	ResearchMaterials    *string `json:"research_materials"`
-	MaterialRelations    *string `json:"material_relations"`
-	BuildsOn             *string `json:"builds_on"`
+	Summary             *string `json:"summary"`
+	PaperType           *string `gorm:"size:20" json:"paper_type"`
+	TheoreticalSubtype  *string `gorm:"size:20" json:"theoretical_subtype"`
+	SuperconductorKind  string  `gorm:"size:32;not null;default:unknown" json:"superconductor_kind"`
+	KeywordsTags        *string `json:"keywords_tags"`
+	Methodology         *string `json:"methodology"`
+	KnowledgeGraphTitle *string `gorm:"size:200" json:"knowledge_graph_title"`
+	KeyFinding          *string `json:"key_finding"`
+	ResearchMotivation  *string `json:"research_motivation"`
+	ResearchMaterials   *string `json:"research_materials"`
+	MaterialRelations   *string `json:"material_relations"`
+	BuildsOn            *string `json:"builds_on"`
 
 	// 关联（GORM 预加载用）
-	Reviewer       *User              `gorm:"foreignKey:ReviewedBy" json:"-"`
-	Uploader       *User              `gorm:"foreignKey:UploadedBy" json:"-"`
-	Files          []PaperFile        `gorm:"foreignKey:PaperID,PaperRevision;references:ID,ContentRevision" json:"files,omitempty"`
-	Chunks         []PaperChunk       `gorm:"foreignKey:PaperID,PaperRevision;references:ID,ContentRevision" json:"chunks,omitempty"`
-	Evidences      []PaperEvidence    `gorm:"foreignKey:PaperID,PaperRevision;references:ID,ContentRevision" json:"evidences,omitempty"`
-	ReviewEvents   []PaperReviewEvent `gorm:"foreignKey:PaperID;references:ID" json:"review_events,omitempty"`
+	Reviewer            *User                 `gorm:"foreignKey:ReviewedBy" json:"-"`
+	Uploader            *User                 `gorm:"foreignKey:UploadedBy" json:"-"`
+	Files               []PaperFile           `gorm:"foreignKey:PaperID,PaperRevision;references:ID,ContentRevision" json:"files,omitempty"`
+	Chunks              []PaperChunk          `gorm:"foreignKey:PaperID,PaperRevision;references:ID,ContentRevision" json:"chunks,omitempty"`
+	Evidences           []PaperEvidence       `gorm:"foreignKey:PaperID,PaperRevision;references:ID,ContentRevision" json:"evidences,omitempty"`
+	ReviewEvents        []PaperReviewEvent    `gorm:"foreignKey:PaperID;references:ID" json:"review_events,omitempty"`
 	MaterialFamilyLinks []PaperMaterialFamily `gorm:"foreignKey:PaperID,PaperRevision;references:ID,ContentRevision" json:"-"`
 	MaterialFamilies    []MaterialFamily      `gorm:"-" json:"material_families,omitempty"`
-	MaterialStates []MaterialState    `gorm:"foreignKey:PaperID,PaperRevision;references:ID,ContentRevision" json:"material_states,omitempty"`
-	KeyProperties  []KeyProperty      `gorm:"foreignKey:PaperID,PaperRevision;references:ID,ContentRevision" json:"key_properties,omitempty"`
+	MaterialStates      []MaterialState       `gorm:"foreignKey:PaperID,PaperRevision;references:ID,ContentRevision" json:"material_states,omitempty"`
+	KeyProperties       []KeyProperty         `gorm:"foreignKey:PaperID,PaperRevision;references:ID,ContentRevision" json:"key_properties,omitempty"`
+}
+
+// PaperReferenceExtraction 记录当前论文版本的 GROBID 参考文献解析状态。
+// 引用事实由 MySQL 保存，Neo4j 不参与本表的写入或查询。
+type PaperReferenceExtraction struct {
+	PaperID       uint      `gorm:"primaryKey" json:"paper_id"`
+	PaperRevision uint      `gorm:"primaryKey" json:"paper_revision"`
+	Status        string    `gorm:"size:20;not null" json:"status"`
+	ParserName    string    `gorm:"size:32;not null" json:"parser_name"`
+	ParserVersion *string   `gorm:"size:64" json:"parser_version"`
+	ErrorMessage  *string   `json:"error_message"`
+	ProcessedAt   time.Time `json:"processed_at"`
+}
+
+// PaperReference 保留一条原始引文及其保守匹配结果；同一论文对的重复条目
+// 在图查询层去重，不能在此丢掉可复核的原文。
+type PaperReference struct {
+	ID              uint64     `gorm:"primaryKey" json:"id"`
+	PaperID         uint       `gorm:"not null;index" json:"paper_id"`
+	PaperRevision   uint       `gorm:"not null;index" json:"paper_revision"`
+	ReferenceIndex  int        `gorm:"not null" json:"reference_index"`
+	RawCitation     string     `gorm:"type:longtext;not null" json:"raw_citation"`
+	DOI             *string    `gorm:"size:255;index" json:"doi"`
+	Title           *string    `json:"title"`
+	NormalizedTitle *string    `gorm:"size:512;index" json:"normalized_title"`
+	Authors         *string    `gorm:"type:json" json:"authors"`
+	Year            *int       `gorm:"index" json:"year"`
+	CitedPaperID    *uint      `gorm:"index" json:"cited_paper_id"`
+	MatchStatus     string     `gorm:"size:20;not null" json:"match_status"`
+	MatchMethod     *string    `gorm:"size:20" json:"match_method"`
+	MatchCheckedAt  *time.Time `json:"match_checked_at"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+}
+
+// PaperGraphMark 是管理员确认的“源头”或“突破”标记，不等同于自动引用边。
+type PaperGraphMark struct {
+	PaperID         uint      `gorm:"primaryKey" json:"paper_id"`
+	MarkType        string    `gorm:"primaryKey;size:20" json:"mark_type"`
+	CreatedByUserID uint      `gorm:"not null" json:"created_by_user_id"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 // PaperFile 当前论文 revision 的正文、补充材料或附件。

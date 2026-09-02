@@ -70,10 +70,10 @@ def _seed_lineage(engine):
             text(
                 """
                 INSERT INTO papers
-                    (id, doi, title, authors, uploaded_by_user_id, review_status,
+                    (id, doi, title, authors, year, uploaded_by_user_id, review_status,
                      content_revision, approved_revision)
                 VALUES
-                    (1, '10.0000/cascade', 'Cascade paper', :authors, 1,
+                    (1, '10.0000/cascade', 'Cascade paper', :authors, 2024, 1,
                      'approved', 1, 1)
                 """
             ),

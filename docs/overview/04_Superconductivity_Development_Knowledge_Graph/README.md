@@ -1,28 +1,34 @@
-# 超导发展知识图谱
+# 超导论文引用发展知识图谱
 
 ## 功能边界
 
-该功能负责以图结构组织论文、材料与物性之间的关系，支持图谱快照展示与 Neo4j 多跳遍历查询。它不负责图谱数据的自动生产——当前 Neo4j 同步（`backend/ingest/sync_neo4j.py`）不在上传链路中自动触发。
+本功能只展示 SC-Wiki 已审核通过的论文，并用 MySQL 中由 GROBID 解析、可追溯的引用事实组织论文之间的上游和下游关系。Material family 是论文级多选分类，Superconductor type 是论文级单选分类；两者都沿用现有审核分类体系。
 
 ## 小功能目录
 
 | 小功能 | 职责 | 依赖 |
 | --- | --- | --- |
-| [超导知识图谱](superconductivity-knowledge-graph.md) | 展示 `graph.json` 快照和 Neo4j 工具查询 | Go API、Python KG API、Neo4j |
-| [知识图谱数据同步](knowledge-graph-data-sync.md) | 审批通过后自动同步到 Neo4j，或全量同步历史数据 | MySQL、Neo4j、审批流程 |
-| [知识图谱边关系](knowledge-graph-edges.md) | 定义和生成论文、材料、作者间的关系边 | AI 提取、同步脚本 |
-| [知识图谱节点标题](knowledge-graph-node-titles.md) | 为 Paper 节点生成凝练标题，替代冗长原标题 | AI 生成、数据库字段 |
+| [超导知识图谱](superconductivity-knowledge-graph.md) | 分类概览、节点搜索、引用边和分页展开 | Go API、MySQL、vis-network |
+| [知识图谱数据同步](knowledge-graph-data-sync.md) | 上传时解析引用、提交保存、审核后匹配和历史重试 | Python Worker、GROBID、MySQL、Redis |
+| [知识图谱边关系](knowledge-graph-edges.md) | 定义真实引用边、节点去重和被引计数 | `paper_references`、当前论文版本 |
+| [知识图谱节点标题](knowledge-graph-node-titles.md) | 提供节点短标题并在缺失时回退原标题 | `papers.knowledge_graph_title` |
 
-## 功能组成
+## 当前能力
 
-```text
-超导发展知识图谱
-├── 超导知识图谱（graph.json 快照 + Neo4j Paper/Material/Property 遍历）
-├── 知识图谱数据同步（审批自动同步 + 全量同步脚本）
-├── 知识图谱边关系（BUILDS_ON/RELATES_TO/STUDIES/AUTHORED/SHARES_STRUCTURE）
-└── 知识图谱节点标题（AI 生成凝练标题 + 优雅降级）
-```
+- `/knowledge` 支持 Material family 多选、常规/非常规 Superconductor type 组合筛选，以及标题或 DOI 搜索后固定节点。
+- 节点按 `paper_id` 去重，圆点大小按库内已审核下游论文的去重数量缩放。
+- 箭头方向为“引用论文 → 被引论文”。点击节点后，上游和下游分别按被引次数排序，每次最多请求 5 篇，并显示剩余数量。
+- 通过 GROBID 保存 DOI、题名、作者、年份和原始引文。未匹配引文保留在数据库，目标论文以后审核通过时自动重试。
+- 管理员和超级管理员可以人工维护 `origin`（源头）与 `breakthrough`（突破）标记；系统不会用引用数自动认定里程碑。
 
-## 关联关系
+## 数据与兼容边界
 
-Go 服务启动时加载 `graph.json` 快照提供前端图谱展示；Python `/api/kg` 提供 `traverse`、`path` 等多跳查询，数据来自 Neo4j。图谱内容来源于 01 上传并经 02 审核的论文数据，审批通过后自动同步到 Neo4j（增量），或手动运行 `sync_neo4j.py` 全量同步。节点标题由 AI 在论文提取时自动生成（15-30 字凝练版），边关系包括论文依赖（`BUILDS_ON`，当前目标为占位符）、论文相关性（`RELATES_TO`，未实现）、论文研究材料（`STUDIES`）、作者署名（`AUTHORED`）和材料结构相似性（`SHARES_STRUCTURE`）。
+MySQL 是引用事实和公开图查询的唯一来源。旧 Neo4j、`graph.json`、`builds_on`、`RELATES_TO` 和材料/作者关系仍可能服务于历史功能，但不参与本引用图的边生成、计数或公开查询。图查询不要求数据库无环，而是在遍历和前端数据集内按 `paper_id` 去重并避免重复展开。
+
+## 相关实现
+
+- Go API：`goserver/handlers/knowledge_graph.go`、`goserver/handlers/paper_graph_marks.go`
+- Python 解析与匹配：`backend/services/citation_graph.py`、`backend/ingest/upload_jobs.py`
+- 前端：`frontend/src/pages/KnowledgeGraphPage.tsx`
+- Schema：`alembic/versions/20260902_0004_paper_citation_graph.py`
+- 规格：`docs/specs/81-citation-graph/`

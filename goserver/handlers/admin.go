@@ -170,6 +170,10 @@ func UpdatePaper(c *gin.Context) {
 
 	// 审核状态只能通过 ReviewPaper 修改，避免普通编辑绕过审核动作。
 	updates := paperUpdatesFromBody(body)
+	if value, exists := updates["year"]; exists && !validPaperYear(value) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "year 必须是有效年份", "code": "year_required"})
+		return
+	}
 	if value, exists := updates["superconductor_kind"]; exists {
 		kind, ok := value.(string)
 		if !ok || !validSuperconductorKind(kind) {
@@ -443,6 +447,10 @@ func ReviewPaper(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "论文不存在"})
 		return
 	}
+	if body.Status == reviewStatusApproved && paper.Year == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "论文年份不能为空", "code": "year_required"})
+		return
+	}
 
 	// 获取当前用户 email（从 JWT 中间件存入）
 	email, exists := c.Get("user_email")
@@ -492,15 +500,15 @@ func ReviewPaper(c *gin.Context) {
 				context = json.RawMessage(`{}`)
 			}
 			classificationSnapshot, err = json.Marshal(struct {
-				Context             json.RawMessage               `json:"context"`
+				Context            json.RawMessage               `json:"context"`
 				SuperconductorKind string                        `json:"superconductor_kind"`
-				MaterialFamilies    []classificationSnapshotTerm  `json:"material_families"`
-				MaterialStates      []classificationSnapshotState `json:"material_states"`
+				MaterialFamilies   []classificationSnapshotTerm  `json:"material_families"`
+				MaterialStates     []classificationSnapshotState `json:"material_states"`
 			}{
-				Context:             context,
+				Context:            context,
 				SuperconductorKind: snapshot.SuperconductorKind,
-				MaterialFamilies:    snapshot.MaterialFamilies,
-				MaterialStates:      snapshot.MaterialStates,
+				MaterialFamilies:   snapshot.MaterialFamilies,
+				MaterialStates:     snapshot.MaterialStates,
 			})
 			if err != nil {
 				return err
@@ -556,6 +564,22 @@ func ReviewPaper(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "审核完成", "paper": paper})
+}
+
+func validPaperYear(value interface{}) bool {
+	switch year := value.(type) {
+	case float64:
+		return year >= 1 && year <= 9999 && math.Trunc(year) == year
+	case int:
+		return year >= 1 && year <= 9999
+	case int64:
+		return year >= 1 && year <= 9999
+	case json.Number:
+		parsed, err := strconv.Atoi(string(year))
+		return err == nil && parsed >= 1 && parsed <= 9999
+	default:
+		return false
+	}
 }
 
 type classificationIncompleteError struct {

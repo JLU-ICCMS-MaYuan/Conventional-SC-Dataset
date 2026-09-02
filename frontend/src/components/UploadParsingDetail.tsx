@@ -6,7 +6,7 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import { api } from '../lib/api'
-import { PROCESSING_STAGES, UploadDraft, unwrapData } from '../lib/paperProcessing'
+import { CitationExtractionStatus, PROCESSING_STAGES, UploadDraft, unwrapData } from '../lib/paperProcessing'
 import { useLanguage } from '../context/LanguageContext'
 import UploadTaskEditor from './UploadTaskEditor'
 
@@ -36,6 +36,9 @@ interface ParsingDetail {
   }>
   chunks: ChunkDetail[]
   partial_draft?: UploadDraft | null
+  citation_extraction_status?: CitationExtractionStatus | null
+  citation_extraction_error?: string | null
+  citation_reference_count?: number
   summary: { status: string; completed: number; total: number }
   next_poll_ms: number | null
 }
@@ -142,6 +145,17 @@ const UploadParsingDetail: React.FC<Props> = ({ taskId, onSubmitted = () => unde
                 error: detail.processing_error || t('upload.unknownError'),
               })}
             </Alert>
+          )}
+          {detail.status !== 'ready' && detail.citation_extraction_status && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="subtitle2" fontWeight={700}>
+                {t('upload.citationExtractionTitle')}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {t(`upload.citationStatus.${detail.citation_extraction_status}`)} · {t('upload.citationReferenceCount', { count: detail.citation_reference_count || 0 })}
+              </Typography>
+              {detail.citation_extraction_error && <Alert severity="info" sx={{ mt: 1 }}>{detail.citation_extraction_error}</Alert>}
+            </Box>
           )}
           <Tabs
             value={tab}

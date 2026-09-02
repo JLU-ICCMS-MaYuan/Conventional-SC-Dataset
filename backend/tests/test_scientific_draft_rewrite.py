@@ -113,10 +113,10 @@ def _seed_paper(engine, *, review_status: str, paper_id: int = 10):
         )
         connection.execute(
             text(
-                "INSERT INTO papers (id, doi, title, authors, uploaded_by_user_id,"
+                "INSERT INTO papers (id, doi, title, authors, year, uploaded_by_user_id,"
                 " review_status, content_revision, approved_revision, paper_type,"
                 " research_materials) VALUES"
-                " (:id, '10.0000/rewrite', 'Rewrite paper', :authors, 1,"
+                " (:id, '10.0000/rewrite', 'Rewrite paper', :authors, 2024, 1,"
                 " :status, 1, :approved, 'experimental', :materials)"
             ),
             {
@@ -494,6 +494,71 @@ def test_bump_cascades_revision_to_lineage_tables(migrated_engine):
     for table in ("paper_files", "paper_chunks", "paper_evidences", "material_states"):
         assert _revisions(engine, table) == [2], f"{table} 未级联到新版本"
         assert _count(engine, table) == before[table], f"{table} 行数不应变化"
+
+
+def test_approved_rewrite_reextracts_references_for_new_revision(migrated_engine, monkeypatch):
+    """升版不继承旧引用，必须把新 GROBID 结果写入新版本。"""
+    engine = migrated_engine
+    _seed_paper(engine, review_status="approved")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO paper_reference_extractions"
+                " (paper_id, paper_revision, status, parser_name)"
+                " VALUES (10, 1, 'succeeded', 'grobid')"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO paper_references"
+                " (paper_id, paper_revision, reference_index, raw_citation,"
+                "  title, normalized_title, match_status)"
+                " VALUES (10, 1, 0, 'old citation', 'Old paper', 'old paper', 'unmatched')"
+            )
+        )
+
+    from backend.services import citation_graph
+
+    parsed_paths = []
+
+    def fake_extract(pdf_path):
+        parsed_paths.append(pdf_path)
+        return {
+            "status": "succeeded",
+            "parser_name": "grobid",
+            "parser_version": "test",
+            "error_message": None,
+            "references": [
+                {
+                    "reference_index": 0,
+                    "raw_citation": "new citation",
+                    "title": "New paper",
+                    "year": 2021,
+                }
+            ],
+        }
+
+    monkeypatch.setattr(citation_graph, "extract_references_from_pdf", fake_extract)
+    data, error = _call_endpoint(_rewrite_payload())
+    assert error is None, error
+    assert data["data"]["content_revision"] == 2
+    assert parsed_paths == [Path("/papers/10/paper.pdf")]
+
+    with engine.connect() as connection:
+        extraction = connection.execute(
+            text(
+                "SELECT paper_revision, status, parser_version"
+                " FROM paper_reference_extractions WHERE paper_id = 10"
+            )
+        ).one()
+        assert tuple(extraction) == (2, "succeeded", "test")
+        references = connection.execute(
+            text(
+                "SELECT paper_revision, raw_citation"
+                " FROM paper_references WHERE paper_id = 10 ORDER BY reference_index"
+            )
+        ).fetchall()
+        assert [tuple(row) for row in references] == [(2, "new citation")]
 
 
 def test_bump_writes_review_event(migrated_engine):

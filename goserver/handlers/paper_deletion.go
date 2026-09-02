@@ -38,6 +38,18 @@ var ErrPaperNotFound = errors.New("论文不存在")
 //
 // superconductors 与 material_families 是跨论文共享的目录数据，不在此删除。
 func cascadeDeleteInDB(tx *gorm.DB, paperID uint) error {
+	// 引用事实同时可能以本论文为源端或目标端；先删记录才不会被
+	// paper_references.cited_paper_id 的 RESTRICT 外键拦住。
+	if err := tx.Where("paper_id = ? OR cited_paper_id = ?", paperID, paperID).Delete(&models.PaperReference{}).Error; err != nil {
+		return fmt.Errorf("删除 paper_references 失败: %w", err)
+	}
+	if err := tx.Where("paper_id = ?", paperID).Delete(&models.PaperReferenceExtraction{}).Error; err != nil {
+		return fmt.Errorf("删除 paper_reference_extractions 失败: %w", err)
+	}
+	if err := tx.Where("paper_id = ?", paperID).Delete(&models.PaperGraphMark{}).Error; err != nil {
+		return fmt.Errorf("删除 paper_graph_marks 失败: %w", err)
+	}
+
 	// 按 paper_id 直接删除的表，严格按依赖逆序排列。
 	steps := []struct {
 		table string
@@ -55,7 +67,6 @@ func cascadeDeleteInDB(tx *gorm.DB, paperID uint) error {
 		// 3. contexts：引用 structure_models 与 material_states
 		{"calculation_contexts", &models.CalculationContext{}},
 		{"experimental_contexts", &models.ExperimentalContext{}},
-
 	}
 	for _, step := range steps {
 		if err := tx.Where("paper_id = ?", paperID).Delete(step.model).Error; err != nil {
