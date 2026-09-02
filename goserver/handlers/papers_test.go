@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -71,6 +72,14 @@ func TestValidSuperconductorKind(t *testing.T) {
 		if validSuperconductorKind(value) {
 			t.Fatalf("%q 不应为有效 superconductor_kind", value)
 		}
+	}
+}
+
+func TestMaterialClassificationUpdateRejectsLegacySuperconductorKind(t *testing.T) {
+	var update materialClassificationUpdate
+	err := json.Unmarshal([]byte(`{"id":1,"superconductor_kind":"conventional"}`), &update)
+	if !errors.Is(err, errLegacyClassificationContract) {
+		t.Fatalf("旧状态级 superconductor_kind 应被拒绝，实际错误：%v", err)
 	}
 }
 

@@ -418,6 +418,10 @@ func ReviewPaper(c *gin.Context) {
 		ClassificationContext json.RawMessage                `json:"classification_context"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
+		if errors.Is(err, errLegacyClassificationContract) {
+			c.JSON(http.StatusBadRequest, gin.H{"code": "legacy_classification_contract", "error": "superconductor_kind 必须设置在论文级"})
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
 		return
 	}
