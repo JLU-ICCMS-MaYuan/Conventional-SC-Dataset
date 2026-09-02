@@ -491,6 +491,7 @@ func paperToDict(p models.Paper) gin.H {
 		"summary":               p.Summary,
 		"paper_type":            p.PaperType,
 		"theoretical_subtype":   p.TheoreticalSubtype,
+		"superconductor_kind":   p.SuperconductorKind,
 		"keywords_tags":         p.KeywordsTags,
 		"methodology":           p.Methodology,
 		"knowledge_graph_title": p.KnowledgeGraphTitle,
@@ -541,7 +542,6 @@ func materialStatesToDict(states []models.MaterialState) []gin.H {
 			"id": state.ID, "material": state.Superconductor.ChemicalFormula,
 			"structure_families": structures,
 			"element_count": state.ElementCount, "material_dimensionality": state.MaterialDimensionality,
-			"superconductor_kind": state.SuperconductorKind,
 			"crystal_system":      state.CrystalSystem,
 			"state_kind":          state.StateKind,
 			// 压强单臂区间：缺失的一侧保持 null，不补造边界（Issue #54 入库语义）。

@@ -34,6 +34,7 @@ var (
 	paperUpdateFields = []string{
 		"doi", "title", "authors", "journal", "volume", "pages", "year", "abstract",
 		"summary", "paper_type", "theoretical_subtype", "keywords_tags",
+		"superconductor_kind",
 		"methodology", "key_finding", "research_motivation", "research_materials",
 		"material_relations", "builds_on", "knowledge_graph_title",
 	}
@@ -169,6 +170,13 @@ func UpdatePaper(c *gin.Context) {
 
 	// 审核状态只能通过 ReviewPaper 修改，避免普通编辑绕过审核动作。
 	updates := paperUpdatesFromBody(body)
+	if value, exists := updates["superconductor_kind"]; exists {
+		kind, ok := value.(string)
+		if !ok || !validSuperconductorKind(kind) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "superconductor_kind 无效"})
+			return
+		}
+	}
 
 	var paper models.Paper
 	err = database.DB.Transaction(func(tx *gorm.DB) error {
@@ -404,6 +412,7 @@ func ReviewPaper(c *gin.Context) {
 		Comment               string                         `json:"comment"`
 		ReviewRequestID       string                         `json:"review_request_id"`
 		AdminInternalNote     *string                        `json:"admin_internal_note"`
+		SuperconductorKind    string                         `json:"superconductor_kind"`
 		MaterialFamilies      []classificationSelection      `json:"material_families"`
 		MaterialStates        []materialClassificationUpdate `json:"material_states"`
 		ClassificationContext json.RawMessage                `json:"classification_context"`
@@ -466,7 +475,7 @@ func ReviewPaper(c *gin.Context) {
 		var classificationSnapshot json.RawMessage
 		if body.Status == reviewStatusApproved {
 			snapshot, err := applyPaperClassifications(
-				tx, &paper, user.ID, body.MaterialFamilies, body.MaterialStates,
+				tx, &paper, user.ID, body.SuperconductorKind, body.MaterialFamilies, body.MaterialStates,
 			)
 			if err != nil {
 				return err
@@ -479,13 +488,15 @@ func ReviewPaper(c *gin.Context) {
 				context = json.RawMessage(`{}`)
 			}
 			classificationSnapshot, err = json.Marshal(struct {
-				Context          json.RawMessage               `json:"context"`
-				MaterialFamilies []classificationSnapshotTerm  `json:"material_families"`
-				MaterialStates   []classificationSnapshotState `json:"material_states"`
+				Context             json.RawMessage               `json:"context"`
+				SuperconductorKind string                        `json:"superconductor_kind"`
+				MaterialFamilies    []classificationSnapshotTerm  `json:"material_families"`
+				MaterialStates      []classificationSnapshotState `json:"material_states"`
 			}{
-				Context: context,
-				MaterialFamilies: snapshot.MaterialFamilies,
-				MaterialStates: snapshot.MaterialStates,
+				Context:             context,
+				SuperconductorKind: snapshot.SuperconductorKind,
+				MaterialFamilies:    snapshot.MaterialFamilies,
+				MaterialStates:      snapshot.MaterialStates,
 			})
 			if err != nil {
 				return err

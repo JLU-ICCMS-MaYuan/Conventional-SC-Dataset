@@ -59,10 +59,15 @@ func TestPropertyModelUsesRawFirstTargetColumns(t *testing.T) {
 }
 
 func TestIdentityFieldsLiveAtOneScientificLevel(t *testing.T) {
+	paper := parseModel(t, &Paper{})
 	superconductor := parseModel(t, &Superconductor{})
 	state := parseModel(t, &MaterialState{})
 	structure := parseModel(t, &StructureModel{})
 
+	requireDBField(t, paper, "SuperconductorKind", "superconductor_kind")
+	if field := state.LookUpField("SuperconductorKind"); field != nil && field.DBName != "" {
+		t.Fatal("MaterialState must not expose superconductor_kind")
+	}
 	requireDBField(t, superconductor, "IsotopeSignature", "isotope_signature")
 	if field := state.LookUpField("PhaseLabel"); field != nil && field.DBName != "" {
 		t.Fatal("MaterialState must not expose phase_label")

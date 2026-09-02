@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -20,6 +21,59 @@ func TestPaperToDictIncludesTheoreticalSubtype(t *testing.T) {
 	}
 }
 
+func TestPaperToDictIncludesPaperLevelSuperconductorKind(t *testing.T) {
+	result := paperToDict(models.Paper{SuperconductorKind: "conventional"})
+	if got := result["superconductor_kind"]; got != "conventional" {
+		t.Fatalf("superconductor_kind = %#v, want conventional", got)
+	}
+}
+
+func TestPaperClassificationSnapshotPlacesSuperconductorKindAtPaperLevel(t *testing.T) {
+	snapshot := paperClassificationSnapshot{
+		SuperconductorKind: "unconventional",
+		MaterialStates: []classificationSnapshotState{{
+			ID: 1, MaterialDimensionality: "three_dimensional", CrystalSystem: "cubic",
+		}},
+	}
+	if snapshot.SuperconductorKind != "unconventional" {
+		t.Fatalf("snapshot superconductor_kind = %q", snapshot.SuperconductorKind)
+	}
+	if len(snapshot.MaterialStates) != 1 || snapshot.MaterialStates[0].CrystalSystem != "cubic" {
+		t.Fatalf("状态分类快照异常：%#v", snapshot.MaterialStates)
+	}
+	encoded, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(encoded, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if got := payload["superconductor_kind"]; got != "unconventional" {
+		t.Fatalf("快照顶层 superconductor_kind = %#v", got)
+	}
+	states, ok := payload["material_states"].([]any)
+	if !ok || len(states) != 1 {
+		t.Fatalf("快照 material_states = %#v", payload["material_states"])
+	}
+	if _, exists := states[0].(map[string]any)["superconductor_kind"]; exists {
+		t.Fatal("审核快照的 material_states 不得包含 superconductor_kind")
+	}
+}
+
+func TestValidSuperconductorKind(t *testing.T) {
+	for _, value := range []string{"conventional", "unconventional", "unknown"} {
+		if !validSuperconductorKind(value) {
+			t.Fatalf("%q 应为有效 superconductor_kind", value)
+		}
+	}
+	for _, value := range []string{"", "mixed", "conventional "} {
+		if validSuperconductorKind(value) {
+			t.Fatalf("%q 不应为有效 superconductor_kind", value)
+		}
+	}
+}
+
 func TestPaperUpdateFieldsExcludeReviewState(t *testing.T) {
 	fields := make(map[string]bool, len(paperUpdateFields))
 	for _, field := range paperUpdateFields {
@@ -30,6 +84,9 @@ func TestPaperUpdateFieldsExcludeReviewState(t *testing.T) {
 	}
 	if !fields["theoretical_subtype"] {
 		t.Fatal("论文更新必须支持 theoretical_subtype")
+	}
+	if !fields["superconductor_kind"] {
+		t.Fatal("论文更新必须支持论文级 superconductor_kind")
 	}
 	if !fields["knowledge_graph_title"] {
 		t.Fatal("管理员论文更新必须支持 knowledge_graph_title")

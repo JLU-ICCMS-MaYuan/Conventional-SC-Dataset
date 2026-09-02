@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -30,6 +31,7 @@ var (
 	errClassificationInvalid      = errors.New("classification selection invalid")
 	errClassificationNotFound     = errors.New("classification target not found")
 	errClassificationNameConflict = errors.New("classification name conflicts with catalog")
+	errLegacyClassificationContract = errors.New("legacy material-state superconductor_kind")
 )
 
 type classificationSelection struct {
@@ -49,6 +51,23 @@ type materialClassificationUpdate struct {
 	StructureFamilies      []structureClassificationSelection `json:"structure_families"`
 }
 
+func (update *materialClassificationUpdate) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if _, exists := raw["superconductor_kind"]; exists {
+		return errLegacyClassificationContract
+	}
+	type decodedMaterialClassificationUpdate materialClassificationUpdate
+	var decoded decodedMaterialClassificationUpdate
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	*update = materialClassificationUpdate(decoded)
+	return nil
+}
+
 type classificationSnapshotTerm struct {
 	ID        uint   `json:"id"`
 	Name      string `json:"name"`
@@ -58,12 +77,12 @@ type classificationSnapshotTerm struct {
 type classificationSnapshotState struct {
 	ID                     uint64                       `json:"id"`
 	MaterialDimensionality string                       `json:"material_dimensionality"`
-	SuperconductorKind     string                       `json:"superconductor_kind"`
 	CrystalSystem          string                       `json:"crystal_system"`
 	StructureFamilies      []classificationSnapshotTerm `json:"structure_families"`
 }
 
 type paperClassificationSnapshot struct {
+	SuperconductorKind string                       `json:"superconductor_kind"`
 	MaterialFamilies []classificationSnapshotTerm  `json:"material_families"`
 	MaterialStates   []classificationSnapshotState `json:"material_states"`
 }
@@ -128,6 +147,15 @@ func validMaterialDimensionality(value string) bool {
 		}
 	}
 	return false
+}
+
+func validSuperconductorKind(value string) bool {
+	switch value {
+	case "conventional", "unconventional", "unknown":
+		return true
+	default:
+		return false
+	}
 }
 
 func resolveMaterialFamily(tx *gorm.DB, actorID uint, selection classificationSelection) (*models.MaterialFamily, error) {
@@ -232,6 +260,7 @@ func applyPaperClassifications(
 	tx *gorm.DB,
 	paper *models.Paper,
 	actorID uint,
+	superconductorKind string,
 	materialFamilies []classificationSelection,
 	updates []materialClassificationUpdate,
 ) (paperClassificationSnapshot, error) {
@@ -239,9 +268,13 @@ func applyPaperClassifications(
 	if revision == 0 {
 		revision = 1
 	}
-	if len(materialFamilies) == 0 {
+	if !validSuperconductorKind(superconductorKind) || len(materialFamilies) == 0 {
 		return paperClassificationSnapshot{}, errClassificationInvalid
 	}
+	if err := tx.Model(paper).Update("superconductor_kind", superconductorKind).Error; err != nil {
+		return paperClassificationSnapshot{}, err
+	}
+	paper.SuperconductorKind = superconductorKind
 	seenFamilies := make(map[uint]bool, len(materialFamilies))
 	familySnapshots := make([]classificationSnapshotTerm, 0, len(materialFamilies))
 	for _, selection := range materialFamilies {
@@ -341,12 +374,12 @@ func applyPaperClassifications(
 		snapshots = append(snapshots, classificationSnapshotState{
 			ID:                     state.ID,
 			MaterialDimensionality: update.MaterialDimensionality,
-			SuperconductorKind:     state.SuperconductorKind,
 			CrystalSystem:          state.CrystalSystem,
 			StructureFamilies:      structureSnapshot,
 		})
 	}
 	return paperClassificationSnapshot{
+		SuperconductorKind: superconductorKind,
 		MaterialFamilies: familySnapshots,
 		MaterialStates: snapshots,
 	}, nil

@@ -110,6 +110,7 @@ type Paper struct {
 	Summary              *string `json:"summary"`
 	PaperType            *string `gorm:"size:20" json:"paper_type"`
 	TheoreticalSubtype   *string `gorm:"size:20" json:"theoretical_subtype"`
+	SuperconductorKind   string  `gorm:"size:32;not null;default:unknown" json:"superconductor_kind"`
 	KeywordsTags         *string `json:"keywords_tags"`
 	Methodology          *string `json:"methodology"`
 	KnowledgeGraphTitle  *string `gorm:"size:200" json:"knowledge_graph_title"`
@@ -275,7 +276,6 @@ type MaterialState struct {
 	SuperconductorID       uint   `gorm:"not null;index" json:"superconductor_id"`
 	ElementCount           *int16 `json:"element_count"`
 	MaterialDimensionality string `gorm:"size:32;not null;default:unknown" json:"material_dimensionality"`
-	SuperconductorKind     string `gorm:"size:32;not null;default:unknown" json:"superconductor_kind"`
 	CrystalSystem          string `gorm:"size:32;not null;default:unknown" json:"crystal_system"`
 	// 必须显式指定列名：GORM 默认命名策略会把 GPa 拆成 g_pa，
 	// 生成 pressure_value_g_pa 这类并不存在的列，导致压强字段读不出来。

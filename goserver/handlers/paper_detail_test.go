@@ -54,7 +54,7 @@ func seedPaperFour(t *testing.T, db *gorm.DB, reviewStatus string) {
 	t.Helper()
 	if err := db.Create(&models.Paper{
 		ID: 4, DOI: strPtr("10.1073/pnas.1704505114"), Title: strPtr("Potential high-Tc superconducting lanthanum and yttrium hydrides"),
-		ReviewStatus: reviewStatus, ContentRevision: 1,
+		ReviewStatus: reviewStatus, ContentRevision: 1, SuperconductorKind: "conventional",
 	}).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func seedPaperFour(t *testing.T, db *gorm.DB, reviewStatus string) {
 	}
 	if err := db.Create(&models.MaterialState{
 		ID: 1, PaperID: 4, PaperRevision: 1, SuperconductorID: 1,
-		MaterialDimensionality: "bulk", SuperconductorKind: "unknown",
+		MaterialDimensionality: "bulk",
 		CrystalSystem: "cubic", StateKind: "theoretical",
 		PressureValueGPa: f64Ptr(250), PressureMinGPa: f64Ptr(200), PressureMaxGPa: nil,
 		PressureRaw:              strPtr("above 200 GPa"),
@@ -188,6 +188,12 @@ func TestPaperDetailReturnsFullMaterialStateFields(t *testing.T) {
 
 	_, body := getPaperDetail(t, "4")
 	state := firstMaterialState(t, body)
+	if body["superconductor_kind"] != "conventional" {
+		t.Fatalf("论文级 superconductor_kind = %#v，期望 conventional", body["superconductor_kind"])
+	}
+	if _, exists := state["superconductor_kind"]; exists {
+		t.Fatal("material_states 不得返回 superconductor_kind")
+	}
 
 	for field, want := range map[string]any{
 		"pressure_value_gpa":          float64(250),
@@ -308,7 +314,7 @@ func TestPaperDetailUsesEmptyArraysWhenNoScientificData(t *testing.T) {
 	}
 	if err := db.Create(&models.MaterialState{
 		ID: 9, PaperID: 7, PaperRevision: 1, SuperconductorID: 2,
-		MaterialDimensionality: "bulk", SuperconductorKind: "unknown",
+		MaterialDimensionality: "bulk",
 		CrystalSystem: "unknown", StateKind: "unknown",
 	}).Error; err != nil {
 		t.Fatal(err)
@@ -499,7 +505,13 @@ func TestAdminPaperDetailPreloadsScientificData(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
 		t.Fatalf("响应不是 JSON：%s", response.Body.String())
 	}
+	if body["superconductor_kind"] != "conventional" {
+		t.Fatalf("管理端论文级 superconductor_kind = %#v，期望 conventional", body["superconductor_kind"])
+	}
 	state := firstMaterialState(t, body)
+	if _, exists := state["superconductor_kind"]; exists {
+		t.Fatal("管理端 material_states 不得返回 superconductor_kind")
+	}
 
 	if tcResults, ok := state["tc_results"].([]any); !ok || len(tcResults) == 0 {
 		t.Fatalf("tc_results 未预加载：%#v", state["tc_results"])
