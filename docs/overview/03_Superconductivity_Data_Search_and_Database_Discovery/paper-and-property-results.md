@@ -27,7 +27,7 @@
 
 - Go 搜索与详情的读取投影已切换到条件化表，与上传写入契约对齐；新旧契约并存阶段结束。（[Issue #57](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/57)）
 - 结果准确性取决于 `tc_results`、`material_states`、`superconductors`、`papers` 的关联关系和审核状态。
-- `superconductor_records` 模型仍存在，但当前 Go 搜索主链路使用 `tc_results` 与 `material_states`。
+- `superconductor_records` 仅在 `backend/models.py` 中保留模型定义，运行数据库已无该表（`alembic/versions/20260821_0008_add_superconducting_data_model.py` 已 `drop_table`）。任何读取路径都不得再查该表：曾有图表接口继续查它而未检查查询错误，导致接口长期静默返回空数组。（[Issue #72](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/72)）
 - 外部来源详情字段不与本地论文字段完全等价，前端会按来源差异兜底显示缺失字段。
 
 ## 代码与测试
