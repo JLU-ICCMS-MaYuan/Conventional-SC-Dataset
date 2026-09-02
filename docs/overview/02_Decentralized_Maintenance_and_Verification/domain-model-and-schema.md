@@ -13,7 +13,7 @@
 - `MaterialState` 表达论文当前 revision 中的材料状态；`StructureModel`、
   `CalculationContext` 和 `ExperimentalContext` 分别表达结构、理论计算和实验测量上下文。
 - `MaterialState.reported_space_group_symbol/number` 保存论文报告但没有完整结构几何时的空间群事实；只有存在真实结构文本时才创建 `StructureModel`，不会为凑必填字段伪造 CIF/POSCAR。
-- `MaterialState` 不再包含 `phase_label` 或材料家族外键；空间群不属于分类树。Material family 是论文 revision 级多选分类，结构家族仍是材料状态级多选标签，两者在论文审核内确认。
+- `MaterialState` 不再包含 `phase_label`、材料家族外键或 `superconductor_kind`；空间群不属于分类树。Material family 是论文 revision 级多选分类，`Paper.superconductor_kind` 是论文 revision 级单选（`conventional`、`unconventional`、`unknown`），结构家族仍是材料状态级多选标签；三者在论文审核内确认。
 - `TcResult` 纵向保存每条 Tc；`PropertyDefinition` 和
   `SuperconductorProperty` 保存 Tc 之外的普通物性，表名为
   `superconductor_properties`，同时保留论文原文和可空规范值。
@@ -96,7 +96,7 @@ fresh 目标 Schema 已落实以下边界：
 
 ## 论文与材料状态分类
 
-Material family 属于论文当前 revision，通过 `paper_material_families(paper_id, paper_revision, material_family_id)` 建立多对多关系；一篇论文可关联多个 family，`Paper type` 及理论论文子分类保持原结构。`material_states` 不再保存 `material_family_id`，每个状态继续独立保存由规范化化学式计算的 `element_count`、`material_dimensionality`、压力和结构家族关联。结构家族即界面中的 `More type labels`，可多选，并通过生成列唯一约束保证最多一个主结构家族。
+Material family 属于论文当前 revision，通过 `paper_material_families(paper_id, paper_revision, material_family_id)` 建立多对多关系；一篇论文可关联多个 family。`Paper.superconductor_kind` 同样属于论文当前 revision，但为单选且只能是 `conventional`、`unconventional` 或 `unknown`；它不因论文含多个材料状态而重复保存。`Paper type` 及理论论文子分类保持原结构。`material_states` 不再保存 `material_family_id` 或 `superconductor_kind`，每个状态继续独立保存由规范化化学式计算的 `element_count`、`material_dimensionality`、压力和结构家族关联。结构家族即界面中的 `More type labels`，可多选，并通过生成列唯一约束保证最多一个主结构家族。
 
 `material_families`、`structure_families` 及各自 seed 别名表提供确定性目录。普通接口只返回目录 ID 和规范中文名，
 不暴露内部 `code`。AI 建议仅作为论文审核上下文，不进入独立建议表；审核者可认可、改选已有目录项或输入新名称。
@@ -125,6 +125,8 @@ Material family 属于论文当前 revision，通过 `paper_material_families(pa
   建立数据库目录、确定性 seed 别名映射、材料状态级分类和审核内人工确认，不迁移旧 655 篇论文数据库。
 - [Feature #79：论文级 Material family 多选分类](../../specs/79-paper-material-families/spec.md)
   将 Material family 提升到论文 revision 级多选关联，保留状态级结构家族标签，并提供旧状态数据的去重迁移。
+- [Feature #80：论文级 Superconductor type 单选分类](../../specs/80-paper-superconductor-kind/spec.md)
+  将 Superconductor type 提升为论文 revision 级单选字段，保留状态级 More type labels 和条件化科学数据。
 
 ## 已知问题
 

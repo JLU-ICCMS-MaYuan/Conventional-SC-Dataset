@@ -43,7 +43,7 @@
 
 - `_summary_classification_candidates` 先过滤掉非当前论文的过期证据，再把分段候选交给 `complete_json(SUMMARY_SYSTEM_PROMPT, ...)` 汇总为一份结构化草稿。
 - 汇总 prompt（`SUMMARY_SYSTEM_PROMPT`）与正文提取（`extractor.py`）都要求以英文产出六个叙述字段（`summary`、`keywords_tags`、`methodology`、`key_finding`、`research_motivation`、`knowledge_graph_title`），与英文论文原文语言一致；某字段无原文依据时保持为空，不编造内容。（[Issue #74](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/74)）
-- `_normalize_draft` 把草稿归一化为当前数据契约：论文元信息、`material_states`（材料、压强/温度/磁场、计算与实验上下文、`tc_results`）、分类证据等。
+- `_normalize_draft` 把草稿归一化为当前数据契约：论文元信息（含单选 `superconductor_kind` 和多选 Material family）、`material_states`（材料、压强/温度/磁场、计算与实验上下文、`tc_results`、More type labels）、分类证据等。旧草稿的状态级 `superconductor_kind` 只在读取时一次性提升：唯一的非 `unknown` 值保留，冲突时回退 `unknown`；新提交拒绝该旧字段。
 - 汇总后执行查重：先按归一化 DOI（`normalize_doi`）查 `papers`，再按原始文件 SHA-256 查；命中即进入 `_handle_duplicate`，任务以 `duplicate` 状态短路结束。
 - 草稿写入 Redis（`save_draft`），同时把 `ai_values` 与证据快照（分类证据、材料状态各字段证据）写入 `review_artifacts/{task_id}/result.json`。
 
@@ -56,7 +56,7 @@
 
 - 用户在前端校对编辑草稿后调用 `POST /api/upload-tasks/{task_id}/submit`（`backend/api/rag.py`），全程持有任务锁，重复提交按已提交结果幂等返回。
 - `_create_pending_paper` 在一个数据库事务内完成：
-  - 创建 `Paper`（`review_status=pending`、`content_revision=1`、`upload_task_id` 关联任务）与 `PaperFile`（角色、存储路径、SHA-256、排序）。
+  - 创建 `Paper`（`review_status=pending`、`content_revision=1`、`upload_task_id` 关联任务、论文级 `superconductor_kind`）与 `PaperFile`（角色、存储路径、SHA-256、排序）。
   - `persist_scientific_draft`（`backend/ingest/scientific_drafts.py`）把草稿落成科学实体图：`superconductors` → `material_states` → `structure_models`（含经用户确认的原生 CIF/POSCAR 附件，服务端重新 ASE 校验并以常规晶胞 CIF 为规范表示，不信任浏览器提交的校验/哈希字段）→ `calculation_contexts` / `experimental_contexts` → `tc_results` → `superconductor_properties`，并返回证据链接目标。
   - `chunk_paper` 对正文重新分段写入 `paper_chunks`；草稿证据按 `(file_id, chunk_index)` 或页码范围匹配到具体 chunk，写入 `paper_evidences` 并挂接 `add_scientific_evidence_link`。
   - 违反完整性约束时整体回滚，返回 409 `scientific_data_integrity_error`。
