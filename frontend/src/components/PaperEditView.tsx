@@ -167,6 +167,12 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
                       </Box>
                     </Box>
                   )}
+                  {paper.superconductor_kind && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">{t('paperDetail.fieldSuperconductorKind')}</Typography>
+                      <Typography variant="body2">{paper.superconductor_kind}</Typography>
+                    </Box>
+                  )}
                   {editKnowledgeGraphTitle && (
                     <Box>
                       <Typography variant="caption" color="text.secondary">{t('paperDetail.fieldKgTitle')}</Typography>
@@ -211,7 +217,7 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
                         {state.material_dimensionality && (
                           <Box>
                             <Typography variant="caption" color="text.secondary">{t('paperDetail.fieldDimensionality')}</Typography>
-                            {/* 材料维度/晶系/超导类型展示后端枚举 value（接口契约，不翻译） */}
+                            {/* 材料维度/晶系展示后端枚举 value（接口契约，不翻译） */}
                             <Typography variant="body2">{state.material_dimensionality}</Typography>
                           </Box>
                         )}
@@ -231,12 +237,6 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
                           <Box>
                             <Typography variant="caption" color="text.secondary">{t('paperDetail.fieldSpaceGroupNumber')}</Typography>
                             <Typography variant="body2">{state.reported_space_group_number}</Typography>
-                          </Box>
-                        )}
-                        {state.superconductor_kind && (
-                          <Box>
-                            <Typography variant="caption" color="text.secondary">{t('paperDetail.fieldSuperconductorKind')}</Typography>
-                            <Typography variant="body2">{state.superconductor_kind}</Typography>
                           </Box>
                         )}
                       </Box>

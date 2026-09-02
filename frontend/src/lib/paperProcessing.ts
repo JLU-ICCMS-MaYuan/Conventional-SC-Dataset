@@ -115,7 +115,6 @@ export interface DraftMaterialState {
   crystal_system?: CrystalSystem
   element_count?: number | null
   element_count_locked?: boolean
-  superconductor_kind?: 'conventional' | 'unconventional' | 'unknown'
   material_dimensionality?: MaterialDimensionality
   pressure_value_gpa?: number | null
   pressure_min_gpa?: number | null
@@ -148,6 +147,7 @@ export interface PaperDraftFields {
   paper_type?: 'theoretical' | 'experimental' | 'review' | 'unknown' | string
   theoretical_subtype?: 'calculation' | 'method' | 'theory' | null | string
   material_families?: FamilySelection[]
+  superconductor_kind?: 'conventional' | 'unconventional' | 'unknown'
   keywords_tags?: string[]
   methodology?: string[]
   key_finding?: string
@@ -219,7 +219,7 @@ export function emptyUploadDraft(): UploadDraft {
       title: '', doi: '', authors: [], corresponding_authors: [], co_first_authors: [],
       journal: '', volume: '', pages: '', year: null,
       abstract: '', summary: '', paper_type: 'unknown', theoretical_subtype: null,
-      material_families: [],
+      material_families: [], superconductor_kind: 'unknown',
       keywords_tags: [], methodology: [], key_finding: '', research_motivation: '',
       research_materials: [], material_relations: [], builds_on: [],
     },
@@ -314,11 +314,13 @@ export function normalizeUploadDraft(value: unknown): UploadDraft {
           ? raw.material_states.map(state => (state as DraftMaterialState & { material_family?: unknown }).material_family).filter(Boolean)
           : []),
       ],
+      superconductor_kind: normalizePaperSuperconductorKind(rawPaper, raw.material_states),
     }),
     material_states: Array.isArray(raw.material_states) ? raw.material_states.map(state => {
       const normalizedState = { ...state }
       delete (normalizedState as { phase_label?: unknown }).phase_label
       delete (normalizedState as { material_family?: unknown }).material_family
+      delete (normalizedState as { superconductor_kind?: unknown }).superconductor_kind
       const rawCrystalSystem = String(state.crystal_system || 'unknown')
       return {
         ...normalizedState,
@@ -327,7 +329,6 @@ export function normalizeUploadDraft(value: unknown): UploadDraft {
           ? rawCrystalSystem as CrystalSystem
           : 'unknown',
         element_count: state.element_count ?? null,
-        superconductor_kind: state.superconductor_kind || 'unknown',
         material_dimensionality: state.material_dimensionality || 'unknown',
         tc_results: Array.isArray(state.tc_results) ? state.tc_results : [],
         properties: Array.isArray(state.properties) ? state.properties.map(item => ({
@@ -354,6 +355,19 @@ export function normalizeUploadDraft(value: unknown): UploadDraft {
       material_states: Array.isArray(aiRaw.material_states) ? aiRaw.material_states : [],
     } : null,
   }
+}
+
+function normalizePaperSuperconductorKind(rawPaper: Record<string, any>, rawStates: unknown): 'conventional' | 'unconventional' | 'unknown' {
+  const paperKind = rawPaper.superconductor_kind
+  if (paperKind === 'conventional' || paperKind === 'unconventional' || paperKind === 'unknown') {
+    return paperKind
+  }
+  if (!Array.isArray(rawStates)) return 'unknown'
+
+  const legacyKinds = new Set(rawStates
+    .map(state => (state as DraftMaterialState & { superconductor_kind?: unknown }).superconductor_kind)
+    .filter(kind => kind === 'conventional' || kind === 'unconventional'))
+  return legacyKinds.size === 1 ? [...legacyKinds][0] as 'conventional' | 'unconventional' : 'unknown'
 }
 
 export function evidenceList(value: SourceEvidence | SourceEvidence[] | null | undefined): SourceEvidence[] {

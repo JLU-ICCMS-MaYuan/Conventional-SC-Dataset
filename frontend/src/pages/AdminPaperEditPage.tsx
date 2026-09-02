@@ -22,23 +22,28 @@ import { useLanguage } from '../context/LanguageContext'
  * 需要转成编辑器的 {id, name, status, is_primary} 选择形态。
  * （原 AdminPage.tsx 弹窗逻辑迁移，Issue #78。）
  */
-const materialStateFromDetail = (state: Record<string, any>): DraftMaterialState => ({
-  ...state,
-  material: state.superconductor?.chemical_formula || state.material || '',
-  structure_families: (state.structure_families || []).map((item: any) => ({
-    id: item.id ?? item.structure_family_id,
-    name: item.structure_family?.name || item.name || '',
-    name_zh: item.structure_family?.name_zh || item.structure_family?.name || item.name || '',
-    name_en: item.structure_family?.name_en || item.name_en || '',
-    status: 'confirmed',
-    is_primary: Boolean(item.is_primary),
-  })),
-  tc_results: state.tc_results || [],
-  properties: (state.properties || []).map((item: any) => ({
-    ...item,
-    value_raw: item.value_raw ?? (item.value == null ? '' : String(item.value)),
-  })),
-})
+const materialStateFromDetail = (state: Record<string, any>): DraftMaterialState => {
+  const { superconductor_kind: _legacySuperconductorKind, ...stateWithoutLegacyKind } = state
+  return {
+    ...stateWithoutLegacyKind,
+    material: state.superconductor?.chemical_formula || state.material || '',
+    structure_families: (state.structure_families || []).map((item: any) => ({
+      id: item.id ?? item.structure_family_id,
+      name: item.structure_family?.name || item.name || '',
+      name_zh: item.structure_family?.name_zh || item.structure_family?.name || item.name || '',
+      name_en: item.structure_family?.name_en || item.name_en || '',
+      status: 'confirmed',
+      is_primary: Boolean(item.is_primary),
+    })),
+    tc_results: state.tc_results || [],
+    properties: (state.properties || []).map((item: any) => ({
+      ...item,
+      value_raw: item.value_raw ?? (item.value == null ? '' : String(item.value)),
+    })),
+  }
+}
+
+const SUPERCONDUCTOR_KIND_VALUES = ['conventional', 'unconventional', 'unknown'] as const
 
 /**
  * Go 已落库的结构模型 → 已确认候选（T020）。
@@ -81,7 +86,7 @@ const AdminPaperEditPage: React.FC = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { t, lang } = useLanguage()
+  const { t, lang, dict } = useLanguage()
   const locale = lang === 'zh' ? 'zh-CN' : 'en-US'
   const paperId = Number(id)
   const workspacePath = user?.role === 'superadmin' ? '/superadmin' : '/admin'
@@ -170,7 +175,12 @@ const AdminPaperEditPage: React.FC = () => {
             // 手工创建或已清理临时证据的待审论文没有 artifact，继续使用正式详情。
           }
         }
-        setEditForm(detail)
+        setEditForm({
+          ...detail,
+          superconductor_kind: pendingValues?.paper?.superconductor_kind
+            ?? detail.superconductor_kind
+            ?? 'unknown',
+        })
         const pendingFamilies = pendingValues?.paper?.material_families
         const materialFamilies = Array.isArray(pendingFamilies)
           ? pendingFamilies
@@ -239,6 +249,7 @@ const AdminPaperEditPage: React.FC = () => {
         comment: editReviewComment,
         review_request_id: crypto.randomUUID(),
         ...(editReviewStatus === 'approved' ? {
+          superconductor_kind: editForm.superconductor_kind || 'unknown',
           material_families: editMaterialFamilies.map(family => ({ id: family.id || null, name: family.name })),
           material_states: materialStates,
         } : {}),
@@ -277,6 +288,7 @@ const AdminPaperEditPage: React.FC = () => {
             `/api/rag/papers/${paperId}/scientific-draft`,
             {
               paper_type: editForm.paper_type || '',
+              superconductor_kind: editForm.superconductor_kind || 'unknown',
               material_families: editMaterialFamilies,
               material_states: editMaterialStates,
               structure_candidates: editStructureCandidates.filter(candidate => candidate.confirmation === 'confirmed'),
@@ -401,6 +413,15 @@ const AdminPaperEditPage: React.FC = () => {
           <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1.5 }}>
             <TextField label={t('admin.fieldPaperType')} size="small" value={editForm.paper_type || ''}
               onChange={e => setEditForm({ ...editForm, paper_type: e.target.value })} />
+            <FormControl size="small">
+              <InputLabel id="paper-superconductor-kind-label">{t('upload.superconductorKindField')}</InputLabel>
+              <Select labelId="paper-superconductor-kind-label" label={t('upload.superconductorKindField')} value={editForm.superconductor_kind || 'unknown'}
+                onChange={e => setEditForm({ ...editForm, superconductor_kind: e.target.value })}>
+                {SUPERCONDUCTOR_KIND_VALUES.map(value => (
+                  <MenuItem key={value} value={value}>{value === 'unknown' ? dict.enums.superconductorKind.unknown : dict.enums.superconductorKind[value]}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
             <Autocomplete<ClassificationTerm | string, true, false, true>
               multiple
               freeSolo
@@ -561,6 +582,7 @@ const AdminPaperEditPage: React.FC = () => {
             onStructureCandidatesChange={setEditStructureCandidates}
             spaceGroups={editSpaceGroups}
             paperType={editForm.paper_type}
+            superconductorKind={editForm.superconductor_kind}
             onUploadStructure={handleUploadStructure}
             onError={setSnackbar}
           />

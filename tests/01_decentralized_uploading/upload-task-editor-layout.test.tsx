@@ -49,6 +49,7 @@ const makeState = (overrides: Partial<DraftMaterialState> = {}): DraftMaterialSt
 const makeDraft = (states: DraftMaterialState[]) => ({
   paper: {
     title: '测试论文', authors: [], paper_type: 'experimental',
+    superconductor_kind: 'unknown',
     keywords_tags: ['超导'], methodology: ['高压合成'],
     material_families: [{ id: 1, name: '氢基超导体' }],
   },
@@ -143,43 +144,42 @@ describe('上传校对页布局与材料状态折叠', () => {
 
 describe('超导类型与条件化 Tc 字段', () => {
   // 重度交互用例：单跑约 3s，默认 5s 上限在多文件并行下余量不足，会偶发超时
-  it('未知类型添加 Tc 仅含数值框，常规类型含完整字段组且方法可选其他，切换类型数据保留', { timeout: 15000 }, async () => {
-    render(<UploadTaskEditor taskId={'d'.repeat(32)} onSubmitted={vi.fn()} draftOverride={makeDraft([makeState()])} />)
+  it('论文级类型同步控制全部材料状态的 Tc 字段，切换类型不删除已有数据', { timeout: 15000 }, async () => {
+    render(<UploadTaskEditor taskId={'d'.repeat(32)} onSubmitted={vi.fn()} draftOverride={makeDraft([makeState(), makeState({ material: 'H3S' })])} />)
 
-    fireEvent.click(await screen.findByRole('button', { name: '添加 Tc' }))
-    expect(await screen.findByLabelText('Tc 数值 (K)')).toBeInTheDocument()
+    const addTcButtons = await screen.findAllByRole('button', { name: '添加 Tc' })
+    fireEvent.click(addTcButtons[0])
+    fireEvent.click(addTcButtons[1])
+    expect(await screen.findAllByLabelText('Tc 数值 (K)')).toHaveLength(2)
     expect(screen.queryByLabelText('电声耦合强度 λ')).not.toBeInTheDocument()
-    expect(screen.queryByRole('combobox', { name: 'Tc 方法' })).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('Tc #1 原始值')).not.toBeInTheDocument()
 
     fireEvent.mouseDown(screen.getByRole('combobox', { name: '超导类型' }))
     fireEvent.click(await screen.findByRole('option', { name: '常规超导体（BCS超导体）' }))
-    expect(await screen.findByLabelText('电声耦合强度 λ')).toBeInTheDocument()
-    expect(screen.getByLabelText('对数声子频率 ωlog (K)')).toBeInTheDocument()
-    expect(screen.getByLabelText('库伦屏蔽常数 μ*')).toBeInTheDocument()
-    expect(screen.getByRole('combobox', { name: 'Tc 方法' })).toBeInTheDocument()
+    expect(await screen.findAllByLabelText('电声耦合强度 λ')).toHaveLength(2)
+    expect(screen.getAllByLabelText('对数声子频率 ωlog (K)')).toHaveLength(2)
+    expect(screen.getAllByLabelText('库伦屏蔽常数 μ*')).toHaveLength(2)
+    expect(screen.getAllByRole('combobox', { name: 'Tc 方法' })).toHaveLength(2)
 
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Tc 方法' }))
+    fireEvent.mouseDown(screen.getAllByRole('combobox', { name: 'Tc 方法' })[0])
     fireEvent.click(await screen.findByRole('option', { name: '其他' }))
     fireEvent.change(await screen.findByLabelText('自定义 Tc 方法'), { target: { value: 'two-band model' } })
-    fireEvent.change(screen.getByLabelText('电声耦合强度 λ'), { target: { value: '1.5' } })
+    fireEvent.change(screen.getAllByLabelText('电声耦合强度 λ')[0], { target: { value: '1.5' } })
 
     fireEvent.mouseDown(screen.getByRole('combobox', { name: '超导类型' }))
     fireEvent.click(await screen.findByRole('option', { name: '非常规超导体' }))
     expect(screen.queryByLabelText('电声耦合强度 λ')).not.toBeInTheDocument()
-    expect(screen.queryByRole('combobox', { name: 'Tc 方法' })).not.toBeInTheDocument()
-    expect(screen.getByLabelText('Tc 数值 (K)')).toBeInTheDocument()
+    expect(screen.getAllByLabelText('Tc 数值 (K)')).toHaveLength(2)
 
     fireEvent.mouseDown(screen.getByRole('combobox', { name: '超导类型' }))
     fireEvent.click(await screen.findByRole('option', { name: '常规超导体（BCS超导体）' }))
-    expect(await screen.findByLabelText('电声耦合强度 λ')).toHaveValue(1.5)
+    expect((await screen.findAllByLabelText('电声耦合强度 λ'))[0]).toHaveValue(1.5)
     expect(screen.getByLabelText('自定义 Tc 方法')).toHaveValue('two-band model')
   })
 
   it('非常规类型添加 Tc 仅含数值框，且不再显示状态级 λ/ωlog 输入框', async () => {
-    render(<UploadTaskEditor taskId={'e'.repeat(32)} onSubmitted={vi.fn()} draftOverride={makeDraft([
-      makeState({ superconductor_kind: 'unconventional' }),
-    ])} />)
+    const draft = makeDraft([makeState()])
+    draft.paper.superconductor_kind = 'unconventional'
+    render(<UploadTaskEditor taskId={'e'.repeat(32)} onSubmitted={vi.fn()} draftOverride={draft} />)
 
     fireEvent.click(await screen.findByRole('button', { name: '添加 Tc' }))
     expect(await screen.findByLabelText('Tc 数值 (K)')).toBeInTheDocument()
@@ -189,12 +189,11 @@ describe('超导类型与条件化 Tc 字段', () => {
   })
 
   it('首次添加常规 Tc 条目时用状态级旧值一次性预填 λ/ωlog', async () => {
-    render(<UploadTaskEditor taskId={'f'.repeat(32)} onSubmitted={vi.fn()} draftOverride={makeDraft([
-      makeState({
-        superconductor_kind: 'conventional',
-        calculation_context: { phonon_nuclear_treatment: 'unknown', lambda_ep: 1.2, omega_log_k: 210, mu_star: 0.1 },
-      }),
-    ])} />)
+    const draft = makeDraft([makeState({
+      calculation_context: { phonon_nuclear_treatment: 'unknown', lambda_ep: 1.2, omega_log_k: 210, mu_star: 0.1 },
+    })])
+    draft.paper.superconductor_kind = 'conventional'
+    render(<UploadTaskEditor taskId={'f'.repeat(32)} onSubmitted={vi.fn()} draftOverride={draft} />)
 
     fireEvent.click(await screen.findByRole('button', { name: '添加 Tc' }))
     expect(await screen.findByLabelText('电声耦合强度 λ')).toHaveValue(1.2)
@@ -206,15 +205,15 @@ describe('超导类型与条件化 Tc 字段', () => {
     expect(lambdas[1]).toHaveValue(null)
   })
 
-  it('超导类型下拉仅含两项全称选项，值为 unknown 时显示占位', async () => {
+  it('论文级超导类型下拉含完整单选值域', async () => {
     render(<UploadTaskEditor taskId={'9'.repeat(32)} onSubmitted={vi.fn()} draftOverride={makeDraft([makeState()])} />)
 
     const kindSelect = await screen.findByRole('combobox', { name: '超导类型' })
-    expect(kindSelect).toHaveTextContent('请选择')
+    expect(kindSelect).toHaveTextContent('未知')
 
     fireEvent.mouseDown(kindSelect)
     const options = await screen.findAllByRole('option')
-    expect(options.map(option => option.textContent)).toEqual(['常规超导体（BCS超导体）', '非常规超导体'])
+    expect(options.map(option => option.textContent)).toEqual(['常规超导体（BCS超导体）', '非常规超导体', '未知'])
   })
 })
 

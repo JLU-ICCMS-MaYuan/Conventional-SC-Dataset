@@ -45,6 +45,7 @@ const paper = {
 const detailWithStructures = {
   ...paper,
   paper_type: 'experimental',
+  superconductor_kind: 'conventional',
   material_families: [{ id: 8, name: '单质超导体', name_en: 'Elemental superconductor' }],
   key_properties: [],
   material_states: [{
@@ -53,7 +54,6 @@ const detailWithStructures = {
     structure_families: [],
     element_count: 1,
     material_dimensionality: 'three_dimensional',
-    superconductor_kind: 'conventional',
     crystal_system: 'tetragonal',
     state_kind: 'experimental',
     pressure_value_gpa: 0.001,
@@ -131,6 +131,7 @@ describe('Issue #78：管理端论文编辑独立页', () => {
     expect(screen.getByRole('textbox', { name: '知识图谱标题 (knowledge_graph_title)' }))
       .toHaveValue('Discovery of Superconductivity in Mercury')
     expect(screen.getByRole('textbox', { name: '标题' })).toBeVisible()
+    expect(screen.getByRole('combobox', { name: '超导类型' })).toHaveTextContent('常规超导体（BCS超导体）')
 
     // 材料状态区（详情 material_states 渲染为 MaterialStatesEditor 卡片）
     expect(await screen.findByText('材料状态 #1')).toBeVisible()
@@ -217,6 +218,8 @@ describe('Issue #78：管理端论文编辑独立页', () => {
     expect(path2).toBe('/api/rag/papers/88/scientific-draft')
     expect(body2).toMatchObject({ paper_type: 'experimental' })
     expect(body2.material_states[0]).toMatchObject({ material: 'H3S' })
+    expect(body2).toMatchObject({ superconductor_kind: 'conventional' })
+    expect(body2.material_states[0]).not.toHaveProperty('superconductor_kind')
   })
 
   it('审核通过时提交当前编辑器中的材料分类（无需先单独保存）', async () => {
@@ -231,6 +234,7 @@ describe('Issue #78：管理端论文编辑独立页', () => {
     await waitFor(() => expect(mockedApi.post).toHaveBeenCalledTimes(1))
     expect(mockedApi.post.mock.calls[0][1]).toMatchObject({
       status: 'approved',
+      superconductor_kind: 'conventional',
       material_families: [{ id: 8, name: '单质超导体' }],
       material_states: [{
         id: 11,

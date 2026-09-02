@@ -34,8 +34,6 @@ export interface SpaceGroupOption {
   symbol: string
 }
 
-const SUPERCONDUCTOR_KIND_VALUES = ['conventional', 'unconventional'] as const
-
 const TC_METHOD_VALUES = [
   'unknown', 'experimental', 'mcmillan', 'allen_dynes',
   'isotropic_eliashberg', 'anisotropic_eliashberg', 'scdft', 'other',
@@ -201,6 +199,8 @@ interface MaterialStatesEditorProps {
   taskId?: string
   /** 论文类型：决定新增材料状态的默认计算/实验上下文 */
   paperType?: string
+  /** 论文级超导类型：统一控制所有材料状态的 Tc 编辑字段 */
+  superconductorKind?: 'conventional' | 'unconventional' | 'unknown'
   /**
    * 结构上传回调（论文宿主，管理端编辑弹窗用，T034）。
    * 提供时结构上传改由父组件完成（论文结构端点，候选不落库）；
@@ -214,7 +214,7 @@ interface MaterialStatesEditorProps {
 
 /**
  * 材料状态编辑区（受控组件）：上传校对页与管理端编辑弹窗共用。
- * 所有编辑逻辑（化学式、分类、元素种类数、维度、超导类型、晶系与空间群联动、
+ * 所有编辑逻辑（化学式、分类、元素种类数、维度、晶系与空间群联动、
  * 压强、Tc 列表、普通物性、结构候选面板）内聚于此，统一通过 onChange 传出完整状态数组。
  */
 const MaterialStatesEditor: React.FC<MaterialStatesEditorProps> = ({
@@ -231,6 +231,7 @@ const MaterialStatesEditor: React.FC<MaterialStatesEditorProps> = ({
   catalogError = '',
   taskId,
   paperType,
+  superconductorKind = 'unknown',
   onUploadStructure,
   onError,
 }) => {
@@ -354,11 +355,11 @@ const MaterialStatesEditor: React.FC<MaterialStatesEditorProps> = ({
     } : state))
   }
 
-  // 常规 (BCS) 类型的 Tc 条目带独立计算上下文；首个条目用状态级旧值一次性预填 λ/ωlog
+  // 常规 (BCS) 论文的 Tc 条目带独立计算上下文；首个条目用状态级旧值一次性预填 λ/ωlog
   const addTcResult = (index: number) => {
     emitStates(states.map((item, itemIndex) => {
       if (itemIndex !== index) return item
-      const isConventional = (item.superconductor_kind || 'unknown') === 'conventional'
+      const isConventional = superconductorKind === 'conventional'
       const legacy = item.calculation_context
       const prefillLegacy = isConventional
         && (legacy?.lambda_ep != null || legacy?.omega_log_k != null)
@@ -438,7 +439,6 @@ const MaterialStatesEditor: React.FC<MaterialStatesEditorProps> = ({
       material_dimensionality: 'unknown',
       pressure_value_gpa: null,
       state_kind: paperType === 'experimental' ? 'experimental' : 'theoretical',
-      superconductor_kind: 'unknown',
       crystal_system: 'unknown',
       reported_space_group_symbol: null,
       reported_space_group_number: null,
@@ -544,7 +544,7 @@ const MaterialStatesEditor: React.FC<MaterialStatesEditorProps> = ({
             const aiState = aiMaterialStates?.[index]
             const stateCandidates = (structureCandidates || []).filter(candidate => candidate.material_state_ref === `material_states[${index}]`)
             const isCollapsed = !readOnly && Boolean(collapsedStates[index])
-            const isConventional = (state.superconductor_kind || 'unknown') === 'conventional'
+            const isConventional = superconductorKind === 'conventional'
             // 晶系未知时显示全部 230 条空间群，否则仅显示该晶系群号范围内的符号
             const crystalSystem = state.crystal_system || 'unknown'
             const spaceGroupOptions = crystalSystem === 'unknown'
@@ -670,25 +670,6 @@ const MaterialStatesEditor: React.FC<MaterialStatesEditorProps> = ({
                       {...issueProps(`material_states[${index}].reported_space_group_number`)}
                       onChange={event => changeSpaceGroupNumber(index, event.target.value)}
                       slotProps={{ htmlInput: { min: 1, max: 230 } }} />
-                    <FormControl fullWidth>
-                      <InputLabel id={`superconductor-kind-${index}-label`}>{t('upload.superconductorKindField')}</InputLabel>
-                      <Select
-                        labelId={`superconductor-kind-${index}-label`}
-                        label={t('upload.superconductorKindField')}
-                        value={state.superconductor_kind === 'conventional' || state.superconductor_kind === 'unconventional'
-                          ? state.superconductor_kind
-                          : ''}
-                        displayEmpty
-                        renderValue={value => value
-                          ? dict.enums.superconductorKind[value as 'conventional' | 'unconventional'] || t('upload.selectPlaceholder')
-                          : <Box component="span" sx={{ color: 'text.secondary' }}>{t('upload.selectPlaceholder')}</Box>}
-                        onChange={event => updateMaterialState(index, 'superconductor_kind', event.target.value)}
-                      >
-                        {SUPERCONDUCTOR_KIND_VALUES.map(value => (
-                          <MenuItem key={value} value={value}>{dict.enums.superconductorKind[value]}</MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
                   </Box>
                   <EvidenceNotes
                     label={t('upload.materialStateNumber', { index: index + 1 })}

@@ -17,14 +17,14 @@ describe('只读详情页与校对表单字段一致（Issue #59）', () => {
    * T002 [US1]: 材料状态分类区 9 项均渲染（FR-001、FR-005）
    *
    * 验收：构造含完整材料状态的论文对象渲染 PaperEditView，
-   * 断言分类区 9 项均可见：材料、材料家族、元素种类数、材料维度、
-   * 结构家族标签、晶系、空间群符号、空间群号、超导类型。
+   * 断言材料状态分类字段及论文级超导类型均可见。
    */
   it('材料状态分类区 9 项均渲染', () => {
     const paper = {
       id: 1,
       title: '测试论文',
       material_families: [{ id: 1, name: '氢化物' }],
+      superconductor_kind: 'conventional',
       material_states: [
         {
           id: 1,
@@ -37,14 +37,13 @@ describe('只读详情页与校对表单字段一致（Issue #59）', () => {
           crystal_system: 'cubic',
           reported_space_group_symbol: 'Fm-3m',
           reported_space_group_number: 225,
-          superconductor_kind: 'conventional',
         },
       ],
     }
 
     render(<PaperEditView paper={paper} onBack={() => {}} />)
 
-    // 分类区 9 项断言
+    // 材料状态分类与论文级类型断言
     expect(screen.getByText('LaH10')).toBeInTheDocument()
     expect(screen.getByText('氢化物')).toBeInTheDocument()
     expect(screen.getByText('不同元素种类数')).toBeInTheDocument()

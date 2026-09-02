@@ -34,6 +34,7 @@ type AuthorRoleField = 'corresponding_authors' | 'co_first_authors'
 
 // 枚举下拉不再携带中文 label：渲染时按 value 查 dict.enums.<组>.<value>（enums.ts）
 const PAPER_TYPE_VALUES = ['theoretical', 'experimental', 'review', 'unknown'] as const
+const SUPERCONDUCTOR_KIND_VALUES = ['conventional', 'unconventional', 'unknown'] as const
 
 const toLines = (value: string[] | undefined) => (value || []).join('\n')
 const fromLines = (value: string) => value.split(/[\n,，]/).map(item => item.trim()).filter(Boolean)
@@ -521,6 +522,16 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
           <IssueText field="paper.theoretical_subtype" />
           <EvidenceNotes label={t('upload.theoreticalSubtypeField')} aiValue={aiPaper.theoretical_subtype} />
         </FormControl>
+        <FormControl fullWidth data-issue-field="paper.superconductor_kind">
+          <InputLabel id="paper-superconductor-kind-label">{t('upload.superconductorKindField')}</InputLabel>
+          <Select labelId="paper-superconductor-kind-label" label={t('upload.superconductorKindField')} value={draft.paper.superconductor_kind || 'unknown'}
+            onChange={event => setPaperField('superconductor_kind', event.target.value)}>
+            {SUPERCONDUCTOR_KIND_VALUES.map(value => (
+              <MenuItem key={value} value={value}>{dict.enums.superconductorKind[value]}</MenuItem>
+            ))}
+          </Select>
+          <EvidenceNotes label={t('upload.superconductorKindField')} aiValue={aiPaper.superconductor_kind} evidence={classificationEvidence} />
+        </FormControl>
         <Box data-issue-field="paper.material_families" sx={{ gridColumn: '1 / -1' }}>
           <Autocomplete<ClassificationTerm | string, true, false, true>
             multiple
@@ -603,6 +614,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
         aiMaterialStates={ai.material_states}
         taskId={taskId}
         paperType={draft.paper.paper_type}
+        superconductorKind={draft.paper.superconductor_kind}
         onError={setError}
       />
     </Box>
