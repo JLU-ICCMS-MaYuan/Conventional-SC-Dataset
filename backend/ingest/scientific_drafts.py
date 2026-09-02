@@ -215,6 +215,11 @@ async def persist_scientific_draft(
 ) -> list[ScientificEvidenceTarget]:
     """Create the scientific entity graph and return evidence-link targets."""
     targets: list[ScientificEvidenceTarget] = []
+    paper_data = draft.get("paper") if isinstance(draft.get("paper"), dict) else {}
+    superconductor_kind = paper_data.get("superconductor_kind") or "unknown"
+    paper.superconductor_kind = (
+        superconductor_kind if superconductor_kind in SUPERCONDUCTOR_KINDS else "unknown"
+    )
     candidates_by_state = _confirmed_candidates_by_state(draft)
     for state_index, state_data in enumerate(draft.get("material_states") or []):
         material = str(state_data.get("material") or "").strip()
@@ -228,9 +233,6 @@ async def persist_scientific_draft(
             if isinstance(draft_element_count, int) and not isinstance(draft_element_count, bool)
             else count_formula_elements(material)
         )
-        superconductor_kind = state_data.get("superconductor_kind") or "unknown"
-        if superconductor_kind not in SUPERCONDUCTOR_KINDS:
-            superconductor_kind = "unknown"
         crystal_system = state_data.get("crystal_system") or "unknown"
         if crystal_system not in CRYSTAL_SYSTEMS:
             crystal_system = "unknown"
@@ -252,7 +254,6 @@ async def persist_scientific_draft(
             temperature_unit_raw=state_data.get("temperature_unit_raw"),
             magnetic_field_t=_number(state_data.get("magnetic_field_t")),
             state_kind=state_data.get("state_kind") or "unknown",
-            superconductor_kind=superconductor_kind,
             crystal_system=crystal_system,
             note=state_data.get("note"),
         )

@@ -38,7 +38,7 @@ def _config(database_url=None):
 def test_alembic_has_one_ordered_head():
     script = ScriptDirectory.from_config(_config())
 
-    assert script.get_heads() == ["revision_cascade_chain"]
+    assert script.get_heads() == ["paper_superconductor_kind"]
     assert script.get_revision("revision_cascade_chain").down_revision == "add_kg_title"
     assert script.get_revision("add_kg_title").down_revision == "20260831_0066"
     assert script.get_revision("20260831_0066").down_revision == "20260831_0065"

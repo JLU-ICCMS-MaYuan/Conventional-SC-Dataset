@@ -450,7 +450,7 @@ def test_space_group_number_stays_none_for_non_standard_symbol():
     assert draft["material_states"][0]["reported_space_group_number"] is None
 
 
-def test_superconductor_kind_normalizes_aliases_and_falls_back_to_unknown():
+def test_legacy_state_superconductor_kind_is_promoted_to_paper_and_removed_from_states():
     draft = _normalize_draft({
         "paper": {"paper_type": "theoretical"},
         "material_states": [
@@ -459,8 +459,20 @@ def test_superconductor_kind_normalizes_aliases_and_falls_back_to_unknown():
         ],
     })
 
-    assert draft["material_states"][0]["superconductor_kind"] == "conventional"
-    assert draft["material_states"][1]["superconductor_kind"] == "unknown"
+    assert draft["paper"]["superconductor_kind"] == "conventional"
+    assert all("superconductor_kind" not in state for state in draft["material_states"])
+
+
+def test_legacy_conflicting_state_superconductor_kinds_become_unknown():
+    draft = _normalize_draft({
+        "paper": {"paper_type": "theoretical"},
+        "material_states": [
+            {"material": "LaH10", "superconductor_kind": "conventional"},
+            {"material": "YBa2Cu3O7", "superconductor_kind": "unconventional"},
+        ],
+    })
+
+    assert draft["paper"]["superconductor_kind"] == "unknown"
 
 
 def test_tc_method_free_text_becomes_other_with_custom_value():
@@ -546,8 +558,8 @@ def test_methodology_inference_mcmillan_marks_conventional_and_fills_tc_method()
         }],
     })
 
+    assert draft["paper"]["superconductor_kind"] == "conventional"
     state = draft["material_states"][0]
-    assert state["superconductor_kind"] == "conventional"
     assert state["tc_results"][0]["tc_method"] == "mcmillan"
 
 
@@ -563,8 +575,8 @@ def test_methodology_inference_multiple_methods_keep_tc_method_unknown():
         }],
     })
 
+    assert draft["paper"]["superconductor_kind"] == "conventional"
     state = draft["material_states"][0]
-    assert state["superconductor_kind"] == "conventional"
     assert state["tc_results"][0]["tc_method"] == "unknown"
 
 
@@ -577,8 +589,8 @@ def test_methodology_inference_ignores_non_discriminative_text():
         }],
     })
 
+    assert draft["paper"]["superconductor_kind"] == "unknown"
     state = draft["material_states"][0]
-    assert state["superconductor_kind"] == "unknown"
     assert state["tc_results"][0]["tc_method"] == "unknown"
 
 
@@ -591,7 +603,7 @@ def test_methodology_inference_does_not_override_unconventional():
         }],
     })
 
-    assert draft["material_states"][0]["superconductor_kind"] == "unconventional"
+    assert draft["paper"]["superconductor_kind"] == "unconventional"
 
 
 def test_methodology_inference_leaves_experimental_tc_untouched():
@@ -615,8 +627,8 @@ def test_methodology_inference_allen_dynes_wins_over_mcmillan():
         }],
     })
 
+    assert draft["paper"]["superconductor_kind"] == "conventional"
     state = draft["material_states"][0]
-    assert state["superconductor_kind"] == "conventional"
     assert state["tc_results"][0]["tc_method"] == "allen_dynes"
 
 
@@ -626,8 +638,8 @@ def test_methodology_inference_never_creates_tc_results():
         "material_states": [{"material": "LaH10"}],
     })
 
+    assert draft["paper"]["superconductor_kind"] == "conventional"
     state = draft["material_states"][0]
-    assert state["superconductor_kind"] == "conventional"
     assert state["tc_results"] == []
 
 

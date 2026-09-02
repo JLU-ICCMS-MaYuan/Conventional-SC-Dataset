@@ -108,7 +108,7 @@ referenced_materials 仅用于帮助区分本文对象与背景对象，最终�
 calculation_context，Tc 只写入 tc_results。压力优先换算为 GPa，同时保留 pressure_raw 和
 pressure_unit_raw；无法可靠换算或原文没有报告时保留原文并将规范数值设为 null。
 晶系 crystal_system 依据论文明确表述或由空间群推断填写，只能取给定枚举，无法确定填 unknown。
-每条 material_state 必须判断 superconductor_kind：Tc 由电声耦合机制/BCS 理论计算给出
+paper.superconductor_kind 必须判断：Tc 由电声耦合机制/BCS 理论计算给出
 （如 McMillan、Allen-Dynes、Eliashberg、SCDFT 求 Tc）判 conventional；论文明确为非电声耦合机制
 （如非常规配对）判 unconventional；无法判断判 unknown。
 tc_method 只能取给定枚举；论文方法无法归入枚举时填 other，并在 tc_method_custom 写入论文中的
@@ -140,7 +140,9 @@ key_finding 保留原有格式，提供完整的核心发现描述。
     "title": "", "doi": null, "authors": [], "corresponding_authors": [], "co_first_authors": [],
     "journal": null, "volume": null, "pages": null,
     "year": null, "abstract": null, "summary": "", "paper_type": "theoretical|experimental|review|unknown",
-    "theoretical_subtype": null, "keywords_tags": [], "methodology": [],
+    "theoretical_subtype": null,
+    "superconductor_kind": "conventional|unconventional|unknown",
+    "keywords_tags": [], "methodology": [],
     "knowledge_graph_title": "", "key_finding": "",
     "research_motivation": "", "research_materials": [], "material_relations": [], "builds_on": [],
     "material_families": [{"id": null, "name": "自由材料家族名称", "status": "pending", "evidence": {"section": "", "page": null, "quote": ""}}]
@@ -153,7 +155,6 @@ key_finding 保留原有格式，提供完整的核心发现描述。
     "pressure_value_gpa": null, "pressure_min_gpa": null, "pressure_max_gpa": null,
     "pressure_raw": null, "pressure_unit_raw": null,
     "state_kind": "theoretical|experimental|mixed|unknown",
-    "superconductor_kind": "conventional|unconventional|unknown",
     "reported_space_group_symbol": null, "reported_space_group_number": null,
     "crystal_system": "triclinic|monoclinic|orthorhombic|tetragonal|trigonal|hexagonal|cubic|unknown",
     "space_group_evidence": {"section": "", "page": null, "quote": ""},
@@ -983,9 +984,7 @@ def _normalize_material_states(value: Any) -> list[dict[str, Any]]:
             state["pressure_raw"] = str(state["pressure_value_gpa"])
             state["pressure_unit_raw"] = state["pressure_unit_raw"] or "GPa"
         state.setdefault("state_kind", "unknown")
-        kind = str(state.get("superconductor_kind") or "").strip().lower()
-        kind = SUPERCONDUCTOR_KIND_ALIASES.get(kind, kind)
-        state["superconductor_kind"] = kind if kind in SUPERCONDUCTOR_KINDS else "unknown"
+        state.pop("superconductor_kind", None)
         state.setdefault("reported_space_group_symbol", None)
         if state.get("reported_space_group_number") in (None, ""):
             state["reported_space_group_number"] = lookup_number(
@@ -1038,11 +1037,30 @@ def _normalize_material_states(value: Any) -> list[dict[str, Any]]:
     return states
 
 
-def _apply_methodology_inference(methodology: list[str], material_states: list[dict[str, Any]]) -> None:
-    """按论文级 methodology 文本单向补全材料状态（FR-002~FR-004，D3），原地改写。
+def _normalize_superconductor_kind(value: Any) -> str:
+    kind = str(value or "").strip().lower()
+    kind = SUPERCONDUCTOR_KIND_ALIASES.get(kind, kind)
+    return kind if kind in SUPERCONDUCTOR_KINDS else "unknown"
 
-    命中任一方法映射且 superconductor_kind 为 unknown 时置 conventional（不覆盖
-    unconventional）；去重后恰好一个方法时，补 tc_method 为 unknown 的理论 Tc 条目；
+
+def _legacy_state_superconductor_kind(material_states: list[dict[str, Any]]) -> str:
+    """将旧状态级值一次性提升为论文级，冲突时保守地返回 unknown。"""
+    kinds = {
+        _normalize_superconductor_kind(state.get("superconductor_kind"))
+        for state in material_states
+        if "superconductor_kind" in state
+    }
+    non_unknown = kinds - {"unknown"}
+    return next(iter(non_unknown)) if len(non_unknown) == 1 else "unknown"
+
+
+def _apply_methodology_inference(
+    methodology: list[str], paper: dict[str, Any], material_states: list[dict[str, Any]],
+) -> None:
+    """按论文级 methodology 单向补全论文分类与理论 Tc 方法。
+
+    命中任一方法映射且论文级 superconductor_kind 为 unknown 时置 conventional
+    （不覆盖 unconventional）；去重后恰好一个方法时，补 tc_method 为 unknown 的理论 Tc 条目；
     多个方法不补；任何情况都不创建新 Tc 条目。
     """
     methods: set[str] = set()
@@ -1060,9 +1078,9 @@ def _apply_methodology_inference(methodology: list[str], material_states: list[d
     if not methods:
         return
     inferred_method = next(iter(methods)) if len(methods) == 1 else None
+    if paper.get("superconductor_kind") == "unknown":
+        paper["superconductor_kind"] = "conventional"
     for state in material_states:
-        if state.get("superconductor_kind") == "unknown":
-            state["superconductor_kind"] = "conventional"
         if inferred_method:
             for result in state.get("tc_results") or []:
                 if result.get("result_kind") == "theoretical" and result.get("tc_method") == "unknown":
@@ -1111,6 +1129,10 @@ def _normalize_draft(raw: dict[str, Any]) -> dict[str, Any]:
         seen_families.add(key)
         material_families.append(selection)
 
+    material_states = _normalize_material_states(raw.get("material_states"))
+    legacy_kind = _legacy_state_superconductor_kind(
+        [state for state in _as_list(raw.get("material_states")) if isinstance(state, dict)]
+    )
     paper = {
         "title": raw_paper.get("title") or parsed.paper.get("title") or "",
         "doi": raw_paper.get("doi") or parsed.paper.get("doi"),
@@ -1125,6 +1147,10 @@ def _normalize_draft(raw: dict[str, Any]) -> dict[str, Any]:
         "summary": raw_paper.get("summary") or parsed.summary or "",
         "paper_type": paper_type,
         "theoretical_subtype": subtype,
+        "superconductor_kind": _normalize_superconductor_kind(
+            raw_paper.get("superconductor_kind")
+            if "superconductor_kind" in raw_paper else legacy_kind
+        ),
         "material_families": material_families,
         "keywords_tags": keywords or _normalize_text_items(parsed.keywords_tags, "keyword", "value", "name")[0],
         "methodology": methodology,
@@ -1161,10 +1187,9 @@ def _normalize_draft(raw: dict[str, Any]) -> dict[str, Any]:
         if values:
             field_evidence[field] = values
 
-    material_states = _normalize_material_states(raw.get("material_states"))
     if not material_states and properties:
         material_states = _legacy_properties_to_material_states(properties)
-    _apply_methodology_inference(paper["methodology"], material_states)
+    _apply_methodology_inference(paper["methodology"], paper, material_states)
 
     return {
         "paper": paper,

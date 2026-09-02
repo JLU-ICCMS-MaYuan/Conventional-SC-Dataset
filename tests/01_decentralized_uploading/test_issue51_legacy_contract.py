@@ -147,6 +147,40 @@ def test_new_put_and_submit_reject_each_legacy_classification_field(monkeypatch)
         assert submit_response.json()["detail"]["fields"] == [field]
 
 
+def test_new_put_and_submit_reject_state_level_superconductor_kind(monkeypatch):
+    from backend.api import rag
+    from backend.ingest import upload_tasks
+
+    task_id = "9" * 32
+    ready_state = {
+        "task_id": task_id, "user_id": 7, "stage": "ready",
+        "processing_status": "succeeded", "updated_at": 1, "state_schema_version": 1,
+    }
+    monkeypatch.setattr(rag, "_task_for_user", lambda *_args: ready_state)
+    _install_upload_jobs_stub(monkeypatch)
+    monkeypatch.setattr(rag, "_submitted_paper_for_task", lambda _task_id: _async_value(None))
+    monkeypatch.setattr(upload_tasks, "upload_task_lock", lambda _task_id: nullcontext())
+    monkeypatch.setattr(upload_tasks, "update_state", lambda *_args, **_kwargs: ready_state)
+    legacy_draft = {
+        "paper": {"title": "Legacy", "paper_type": "review"},
+        "material_states": [{"material": "LaH10", "superconductor_kind": "conventional"}],
+    }
+    monkeypatch.setattr(upload_tasks, "get_draft", lambda _task_id: legacy_draft)
+    app = _app_with_user(rag)
+
+    put_response = asyncio.run(_request(
+        app, "PUT", f"/api/rag/upload-tasks/{task_id}/draft", json=legacy_draft,
+    ))
+    assert put_response.status_code == 400
+    assert put_response.json()["detail"]["fields"] == ["material_states[].superconductor_kind"]
+
+    submit_response = asyncio.run(_request(
+        app, "POST", f"/api/rag/upload-tasks/{task_id}/submit",
+    ))
+    assert submit_response.status_code == 400
+    assert submit_response.json()["detail"]["fields"] == ["material_states[].superconductor_kind"]
+
+
 submit_draft = {"value": {}}
 
 

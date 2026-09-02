@@ -304,6 +304,10 @@ class Paper(Base):
             """,
             name="ck_papers_review_revision",
         ),
+        CheckConstraint(
+            "superconductor_kind IN ('conventional', 'unconventional', 'unknown')",
+            name="ck_papers_superconductor_kind",
+        ),
         UniqueConstraint(
             "id",
             "content_revision",
@@ -361,6 +365,12 @@ class Paper(Base):
     summary = Column(Text)
     paper_type = Column(String(20))
     theoretical_subtype = Column(String(20), nullable=True)
+    superconductor_kind = Column(
+        String(32),
+        nullable=False,
+        default="unknown",
+        server_default="unknown",
+    )
     keywords_tags = Column(Text)
     methodology = Column(Text)
     knowledge_graph_title = Column(String(200), nullable=True)
@@ -868,10 +878,6 @@ class MaterialState(Base):
             name="ck_material_states_dimensionality",
         ),
         CheckConstraint(
-            "superconductor_kind IN ('conventional', 'unconventional', 'unknown')",
-            name="ck_material_states_superconductor_kind",
-        ),
-        CheckConstraint(
             "crystal_system IN ('triclinic', 'monoclinic', 'orthorhombic', "
             "'tetragonal', 'trigonal', 'hexagonal', 'cubic', 'unknown')",
             name="ck_material_states_crystal_system",
@@ -929,12 +935,6 @@ class MaterialState(Base):
     magnetic_field_t = Column(Numeric(14, 6))
     state_kind = Column(
         String(20),
-        nullable=False,
-        default="unknown",
-        server_default="unknown",
-    )
-    superconductor_kind = Column(
-        String(32),
         nullable=False,
         default="unknown",
         server_default="unknown",

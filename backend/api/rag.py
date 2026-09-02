@@ -132,6 +132,11 @@ def _reject_legacy_classification_contract(draft: dict[str, Any]) -> None:
         for state in draft.get("material_states") or []
     ):
         present.append("material_states[].material_family")
+    if any(
+        isinstance(state, dict) and "superconductor_kind" in state
+        for state in draft.get("material_states") or []
+    ):
+        present.append("material_states[].superconductor_kind")
     if present:
         raise _upload_error(
             400,
@@ -253,6 +258,8 @@ def _validate_draft(
         raise _upload_error(400, "theoretical_subtype_required", "理论论文必须选择二级类型")
     if paper_type != "theoretical":
         paper["theoretical_subtype"] = None
+    if paper.get("superconductor_kind") not in {"conventional", "unconventional", "unknown"}:
+        raise _upload_error(400, "invalid_superconductor_kind", "论文级 Superconductor type 无效")
     families = [item for item in paper.get("material_families") or [] if isinstance(item, dict)]
     if not families:
         raise _upload_error(400, "material_family_required", "请至少选择一个论文级 Material family")
@@ -1052,6 +1059,7 @@ async def _create_pending_paper(
                     summary=paper_data.get("summary"),
                     paper_type=paper_data.get("paper_type"),
                     theoretical_subtype=paper_data.get("theoretical_subtype"),
+                    superconductor_kind=paper_data.get("superconductor_kind"),
                     keywords_tags=json.dumps(paper_data.get("keywords_tags") or [], ensure_ascii=False),
                     methodology=json.dumps(paper_data.get("methodology") or [], ensure_ascii=False),
                     knowledge_graph_title=paper_data.get("knowledge_graph_title"),
@@ -1593,6 +1601,7 @@ async def _rewrite_paper_scientific_draft_in_tx(
     material_states = draft.get("material_states")
     if not isinstance(material_states, list):
         raise _upload_error(400, "invalid_draft", "草稿结构不完整")
+    _reject_legacy_classification_contract({"material_states": material_states})
 
     paper = await session.get(models.Paper, paper_id)
     if paper is None:
@@ -1607,6 +1616,7 @@ async def _rewrite_paper_scientific_draft_in_tx(
     full_draft = {
         "paper": {
             **_paper_as_draft_dict(paper, paper_type),
+            "superconductor_kind": draft.get("superconductor_kind", paper.superconductor_kind),
             "material_families": draft.get("material_families") or [],
         },
         "material_states": material_states,
@@ -1614,6 +1624,7 @@ async def _rewrite_paper_scientific_draft_in_tx(
     }
     _validate_draft(full_draft)
     await _resolve_draft_classifications(session, full_draft)
+    paper.superconductor_kind = full_draft["paper"]["superconductor_kind"]
 
     bumped = paper.review_status == "approved"
     await delete_scientific_entities(session, paper.id)
@@ -1646,6 +1657,7 @@ def _paper_as_draft_dict(paper: models.Paper, paper_type: str) -> dict[str, Any]
         "doi": paper.doi or "",
         "paper_type": paper_type,
         "theoretical_subtype": paper.theoretical_subtype,
+        "superconductor_kind": paper.superconductor_kind,
         "research_materials": paper.research_materials or [],
         "authors": paper.authors or [],
         "journal": paper.journal or "",

@@ -169,9 +169,8 @@ def _seed_paper(engine, *, review_status: str, paper_id: int = 10):
         connection.execute(
             text(
                 "INSERT INTO material_states (id, paper_id, paper_revision, superconductor_id,"
-                " material_dimensionality, superconductor_kind,"
-                " crystal_system, pressure_value_gpa, state_kind, created_at, updated_at)"
-                " VALUES (1, :pid, 1, 1, 'three_dimensional', 'conventional',"
+                " material_dimensionality, crystal_system, pressure_value_gpa, state_kind, created_at, updated_at)"
+                " VALUES (1, :pid, 1, 1, 'three_dimensional',"
                 " 'tetragonal', 0.001, 'experimental', NOW(), NOW())"
             ),
             {"pid": paper_id},
@@ -297,6 +296,7 @@ def clean_data(migrated_engine):
 def _rewrite_payload(states=None, paper_type="experimental"):
     return {
         "paper_type": paper_type,
+        "superconductor_kind": "conventional",
         "material_families": [
             {"id": 1, "name": "单质超导体", "status": "confirmed"}
         ],
@@ -306,7 +306,6 @@ def _rewrite_payload(states=None, paper_type="experimental"):
                 "structure_families": [],
                 "element_count": 1,
                 "material_dimensionality": "three_dimensional",
-                "superconductor_kind": "conventional",
                 "crystal_system": "tetragonal",
                 "pressure_value_gpa": 0.001,
                 "pressure_min_gpa": None,
@@ -368,7 +367,6 @@ def test_rewrite_deletes_in_dependency_order_and_rebuilds(migrated_engine):
             "structure_families": [],
             "element_count": 1,
             "material_dimensionality": "three_dimensional",
-            "superconductor_kind": "conventional",
             "crystal_system": "cubic",
             "pressure_value_gpa": 0.0,
             "state_kind": "experimental",
@@ -401,7 +399,7 @@ def test_rewrite_reuses_validation_rules(migrated_engine):
     missing_material = _rewrite_payload(states=[{
         "material": "",
         "structure_families": [], "element_count": 1, "material_dimensionality": "three_dimensional",
-        "superconductor_kind": "conventional", "crystal_system": "tetragonal", "state_kind": "experimental",
+        "crystal_system": "tetragonal", "state_kind": "experimental",
         "tc_results": [], "properties": [],
     }])
     data, error = _call_endpoint(missing_material)
@@ -413,7 +411,7 @@ def test_rewrite_reuses_validation_rules(migrated_engine):
     missing_family = _rewrite_payload(states=[{
         "material": "Sn",
         "structure_families": [], "element_count": 1, "material_dimensionality": "three_dimensional",
-        "superconductor_kind": "conventional", "crystal_system": "tetragonal", "state_kind": "experimental",
+        "crystal_system": "tetragonal", "state_kind": "experimental",
         "tc_results": [], "properties": [],
     }])
     missing_family["material_families"] = []
@@ -424,7 +422,7 @@ def test_rewrite_reuses_validation_rules(migrated_engine):
     bad_pressure = _rewrite_payload(states=[{
         "material": "Sn",
         "structure_families": [], "element_count": 1, "material_dimensionality": "three_dimensional",
-        "superconductor_kind": "conventional", "crystal_system": "tetragonal", "state_kind": "experimental",
+        "crystal_system": "tetragonal", "state_kind": "experimental",
         "pressure_min_gpa": 10, "pressure_max_gpa": 5,
         "tc_results": [], "properties": [],
     }])
@@ -528,7 +526,7 @@ def test_failed_rewrite_rolls_back_everything(migrated_engine):
     bad_payload = _rewrite_payload(states=[{
         "material": "Sn",
         "structure_families": [], "element_count": 1, "material_dimensionality": "not_a_dimension",
-        "superconductor_kind": "conventional", "crystal_system": "tetragonal", "state_kind": "experimental",
+        "crystal_system": "tetragonal", "state_kind": "experimental",
         "tc_results": [], "properties": [],
     }])
     data, error = _call_endpoint(bad_payload)

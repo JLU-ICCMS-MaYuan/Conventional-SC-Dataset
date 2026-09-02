@@ -243,6 +243,7 @@ def test_theoretical_tc_without_entry_context_keeps_shared_state_context():
 
 def test_draft_element_count_takes_precedence_over_formula_count():
     draft = {
+        "paper": {"superconductor_kind": "unconventional"},
         "material_states": [
             {"material": "MgB2", "element_count": 5},
             {"material": "LaH10"},
@@ -258,7 +259,7 @@ def test_draft_element_count_takes_precedence_over_formula_count():
     assert states[1].element_count == 2
 
 
-def test_superconductor_kind_persisted_with_whitelist_fallback():
+def test_superconductor_kind_is_not_persisted_on_material_states():
     draft = {
         "material_states": [
             {"material": "Cu", "superconductor_kind": "unconventional"},
@@ -272,9 +273,8 @@ def test_superconductor_kind_persisted_with_whitelist_fallback():
     asyncio.run(persist_scientific_draft(session, paper, draft))
 
     states = [item for item in session.added if isinstance(item, models.MaterialState)]
-    assert states[0].superconductor_kind == "unconventional"
-    assert states[1].superconductor_kind == "unknown"
-    assert states[2].superconductor_kind == "unknown"
+    assert paper.superconductor_kind == "unconventional"
+    assert all(not hasattr(state, "superconductor_kind") for state in states)
 
 
 def test_tc_method_custom_persisted_only_for_other_method():

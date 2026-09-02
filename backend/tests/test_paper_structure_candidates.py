@@ -114,9 +114,8 @@ def _seed_paper(engine):
         connection.execute(
             text(
                 "INSERT INTO material_states (id, paper_id, paper_revision, superconductor_id,"
-                " material_dimensionality, superconductor_kind, crystal_system, state_kind,"
-                " created_at, updated_at) VALUES"
-                " (1, 10, 1, 1, 'three_dimensional', 'unknown', 'cubic', 'theoretical', NOW(), NOW())"
+                " material_dimensionality, crystal_system, state_kind, created_at, updated_at) VALUES"
+                " (1, 10, 1, 1, 'three_dimensional', 'cubic', 'theoretical', NOW(), NOW())"
             )
         )
 
