@@ -82,7 +82,7 @@ fresh 目标 Schema 已落实以下边界：
 
 ## 论文叙述字段的语言约定
 
-六个 LLM 叙述字段（`summary`、`keywords_tags`、`methodology`、`key_finding`、`research_motivation`、`knowledge_graph_title`）的事实来源是英文论文原文，因此内容语言统一为英文，不做双语存储（不存在 `*_en` 列），展示也不随界面语言变化（[Issue #74](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/74)）。界面语言（简体中文/英文）只作用于前端文案与固定枚举标签，与叙述字段内容无关。分类目录项（`material_families`、`structure_families`）则是真正的双语实体：seed 条目齐备 `name_zh` 与 `name_en`，用户自建条目只有中文名，英文界面缺 `name_en` 时回退中文名。
+六个 LLM 叙述字段（`summary`、`keywords_tags`、`methodology`、`key_finding`、`research_motivation`、`knowledge_graph_title`）的事实来源是英文论文原文，因此内容语言统一为英文，不做双语存储（不存在 `*_en` 列），展示也不随界面语言变化（[Issue #74](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/74)）。界面语言（简体中文/英文）只作用于前端文案与固定枚举标签，与叙述字段内容无关。分类目录项（`material_families`、`structure_families`）则是真正的双语实体：seed 条目齐备 `name_zh` 与 `name_en`；用户自建条目通常只有中文名，英文界面缺 `name_en` 时回退中文名，已知的「单质超导体」目录项已补齐为 `Elemental superconductor`。
 
 ## 约束
 
