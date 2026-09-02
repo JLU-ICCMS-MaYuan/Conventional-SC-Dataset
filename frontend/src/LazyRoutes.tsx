@@ -40,8 +40,8 @@ const LazyRoutes: React.FC = () => (
     <Route path="/account" element={<Spin><RoleRoute allow={['user', 'admin', 'superadmin']}><AccountPage /></RoleRoute></Spin>} />
     <Route path="/users/:username" element={<Spin><PublicUserPage /></Spin>} />
     <Route path="/admin" element={<Spin><RoleRoute allow={['admin']} redirectSuperadminFromAdmin><AdminPage /></RoleRoute></Spin>} />
-    {/* 论文编辑独立页（Issue #78）：与 /admin 一致由管理员保护，超管重定向语义同 /admin */}
-    <Route path="/admin/papers/:id/edit" element={<Spin><RoleRoute allow={['admin']} redirectSuperadminFromAdmin><AdminPaperEditPage /></RoleRoute></Spin>} />
+    {/* Issue #78：超管复用管理员论文列表，需能进入同一篇论文的独立编辑页。 */}
+    <Route path="/admin/papers/:id/edit" element={<Spin><RoleRoute allow={['admin', 'superadmin']}><AdminPaperEditPage /></RoleRoute></Spin>} />
     <Route path="/superadmin" element={<Spin><RoleRoute allow={['superadmin']}><SuperAdminPage /></RoleRoute></Spin>} />
     {/* 兜底：未匹配地址显示明确提示，避免白屏 */}
     <Route path="*" element={<Spin><NotFoundPage /></Spin>} />

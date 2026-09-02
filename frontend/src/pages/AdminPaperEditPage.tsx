@@ -6,6 +6,7 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
+import { useAuth } from '../context/AuthContext'
 import { ClassificationCatalogs, loadClassificationCatalogs } from '../lib/classifications'
 import { DraftMaterialState, StructureCandidate, unwrapData } from '../lib/paperProcessing'
 import MaterialStatesEditor, { SpaceGroupOption } from '../components/MaterialStatesEditor'
@@ -87,9 +88,11 @@ const candidateFromStructureModel = (model: Record<string, any>, ref: string): S
 const AdminPaperEditPage: React.FC = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const { t, lang } = useLanguage()
   const locale = lang === 'zh' ? 'zh-CN' : 'en-US'
   const paperId = Number(id)
+  const workspacePath = user?.role === 'superadmin' ? '/superadmin' : '/admin'
 
   /* ── 论文级字段 ─────────────────────────────── */
   const [editForm, setEditForm] = useState<Record<string, any>>({})
@@ -287,7 +290,7 @@ const AdminPaperEditPage: React.FC = () => {
     <Container maxWidth="lg" sx={{ py: 3 }}>
       {/* 标题栏 + 返回列表 */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-        <IconButton aria-label={t('admin.editBackToList')} onClick={() => navigate('/admin')}>
+        <IconButton aria-label={t('admin.editBackToList')} onClick={() => navigate(workspacePath)}>
           <ArrowBackIcon fontSize="small" />
         </IconButton>
         <Typography variant="h5" fontWeight={700}>{t('admin.editPaperTitle')}</Typography>
@@ -498,7 +501,7 @@ const AdminPaperEditPage: React.FC = () => {
           />
 
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 1 }}>
-            <Button variant="outlined" onClick={() => navigate('/admin')}>{t('common.cancel')}</Button>
+            <Button variant="outlined" onClick={() => navigate(workspacePath)}>{t('common.cancel')}</Button>
             <Button variant="contained" onClick={handleEditSave}>{t('admin.saveChanges')}</Button>
           </Box>
         </Box>

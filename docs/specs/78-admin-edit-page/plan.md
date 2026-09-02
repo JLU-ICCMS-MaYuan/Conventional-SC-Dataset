@@ -16,7 +16,7 @@
 
 前端
   frontend/src/pages/AdminPaperEditPage.tsx          ← 新增：独立编辑页组件
-    路由 /admin/papers/:id/edit（LazyRoutes + RoleRoute admin）
+    路由 /admin/papers/:id/edit（LazyRoutes + RoleRoute admin/superadmin）；按当前角色返回对应工作台
     迁移现编辑弹窗能力：论文级字段、MaterialStatesEditor（含结构区）、
     审核区、两段保存（C4）、升版警告与退回提示
     加载详情后：对每个已落库结构调用表示端点 → 合并进候选的 representations
@@ -49,7 +49,7 @@
 ### 步骤 3：列表跳转与弹窗移除
 
 - `AdminPage.tsx`：删除编辑弹窗的渲染与相关状态（`editPaper`/`editForm`/`handleEditSave` 等迁移到独立页面）；列表「编辑」按钮改为 `navigate(\`/admin/papers/${paper.id}/edit\`)`。
-- `frontend/src/LazyRoutes.tsx`：注册 `/admin/papers/:id/edit`（`RoleRoute allow={['admin']}`）。
+- `frontend/src/LazyRoutes.tsx`：注册 `/admin/papers/:id/edit`（`RoleRoute allow={['admin', 'superadmin']}`）；保留 `/admin` 工作台对超级管理员的既有重定向。
 
 ### 步骤 4：i18n
 
@@ -62,6 +62,7 @@
   2. 已落库结构调用表示端点后，结构区切换 cell/format 有预览内容（mock 端点返回完整 representations）。
   3. 表示端点失败时降级（仅落库 CIF 可用），不阻塞保存。
   4. 两段保存顺序（先论文级后科学数据）与 `revision_bumped` 提示。
+  5. 通过真实 `LazyRoutes` 验证超级管理员访问编辑深链时渲染编辑页，而非重定向到 `/superadmin`。
 - `tests/02_identity_governance/admin-edit-review.test.tsx` 与 `admin-scientific-data-edit.test.tsx`：**改造为独立页面语义**（点「编辑」后进入页面而非弹窗）；既有断言如适用则迁移。
 - `upload-task-*` 等上传页测试不变（SC-005）。
 

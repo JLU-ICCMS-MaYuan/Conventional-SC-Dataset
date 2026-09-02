@@ -40,7 +40,10 @@ vi.mock('../../frontend/src/context/AuthContext', () => ({
 
 import AppShell from '../../frontend/src/components/AppShell'
 import AuthDialog from '../../frontend/src/components/AuthDialog'
+import LazyRoutes from '../../frontend/src/LazyRoutes'
 import RoleRoute from '../../frontend/src/components/RoleRoute'
+
+vi.mock('../../frontend/src/pages/AdminPaperEditPage', () => ({ default: () => <div>独立编辑页</div> }))
 
 afterEach(() => {
   cleanup()
@@ -74,6 +77,13 @@ describe('身份与工作台导航', () => {
     authState = { ...authState, user: { ...baseUser, role: 'superadmin', is_superadmin: true } }
     render(<MemoryRouter initialEntries={['/admin']}><Routes><Route path="/admin" element={<RoleRoute allow={['admin']} redirectSuperadminFromAdmin><div>管理员页</div></RoleRoute>} /><Route path="/superadmin" element={<div>超级管理员页</div>} /></Routes></MemoryRouter>)
     expect(screen.getByText('超级管理员页')).toBeInTheDocument()
+  })
+
+  it('超级管理员可访问管理员列表复用的论文编辑深链', async () => {
+    authState = { ...authState, user: { ...baseUser, role: 'superadmin', is_superadmin: true } }
+    render(<MemoryRouter initialEntries={['/admin/papers/88/edit']}><LazyRoutes /></MemoryRouter>)
+    expect(await screen.findByText('独立编辑页')).toBeInTheDocument()
+    expect(screen.queryByText('超级管理员工作台')).not.toBeInTheDocument()
   })
 })
 

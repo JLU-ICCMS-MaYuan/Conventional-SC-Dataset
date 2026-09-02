@@ -41,11 +41,13 @@
 ### 实施
 
 - [x] T011 [US1] 新增 `frontend/src/pages/AdminPaperEditPage.tsx`：迁移 `materialStateFromDetail`/`candidateFromStructureModel`、两段保存、升版警告、审核区、结构表示加载与合并（FR-001–FR-009）
-- [x] T012 [US1] 修改 `frontend/src/LazyRoutes.tsx`：注册 `/admin/papers/:id/edit`（`RoleRoute allow={['admin']}`）（FR-002）
+- [x] T012 [US1] 修改 `frontend/src/LazyRoutes.tsx`：注册 `/admin/papers/:id/edit`（初始实现为 `RoleRoute allow={['admin']}`）（FR-002）
 - [x] T013 [US1] 修改 `frontend/src/pages/AdminPage.tsx`：移除编辑弹窗与相关状态，「编辑」按钮 `navigate(\`/admin/papers/${paper.id}/edit\`)`（FR-001）
 - [x] T014 [US1] 修改 `frontend/src/i18n/{zh,en}/admin.ts`：独立页标题、返回、加载失败、表示降级提示等文案（FR-011）
 
 ## 最终阶段：完善与跨故事事项
+
+- [x] T019 [US1] 修复超级管理员复用论文列表后被编辑路由重定向的问题：`frontend/src/LazyRoutes.tsx` 将编辑子路由授权给 `admin` 与 `superadmin`，`frontend/src/pages/AdminPaperEditPage.tsx` 按角色返回对应工作台，并在 `tests/02_identity_governance/identity_ui.test.tsx` 覆盖真实 `LazyRoutes` 深链（FR-002、SC-006）
 
 - [x] T015 执行 `scripts/run-tests.sh frontend`、`go`、`backend`，与 T003 基线比对确认无新增失败（SC-005）
 - [x] T016 执行 `cd frontend && npm run build`，确认 `tsc -b` 无类型错误
@@ -78,6 +80,7 @@
 | --- | --- | --- |
 | FR-001 / US1 | T011、T013 | 列表跳转独立页、移除弹窗 |
 | FR-002 / US1 | T012 | RoleRoute 保护 |
+| FR-002 / US1 / SC-006 | T019 | 超级管理员编辑页例外授权、返回目标与路由回归 |
 | FR-003 / US1 | T007、T011 | 页面承载全部编辑能力 |
 | FR-004 / US2 | T004、T006 | 完整表示生成 |
 | FR-005 / US2 | T008、T011 | 晶胞/格式切换预览 |
