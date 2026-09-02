@@ -261,6 +261,7 @@ def test_draft_element_count_takes_precedence_over_formula_count():
 
 def test_superconductor_kind_is_not_persisted_on_material_states():
     draft = {
+        "paper": {"superconductor_kind": "unconventional"},
         "material_states": [
             {"material": "Cu", "superconductor_kind": "unconventional"},
             {"material": "Fe", "superconductor_kind": "not-a-kind"},
