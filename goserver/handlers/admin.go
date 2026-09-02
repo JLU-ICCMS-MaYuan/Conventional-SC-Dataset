@@ -121,11 +121,16 @@ func GetPaperDetail(c *gin.Context) {
 	id := c.Param("id")
 	var paper models.Paper
 	// First = SELECT ... LIMIT 1
+	// 材料状态下的 Tc、物性与结构必须预加载，否则编辑页只能看到空数组
+	// （GORM 未预加载的关联序列化为空，且接口返回 200 无错误信号）。
 	if err := database.DB.
 		Preload("KeyProperties").
 		Preload("MaterialStates.Superconductor").
 		Preload("MaterialStates.MaterialFamily").
 		Preload("MaterialStates.StructureFamilyLinks.StructureFamily").
+		Preload("MaterialStates.TcResults").
+		Preload("MaterialStates.Properties").
+		Preload("MaterialStates.Structures").
 		First(&paper, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "论文不存在"})
 		return

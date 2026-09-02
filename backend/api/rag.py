@@ -251,7 +251,7 @@ def _validate_draft(
         raise _upload_error(400, "material_state_required", "非综述论文至少需要一个材料状态")
     for state_index, state in enumerate(material_states):
         if not str(state.get("material") or "").strip():
-            raise _upload_error(400, "state_material_required", f"第 {state_index + 1} 个材料状态缺少材料")
+            raise _upload_error(400, "state_material_required", f"第 {state_index + 1} 个材料状态缺少化学式")
         family = state.get("material_family")
         if paper_type != "review" and (
             not isinstance(family, dict) or not str(family.get("name") or "").strip()
@@ -1391,6 +1391,201 @@ async def download_candidate_attachment(
         raise _upload_error(404, "candidate_attachment_not_found", "候选附件不存在")
     file_path, filename = found
     return FileResponse(file_path, filename=filename, media_type="application/octet-stream")
+
+
+@router.post("/papers/{paper_id}/structure-candidates")
+async def paper_structure_candidate(
+    paper_id: int,
+    material_state_index: int = Form(..., ge=0),
+    file: UploadFile = File(...),
+    _current_user: User = Depends(get_current_admin),
+) -> dict[str, Any]:
+    """为论文补传结构附件（契约 C2）。
+
+    只产出并返回校验后的结构候选，不写入 `structure_models`——候选随后由
+    C1 的 `structure_candidates` 字段一并提交落库（保持「先校验预览、确认后
+    保存」的既有交互）。校验与表示生成复用 `build_structure_candidate`（R6）。
+    """
+    from backend.rag.database import async_session_factory
+
+    raw = await file.read()
+    await file.close()
+    filename = Path(file.filename or "structure.cif").name
+    async with async_session_factory() as session:
+        return await _build_paper_structure_candidate(
+            session, paper_id, material_state_index, filename, raw
+        )
+
+
+async def _build_paper_structure_candidate(
+    session,
+    paper_id: int,
+    material_state_index: int,
+    filename: str,
+    raw: bytes,
+) -> dict[str, Any]:
+    """C2 的实现（不管理 session），便于测试直接调用。"""
+    from backend.ingest.upload_contracts import structure_format_for_filename
+    from backend.services.structure_candidates import (
+        StructureCandidateError,
+        build_structure_candidate,
+    )
+
+    paper = await session.get(models.Paper, paper_id)
+    if paper is None:
+        raise _upload_error(404, "paper_not_found", "论文不存在")
+    state_count = await session.scalar(
+        select(func.count())
+        .select_from(models.MaterialState)
+        .where(models.MaterialState.paper_id == paper_id)
+    )
+    if material_state_index >= (state_count or 0):
+        raise _upload_error(400, "invalid_material_state_index", "指定材料状态不存在")
+
+    structure_format = structure_format_for_filename(filename)
+    if structure_format is None:
+        raise _upload_error(
+            400, "invalid_structure_format", "只支持 CIF 或 VASP 结构文件（POSCAR、CONTCAR、.poscar、.vasp）"
+        )
+    try:
+        structure_text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise _upload_error(400, "structure_encoding_invalid", "结构文件必须使用 UTF-8 编码") from exc
+
+    source_info = {
+        "file_id": uuid.uuid4().hex,
+        "filename": filename,
+        "role": "attachment",
+        "page": None,
+        "quote": None,
+    }
+    try:
+        candidate = build_structure_candidate(
+            structure_format=structure_format,
+            structure_text=structure_text,
+            source=source_info,
+            material_state_ref=f"material_states[{material_state_index}]",
+        )
+    except (StructureCandidateError, ValueError) as exc:
+        raise _upload_error(400, "structure_validation_failed", str(exc)) from exc
+
+    return {
+        "ok": True,
+        "data": {
+            "candidate_id": candidate["candidate_id"],
+            "material_state_index": material_state_index,
+            "status": candidate["status"],
+            "structure_format": candidate["original_format"],
+            "validation": candidate["validation"],
+            "representations": candidate["representations"],
+        },
+    }
+
+
+@router.put("/papers/{paper_id}/scientific-draft")
+async def rewrite_paper_scientific_draft(
+    paper_id: int,
+    draft: dict[str, Any],
+    current_user: User = Depends(get_current_admin),
+) -> dict[str, Any]:
+    """重写论文的科学数据（整体替换，契约 C1）。
+
+    - `pending`：原地重建，版本号不变（FR-012）。
+    - `approved`：升版重审——版本号递增、清空已批准标记、退回待审核，
+      由外键级联迁移血缘数据（FR-013–FR-016）。
+    - `rejected`：拒绝（R10、409）。
+    全部写入在单一事务内，任一步失败整体回滚（FR-018）。
+    """
+    from backend.rag.database import async_session_factory
+
+    async with async_session_factory() as session:
+        async with session.begin():
+            return await _rewrite_paper_scientific_draft_in_tx(
+                session, paper_id, draft, current_user
+            )
+
+
+async def _rewrite_paper_scientific_draft_in_tx(
+    session,
+    paper_id: int,
+    draft: dict[str, Any],
+    current_user: User,
+) -> dict[str, Any]:
+    """C1 的事务内实现（不管理 session/事务），便于测试直接调用。"""
+    from backend.ingest.scientific_drafts import persist_scientific_draft
+    from backend.services.scientific_draft_rewrite import (
+        bump_paper_revision,
+        delete_scientific_entities,
+        record_revision_event,
+    )
+
+    paper_type = str(draft.get("paper_type") or "").strip()
+    if paper_type not in PAPER_TYPES:
+        raise _upload_error(400, "paper_type_required", "请选择论文整体类型")
+    material_states = draft.get("material_states")
+    if not isinstance(material_states, list):
+        raise _upload_error(400, "invalid_draft", "草稿结构不完整")
+
+    paper = await session.get(models.Paper, paper_id)
+    if paper is None:
+        raise _upload_error(404, "paper_not_found", "论文不存在")
+    if paper.review_status != "pending" and paper.review_status != "approved":
+        raise _upload_error(
+            409, "paper_status_not_editable", "当前状态的论文不可编辑，请先退回待审核"
+        )
+
+    # 复用上传提交的既有校验（FR-020）：论文级字段来自数据库，
+    # 请求体只携带科学数据部分（契约 C1 的形态）。
+    full_draft = {
+        "paper": _paper_as_draft_dict(paper, paper_type),
+        "material_states": material_states,
+        "structure_candidates": draft.get("structure_candidates") or [],
+    }
+    _validate_draft(full_draft)
+    await _resolve_draft_classifications(session, full_draft)
+
+    bumped = paper.review_status == "approved"
+    await delete_scientific_entities(session, paper.id)
+    if bumped:
+        await bump_paper_revision(session, paper)
+    await persist_scientific_draft(session, paper, full_draft)
+    if bumped:
+        await record_revision_event(session, paper, current_user.id)
+
+    return {
+        "ok": True,
+        "data": {
+            "paper_id": paper.id,
+            "content_revision": paper.content_revision,
+            "review_status": paper.review_status,
+            "revision_bumped": bumped,
+            "material_state_count": len(full_draft["material_states"]),
+        },
+    }
+
+
+def _paper_as_draft_dict(paper: models.Paper, paper_type: str) -> dict[str, Any]:
+    """把数据库论文行转成 `_validate_draft` 需要的 paper 段。
+
+    请求体只携带科学数据（material_states 等），论文级校验字段从数据库读取，
+    使「复用上传校验」对已存在的论文成立（title 等必然非空）。
+    """
+    return {
+        "title": paper.title or "",
+        "doi": paper.doi or "",
+        "paper_type": paper_type,
+        "theoretical_subtype": paper.theoretical_subtype,
+        "research_materials": paper.research_materials or [],
+        "authors": paper.authors or [],
+        "journal": paper.journal or "",
+        "year": paper.year,
+        "abstract": paper.abstract or "",
+        "summary": paper.summary or "",
+        "keywords_tags": paper.keywords_tags or [],
+        "methodology": paper.methodology or [],
+        "key_finding": paper.key_finding or "",
+        "research_motivation": paper.research_motivation or "",
+    }
 
 
 @router.post("/papers/{paper_id}/publish")

@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import AdminPage from '../../frontend/src/pages/AdminPage'
+import { LanguageProvider } from '../../frontend/src/context/LanguageContext'
 import { api } from '../../frontend/src/lib/api'
 
 vi.mock('../../frontend/src/context/AuthContext', () => ({
@@ -86,5 +87,47 @@ describe('编辑页内审核', () => {
     expect(await screen.findByRole('option', { name: '❌ 拒绝' })).toBeVisible()
     expect(screen.getByRole('option', { name: '退回待审核' })).toBeVisible()
     expect(screen.queryByRole('option', { name: /通过/ })).not.toBeInTheDocument()
+  })
+})
+
+describe('T012：物性行化学式标签（#75-1 FR-002）', () => {
+  const paperWithKp = {
+    ...paper,
+    key_properties: [{
+      id: 1, material: 'LaH10', name: 'critical_temperature', name_raw: 'Tc',
+      value_min: 250, value_max: null, unit: 'K', is_primary: true,
+    }],
+    material_states: [],
+  }
+
+  beforeEach(() => {
+    mockedApi.get.mockImplementation(async (path: string) => {
+      if (path.startsWith('/api/admin/papers/all')) return { items: [paper], total: 1 }
+      if (path === '/api/admin/papers/88') return paperWithKp
+      if (path.startsWith('/api/chart-groups')) return []
+      return {}
+    })
+  })
+
+  it('物性行输入框标签为「化学式 (material)」', async () => {
+    const user = userEvent.setup()
+    render(<AdminPage />)
+    await user.click(await screen.findByRole('button', { name: '论文审核' }))
+    await user.click(await screen.findByRole('button', { name: '编辑' }))
+    expect(await screen.findByLabelText('化学式 (material)')).toBeVisible()
+    expect(screen.getByLabelText('化学式 (material)')).toHaveValue('LaH10')
+  })
+
+  it('英文界面标签为 Chemical formula (material)', async () => {
+    localStorage.setItem('sc-wiki.language', 'en')
+    const user = userEvent.setup()
+    render(
+      <LanguageProvider>
+        <AdminPage />
+      </LanguageProvider>,
+    )
+    await user.click(await screen.findByRole('button', { name: 'Paper Review' }))
+    await user.click(await screen.findByRole('button', { name: 'Edit' }))
+    expect(await screen.findByLabelText('Chemical formula (material)')).toBeVisible()
   })
 })

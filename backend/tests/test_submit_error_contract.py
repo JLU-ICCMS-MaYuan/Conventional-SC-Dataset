@@ -80,3 +80,33 @@ def test_existing_http_exception_contract_is_not_rewritten(client):
     detail = response.json()["detail"]
     assert detail["code"] == "title_required"
     assert detail["message"] == "论文标题不能为空"
+
+
+def test_missing_material_contract_names_chemical_formula(client):
+    """#75-1：化学式缺失的错误契约——code 为 state_material_required，
+    message 指明缺少化学式且保留「第 N 个材料状态」序号前缀（FR-006、FR-007）。"""
+    import re
+
+    from backend.api.rag import _validate_draft
+
+    draft = {
+        "paper": {
+            "title": "测试论文",
+            "paper_type": "experimental",
+            "research_materials": ["LaH10"],
+        },
+        "material_states": [
+            {"material": "", "material_family": {"name": "氢基超导体"}},
+            {"material": "H3S", "material_family": {"name": "氢基超导体"}},
+        ],
+    }
+
+    with pytest.raises(HTTPException) as exc_info:
+        _validate_draft(draft)
+
+    assert exc_info.value.status_code == 400
+    detail = exc_info.value.detail
+    assert detail["code"] == "state_material_required"
+    assert re.fullmatch(r"第 \d+ 个材料状态缺少化学式", detail["message"]), detail["message"]
+    # 序号前缀必须保留，供前端解析并定位到出错卡片
+    assert detail["message"].startswith("第 1 个材料状态")

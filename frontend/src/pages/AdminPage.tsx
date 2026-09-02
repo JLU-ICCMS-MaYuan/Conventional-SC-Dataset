@@ -21,9 +21,12 @@ import {
 import { type User, useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
 import { ClassificationCatalogs, loadClassificationCatalogs, refreshClassificationCatalogs } from '../lib/classifications'
-import { SourceEvidence, UploadDraft, normalizeUploadDraft, unwrapData } from '../lib/paperProcessing'
+import {
+  DraftMaterialState, SourceEvidence, StructureCandidate, UploadDraft, normalizeUploadDraft, unwrapData,
+} from '../lib/paperProcessing'
 import ChartGroupEditor from '../components/ChartGroupEditor'
 import ClassificationAutocomplete from '../components/ClassificationAutocomplete'
+import MaterialStatesEditor, { SpaceGroupOption } from '../components/MaterialStatesEditor'
 import NewsManager from '../components/NewsManager'
 import SuperAdminGovernance from '../components/SuperAdminGovernance'
 import UsernameField from '../components/UsernameField'
@@ -100,6 +103,61 @@ const WORKSPACE_CARDS: Array<{
 ]
 const paperRecordCount = (paper?: PaperRecord | null) =>
   paper?.record_count ?? paper?.key_properties?.length ?? 0
+
+/**
+ * Go 详情行的材料状态 → 共享编辑器（MaterialStatesEditor）的 DraftMaterialState（T020）。
+ * Go 侧返回的是模型序列化：化学式在 superconductor.chemical_formula，
+ * structure_families 是 {id, is_primary, structure_family:{...}} 的链接行，
+ * 需要转成编辑器的 {id, name, status, is_primary} 选择形态。
+ */
+const materialStateFromDetail = (state: Record<string, any>): DraftMaterialState => ({
+  ...state,
+  material: state.superconductor?.chemical_formula || state.material || '',
+  material_family: state.material_family
+    ? { id: state.material_family.id ?? null, name: state.material_family.name || '', status: 'confirmed' }
+    : null,
+  structure_families: (state.structure_families || []).map((item: any) => ({
+    id: item.id ?? item.structure_family_id,
+    name: item.structure_family?.name || item.name || '',
+    status: 'confirmed',
+    is_primary: Boolean(item.is_primary),
+  })),
+  tc_results: state.tc_results || [],
+  properties: (state.properties || []).map((item: any) => ({
+    ...item,
+    value_raw: item.value_raw ?? (item.value == null ? '' : String(item.value)),
+  })),
+})
+
+/**
+ * Go 已落库的结构模型 → 已确认候选（T020）。
+ * 科学数据保存是整体替换（契约 C1）：既有结构必须并入候选列表，
+ * 否则保存时会被整体删除重建流程丢掉。
+ */
+const candidateFromStructureModel = (model: Record<string, any>, ref: string): StructureCandidate => ({
+  candidate_id: `structure_${model.id}`,
+  material_state_ref: ref,
+  source_kind: 'attachment',
+  status: 'confirmed',
+  confirmation: 'confirmed',
+  original_format: model.structure_format || 'cif',
+  original_text: model.structure_text || null,
+  validation: {
+    structure_format: model.structure_format || 'cif',
+    atom_count: model.atom_count ?? undefined,
+    volume: model.volume_angstrom3 ?? undefined,
+    cell_parameters: model.cell_parameters || undefined,
+  },
+  representations: model.structure_text ? {
+    // Python 端只把惯用胞 CIF 作为规范表示落库（scientific_drafts.py），统一放 cif 槽位
+    conventional: { cif: { text: model.structure_text, available: true } },
+  } : undefined,
+  sources: [{
+    file_id: `structure_${model.id}`,
+    filename: model.source_locator || `structure_${model.id}.cif`,
+    role: 'attachment',
+  }],
+})
 /* ═══════════════════════════════════════════════ */
 interface AdminPageProps { mode?: 'admin' | 'superadmin' }
 
@@ -160,6 +218,12 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
   const [editReviewStatus, setEditReviewStatus] = useState('')
   const [editReviewComment, setEditReviewComment] = useState('')
   const [editReviewSaving, setEditReviewSaving] = useState(false)
+  // 编辑弹窗科学数据（Issue #76）：材料状态与结构候选受控于共享编辑器，保存时随 C1 提交
+  const [editMaterialStates, setEditMaterialStates] = useState<DraftMaterialState[]>([])
+  const [editStructureCandidates, setEditStructureCandidates] = useState<StructureCandidate[]>([])
+  const [editSpaceGroups, setEditSpaceGroups] = useState<SpaceGroupOption[]>([])
+  // 论文原本是否有科学数据：有才在保存时走科学数据段（契约 C4 第二步）
+  const [editHadScientificData, setEditHadScientificData] = useState(false)
 
   /* ── Users ───────────────────────────────────── */
   const [users, setUsers] = useState<UserRecord[]>([])
@@ -334,6 +398,21 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
       // Select 的值将不在选项内而显示空白，故落到 rejected。
       setEditReviewStatus(p.review_status === 'rejected' ? 'rejected' : 'pending')
       setEditReviewComment(p.review_comment || '')
+      // 科学数据：Go 详情行转成共享编辑器形态；既有结构并入候选（整体替换语义，T020）
+      const detailStates: Array<Record<string, any>> = detail.material_states || []
+      const materialStates = detailStates.map(materialStateFromDetail)
+      const structureCandidates = detailStates.flatMap((state, index) =>
+        (state.structures || []).map((model: any) =>
+          candidateFromStructureModel(model, `material_states[${index}]`)))
+      setEditMaterialStates(materialStates)
+      setEditStructureCandidates(structureCandidates)
+      setEditHadScientificData(materialStates.length > 0 || structureCandidates.length > 0)
+      // 空间群标准表首次打开时加载（与上传页同一端点；失败降级为纯自由输入）
+      if (editSpaceGroups.length === 0) {
+        api.get<{ space_groups?: SpaceGroupOption[] }>('/api/rag/space-groups')
+          .then(response => { if (Array.isArray(response?.space_groups)) setEditSpaceGroups(response.space_groups) })
+          .catch(() => { /* 空间群表不可用时降级为自由输入，不阻塞编辑 */ })
+      }
       setEditPaper({paper:p,open:true})
     } catch (e: unknown) { setSnackbar(t('admin.loadFailedReason', { reason: (e as Error).message })) }
     finally { setEditLoading(false) }
@@ -364,6 +443,9 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
     } finally { setEditReviewSaving(false) }
   }
 
+  // 两段保存（契约 C4）：先论文级（Go，低风险），后科学数据（Python，整体替换）。
+  // 科学数据段仅当论文原本有科学数据或当前编辑区有内容时执行——纯论文级编辑
+  // （如无材料状态的综述）不需要触发整体替换。
   const handleEditSave = async () => {
     if (!editPaper.paper) return
     try {
@@ -379,11 +461,64 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
           condition_note: kp.condition_note,
         }))
       }
+      // 第一步：论文级字段保存（Go）。失败在此终止，不调用科学数据段。
       await api.put(`/api/admin/papers/${editPaper.paper.id}`, payload)
-      setSnackbar(t('common.saved'))
+      if (editHadScientificData || editMaterialStates.length > 0 || editStructureCandidates.length > 0) {
+        try {
+          // 第二步：科学数据整体替换（Python，契约 C1）。
+          // structure_candidates 只提交已确认候选：未确认（unreviewed）与已排除（excluded）
+          // 的候选不落库，与上传链路「先确认后保存」的语义一致（契约 C1/C2）。
+          const response = await api.put<{ ok: boolean; data: { revision_bumped?: boolean } }>(
+            `/api/rag/papers/${editPaper.paper.id}/scientific-draft`,
+            {
+              paper_type: editForm.paper_type || '',
+              material_states: editMaterialStates,
+              structure_candidates: editStructureCandidates.filter(candidate => candidate.confirmation === 'confirmed'),
+            },
+          )
+          // 升版成功（T045）：论文已退回待审核，明确提示审核通过前不对外公开
+          setSnackbar(response?.data?.revision_bumped
+            ? t('admin.scientificSavedRevisionBumped')
+            : t('common.saved'))
+        } catch (e: unknown) {
+          // FR-019：论文级已保存成功，只需重试科学数据部分；不关闭弹窗
+          setSnackbar(t('admin.scientificSaveFailed', { reason: (e as Error).message }))
+          return
+        }
+      } else {
+        setSnackbar(t('common.saved'))
+      }
       setEditPaper({paper:null,open:false})
       loadPapers()
     } catch (e: unknown) { setSnackbar(t('admin.saveFailedReason', { reason: (e as Error).message })) }
+  }
+
+  // 论文结构补传（契约 C2）：只产出并校验候选、不落库；成功后并入本地候选，
+  // 由保存时的 C1 structure_candidates 字段一并提交（T034）。
+  const handleUploadStructure = async (stateIndex: number, file: File) => {
+    if (!editPaper.paper) return
+    const body = new FormData()
+    body.append('material_state_index', String(stateIndex))
+    body.append('file', file)
+    const response = await api.post<{ ok: boolean; data: Record<string, any> }>(
+      `/api/rag/papers/${editPaper.paper.id}/structure-candidates`, body,
+    )
+    const data = unwrapData(response)
+    const candidate: StructureCandidate = {
+      candidate_id: String(data.candidate_id),
+      material_state_ref: `material_states[${stateIndex}]`,
+      source_kind: 'attachment',
+      status: data.status || 'needs_review',
+      confirmation: 'unreviewed',
+      original_format: data.structure_format || null,
+      validation: data.validation,
+      representations: data.representations,
+      sources: [{ file_id: String(data.candidate_id), filename: file.name, role: 'attachment' }],
+    }
+    setEditStructureCandidates(current => [
+      ...current.filter(item => item.candidate_id !== candidate.candidate_id),
+      candidate,
+    ])
   }
 
   const handleBatchReview = async (status: string) => {
@@ -1172,6 +1307,27 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
               </Box>
             </Box>
           )}
+
+          {/* 升版警告：编辑已通过论文时提示保存科学数据将递增版本并退回待审核（T044） */}
+          {editPaper.paper?.review_status === 'approved' && (
+            <Alert severity="warning">{t('admin.revisionBumpWarning')}</Alert>
+          )}
+          {/* 科学数据编辑区（Issue #76）：材料状态、Tc、物性、结构候选与补传。
+              数据来自 /api/admin/papers/:id 的 material_states（含 tc_results/properties/structures），
+              编辑结果随保存时的 C1 请求整体替换（T020/T030/T034）。 */}
+          <MaterialStatesEditor
+            states={editMaterialStates}
+            onChange={setEditMaterialStates}
+            catalogs={classificationCatalogs}
+            catalogLoading={!classificationCatalogs && !classificationCatalogError}
+            catalogError={classificationCatalogError}
+            structureCandidates={editStructureCandidates}
+            onStructureCandidatesChange={setEditStructureCandidates}
+            spaceGroups={editSpaceGroups}
+            paperType={editForm.paper_type}
+            onUploadStructure={handleUploadStructure}
+            onError={setSnackbar}
+          />
         </DialogContent>
         <DialogActions>
           <Button onClick={()=>setEditPaper({paper:null,open:false})}>{t('common.cancel')}</Button>

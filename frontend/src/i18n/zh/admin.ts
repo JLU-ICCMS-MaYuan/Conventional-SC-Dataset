@@ -94,7 +94,7 @@ export default {
   createdChip: '创建: {value}',
   keyPropertiesHeader: '物性数据 ({n})',
   primaryProperty: '主要物性',
-  fieldMaterial: '材料 (material)',
+  fieldMaterial: '化学式 (material)',
   fieldPropertyName: '物性名 (name)',
   nameNoteLabel: '物性名备注',
   nameNoteTemperaturePositionDependent: '温度/位置依赖',
@@ -116,6 +116,12 @@ export default {
   fieldNameNote: '物性备注 (name_note)',
   saveChanges: '保存修改',
   saveFailedReason: '保存失败: {reason}',
+  // 科学数据编辑（Issue #76）：两段保存中科学数据段失败的提示（FR-019）
+  scientificSaveFailed: '论文信息已保存，但超导性质保存失败：{reason}',
+  // 升版成功提示（T045）：论文已从公开状态退回待审核
+  scientificSavedRevisionBumped: '论文已保存并退回待审核，审核通过前不对外公开',
+  // 编辑已通过论文时的升版警告（T044）
+  revisionBumpWarning: '该论文已通过审核。保存超导性质会递增版本号并退回待审核，审核通过前不对外公开。',
 
   // 论文批量操作与通用提示
   selectPapersFirst: '请先选择论文',

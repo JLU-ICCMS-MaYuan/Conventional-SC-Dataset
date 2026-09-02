@@ -88,7 +88,7 @@ describe('提交失败的必填定位与原因展示（Issue #58）', () => {
 
     const banner = await screen.findByRole('alert')
     expect(banner).toHaveTextContent('标题不能为空')
-    expect(banner).toHaveTextContent('第 3 个材料状态缺少材料')
+    expect(banner).toHaveTextContent('第 3 个材料状态缺少化学式')
     expect(mockedApi.post).not.toHaveBeenCalled()
   })
 
@@ -114,7 +114,7 @@ describe('提交失败的必填定位与原因展示（Issue #58）', () => {
     })
     const anchor = document.querySelector('[data-issue-field="material_states[2].material"]')
     expect(anchor).not.toBeNull()
-    expect(anchor).toHaveTextContent('第 3 个材料状态缺少材料')
+    expect(anchor).toHaveTextContent('第 3 个材料状态缺少化学式')
   })
 
   it('空间群号越界时定位到该字段并展示区间提示', async () => {
@@ -212,14 +212,42 @@ describe('提交失败的必填定位与原因展示（Issue #58）', () => {
     />)
 
     await clickSubmit()
-    expect(await screen.findByRole('alert')).toHaveTextContent('第 1 个材料状态缺少材料')
+    expect(await screen.findByRole('alert')).toHaveTextContent('第 1 个材料状态缺少化学式')
 
-    fireEvent.change(screen.getByLabelText('材料'), { target: { value: 'LaH10' } })
+    fireEvent.change(screen.getByLabelText('化学式'), { target: { value: 'LaH10' } })
     await clickSubmit()
 
     await waitFor(() => {
       expect(onSubmitted).toHaveBeenCalledWith(99)
     })
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('后端返回「第 N 个材料状态缺少化学式」时仍能解析序号并定位到出错卡片', async () => {
+    const failure = Object.assign(new Error('第 2 个材料状态缺少化学式'), {
+      status: 400,
+      code: 'state_material_required',
+      detail: { code: 'state_material_required', message: '第 2 个材料状态缺少化学式' },
+    }) as ApiError
+    mockedApi.post.mockRejectedValue(failure)
+
+    render(<UploadTaskEditor
+      taskId={'9'.repeat(32)}
+      onSubmitted={vi.fn()}
+      draftOverride={makeDraft([makeState({ material: 'LaH10' }), makeState({ material: '' })])}
+    />)
+
+    await clickSubmit()
+
+    const banner = await screen.findByRole('alert')
+    expect(banner).toHaveTextContent('第 2 个材料状态缺少化学式')
+
+    // 序号前缀仍被解析：第二张卡片展开并挂上字段错误锚点
+    await waitFor(() => {
+      expect(collapseContent(1)).toHaveClass('MuiCollapse-entered')
+    })
+    const anchor = document.querySelector('[data-issue-field="material_states[1].material"]')
+    expect(anchor).not.toBeNull()
+    expect(anchor).toHaveTextContent('第 2 个材料状态缺少化学式')
   })
 })

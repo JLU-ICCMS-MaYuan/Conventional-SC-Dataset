@@ -470,3 +470,43 @@ func TestNewKeyPropertyOnlyAcceptsRealColumns(t *testing.T) {
 		t.Fatalf("canonical_unit 未赋值：%#v", kp.CanonicalUnit)
 	}
 }
+
+// T012（Issue #76）：GET /api/admin/papers/:id 的材料状态必须预加载
+// tc_results、properties、structures——缺预加载时这些关联序列化为空数组，
+// 编辑页拿不到任何科学数据（契约 docs/specs/76-.../contracts/scientific-draft-api.md C3）。
+func TestAdminPaperDetailPreloadsScientificData(t *testing.T) {
+	db := paperDetailTestDB(t)
+	seedPaperFour(t, db, reviewStatusPending)
+
+	if err := db.Create(&models.StructureModel{
+		ID: 1, PaperID: 4, PaperRevision: 1, MaterialStateID: 1,
+		StructureFormat: "cif", StructureText: "data_LaH10\n_cell_length_a 5.0",
+		StructureHash: "hash-structure-1", NuclearTreatment: "unknown",
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.GET("/admin/papers/:id", GetPaperDetail)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/admin/papers/4", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("状态码 = %d，响应 = %s", response.Code, response.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatalf("响应不是 JSON：%s", response.Body.String())
+	}
+	state := firstMaterialState(t, body)
+
+	if tcResults, ok := state["tc_results"].([]any); !ok || len(tcResults) == 0 {
+		t.Fatalf("tc_results 未预加载：%#v", state["tc_results"])
+	}
+	if properties, ok := state["properties"].([]any); !ok || len(properties) == 0 {
+		t.Fatalf("properties 未预加载：%#v", state["properties"])
+	}
+	if structures, ok := state["structures"].([]any); !ok || len(structures) == 0 {
+		t.Fatalf("structures 未预加载：%#v", state["structures"])
+	}
+}

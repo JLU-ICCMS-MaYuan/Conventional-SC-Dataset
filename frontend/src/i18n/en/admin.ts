@@ -96,7 +96,7 @@ export default {
   createdChip: 'Created: {value}',
   keyPropertiesHeader: 'Key properties ({n})',
   primaryProperty: 'Primary property',
-  fieldMaterial: 'Material (material)',
+  fieldMaterial: 'Chemical formula (material)',
   fieldPropertyName: 'Property name (name)',
   nameNoteLabel: 'Property name note',
   nameNoteTemperaturePositionDependent: 'Temperature/position dependent',
@@ -118,6 +118,12 @@ export default {
   fieldNameNote: 'Property note (name_note)',
   saveChanges: 'Save Changes',
   saveFailedReason: 'Failed to save: {reason}',
+  // Scientific data editing (Issue #76): failure notice of the scientific-data step (FR-019)
+  scientificSaveFailed: 'Paper info saved, but superconducting properties failed to save: {reason}',
+  // Revision-bump success notice (T045): the paper was sent back to pending review
+  scientificSavedRevisionBumped: 'Paper saved and sent back to pending review; it stays non-public until re-approved',
+  // Revision-bump warning when editing an approved paper (T044)
+  revisionBumpWarning: 'This paper is approved. Saving superconducting properties will bump the revision, send it back to pending review, and keep it non-public until re-approved.',
 
   // Paper batch actions and generic notices
   selectPapersFirst: 'Please select papers first',

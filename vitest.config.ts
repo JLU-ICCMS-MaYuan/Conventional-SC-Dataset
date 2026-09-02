@@ -19,6 +19,10 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    // 管理端编辑弹窗接入 MaterialStatesEditor 后，多个测试文件并行渲染完整 MUI
+    // 组件树（Autocomplete/Select/3D 面板），16 核机器上并行负载可把单个用例
+    // 推到 5s 以上。放宽超时避免把「慢」误判为「卡死」（无断言语义变化）。
+    testTimeout: 15000,
     // 逐目录白名单而非 'tests/**'：tests/ 下同时存在 pytest 用的 .py 与前端 .test.tsx，
     // 且部分目录只有 Python 测试。新增含 .test.tsx 的目录时必须同步加到这里，
     // 否则该目录的用例会被静默跳过——不报错、不计数，看不出漏了。

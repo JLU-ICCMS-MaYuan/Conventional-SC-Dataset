@@ -318,7 +318,7 @@ describe('论文上传工作区', () => {
 
     render(<UploadParsingDetail taskId={'f'.repeat(32)} onSubmitted={vi.fn()} />)
 
-    expect(await screen.findByRole('textbox', { name: '材料' })).toHaveValue('Li2MgH16')
+    expect(await screen.findByRole('textbox', { name: '化学式' })).toHaveValue('Li2MgH16')
     expect(screen.queryByRole('textbox', { name: '物相' })).not.toBeInTheDocument()
     expect(screen.getByRole('spinbutton', { name: '压强 (GPa)' })).toHaveValue(300)
     expect(screen.getByRole('combobox', { name: '空间群符号' })).toHaveValue('Fd-3m')
@@ -477,7 +477,7 @@ describe('论文上传工作区', () => {
     expect(screen.getByLabelText('标题')).toHaveValue('Li2MgH16 study')
     expect(screen.getByText('Ying Sun')).toBeVisible()
     expect(screen.getByText('材料状态 #1')).toBeVisible()
-    expect(screen.getByLabelText('材料')).toHaveValue('Li2MgH16')
+    expect(screen.getByLabelText('化学式')).toHaveValue('Li2MgH16')
     expect(screen.queryByRole('button', { name: '提交审核' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '立即保存' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '展开 作者' })).not.toBeInTheDocument()
@@ -658,7 +658,7 @@ describe('论文上传工作区', () => {
     expect(screen.getByText('暂不确定')).toBeInTheDocument()
     expect(screen.getByDisplayValue('高压三元氢化物超导体')).toBeInTheDocument()
     expect(screen.getByText('新名称，将在论文审核通过时创建')).toBeInTheDocument()
-    expect(screen.getByLabelText('材料')).toHaveValue('Li2MgH16')
+    expect(screen.getByLabelText('化学式')).toHaveValue('Li2MgH16')
     expect(screen.getByLabelText('标题')).toHaveValue('Main title')
     expect(screen.getByLabelText('研究驱动力')).toHaveValue('')
     expect(screen.queryByRole('button', { name: '提交审核' })).not.toBeInTheDocument()
