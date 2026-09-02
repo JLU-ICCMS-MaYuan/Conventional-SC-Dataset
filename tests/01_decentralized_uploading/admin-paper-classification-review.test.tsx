@@ -117,8 +117,8 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('论文审核内材料分类确认', () => {
-  it('移除独立治理入口，并以一次审核请求提交数据库选择和内部快照', async () => {
+describe('论文审核弹窗仅提交审核结果与意见', () => {
+  it('不再显示材料状态分类，只提交审核结果和审核意见', async () => {
     const user = userEvent.setup()
     render(<MemoryRouter><AdminPage /></MemoryRouter>)
 
@@ -129,10 +129,8 @@ describe('论文审核内材料分类确认', () => {
 
     await user.click(screen.getByRole('button', { name: '审核' }))
 
-    expect(await screen.findByText('确认材料状态分类')).toBeVisible()
-    // Issue #62 起弹窗不再展示原文证据引文；classification_scope 仍随审核请求提交，
-    // 由本用例末尾的 body 断言保护，因此这里不再断言引文的可见性。
-    expect(screen.getByRole('combobox', { name: 'LaH10 的材料家族' })).toHaveValue('氢基超导体')
+    expect(screen.queryByText('确认材料状态分类')).not.toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: 'LaH10 的材料家族' })).not.toBeInTheDocument()
 
     fireEvent.mouseDown(screen.getByRole('combobox', { name: '审核结果' }))
     await user.click(await screen.findByRole('option', { name: '✅ 通过' }))
@@ -143,39 +141,24 @@ describe('论文审核内材料分类确认', () => {
     expect(path).toBe('/api/admin/papers/51/review')
     expect(body).toMatchObject({
       status: 'approved',
-      material_states: [{
-        id: 501,
-        material_family: { id: 1, name: '氢基超导体' },
-        material_dimensionality: 'three_dimensional',
-      }],
-      classification_context: {
-        classification_scope: expect.arrayContaining([
-          expect.objectContaining({ raw_name: 'H3S', scope: 'referenced_work' }),
-        ]),
-      },
+      comment: '',
     })
     expect(mockedApi.put).not.toHaveBeenCalled()
   })
 
-  it('自由输入的新名称留在同一个审核请求中，不调用目录治理 API', async () => {
+  it('审核弹窗不触发详情或审核产物加载', async () => {
     const user = userEvent.setup()
     render(<MemoryRouter><AdminPage /></MemoryRouter>)
     await user.click(screen.getByRole('button', { name: '论文审核' }))
     expect(await screen.findByText('Hydride paper')).toBeVisible()
     await user.click(screen.getByRole('button', { name: '审核' }))
 
-    const familyInput = await screen.findByRole('combobox', { name: 'LaH10 的材料家族' })
-    await user.clear(familyInput)
-    await user.type(familyInput, '新型界面超导体')
-    fireEvent.blur(familyInput)
     fireEvent.mouseDown(screen.getByRole('combobox', { name: '审核结果' }))
     await user.click(await screen.findByRole('option', { name: '✅ 通过' }))
     await user.click(screen.getByRole('button', { name: '确认审核' }))
 
     await waitFor(() => expect(mockedApi.post).toHaveBeenCalledTimes(1))
-    expect(mockedApi.post.mock.calls[0][1]).toMatchObject({
-      material_states: [{ material_family: { id: null, name: '新型界面超导体' } }],
-    })
-    expect(String(mockedApi.post.mock.calls[0][0])).not.toContain('classification-catalogs')
+    expect(mockedApi.get.mock.calls.some(([path]) => String(path).includes('/review-artifact'))).toBe(false)
+    expect(mockedApi.get.mock.calls.some(([path]) => String(path).includes('/api/admin/papers/51'))).toBe(false)
   })
 })

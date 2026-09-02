@@ -5,7 +5,7 @@ import {
   Paper, IconButton, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Select, MenuItem, FormControl, InputLabel, Alert,
   Snackbar, CircularProgress, LinearProgress, Avatar, Tooltip,
-  Pagination, Checkbox, FormControlLabel,
+  Pagination,
 } from '@mui/material'
 import {
   Delete as DeleteIcon,
@@ -13,17 +13,11 @@ import {
   Gavel as ReviewIcon,
   DriveFileRenameOutline as RenameIcon,
   History as HistoryIcon,
-  Add as AddIcon,
 } from '@mui/icons-material'
 import { type User, useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
 import { useNavigate } from 'react-router-dom'
-import { ClassificationCatalogs, loadClassificationCatalogs, refreshClassificationCatalogs } from '../lib/classifications'
-import {
-  SourceEvidence, UploadDraft, normalizeUploadDraft, unwrapData,
-} from '../lib/paperProcessing'
 import ChartGroupEditor from '../components/ChartGroupEditor'
-import ClassificationAutocomplete from '../components/ClassificationAutocomplete'
 import NewsManager from '../components/NewsManager'
 import SuperAdminGovernance from '../components/SuperAdminGovernance'
 import UsernameField from '../components/UsernameField'
@@ -51,27 +45,6 @@ interface PaperRecord {
   record_count: number; show_in_chart: boolean
   compound_symbols: string | null; article_types: string[]
   key_properties?: Array<Record<string, unknown>>
-}
-
-interface ReviewArtifact {
-  ai: UploadDraft
-  user: UploadDraft
-  evidence: {
-    classification?: SourceEvidence[]
-    classification_scope?: Array<{
-      dimension: string
-      raw_name: string
-      scope: 'current_paper' | 'referenced_work'
-      section?: string
-      page_start?: number
-      quote?: string
-    }>
-    material_states?: Array<{
-      space_group?: SourceEvidence | SourceEvidence[] | null
-      calculation_context?: SourceEvidence | SourceEvidence[] | null
-      tc_results?: Array<SourceEvidence | SourceEvidence[] | null>
-    }>
-  }
 }
 
 /* ── Helpers ──────────────────────────────────── */
@@ -124,15 +97,6 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
 
   const [tab, setTab] = useState(0)
   const [snackbar, setSnackbar] = useState('')
-  const [classificationCatalogs, setClassificationCatalogs] = useState<ClassificationCatalogs | null>(null)
-  const [classificationCatalogError, setClassificationCatalogError] = useState('')
-
-  useEffect(() => {
-    loadClassificationCatalogs()
-      .then(setClassificationCatalogs)
-      .catch((reason: Error) => setClassificationCatalogError(reason.message || t('admin.catalogLoadFailed')))
-  }, [])
-
   /* ── Dashboard ──────────────────────────────── */
   const [stats, setStats] = useState<{users:number,papers:number,pending:number} | null>(null)
 
@@ -150,8 +114,6 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
   const [reviewDlg, setReviewDlg] = useState<{paper:PaperRecord,open:boolean}>({paper:null!,open:false})
   const [reviewStatus, setReviewStatus] = useState('')
   const [reviewComment, setReviewComment] = useState('')
-  const [reviewDetail, setReviewDetail] = useState<Record<string, any> | null>(null)
-  const [reviewArtifact, setReviewArtifact] = useState<ReviewArtifact | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
 
   /* ── Users ───────────────────────────────────── */
@@ -230,54 +192,6 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
     setReviewDlg({ paper, open: true })
     setReviewStatus(paper.review_status || 'pending')
     setReviewComment(paper.review_comment || '')
-    setReviewDetail(null)
-    setReviewArtifact(null)
-    // 弹窗已简化为只选状态 + 写批注，不再展示 AI 解析；但审核提交仍需
-    // detail/artifact 构造 material_states 分类载荷，因此这里继续拉取。
-    try {
-      const [detail, artifactResponse] = await Promise.all([
-        api.get<Record<string, any>>(`/api/admin/papers/${paper.id}`),
-        api.get<any>(`/api/rag/papers/${paper.id}/review-artifact`).catch(() => null),
-      ])
-      let artifact: ReviewArtifact | null = null
-      if (artifactResponse) {
-        const artifactData = unwrapData<any>(artifactResponse)
-        artifact = {
-          ai: normalizeUploadDraft(artifactData?.ai_values),
-          user: normalizeUploadDraft(artifactData?.user_values),
-          evidence: artifactData?.evidence || {},
-        }
-        setReviewArtifact(artifact)
-      }
-      setReviewDetail({
-        ...detail,
-        material_states: (detail.material_states || []).map((state: any, index: number) => {
-          const submittedState = artifact?.user.material_states?.[index]
-          const aiState = artifact?.ai.material_states?.[index]
-          const savedStructures = (state.structure_families || []).map((item: any) => ({
-            id: item.id || item.structure_family_id,
-            name: item.structure_family?.name || item.name || '',
-            status: 'confirmed',
-            is_primary: Boolean(item.is_primary),
-          }))
-          return {
-            ...state,
-            material_family: state.material_family
-              ? { ...state.material_family, status: 'confirmed' }
-              : submittedState?.material_family || aiState?.material_family || null,
-            material_dimensionality: state.material_dimensionality
-              || submittedState?.material_dimensionality
-              || aiState?.material_dimensionality
-              || 'unknown',
-            structure_families: savedStructures.length > 0
-              ? savedStructures
-              : submittedState?.structure_families || aiState?.structure_families || [],
-          }
-        }),
-      })
-    } catch (reason) {
-      setSnackbar(t('admin.reviewDataLoadFailed', { reason: (reason as Error).message }))
-    }
   }
 
   const handleReview = async () => {
@@ -285,34 +199,9 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
     try {
       await api.post(`/api/admin/papers/${reviewDlg.paper.id}/review`, {
         status: reviewStatus, comment: reviewComment, review_request_id: crypto.randomUUID(),
-        material_states: reviewStatus === 'approved'
-          ? (reviewDetail?.material_states || []).map((state: any) => ({
-              id: state.id,
-              material_family: {
-                id: state.material_family?.id || null,
-                name: state.material_family?.name || '',
-              },
-              material_dimensionality: state.material_dimensionality || 'unknown',
-              structure_families: (state.structure_families || []).map((item: any) => ({
-                id: item.id || item.structure_family_id || null,
-                name: item.name || item.structure_family?.name || '',
-                is_primary: Boolean(item.is_primary),
-              })),
-            }))
-          : [],
-        classification_context: {
-          // Issue #66：分类判据已整体退役，快照不再记录该键；
-          // 追溯主体是 classification_scope 与材料状态分类。
-          classification_scope: reviewArtifact?.evidence.classification_scope || [],
-          ai_material_states: reviewArtifact?.ai.material_states || [],
-          user_material_states: reviewArtifact?.user.material_states || [],
-        },
       })
-      setClassificationCatalogs(await refreshClassificationCatalogs())
       setSnackbar(t('admin.reviewDone'))
       setReviewDlg({paper:null!,open:false})
-      setReviewDetail(null)
-      setReviewArtifact(null)
       loadPapers()
     } catch (e: unknown) { setSnackbar(t('admin.failed', { reason: (e as Error).message })) }
   }
@@ -792,111 +681,6 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
             <Chip size="small" label={t('admin.yearChip', { value: reviewDlg.paper?.year || '-' })} variant="outlined" />
             <Chip size="small" label={t('admin.recordsChip', { value: paperRecordCount(reviewDlg.paper) })} variant="outlined" />
           </Box>
-          {(reviewDetail?.material_states || []).length > 0 && (
-            <Box sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 2 }}>
-              <Typography variant="subtitle2" fontWeight={700} gutterBottom>{t('admin.confirmMaterialStates')}</Typography>
-              {classificationCatalogError && <Alert severity="error" sx={{ mb: 1 }}>{classificationCatalogError}</Alert>}
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                {(reviewDetail?.material_states || []).map((state: any, index: number) => {
-                  const label = state.superconductor?.chemical_formula || t('admin.materialStateFallback', { n: index + 1 })
-                  const aiState = reviewArtifact?.ai.material_states?.[index]
-                  const updateState = (updates: Record<string, unknown>) => setReviewDetail(current => {
-                    if (!current) return current
-                    const materialStates = [...(current.material_states || [])]
-                    materialStates[index] = { ...materialStates[index], ...updates }
-                    return { ...current, material_states: materialStates }
-                  })
-                  return (
-                    <Box key={state.id || index} sx={{ border: '1px solid', borderColor: 'divider', p: 1.5, borderRadius: 1 }}>
-                      <Typography variant="body2" fontWeight={700} gutterBottom>{label}</Typography>
-                      {aiState?.material_family?.name && (
-                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                          {t('admin.aiSuggestion', { name: aiState.material_family.name })}
-                        </Typography>
-                      )}
-                      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 2fr) minmax(160px, 1fr)' }, gap: 1 }}>
-                        <ClassificationAutocomplete
-                          label={t('admin.materialFamilyOf', { label })}
-                          options={classificationCatalogs?.material_families || []}
-                          value={state.material_family || null}
-                          loading={!classificationCatalogs && !classificationCatalogError}
-                          error={classificationCatalogError}
-                          onChange={value => updateState({
-                            material_family: value,
-                            material_family_id: value?.id || null,
-                          })}
-                        />
-                        <FormControl fullWidth size="small">
-                          <InputLabel>{t('admin.materialDimensionality')}</InputLabel>
-                          <Select
-                            label={t('admin.materialDimensionality')}
-                            value={state.material_dimensionality || 'unknown'}
-                            onChange={event => updateState({ material_dimensionality: event.target.value })}
-                          >
-                            {(classificationCatalogs?.material_dimensionalities || []).map(option => (
-                              <MenuItem key={option.value} value={option.value}>
-                                {dict.enums.materialDimensionality[option.value] || option.name}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
-                      </Box>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 1 }}>
-                        {(state.structure_families || []).map((selection: any, structureIndex: number) => (
-                          <Box key={`${state.id}-${structureIndex}`} sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr auto', sm: 'minmax(0, 1fr) auto auto' }, gap: 1, alignItems: 'center' }}>
-                            <ClassificationAutocomplete
-                              label={t('admin.structureFamily')}
-                              options={classificationCatalogs?.structure_families || []}
-                              value={selection}
-                              loading={!classificationCatalogs && !classificationCatalogError}
-                              error={classificationCatalogError}
-                              onChange={value => {
-                                const structures = [...(state.structure_families || [])]
-                                structures[structureIndex] = { ...value, is_primary: Boolean(selection.is_primary) }
-                                updateState({ structure_families: structures })
-                              }}
-                            />
-                            <FormControlLabel
-                              control={<Checkbox
-                                checked={Boolean(selection.is_primary)}
-                                onChange={event => updateState({
-                                  structure_families: (state.structure_families || []).map((item: any, itemIndex: number) => ({
-                                    ...item,
-                                    is_primary: event.target.checked ? itemIndex === structureIndex : itemIndex === structureIndex ? false : item.is_primary,
-                                  })),
-                                })}
-                              />}
-                              label={t('admin.primaryStructure')}
-                            />
-                            <Tooltip title={t('admin.removeStructureFamily')}>
-                              <IconButton
-                                aria-label={t('admin.removeStructureFamilyN', { n: structureIndex + 1 })}
-                                onClick={() => updateState({
-                                  structure_families: (state.structure_families || []).filter((_: any, itemIndex: number) => itemIndex !== structureIndex),
-                                })}
-                              >
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          </Box>
-                        ))}
-                        <Button
-                          size="small"
-                          startIcon={<AddIcon />}
-                          sx={{ alignSelf: 'flex-start' }}
-                          onClick={() => updateState({
-                            structure_families: [...(state.structure_families || []), { id: null, name: '', status: 'pending', is_primary: false }],
-                          })}
-                        >
-                          {t('admin.addStructureFamily')}
-                        </Button>
-                      </Box>
-                    </Box>
-                  )
-                })}
-              </Box>
-            </Box>
-          )}
           <FormControl fullWidth size="small">
             <InputLabel id="paper-review-status-label">{t('admin.reviewResult')}</InputLabel>
             <Select
