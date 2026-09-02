@@ -8,14 +8,14 @@
 
 - 管理后台可按状态、关键词、材料和年份筛选论文列表，并分页展示。
 - 管理员可编辑论文基础字段、摘要、LLM 富化字段和普通物性；物性支持新增、修改与标记删除。
-- 编辑入口为独立页面（`/admin/papers/:id/edit`，管理员角色保护），不再是列表页上的弹窗；页面接入共享的材料状态编辑组件（`MaterialStatesEditor`，与上传校对页同一实现）：管理员可像上传者一样查看并修改全部材料状态的化学式、材料家族、维度、超导类型、晶系、空间群、压强，及其下的 Tc 列表、普通物性列表与结构附件。承载化学式的输入框标签为「化学式」（上传页）/「化学式 (material)」（管理端物性行）。（[Issue #75](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/75)、[Issue #76](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/76)、[Issue #78](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/78)）
+- 编辑入口为独立页面（`/admin/papers/:id/edit`，`admin` 与 `superadmin` 角色保护），不再是列表页上的弹窗；页面接入共享的材料状态编辑组件（`MaterialStatesEditor`，与上传校对页同一实现）：管理员可像上传者一样查看并修改全部材料状态的化学式、材料家族、维度、超导类型、晶系、空间群、压强，及其下的 Tc 列表、普通物性列表与结构附件。承载化学式的输入框标签为「化学式」（上传页）/「化学式 (material)」（管理端物性行）。（[Issue #75](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/75)、[Issue #76](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/76)、[Issue #78](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/78)）
 - 已落库结构的晶胞表示（惯用胞/原胞）与格式（CIF/POSCAR）按需从落库 CIF 实时生成（`GET /api/rag/papers/{id}/structures/{sid}/representations`），管理端编辑页可自由切换预览并下载对应文件（[Issue #78](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/78)）。
 - 科学数据编辑走 Python 端点 `PUT /api/rag/papers/{id}/scientific-draft`（管理员鉴权），语义是整体替换：单事务内按依赖逆序删除该论文当前科学实体后按请求体重建，复用上传提交的校验规则。`pending` 论文原地重建（版本号不变）；`approved` 论文升版重审——`content_revision` 递增、`approved_revision` 清空、状态回到 `pending`，期间不对外公开，重新批准后走既有 publish 链路重建索引。升版由外键级联链支撑：`paper_files` / `paper_chunks` / `paper_evidences` / `material_states` 的 `paper_revision` 随单条 `UPDATE papers` 由 MySQL 级联迁移（[Issue #76](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/76)）。结构附件补传走 `POST /api/rag/papers/{id}/structure-candidates`，只产出候选不写库，随保存一并提交。
 - 物性写入只接受 `superconductor_properties` 的真实列（`material_raw`、`name_raw`、`value_raw`、`value_number`、`unit_raw`、`canonical_unit`、`value_min`、`value_max`、`condition_note`）。压强、温度、主记录标记、结构文本与结构格式没有对应列，因此不再被接受，而不是接受后静默丢弃——后者会让管理员以为改动已保存。条件字段属材料状态，不经物性接口修改，以免绕过材料状态自身的校验与审核语义。（[Issue #57](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/57)）
 - 管理员可查看、编辑、单篇审核和批量审核论文；论文删除与批量删除只允许超级管理员，且为不可恢复的物理删除（详见下方“论文物理删除”）。
 - 管理员在审核弹窗为每个材料状态确认材料家族、结构家族和材料维度；可认可建议、改选数据库已有项或输入新名称。分类变更随同一次审核请求提交，不额外调用目录治理 API。旧 `key_properties.superconductor_type` 不再参与管理员写入。
-- 编辑弹窗（铅笔图标）顶部有固定的审核区域，可一边修改字段一边提交审核。该区域只提供「拒绝」与「退回待审核」：批准要求逐个材料状态确认分类，编辑页没有分类确认区，放开批准只会撞 `409 classification_incomplete`，因此批准仍须走列表中的审核弹窗。
-- 审核弹窗只保留判定所需内容：论文标题与 DOI、年份、记录数标签，材料状态分类确认区，审核结果选择器（通过、拒绝、退回待审核）和审核意见输入框。AI 与用户提交值的三列对照、原文证据引文、同 DOI 候选附件列表已移除——它们是纯阅读性内容，造成信息过载。分类确认区不属于被移除范围，它承载可编辑能力。（[Issue #62](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/62)）
+- 独立编辑页顶部有固定的审核区域，可一边修改字段和材料状态分类一边提交审核；审核结果统一提供「通过」「拒绝」「↩️ 退回待审核」三个状态。选择「通过」时，页面会把当前编辑器中的材料状态分类随审核请求提交，无需先单独保存，后端继续执行分类完整性校验。
+- 论文列表的审核弹窗只保留论文标题与 DOI、年份、记录数标签、审核结果选择器和审核意见输入框；材料状态分类在独立编辑页维护，不在弹窗重复编辑。AI 与用户提交值的三列对照、原文证据引文、同 DOI 候选附件列表已移除。（[Issue #62](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/62)、[Issue #78](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/78)）
 - 目录不提供独立建议队列、重命名、停用、合并或超级管理员二次治理。新名称只在论文批准事务中创建，拒绝或退回不会污染正式目录。
 - 批准论文前检查当前 revision 的材料家族、元素种类数、材料维度和主结构唯一性；不完整时返回 `409 classification_incomplete`，论文状态及目录均不改变。批准事件保存 AI 上下文与最终目录 ID 快照。
 - 同一审核人每次实际提交单篇或批量论文审核都会写入一条不可变审核事件，即使论文状态和意见与上次相同；相同 `review_request_id` 的网络重试保持幂等，不重复计数。
@@ -63,11 +63,15 @@
 - `goserver/handlers/chart_groups.go`
 - `backend/models.py`
 - `frontend/src/pages/AdminPage.tsx`
+- `frontend/src/pages/AdminPaperEditPage.tsx`
+- `frontend/src/LazyRoutes.tsx`
 - `frontend/src/components/PaperEditView.tsx`
 - `frontend/src/components/NewsManager.tsx`
 - `frontend/src/components/SuperAdminGovernance.tsx`
 - `goserver/handlers/admin_review_event_test.go`
 - `tests/01_decentralized_uploading/admin-paper-classification-review.test.tsx`
+- `tests/02_identity_governance/admin-edit-page.test.tsx`
+- `tests/02_identity_governance/identity_ui.test.tsx`
 - `tests/02_identity_governance/admin-workspace-cards.test.tsx`
 
 ## 相关变更记录
@@ -77,6 +81,7 @@
 - [Issue #60：论文删除改为按外键依赖级联的物理删除](../../specs/60-fix-paper-deletion-cascade/spec.md)
 - [Issue #61：工作台导航由页签改为卡片式入口](../../specs/61-admin-workspace-navigation-refactor/spec.md)
 - [Issue #62：审核弹窗移除纯阅读性展示内容](../../specs/62-simplify-paper-review/spec.md)
+- [Issue #78：管理端审核编辑页独立化并功能对齐提交页](../../specs/78-admin-edit-page/spec.md)
 
 ## 已知问题
 
