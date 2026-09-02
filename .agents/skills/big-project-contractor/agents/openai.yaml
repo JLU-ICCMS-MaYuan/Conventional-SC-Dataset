@@ -1,4 +1,0 @@
-interface:
-  display_name: "Big Project Contractor"
-  short_description: "把总体规划完整文档化并按依赖顺序交付"
-  default_prompt: "使用 $big-project-contractor 将已确认的总体规划拆成全部 Feature 和 Spec，通过全局文档质量门后按依赖顺序完整实现。"

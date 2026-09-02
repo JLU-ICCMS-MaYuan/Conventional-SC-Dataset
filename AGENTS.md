@@ -101,23 +101,14 @@ description: 专业的软件工程师，严格遵循SOLID、KISS、DRY、YAGNI�
 
 - GitHub Issues 是所有可追踪项目想法与行动的唯一入口，也是未完成行动的唯一状态
   来源。
-- 创建、分类、拆分、更新或关闭 Issue 时，必须使用项目 Skill
-  `big-project-issue-manager`，应用其中规定的 `type:*` 标签、父子关系、Spec 关联和
-  `Documentation Impact` 关闭门槛。
-- 已采纳的 Feature 必须使用项目 Skill `big-project-spec-runner`，并在
-  `docs/specs/<issue-number>-<feature-slug>/` 保存 Spec、Plan、Tasks 及相关设计产物；
-  Issue 负责协作状态，`tasks.md` 只负责技术拆解。
-- 尚未形成 Feature 的大型项目构想使用 `big-project-planer` 写入 `docs/plan/`；需要从
-  总体规划完整拆分、文档化并连续交付时使用 `big-project-contractor`。
-- 需要把代码、架构、方案或报错解释成大白话并给出具体例子时，使用
-  `big-project-translator`，但不得改变原始技术结论。
+- 已采纳的 Feature 在 `docs/specs/<issue-number>-<feature-slug>/` 保存 Spec、Plan、Tasks
+  及相关设计产物；Issue 负责协作状态，`tasks.md` 只负责技术拆解。
 
 ### 6. 当前功能总览
 
 - 当前已经实现的项目说明、领域术语、功能行为、架构关系、稳定约束和已知边界以
   [docs/overview/README.md](docs/overview/README.md) 为唯一文档入口。
-- 初始化或更新当前功能总览时，必须使用项目 Skill
-  `big-project-overview-maintainer`，不得把尚未落地的 Issue、Spec 或计划写成当前事实。
+- 初始化或更新当前功能总览时，不得把尚未落地的 Issue、Spec 或计划写成当前事实。
 - 不建立独立 Memory Bank 或 ADR；跨功能决策优先判断能否作为当前有效约束写入
   Overview，功能内部设计理由保留在对应 Spec。
 

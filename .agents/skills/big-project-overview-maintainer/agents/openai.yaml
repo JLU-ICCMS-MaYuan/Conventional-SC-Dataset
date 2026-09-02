@@ -1,4 +1,0 @@
-interface:
-  display_name: "Big Project Overview Maintainer"
-  short_description: "维护大型项目已落地功能的权威总览"
-  default_prompt: "Use $big-project-overview-maintainer to synchronize the implemented behavior into docs/overview/."
