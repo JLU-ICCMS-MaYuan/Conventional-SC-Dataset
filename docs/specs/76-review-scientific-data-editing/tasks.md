@@ -134,6 +134,19 @@
 - [x] T048 按 [quickstart.md](quickstart.md) 场景 1–8 手工走查，重点核对场景 5（升版）与场景 6（失败回滚）的数据库断言
 - [x] T049 验证升版重新批准后向量索引与知识图谱按新内容重建（quickstart 场景 5 步骤 10、SC-005、R9）
 - [x] T050 更新 Issue #76 正文：把「风险」中标记为阻塞点的唯一约束问题改为已解决结论（外键级联链方案，需一次迁移），并说明原「无数据库迁移」的判断已修正，使 Issue 与 Spec 一致
+
+## 阶段 9：家族英文名双语展示（FR-024、SC-010）
+
+**目标**：补齐 #76 审核编辑页的中英文转化——「单质超导体」在英文界面显示 `Elemental superconductor`，中文界面仍显示中文。数据、接口、前端三处打通（[spec.md](spec.md) 澄清记录 2026-09-02）。
+
+**独立验收**：英文界面打开编辑弹窗，材料家族字段显示 `Elemental superconductor`；中文界面显示「单质超导体」；库中 `material_families.name_en` 已补齐。
+
+### 实施
+
+- [x] T051 新增 `alembic/versions/20260902_0001_fill_elemental_superconductor_name_en.py` 数据迁移：按 `name_zh = '单质超导体'` 把 `material_families.name_en` 补齐为 `Elemental superconductor`（幂等，0 行不影响）；`downgrade` 还原空串；应用并核对（[data-model.md](data-model.md) 家族英文名补齐、FR-024）
+- [x] T052 修改 `goserver/models/models.go`（`MaterialFamily.NameEN`、`StructureFamily.NameEN` 的 `json:"-"` 改为 `json:"name_en"`）与 `goserver/handlers/papers.go` 的 `materialStatesToDict`：管理端与公开详情接口的 `material_family`（及结构家族）返回 `name_en`，`name` 键不变（契约 C3 响应补充、FR-024）
+- [x] T053 修改 `materialStateFromDetail` 保留 `name_zh`/`name_en`（该函数已随 Issue #78 的编辑页独立化迁至 `frontend/src/pages/AdminPaperEditPage.tsx`，改动随之落地）；`ClassificationAutocomplete` 目录未命中时回退 `familyName` 标签；在 `tests/01_decentralized_uploading/enum-labels-i18n.test.tsx` 新增 FR-024 用例（familyName 英文名 + 目录未命中回退不退化）（SC-010）
+- [x] T054 在 `goserver/handlers/paper_detail_test.go` 新增测试：详情响应（admin 与 public）的 `material_family` 含 `name_en`，与库中 `NameEN` 一致（契约 C3 响应补充）
 ## 依赖与执行顺序
 
 - **阶段 1**（T001–T004）阻断全部；T001、T002 是硬阻塞（#74 基建未就位则不得开始），T003 基线是 T046 判定回归的前提。
@@ -153,7 +166,9 @@
 | 文件 | 涉及任务 | 跨 Feature 冲突 |
 | --- | --- | --- |
 | `frontend/src/components/UploadTaskEditor.tsx` | T015 | 与 #74 的 T018、#75 的 T010 冲突，须排在其后 |
-| `frontend/src/pages/AdminPage.tsx` | T020、T030、T044 | 与 #74 的 T019、#75 的 T014 冲突，须排在其后 |
+| `frontend/src/pages/AdminPage.tsx` | T020、T030、T044、T053 | 与 #74 的 T019、#75 的 T014 冲突，须排在其后 |
+| `goserver/models/models.go` | T052 | json tag 改动影响全部模型序列化端点，须与其它模型改动串行 |
+| `goserver/handlers/papers.go` | T052 | `materialStatesToDict` 同时服务公开与管理端详情 |
 | `frontend/src/components/MaterialStatesEditor.tsx` | T014、T034 | 本 Feature 新增文件，无跨 Feature 冲突 |
 | `backend/api/rag.py` | T029、T033、T043 | 本 Feature 内部串行；#74 已无新增端点，无跨 Feature 冲突 |
 | `backend/services/scientific_draft_rewrite.py` | T028、T042 | 本 Feature 新增文件 |
@@ -196,6 +211,7 @@
 | SC-007 | T039 | 权限拒绝 |
 | SC-008 | T016、T046 | 上传测试全绿 |
 | SC-009 | T005、T035 | 版本一致性约束成立 |
+| FR-024 / SC-010 | T051、T052、T053、T054 | 家族英文名双语展示：数据补齐 + 接口返回 name_en + 前端保留字段 + 断言 |
 | 外键完整性 | T007、T008、T011 | 删除直连不放松保障、ON DELETE 未变 |
 
 ## MVP 与增量策略
@@ -205,5 +221,6 @@
 3. 完成阶段 6（P1）：待审核论文可编辑，这是最安全且最高频的编辑场景，MVP 到此完成。
 4. 完成阶段 7、8（P2）：结构补传与已批准论文升版重审。
 5. 最终阶段收尾验证，并把 Issue 正文的阻塞点结论与迁移范围对齐（T050）。
+6. 阶段 9 补齐审核编辑页的家族英文名双语展示（FR-024、SC-010）：数据迁移、接口返回 `name_en`、前端保留字段、双语断言。独立可交付，不阻塞前序阶段。
 
 阶段 5 交付后可独立验收；阶段 6 缺失时管理员仍只能查看不能修改，但不影响既有审核流程。阶段 8 是风险最高的增量，放在最后使前序能力与外键级联均已充分验证。

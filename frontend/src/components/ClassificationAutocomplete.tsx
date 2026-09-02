@@ -27,9 +27,11 @@ const ClassificationAutocomplete: React.FC<ClassificationAutocompleteProps> = ({
   onChange,
 }) => {
   const { lang, t } = useLanguage()
+  // 目录内找不到时回退到 familyName 标签（而非裸 name）：管理端详情带入的 name_en
+  // 使英文界面显示规范英文名（如 Elemental superconductor，FR-024）。
   const selected = value?.id == null
     ? value?.name || null
-    : options.find(option => option.id === value.id) || value.name
+    : options.find(option => option.id === value.id) || (value ? familyName(value, lang) : null)
 
   return (
     <Autocomplete

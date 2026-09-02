@@ -18,6 +18,15 @@ export interface ClassificationSelection {
   status: ClassificationStatus
 }
 
+/**
+ * 带双语名的家族选择。Issue #76（FR-024）：管理端详情接口回传 name_zh/name_en，
+ * 供 familyName 在英文界面显示规范英文名；上传链路的普通选择（无双语名）仍满足该形态。
+ */
+export interface FamilySelection extends ClassificationSelection {
+  name_zh?: string
+  name_en?: string
+}
+
 export interface StructureFamilySelection extends ClassificationSelection {
   is_primary: boolean
 }

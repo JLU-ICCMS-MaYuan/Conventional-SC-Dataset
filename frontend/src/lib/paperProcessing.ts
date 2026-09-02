@@ -1,5 +1,5 @@
 import type {
-  ClassificationSelection,
+  FamilySelection,
   MaterialDimensionality,
   StructureFamilySelection,
 } from './classifications'
@@ -111,7 +111,7 @@ export type CrystalSystem = typeof CRYSTAL_SYSTEM_VALUES[number]
 
 export interface DraftMaterialState {
   material?: string
-  material_family?: ClassificationSelection | null
+  material_family?: FamilySelection | null
   structure_families?: StructureFamilySelection[]
   crystal_system?: CrystalSystem
   element_count?: number | null

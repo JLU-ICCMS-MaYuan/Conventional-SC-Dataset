@@ -217,7 +217,7 @@ type MaterialFamily struct {
 	ID              uint                  `gorm:"primaryKey" json:"id"`
 	Code            string                `gorm:"size:64;not null;uniqueIndex" json:"-"`
 	NameZH          string                `gorm:"column:name_zh;size:100;not null;uniqueIndex" json:"name"`
-	NameEN          string                `gorm:"column:name_en;size:160" json:"-"`
+	NameEN          string                `gorm:"column:name_en;size:160" json:"name_en"`
 	NormalizedName  string                `gorm:"size:160;not null;uniqueIndex" json:"-"`
 	CreatedByUserID *uint                 `json:"created_by_user_id,omitempty"`
 	CreatedAt       time.Time             `json:"created_at"`
@@ -239,7 +239,7 @@ type StructureFamily struct {
 	ID              uint                   `gorm:"primaryKey" json:"id"`
 	Code            string                 `gorm:"size:64;not null;uniqueIndex" json:"-"`
 	NameZH          string                 `gorm:"column:name_zh;size:100;not null;uniqueIndex" json:"name"`
-	NameEN          string                 `gorm:"column:name_en;size:160" json:"-"`
+	NameEN          string                 `gorm:"column:name_en;size:160" json:"name_en"`
 	NormalizedName  string                 `gorm:"size:160;not null;uniqueIndex" json:"-"`
 	CreatedByUserID *uint                  `json:"created_by_user_id,omitempty"`
 	CreatedAt       time.Time              `json:"created_at"`

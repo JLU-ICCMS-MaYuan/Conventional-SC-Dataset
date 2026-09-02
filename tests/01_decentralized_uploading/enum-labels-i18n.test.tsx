@@ -1,6 +1,8 @@
 /**
  * Feature #74：固定枚举与分类家族名的双语展示（US2）
  * Spec: docs/specs/74-site-wide-i18n/spec.md（FR-008、FR-009、FR-010）
+ * Issue #76（FR-024、SC-010）：家族带规范英文名时英文界面显示英文名
+ * （如「单质超导体」→ Elemental superconductor，见 T028 的补充用例）。
  *
  * - T027：七类枚举标签随语言切换，选中后提交值不变。
  * - T028：seed 家族显示英文名；自建家族（name_en 空）英文界面回退中文名，
@@ -158,5 +160,27 @@ describe('T028：分类家族名按语言展示，缺英文名回退中文（FR-
     expect(await screen.findByText('Hydrogen-based superconductor')).toBeInTheDocument()
     // 自建家族无英文名：回退中文名，可辨认、可选
     expect(screen.getByText('单质超导体')).toBeInTheDocument()
+  })
+
+  it('FR-024：家族带规范英文名（如 单质超导体 → Elemental superconductor）时英文界面显示英文名', () => {
+    const elemental = { name: '单质超导体', name_zh: '单质超导体', name_en: 'Elemental superconductor' }
+    expect(familyName(elemental, 'zh')).toBe('单质超导体')
+    expect(familyName(elemental, 'en')).toBe('Elemental superconductor')
+    // 数据迁移补齐 name_en 后，详情/目录回传即走此分支（SC-010）
+  })
+
+  it('FR-024：目录中找不到该家族时，值自带的 name_en 仍用于英文展示（回退不退化）', () => {
+    localStorage.setItem(STORAGE_KEY, 'en')
+    render(
+      <LanguageProvider>
+        <ClassificationAutocomplete
+          label="Material family"
+          options={[]}
+          value={{ id: 8, name: '单质超导体', name_en: 'Elemental superconductor', status: 'confirmed' }}
+          onChange={vi.fn()}
+        />
+      </LanguageProvider>,
+    )
+    expect(screen.getByRole('combobox')).toHaveValue('Elemental superconductor')
   })
 })

@@ -183,6 +183,14 @@ Preload("MaterialStates.StructureFamilyLinks.StructureFamily").
 
 **改动性质**：只补 `Preload` 调用，不改响应形状定义——响应契约由模型的 `json` tag 决定，本就包含这些键。因此这是补齐数据加载而非契约变更。
 
+**响应补充（2026-09-02，FR-024、SC-010）**：`material_states[].material_family` 与 `material_states[].structure_families[].structure_family` 增加返回 `name_en`（规范英文名）。此前 Go 模型对 `name_en` 是 `json:"-"`、`GET /api/papers/:id` 的 `materialStatesToDict` 只回 `name`，导致英文界面拿不到英文名、自建家族只能回退中文名。改动为：`MaterialFamily`/`StructureFamily` 模型的 `NameEN` 改为 `json:"name_en"`（管理端详情），`materialStatesToDict` 的 `family` 与结构家族 `gin.H` 补 `name_en`（公开详情）。`name` 键保持不变（仍为规范中文名），属向后兼容的增量。
+
+```json
+"material_family": { "id": 8, "name": "单质超导体", "name_en": "Elemental superconductor", "status": "confirmed" }
+```
+
+数据层配套：既有自建家族「单质超导体」（`name_zh = '单质超导体'`）的 `name_en` 由空串补齐为 `Elemental superconductor`（一次幂等数据迁移，见 [../data-model.md](../data-model.md) 家族英文名补齐）。
+
 **注意 `KeyProperties` 与 `MaterialStates.Properties` 的区别**：前者是按 `(paper_id, paper_revision)` 挂在论文下的全部物性（扁平表，供既有物性编辑区使用），后者是按 `material_state_id` 挂在材料状态下的同一批记录。编辑页的材料状态卡片需要后者以便按材料状态分组展示。两者指向同一张 `superconductor_properties` 表，不是重复数据。
 
 ## C4：前端调用编排

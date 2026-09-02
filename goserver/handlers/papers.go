@@ -510,12 +510,18 @@ func materialStatesToDict(states []models.MaterialState) []gin.H {
 	for _, state := range states {
 		var family interface{}
 		if state.MaterialFamily != nil {
-			family = gin.H{"id": state.MaterialFamily.ID, "name": state.MaterialFamily.NameZH, "status": "confirmed"}
+			// Issue #76（FR-024）：返回 name_en 供英文界面显示规范英文名，
+			// name 键保持规范中文名不变（向后兼容的增量）。
+			family = gin.H{
+				"id": state.MaterialFamily.ID, "name": state.MaterialFamily.NameZH,
+				"name_en": state.MaterialFamily.NameEN, "status": "confirmed",
+			}
 		}
 		structures := make([]gin.H, 0, len(state.StructureFamilyLinks))
 		for _, link := range state.StructureFamilyLinks {
 			structures = append(structures, gin.H{
 				"id": link.StructureFamilyID, "name": link.StructureFamily.NameZH,
+				"name_en": link.StructureFamily.NameEN,
 				"status": "confirmed", "is_primary": link.IsPrimary,
 			})
 		}

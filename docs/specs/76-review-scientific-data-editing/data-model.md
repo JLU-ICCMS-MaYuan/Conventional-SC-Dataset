@@ -6,7 +6,7 @@
 
 **Spec**：[spec.md](spec.md)　**Plan**：[plan.md](plan.md)　**决策依据**：[research.md](research.md)
 
-**本 Feature 不新增表、不新增列、不改唯一约束与检查约束。** 唯一的 Schema 改动是一次外键规则调整（见「外键迁移」），用于支撑 Issue #33 已建立但从未执行过的论文版本递增语义。
+**本 Feature 不新增表、不新增列、不改唯一约束与检查约束。** Schema 改动只有一次外键规则调整（见「外键迁移」），用于支撑 Issue #33 已建立但从未执行过的论文版本递增语义；另有一次 `material_families` 的行级数据迁移（见「家族英文名补齐」），不涉及 Schema。
 
 ## 涉及的既有实体
 
@@ -25,7 +25,7 @@
 | 文本切片 | `paper_chunks` | **不触碰**；同上 |
 | 证据锚点 | `paper_evidences` | **不触碰**；同上 |
 | 审核事件 | `paper_review_events` | 新增一条升版记录 |
-| 跨论文共享目录 | `superconductors`、`material_families`、`structure_families`、`property_definitions` | **不动** |
+| 跨论文共享目录 | `superconductors`、`material_families`、`structure_families`、`property_definitions` | **不动**（仅 `material_families` 一次行级数据迁移，见「家族英文名补齐」） |
 
 共享目录不删除是既有约束（见[文献与记录审核](../../overview/02_Decentralized_Maintenance_and_Verification/literature-and-record-review.md)），本 Feature 沿用。
 
@@ -204,4 +204,14 @@ AND (
 - 不改唯一约束（`uq_paper_files_main`、`uq_paper_files_path`、`uq_paper_files_order` 等全部保持原样）。
 - 不改检查约束（含 `ck_papers_review_revision`）。
 - 不改 ORM 模型字段——外键规则不体现在 SQLAlchemy 与 GORM 的字段声明中。
-- 不改动 `superconductors`、`material_families`、`structure_families`、`property_definitions` 的任何行。
+- 不改动 `superconductors`、`structure_families`、`property_definitions` 的任何行；`material_families` 仅一条既有行的 `name_en` 被数据迁移补齐（见上），不改其 `name_zh`、`code`、`normalized_name`。
+
+## 家族英文名补齐
+
+`material_families` 的 `name_en` 列自建家族创建时留空（`resolveMaterialFamily` 不写 `name_en`），Issue #74 据此设计「英文缺失回退中文名」。本 Feature 的编辑弹窗需要英文界面显示规范英文名（FR-024），因此对既有数据「单质超导体」（`name_zh = '单质超导体'`）做一次幂等数据迁移：
+
+| 列 | 迁移前 | 迁移后 |
+| --- | --- | --- |
+| `name_en` | `''` | `Elemental superconductor` |
+
+迁移按 `name_zh = '单质超导体'` 定位（`code` 为生成的 `custom_*` 哈希，不稳定），`downgrade` 把 `name_en` 还原为空串。库中不存在该家族的安装不受影响（0 行更新）。只补数据、不改 Schema，也不改创建路径——新建自建家族仍留空 `name_en`，回退语义不变。

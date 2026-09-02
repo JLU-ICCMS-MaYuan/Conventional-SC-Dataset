@@ -510,3 +510,54 @@ func TestAdminPaperDetailPreloadsScientificData(t *testing.T) {
 		t.Fatalf("structures 未预加载：%#v", state["structures"])
 	}
 }
+
+// T054（Issue #76，FR-024）：详情响应（管理端与公开）的 material_family 必须返回
+// name_en——英文界面据此显示规范英文名（如「单质超导体」→ Elemental superconductor）。
+// 修复前：管理端详情走模型序列化，NameEN 是 json:"-"；公开详情 materialStatesToDict
+// 只回 name。两者都会让英文界面拿不到英文名而回退中文。
+func TestPaperDetailReturnsFamilyNameEn(t *testing.T) {
+	db := paperDetailTestDB(t)
+	seedPaperFour(t, db, reviewStatusApproved)
+
+	if err := db.Create(&models.MaterialFamily{
+		ID: 8, Code: "custom_elemental", NameZH: "单质超导体", NameEN: "Elemental superconductor",
+		NormalizedName: "单质超导体",
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&models.MaterialState{}).Where("id = ?", 1).
+		Update("material_family_id", 8).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	assertFamilyNameEn := func(t *testing.T, label string, body map[string]any) {
+		t.Helper()
+		state := firstMaterialState(t, body)
+		family, ok := state["material_family"].(map[string]any)
+		if !ok {
+			t.Fatalf("%s material_family 缺失或类型异常：%#v", label, state["material_family"])
+		}
+		if family["name"] != "单质超导体" || family["name_en"] != "Elemental superconductor" {
+			t.Fatalf("%s material_family = %#v，期望 name=单质超导体 且 name_en=Elemental superconductor", label, family)
+		}
+	}
+
+	// 公开详情（materialStatesToDict）
+	_, body := getPaperDetail(t, "4")
+	assertFamilyNameEn(t, "公开详情", body)
+
+	// 管理端详情（模型序列化）
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.GET("/admin/papers/:id", GetPaperDetail)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/admin/papers/4", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("管理端详情状态码 = %d，响应 = %s", response.Code, response.Body.String())
+	}
+	var adminBody map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &adminBody); err != nil {
+		t.Fatalf("管理端详情响应不是 JSON：%s", response.Body.String())
+	}
+	assertFamilyNameEn(t, "管理端详情", adminBody)
+}
