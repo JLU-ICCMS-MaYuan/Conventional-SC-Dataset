@@ -10,9 +10,11 @@ import '@testing-library/jest-dom/vitest'
 import React from 'react'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import AdminPage from '../../frontend/src/pages/AdminPage'
+import AdminPaperEditPage from '../../frontend/src/pages/AdminPaperEditPage'
 import { api } from '../../frontend/src/lib/api'
 
 vi.mock('../../frontend/src/context/AuthContext', () => ({
@@ -50,7 +52,7 @@ const detailWithState = {
   material_states: [{
     id: 11,
     superconductor: { id: 22, chemical_formula: 'Sn' },
-    material_family: { id: 8, name: '单质超导体' },
+    material_family: { id: 8, name: '单质超导体', name_en: 'Elemental superconductor' },
     structure_families: [],
     element_count: 1,
     material_dimensionality: 'three_dimensional',
@@ -93,9 +95,24 @@ beforeEach(() => {
 
 afterEach(() => { cleanup(); vi.clearAllMocks() })
 
+/**
+ * Issue #78：编辑弹窗迁移为独立页（/admin/papers/:id/edit）后，升版重审
+ * 通过「列表「编辑」→ 独立页面」的页面语义驱动；升版警告与退回提示断言不变。
+ */
+function renderAdminRoutes() {
+  return render(
+    <MemoryRouter initialEntries={['/admin']}>
+      <Routes>
+        <Route path="/admin" element={<AdminPage />} />
+        <Route path="/admin/papers/:id/edit" element={<AdminPaperEditPage />} />
+      </Routes>
+    </MemoryRouter>,
+  )
+}
+
 async function openEditDialog() {
   const user = userEvent.setup()
-  render(<AdminPage />)
+  renderAdminRoutes()
   await user.click(await screen.findByRole('button', { name: '论文审核' }))
   await user.click(await screen.findByRole('button', { name: '编辑' }))
   expect(await screen.findByText('编辑论文')).toBeVisible()

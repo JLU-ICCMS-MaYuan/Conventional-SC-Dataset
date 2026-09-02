@@ -10,9 +10,12 @@ import '@testing-library/jest-dom/vitest'
 import React from 'react'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import AdminPage from '../../frontend/src/pages/AdminPage'
+import AdminPaperEditPage from '../../frontend/src/pages/AdminPaperEditPage'
+import { LanguageProvider } from '../../frontend/src/context/LanguageContext'
 import { api } from '../../frontend/src/lib/api'
 
 vi.mock('../../frontend/src/context/AuthContext', () => ({
@@ -53,7 +56,7 @@ const detailWithStates = {
   material_states: [{
     id: 11,
     superconductor: { id: 22, chemical_formula: 'Sn' },
-    material_family: { id: 8, name: '单质超导体' },
+    material_family: { id: 8, name: '单质超导体', name_en: 'Elemental superconductor' },
     structure_families: [{ id: 10, is_primary: false, structure_family: { id: 10, name: '笼状结构' } }],
     element_count: 1,
     material_dimensionality: 'three_dimensional',
@@ -93,9 +96,24 @@ beforeEach(() => {
 
 afterEach(() => { cleanup(); vi.clearAllMocks() })
 
+/**
+ * Issue #78：编辑弹窗迁移为独立页（/admin/papers/:id/edit）后，科学数据查看
+ * 通过「列表「编辑」→ 独立页面」的页面语义驱动；断言与契约保持不变。
+ */
+function renderAdminRoutes() {
+  return render(
+    <MemoryRouter initialEntries={['/admin']}>
+      <Routes>
+        <Route path="/admin" element={<AdminPage />} />
+        <Route path="/admin/papers/:id/edit" element={<AdminPaperEditPage />} />
+      </Routes>
+    </MemoryRouter>,
+  )
+}
+
 async function openEditDialog() {
   const user = userEvent.setup()
-  render(<AdminPage />)
+  renderAdminRoutes()
   await user.click(await screen.findByRole('button', { name: '论文审核' }))
   await user.click(await screen.findByRole('button', { name: '编辑' }))
   expect(await screen.findByText('编辑论文')).toBeVisible()
@@ -140,7 +158,7 @@ describe('T018：管理员查看完整超导性质', () => {
     await openEditDialog()
 
     expect(screen.getByText(/AI 没有提取到材料状态/)).toBeVisible()
-    // 弹窗仍完整可用：论文级字段与保存按钮保留
+    // 页面仍完整可用：论文级字段与保存按钮保留
     expect(screen.getByRole('textbox', { name: '标题' })).toBeVisible()
     expect(screen.getByRole('button', { name: '保存修改' })).toBeVisible()
   })

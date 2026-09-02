@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest'
 import React from 'react'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import AdminPage from '../../frontend/src/pages/AdminPage'
@@ -45,7 +46,7 @@ afterEach(() => {
 
 describe('工作台卡片式导航', () => {
   it('移除顶部 Tabs，普通管理员只看到论文审核与当前角色', async () => {
-    render(<AdminPage />)
+    render(<MemoryRouter><AdminPage /></MemoryRouter>)
 
     // FR-001：不再有 Tabs 导航
     expect(screen.queryAllByRole('tab')).toHaveLength(0)
@@ -63,7 +64,7 @@ describe('工作台卡片式导航', () => {
 
   it('超级管理员看到全部 5 个可点击入口，且均具备按钮语义', async () => {
     currentUser = { id: 1, username: 'superadmin_mayuan', role: 'superadmin', is_admin: true, is_superadmin: true }
-    render(<AdminPage mode="superadmin" />)
+    render(<MemoryRouter><AdminPage mode="superadmin" /></MemoryRouter>)
 
     for (const label of ['用户与权限', '论文审核', '待审批管理员', '图表管理', '快讯管理']) {
       // SC-004：CardActionArea 提供 role=button；若退回成带 onClick 的 Card，这里会失败
@@ -75,7 +76,7 @@ describe('工作台卡片式导航', () => {
 
   it('点击论文审核卡片进入论文列表', async () => {
     const user = userEvent.setup()
-    render(<AdminPage />)
+    render(<MemoryRouter><AdminPage /></MemoryRouter>)
 
     await user.click(await screen.findByRole('button', { name: '论文审核' }))
 
@@ -86,7 +87,7 @@ describe('工作台卡片式导航', () => {
   it('统计未加载完时显示占位符而非 0', async () => {
     // 让统计请求悬挂，模拟加载中
     mockedApi.get.mockImplementation(() => new Promise(() => {}))
-    render(<AdminPage />)
+    render(<MemoryRouter><AdminPage /></MemoryRouter>)
 
     // FR-007：加载中不得渲染 0，否则会被误读为真实值为零
     await waitFor(() => expect(screen.getByText('论文审核')).toBeVisible())

@@ -1482,6 +1482,62 @@ async def _build_paper_structure_candidate(
     }
 
 
+@router.get("/papers/{paper_id}/structures/{structure_id}/representations")
+async def paper_structure_representations(
+    paper_id: int,
+    structure_id: int,
+    _current_user: User = Depends(get_current_admin),
+) -> dict[str, Any]:
+    """为已落库结构生成完整表示（Issue #78，契约见 spec）。
+
+    `structure_models` 只存惯用胞 CIF（提交链路契约），原胞/POSCAR 等表示
+    按需从落库 CIF 实时推导（R1）。返回 primitive/conventional × cif/poscar
+    的完整表示，供管理端编辑页的晶胞/格式切换与下载使用。
+    """
+    from backend.rag.database import async_session_factory
+
+    async with async_session_factory() as session:
+        return await _structure_representations(session, paper_id, structure_id)
+
+
+async def _structure_representations(
+    session,
+    paper_id: int,
+    structure_id: int,
+) -> dict[str, Any]:
+    """表示生成的实现（不管理 session），便于测试直接调用。"""
+    from backend.services.structure_candidates import (
+        StructureCandidateError,
+        export_representations,
+        read_atoms,
+        validate_structure_text,
+    )
+
+    structure = await session.get(models.StructureModel, structure_id)
+    if structure is None or structure.paper_id != paper_id:
+        raise _upload_error(404, "structure_not_found", "结构不存在")
+    structure_text = str(structure.structure_text or "")
+    if not structure_text.strip():
+        raise _upload_error(400, "structure_representation_failed", "结构内容为空，无法生成表示")
+
+    try:
+        atoms = read_atoms(str(structure.structure_format or "cif"), structure_text)
+        representations = export_representations(atoms)
+        validation = validate_structure_text("cif", structure_text)
+    except (StructureCandidateError, ValueError) as exc:
+        raise _upload_error(400, "structure_representation_failed", str(exc)) from exc
+
+    return {
+        "ok": True,
+        "data": {
+            "structure_id": structure_id,
+            "structure_format": structure.structure_format or "cif",
+            "representations": representations,
+            "validation": validation,
+        },
+    }
+
+
 @router.put("/papers/{paper_id}/scientific-draft")
 async def rewrite_paper_scientific_draft(
     paper_id: int,

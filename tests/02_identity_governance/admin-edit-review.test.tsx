@@ -2,9 +2,11 @@ import '@testing-library/jest-dom/vitest'
 import React from 'react'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import AdminPage from '../../frontend/src/pages/AdminPage'
+import AdminPaperEditPage from '../../frontend/src/pages/AdminPaperEditPage'
 import { LanguageProvider } from '../../frontend/src/context/LanguageContext'
 import { api } from '../../frontend/src/lib/api'
 
@@ -45,9 +47,24 @@ beforeEach(() => {
 
 afterEach(() => { cleanup(); vi.clearAllMocks() })
 
+/**
+ * Issue #78：编辑弹窗迁移为独立页（/admin/papers/:id/edit）后，编辑页内审核
+ * 通过「列表「编辑」→ 独立页面」的页面语义驱动；断言与契约保持不变。
+ */
+function renderAdminRoutes() {
+  return render(
+    <MemoryRouter initialEntries={['/admin']}>
+      <Routes>
+        <Route path="/admin" element={<AdminPage />} />
+        <Route path="/admin/papers/:id/edit" element={<AdminPaperEditPage />} />
+      </Routes>
+    </MemoryRouter>,
+  )
+}
+
 async function openEditDialog() {
   const user = userEvent.setup()
-  render(<AdminPage />)
+  renderAdminRoutes()
   await user.click(await screen.findByRole('button', { name: '论文审核' }))
   await user.click(await screen.findByRole('button', { name: '编辑' }))
   expect(await screen.findByText('编辑论文')).toBeVisible()
@@ -111,7 +128,7 @@ describe('T012：物性行化学式标签（#75-1 FR-002）', () => {
 
   it('物性行输入框标签为「化学式 (material)」', async () => {
     const user = userEvent.setup()
-    render(<AdminPage />)
+    renderAdminRoutes()
     await user.click(await screen.findByRole('button', { name: '论文审核' }))
     await user.click(await screen.findByRole('button', { name: '编辑' }))
     expect(await screen.findByLabelText('化学式 (material)')).toBeVisible()
@@ -123,7 +140,12 @@ describe('T012：物性行化学式标签（#75-1 FR-002）', () => {
     const user = userEvent.setup()
     render(
       <LanguageProvider>
-        <AdminPage />
+        <MemoryRouter initialEntries={['/admin']}>
+          <Routes>
+            <Route path="/admin" element={<AdminPage />} />
+            <Route path="/admin/papers/:id/edit" element={<AdminPaperEditPage />} />
+          </Routes>
+        </MemoryRouter>
       </LanguageProvider>,
     )
     await user.click(await screen.findByRole('button', { name: 'Paper Review' }))

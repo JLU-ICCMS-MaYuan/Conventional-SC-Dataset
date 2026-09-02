@@ -69,8 +69,9 @@ export default {
   reviewDataLoadFailed: 'Failed to load review data: {reason}',
   reviewDone: 'Review completed',
 
-  // Edit paper dialog
+  // Edit paper (standalone page, Issue #78; wording carried over from the dialog)
   editPaperTitle: 'Edit Paper',
+  editBackToList: 'Back to list',
   editReviewSection: 'Review',
   submitReview: 'Submit Review',
   editReviewHint: 'Approval requires confirming material classifications one by one; use the review entry in the list. Only rejection and send-back are handled here.',
@@ -124,6 +125,8 @@ export default {
   scientificSavedRevisionBumped: 'Paper saved and sent back to pending review; it stays non-public until re-approved',
   // Revision-bump warning when editing an approved paper (T044)
   revisionBumpWarning: 'This paper is approved. Saving superconducting properties will bump the revision, send it back to pending review, and keep it non-public until re-approved.',
+  // Structure-representation failure fallback (Issue #78, FR-007): keep the stored CIF, editing continues
+  representationsLoadFailed: 'Some structure representations could not be generated; showing the stored CIF only.',
 
   // Paper batch actions and generic notices
   selectPapersFirst: 'Please select papers first',

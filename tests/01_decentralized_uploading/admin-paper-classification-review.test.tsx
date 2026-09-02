@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest'
 import React from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import AdminPage from '../../frontend/src/pages/AdminPage'
@@ -119,7 +120,7 @@ afterEach(() => {
 describe('论文审核内材料分类确认', () => {
   it('移除独立治理入口，并以一次审核请求提交数据库选择和内部快照', async () => {
     const user = userEvent.setup()
-    render(<AdminPage />)
+    render(<MemoryRouter><AdminPage /></MemoryRouter>)
 
     await user.click(screen.getByRole('button', { name: '论文审核' }))
     expect(await screen.findByText('Hydride paper')).toBeVisible()
@@ -158,7 +159,7 @@ describe('论文审核内材料分类确认', () => {
 
   it('自由输入的新名称留在同一个审核请求中，不调用目录治理 API', async () => {
     const user = userEvent.setup()
-    render(<AdminPage />)
+    render(<MemoryRouter><AdminPage /></MemoryRouter>)
     await user.click(screen.getByRole('button', { name: '论文审核' }))
     expect(await screen.findByText('Hydride paper')).toBeVisible()
     await user.click(screen.getByRole('button', { name: '审核' }))

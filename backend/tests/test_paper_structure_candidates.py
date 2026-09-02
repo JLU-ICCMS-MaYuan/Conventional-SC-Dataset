@@ -207,3 +207,74 @@ def test_out_of_range_state_index_returns_400(migrated_engine):
     data, error = _call("test.cif", CIF, index=5)
     assert error is not None and error.status_code == 400
     assert error.detail["code"] == "invalid_material_state_index"
+
+
+def _call_representations(structure_id=1):
+    from backend.api.rag import _structure_representations
+
+    async_url = os.environ["RAG_DATABASE_URL"].replace("mysql+pymysql://", "mysql+asyncmy://")
+
+    async def run():
+        engine = create_async_engine(async_url)
+        try:
+            async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+                try:
+                    result = await _structure_representations(session, 10, structure_id)
+                    return result, None
+                except HTTPException as exc:
+                    return None, exc
+        finally:
+            await engine.dispose()
+
+    return asyncio.run(run())
+
+
+def _seed_structure(engine):
+    """在既有 seed 基础上追加一条已落库结构（惯用胞 CIF）。"""
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO structure_models (id, paper_id, paper_revision, material_state_id,"
+                " parent_structure_id, structure_format, structure_text, structure_hash,"
+                " nuclear_treatment, created_at, updated_at) VALUES"
+                " (1, 10, 1, 1, NULL, 'cif', :text, :hash, 'unknown', NOW(), NOW())"
+            ),
+            {
+                "text": CIF.decode("utf-8"),
+                "hash": "rep-hash-1",
+            },
+        )
+
+
+def test_structure_representations_returns_full_cell_and_format_set(migrated_engine):
+    """T004（#78）：表示端点返回 primitive/conventional × cif/poscar 完整表示。"""
+    _seed_paper(migrated_engine)
+    _seed_structure(migrated_engine)
+
+    data, error = _call_representations(1)
+    assert error is None, error
+    body = data["data"]
+    assert body["structure_id"] == 1
+    reps = body["representations"]
+    for cell in ("conventional", "primitive"):
+        assert cell in reps, f"缺少 {cell} 表示"
+        for fmt in ("cif", "poscar"):
+            assert fmt in reps[cell], f"缺少 {cell}/{fmt}"
+            assert reps[cell][fmt].get("text"), f"{cell}/{fmt} 文本为空"
+    assert body["validation"]["atom_count"] == 2
+
+
+def test_structure_representations_not_found_or_failed(migrated_engine):
+    """T005（#78）：结构不存在 404；内容为空生成失败 400。"""
+    _seed_paper(migrated_engine)
+    _seed_structure(migrated_engine)
+
+    data, error = _call_representations(999)
+    assert error is not None and error.status_code == 404
+    assert error.detail["code"] == "structure_not_found"
+
+    with migrated_engine.begin() as connection:
+        connection.execute(text("UPDATE structure_models SET structure_text = '' WHERE id = 1"))
+    data, error = _call_representations(1)
+    assert error is not None and error.status_code == 400
+    assert error.detail["code"] == "structure_representation_failed"

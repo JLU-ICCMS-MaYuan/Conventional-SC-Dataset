@@ -67,8 +67,9 @@ export default {
   reviewDataLoadFailed: '审核资料加载失败: {reason}',
   reviewDone: '审核完成',
 
-  // 编辑论文弹窗
+  // 编辑论文（独立页，Issue #78；原编辑弹窗文案沿用）
   editPaperTitle: '编辑论文',
+  editBackToList: '返回列表',
   editReviewSection: '审核',
   submitReview: '提交审核',
   editReviewHint: '批准需逐个确认材料分类，请使用列表中的审核入口；此处只处理拒绝与退回。',
@@ -122,6 +123,8 @@ export default {
   scientificSavedRevisionBumped: '论文已保存并退回待审核，审核通过前不对外公开',
   // 编辑已通过论文时的升版警告（T044）
   revisionBumpWarning: '该论文已通过审核。保存超导性质会递增版本号并退回待审核，审核通过前不对外公开。',
+  // 结构表示生成失败降级提示（Issue #78，FR-007）：保留落库惯用胞 CIF，不阻塞编辑
+  representationsLoadFailed: '部分结构表示生成失败，已降级为仅显示落库的 CIF。',
 
   // 论文批量操作与通用提示
   selectPapersFirst: '请先选择论文',

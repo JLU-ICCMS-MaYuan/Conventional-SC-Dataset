@@ -12,9 +12,11 @@ import '@testing-library/jest-dom/vitest'
 import React from 'react'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import AdminPage from '../../frontend/src/pages/AdminPage'
+import AdminPaperEditPage from '../../frontend/src/pages/AdminPaperEditPage'
 import { api } from '../../frontend/src/lib/api'
 
 vi.mock('../../frontend/src/context/AuthContext', () => ({
@@ -59,9 +61,25 @@ beforeEach(() => {
 
 afterEach(() => { cleanup(); vi.clearAllMocks() })
 
+/**
+ * Issue #78：编辑弹窗迁移为独立页（/admin/papers/:id/edit）后，叙述字段编辑
+ * 通过「列表「编辑」→ 独立页面」的页面语义驱动；knowledge_graph_title 输入框
+ * 已迁移到独立页并保留（label admin.fieldKnowledgeGraphTitle），断言不变。
+ */
+function renderAdminRoutes() {
+  return render(
+    <MemoryRouter initialEntries={['/admin']}>
+      <Routes>
+        <Route path="/admin" element={<AdminPage />} />
+        <Route path="/admin/papers/:id/edit" element={<AdminPaperEditPage />} />
+      </Routes>
+    </MemoryRouter>,
+  )
+}
+
 async function openEditDialog() {
   const user = userEvent.setup()
-  render(<AdminPage />)
+  renderAdminRoutes()
   await user.click(await screen.findByRole('button', { name: '论文审核' }))
   await user.click(await screen.findByRole('button', { name: '编辑' }))
   expect(await screen.findByText('编辑论文')).toBeVisible()
