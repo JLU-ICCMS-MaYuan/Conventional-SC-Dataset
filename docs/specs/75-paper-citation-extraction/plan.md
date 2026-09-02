@@ -41,7 +41,7 @@
 ## Feature 文档结构
 
 ```text
-docs/specs/75-chemical-formula-label/
+docs/specs/75-paper-citation-extraction/
 ├── spec.md
 ├── plan.md
 ├── research.md
