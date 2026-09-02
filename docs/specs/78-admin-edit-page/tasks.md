@@ -50,6 +50,7 @@
 - [x] T019 [US1] 修复超级管理员复用论文列表后被编辑路由重定向的问题：`frontend/src/LazyRoutes.tsx` 将编辑子路由授权给 `admin` 与 `superadmin`，`frontend/src/pages/AdminPaperEditPage.tsx` 按角色返回对应工作台，并在 `tests/02_identity_governance/identity_ui.test.tsx` 覆盖真实 `LazyRoutes` 深链（FR-002、SC-006）
 - [x] T020 [US1] 将材料状态分类统一放入独立编辑页，并精简 `frontend/src/pages/AdminPage.tsx` 审核弹窗为审核结果与审核意见；补充审核弹窗职责回归测试（FR-003a、SC-007）
 - [x] T021 [US1] 统一编辑页审核结果为通过/拒绝/退回待审核三个状态，并为退回待审核文案增加回退箭头图标；更新 `tests/02_identity_governance/admin-edit-page.test.tsx`（FR-003b、SC-008）
+- [x] T022 [US1] 审核通过时从 `AdminPaperEditPage` 的当前材料状态编辑器组装 `material_states` 发送到审核接口，支持无需先单独保存的直接批准流程，并补充回归测试（FR-003c、SC-009）
 
 - [x] T015 执行 `scripts/run-tests.sh frontend`、`go`、`backend`，与 T003 基线比对确认无新增失败（SC-005）
 - [x] T016 执行 `cd frontend && npm run build`，确认 `tsc -b` 无类型错误

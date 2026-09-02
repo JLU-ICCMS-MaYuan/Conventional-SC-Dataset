@@ -219,6 +219,26 @@ describe('Issue #78：管理端论文编辑独立页', () => {
     expect(body2.material_states[0]).toMatchObject({ material: 'H3S' })
   })
 
+  it('审核通过时提交当前编辑器中的材料分类（无需先单独保存）', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByText('材料状态 #1')
+    await user.click(screen.getByRole('combobox', { name: '审核结果' }))
+    await user.click(await screen.findByRole('option', { name: '✅ 通过' }))
+    await user.click(screen.getByRole('button', { name: '提交审核' }))
+
+    await waitFor(() => expect(mockedApi.post).toHaveBeenCalledTimes(1))
+    expect(mockedApi.post.mock.calls[0][1]).toMatchObject({
+      status: 'approved',
+      material_states: [{
+        id: 11,
+        material_family: { id: 8, name: '单质超导体' },
+        material_dimensionality: 'three_dimensional',
+      }],
+    })
+  })
+
   it('approved 论文显示升版警告，保存成功且 revision_bumped 时提示退回待审核（FR-009）', async () => {
     const user = userEvent.setup()
     mockedApi.get.mockImplementation(async (path: string) => {

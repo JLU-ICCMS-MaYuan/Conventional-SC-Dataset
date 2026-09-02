@@ -196,10 +196,24 @@ const AdminPaperEditPage: React.FC = () => {
   const handleEditReview = async () => {
     setEditReviewSaving(true)
     try {
+      const materialStates = editMaterialStates.map(state => ({
+        id: (state as DraftMaterialState & { id?: number }).id,
+        material_family: {
+          id: state.material_family?.id || null,
+          name: state.material_family?.name || state.material_family?.name_zh || '',
+        },
+        material_dimensionality: state.material_dimensionality || 'unknown',
+        structure_families: (state.structure_families || []).map(item => ({
+          id: item.id || null,
+          name: item.name || '',
+          is_primary: Boolean(item.is_primary),
+        })),
+      }))
       await api.post(`/api/admin/papers/${paperId}/review`, {
         status: editReviewStatus,
         comment: editReviewComment,
         review_request_id: crypto.randomUUID(),
+        ...(editReviewStatus === 'approved' ? { material_states: materialStates } : {}),
       })
       setSnackbar(t('admin.reviewSubmitted'))
     } catch (e: unknown) {
