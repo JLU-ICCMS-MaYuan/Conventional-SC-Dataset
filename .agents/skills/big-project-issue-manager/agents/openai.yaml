@@ -1,0 +1,4 @@
+interface:
+  display_name: "Big Project Issue Manager"
+  short_description: "管理大型项目的 GitHub Issue 需求生命周期"
+  default_prompt: "Use $big-project-issue-manager to classify and manage this project requirement in GitHub Issues."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Big Project Planer"
+  short_description: "通过设计树访谈形成大型项目前期总体规划"
+  default_prompt: "使用 $big-project-planer 分轮访谈我，挖掘潜在需求，并将确认后的总体规划写入 docs/plan/。"
