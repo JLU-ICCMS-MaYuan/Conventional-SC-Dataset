@@ -45,11 +45,11 @@ const paper = {
 const detailWithStructures = {
   ...paper,
   paper_type: 'experimental',
+  material_families: [{ id: 8, name: '单质超导体', name_en: 'Elemental superconductor' }],
   key_properties: [],
   material_states: [{
     id: 11,
     superconductor: { id: 22, chemical_formula: 'Sn' },
-    material_family: { id: 8, name: '单质超导体', name_en: 'Elemental superconductor' },
     structure_families: [],
     element_count: 1,
     material_dimensionality: 'three_dimensional',
@@ -231,10 +231,68 @@ describe('Issue #78：管理端论文编辑独立页', () => {
     await waitFor(() => expect(mockedApi.post).toHaveBeenCalledTimes(1))
     expect(mockedApi.post.mock.calls[0][1]).toMatchObject({
       status: 'approved',
+      material_families: [{ id: 8, name: '单质超导体' }],
       material_states: [{
         id: 11,
-        material_family: { id: 8, name: '单质超导体' },
         material_dimensionality: 'three_dimensional',
+      }],
+    })
+  })
+
+  it('待审正式关联为空时从审核产物回填论文 family 与 More type labels', async () => {
+    const user = userEvent.setup()
+    mockedApi.get.mockImplementation(async (path: string) => {
+      if (path === '/api/admin/papers/88') {
+        return {
+          ...detailWithStructures,
+          material_families: [],
+          material_states: [{
+            ...detailWithStructures.material_states[0],
+            structure_families: [],
+            structures: [],
+          }],
+        }
+      }
+      if (path === '/api/rag/papers/88/review-artifact') {
+        return { data: { user_values: {
+          paper: { material_families: [
+            { id: null, name: '待建家族', status: 'pending' },
+            { id: 1, name: '氢基超导体', status: 'confirmed' },
+          ] },
+          material_states: [{
+            material_dimensionality: 'three_dimensional',
+            structure_families: [{ id: 10, name: '笼状结构', status: 'confirmed', is_primary: false }],
+          }],
+        } } }
+      }
+      if (path === '/api/rag/space-groups') return { space_groups: [] }
+      if (path === '/api/classification-catalogs') {
+        return {
+          material_families: [{ id: 1, name: '氢基超导体', aliases: ['hydride'] }],
+          structure_families: [{ id: 10, name: '笼状结构', aliases: ['clathrate'] }],
+          material_dimensionalities: [{ value: 'three_dimensional', name: '三维' }],
+        }
+      }
+      return {}
+    })
+
+    renderPage()
+    expect(await screen.findByText('待建家族')).toBeVisible()
+    expect(screen.getByText('笼状结构')).toBeVisible()
+
+    await user.click(screen.getByRole('combobox', { name: '审核结果' }))
+    await user.click(await screen.findByRole('option', { name: '✅ 通过' }))
+    await user.click(screen.getByRole('button', { name: '提交审核' }))
+
+    await waitFor(() => expect(mockedApi.post).toHaveBeenCalledTimes(1))
+    expect(mockedApi.post.mock.calls[0][1]).toMatchObject({
+      material_families: [
+        { id: null, name: '待建家族' },
+        { id: 1, name: '氢基超导体' },
+      ],
+      material_states: [{
+        id: 11,
+        structure_families: [{ id: 10, name: '笼状结构', is_primary: false }],
       }],
     })
   })

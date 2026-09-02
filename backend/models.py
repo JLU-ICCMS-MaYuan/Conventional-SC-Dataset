@@ -398,6 +398,11 @@ class Paper(Base):
         overlaps="evidences,paper_chunk",
     )
     review_events = relationship("PaperReviewEvent", back_populates="paper")
+    material_family_links = relationship(
+        "PaperMaterialFamily",
+        back_populates="paper",
+        cascade="all, delete-orphan",
+    )
     material_states = relationship("MaterialState", back_populates="paper")
 
 
@@ -702,7 +707,7 @@ class MaterialFamily(Base):
     )
 
     aliases = relationship("MaterialFamilyAlias", back_populates="material_family")
-    material_states = relationship("MaterialState", back_populates="material_family")
+    paper_links = relationship("PaperMaterialFamily", back_populates="material_family")
 
 
 class MaterialFamilyAlias(Base):
@@ -732,6 +737,32 @@ class MaterialFamilyAlias(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     material_family = relationship("MaterialFamily", back_populates="aliases")
+
+
+class PaperMaterialFamily(Base):
+    __tablename__ = "paper_material_families"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["paper_id", "paper_revision"],
+            ["papers.id", "papers.content_revision"],
+            name="fk_paper_material_families_paper_revision",
+            ondelete="RESTRICT",
+            onupdate="CASCADE",
+        ),
+    )
+
+    paper_id = Column(Integer, primary_key=True)
+    paper_revision = Column(Integer, primary_key=True)
+    material_family_id = Column(
+        Integer,
+        ForeignKey("material_families.id", ondelete="RESTRICT"),
+        primary_key=True,
+        index=True,
+    )
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    paper = relationship("Paper", back_populates="material_family_links")
+    material_family = relationship("MaterialFamily", back_populates="paper_links")
 
 
 class StructureFamily(Base):
@@ -878,11 +909,6 @@ class MaterialState(Base):
         ForeignKey("superconductors.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    material_family_id = Column(
-        Integer,
-        ForeignKey("material_families.id", ondelete="RESTRICT"),
-        index=True,
-    )
     element_count = Column(SmallInteger)
     material_dimensionality = Column(
         String(32),
@@ -934,7 +960,6 @@ class MaterialState(Base):
 
     paper = relationship("Paper", back_populates="material_states")
     superconductor = relationship("Superconductor", back_populates="material_states")
-    material_family = relationship("MaterialFamily", back_populates="material_states")
     structure_family_links = relationship(
         "MaterialStateStructureFamily",
         back_populates="material_state",

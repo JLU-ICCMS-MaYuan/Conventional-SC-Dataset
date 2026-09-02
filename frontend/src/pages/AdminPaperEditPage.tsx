@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from 'react'
 import {
-  Alert, Box, Button, Checkbox, Chip, CircularProgress, Container, FormControl,
+  Alert, Autocomplete, Box, Button, Checkbox, Chip, CircularProgress, Container, FormControl,
   FormControlLabel, IconButton, InputLabel, MenuItem, Select, Snackbar, TextField, Typography,
 } from '@mui/material'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
-import { ClassificationCatalogs, loadClassificationCatalogs } from '../lib/classifications'
+import {
+  ClassificationCatalogs, ClassificationTerm, FamilySelection, familyName,
+  loadClassificationCatalogs, pendingSelection, selectionForTerm,
+} from '../lib/classifications'
 import { DraftMaterialState, StructureCandidate, unwrapData } from '../lib/paperProcessing'
 import MaterialStatesEditor, { SpaceGroupOption } from '../components/MaterialStatesEditor'
 import { useLanguage } from '../context/LanguageContext'
@@ -22,17 +25,6 @@ import { useLanguage } from '../context/LanguageContext'
 const materialStateFromDetail = (state: Record<string, any>): DraftMaterialState => ({
   ...state,
   material: state.superconductor?.chemical_formula || state.material || '',
-  // Issue #76（FR-024）：保留 name_zh/name_en，使 familyName 在英文界面显示规范英文名
-  // （如「单质超导体」→ Elemental superconductor）；仅回退时兜底到 name。
-  material_family: state.material_family
-    ? {
-        id: state.material_family.id ?? null,
-        name: state.material_family.name || '',
-        name_zh: state.material_family.name_zh || state.material_family.name || '',
-        name_en: state.material_family.name_en || '',
-        status: 'confirmed',
-      }
-    : null,
   structure_families: (state.structure_families || []).map((item: any) => ({
     id: item.id ?? item.structure_family_id,
     name: item.structure_family?.name || item.name || '',
@@ -82,7 +74,7 @@ const candidateFromStructureModel = (model: Record<string, any>, ref: string): S
 /**
  * 管理端论文编辑独立页（Issue #78，路由 /admin/papers/:id/edit）。
  * 由原 AdminPage 编辑弹窗迁移而来：论文级字段、科学数据（MaterialStatesEditor）、
- * 审核区（只拒绝/退回）与两段保存全部保留，容器从 Dialog 改为页面；
+ * 审核区与两段保存全部保留，容器从 Dialog 改为页面；
  * 并新增已落库结构的完整表示加载（晶胞/格式切换与下载，FR-004/FR-005/FR-006）。
  */
 const AdminPaperEditPage: React.FC = () => {
@@ -99,13 +91,14 @@ const AdminPaperEditPage: React.FC = () => {
   const [editLoading, setEditLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
 
-  /* ── 审核区（编辑页内审核：只拒绝/退回，批准需分类确认区，编辑页没有）─ */
+  /* ── 审核区（论文级 family 与状态级标签均可在本页确认后批准）─ */
   const [editReviewStatus, setEditReviewStatus] = useState('')
   const [editReviewComment, setEditReviewComment] = useState('')
   const [editReviewSaving, setEditReviewSaving] = useState(false)
 
   /* ── 科学数据（Issue #76）：材料状态与结构候选受控于共享编辑器，保存时随 C1 提交 ─ */
   const [editMaterialStates, setEditMaterialStates] = useState<DraftMaterialState[]>([])
+  const [editMaterialFamilies, setEditMaterialFamilies] = useState<FamilySelection[]>([])
   const [editStructureCandidates, setEditStructureCandidates] = useState<StructureCandidate[]>([])
   const [editSpaceGroups, setEditSpaceGroups] = useState<SpaceGroupOption[]>([])
   // 论文原本是否有科学数据：有才在保存时走科学数据段（契约 C4 第二步）
@@ -166,20 +159,57 @@ const AdminPaperEditPage: React.FC = () => {
       setEditLoading(true)
       try {
         const detail = await api.get<Record<string, any>>(`/api/admin/papers/${paperId}`)
+        let pendingValues: Record<string, any> | null = null
+        if (detail.review_status === 'pending') {
+          try {
+            const artifact = await api.get<{ data?: { user_values?: Record<string, any> } }>(
+              `/api/rag/papers/${paperId}/review-artifact`,
+            )
+            pendingValues = artifact?.data?.user_values || null
+          } catch {
+            // 手工创建或已清理临时证据的待审论文没有 artifact，继续使用正式详情。
+          }
+        }
         setEditForm(detail)
-        // 编辑页只提供拒绝与退回两项，已通过的论文若原样带入 approved，
-        // Select 的值将不在选项内而显示空白，故落到 rejected。
+        const pendingFamilies = pendingValues?.paper?.material_families
+        const materialFamilies = Array.isArray(pendingFamilies)
+          ? pendingFamilies
+          : (detail.material_families || [])
+        setEditMaterialFamilies(materialFamilies.map((family: any) => ({
+          id: family.id ?? null,
+          name: family.name || family.name_zh || '',
+          name_zh: family.name_zh || family.name || '',
+          name_en: family.name_en || '',
+          status: family.status === 'pending' ? 'pending' : 'confirmed',
+        })))
+        // 已通过论文重新编辑时默认退回待审核，避免无修改地重复批准。
         setEditReviewStatus(detail.review_status === 'rejected' ? 'rejected' : 'pending')
         setEditReviewComment(detail.review_comment || '')
         // 科学数据：Go 详情行转成共享编辑器形态；既有结构并入候选（整体替换语义，T020）
         const detailStates: Array<Record<string, any>> = detail.material_states || []
-        const materialStates = detailStates.map(materialStateFromDetail)
+        const pendingStates: Array<Record<string, any>> = Array.isArray(pendingValues?.material_states)
+          ? pendingValues.material_states
+          : []
+        const materialStates = detailStates.map((state, index) => {
+          const normalized = materialStateFromDetail(state)
+          const pendingState = pendingStates[index]
+          if (!pendingState) return normalized
+          return {
+            ...normalized,
+            material_dimensionality: pendingState.material_dimensionality || normalized.material_dimensionality,
+            structure_families: Array.isArray(pendingState.structure_families)
+              ? pendingState.structure_families
+              : normalized.structure_families,
+          }
+        })
         const structureCandidates = detailStates.flatMap((state, index) =>
           (state.structures || []).map((model: any) =>
             candidateFromStructureModel(model, `material_states[${index}]`)))
         setEditMaterialStates(materialStates)
         setEditStructureCandidates(structureCandidates)
-        setEditHadScientificData(materialStates.length > 0 || structureCandidates.length > 0)
+        setEditHadScientificData(
+          materialStates.length > 0 || structureCandidates.length > 0 || materialFamilies.length > 0,
+        )
         // 已落库结构表示：异步拉取完整表示并入候选，不阻塞表单渲染
         void loadStructureRepresentations(detailStates)
       } catch (e: unknown) {
@@ -191,17 +221,12 @@ const AdminPaperEditPage: React.FC = () => {
     void loadDetail()
   }, [paperId])
 
-  // 编辑页内提交审核。只允许拒绝与退回待审核：
-  // 批准时由后端校验编辑页已保存的材料状态分类完整性。
+  // 编辑页内提交审核；批准时由后端校验当前论文级 family 和状态分类完整性。
   const handleEditReview = async () => {
     setEditReviewSaving(true)
     try {
       const materialStates = editMaterialStates.map(state => ({
         id: (state as DraftMaterialState & { id?: number }).id,
-        material_family: {
-          id: state.material_family?.id || null,
-          name: state.material_family?.name || state.material_family?.name_zh || '',
-        },
         material_dimensionality: state.material_dimensionality || 'unknown',
         structure_families: (state.structure_families || []).map(item => ({
           id: item.id || null,
@@ -213,7 +238,10 @@ const AdminPaperEditPage: React.FC = () => {
         status: editReviewStatus,
         comment: editReviewComment,
         review_request_id: crypto.randomUUID(),
-        ...(editReviewStatus === 'approved' ? { material_states: materialStates } : {}),
+        ...(editReviewStatus === 'approved' ? {
+          material_families: editMaterialFamilies.map(family => ({ id: family.id || null, name: family.name })),
+          material_states: materialStates,
+        } : {}),
       })
       setSnackbar(t('admin.reviewSubmitted'))
     } catch (e: unknown) {
@@ -240,7 +268,7 @@ const AdminPaperEditPage: React.FC = () => {
       }
       // 第一步：论文级字段保存（Go）。失败在此终止，不调用科学数据段。
       await api.put(`/api/admin/papers/${paperId}`, payload)
-      if (editHadScientificData || editMaterialStates.length > 0 || editStructureCandidates.length > 0) {
+      if (editHadScientificData || editMaterialFamilies.length > 0 || editMaterialStates.length > 0 || editStructureCandidates.length > 0) {
         try {
           // 第二步：科学数据整体替换（Python，契约 C1）。
           // structure_candidates 只提交已确认候选：未确认（unreviewed）与已排除（excluded）
@@ -249,6 +277,7 @@ const AdminPaperEditPage: React.FC = () => {
             `/api/rag/papers/${paperId}/scientific-draft`,
             {
               paper_type: editForm.paper_type || '',
+              material_families: editMaterialFamilies,
               material_states: editMaterialStates,
               structure_candidates: editStructureCandidates.filter(candidate => candidate.confirmation === 'confirmed'),
             },
@@ -372,6 +401,32 @@ const AdminPaperEditPage: React.FC = () => {
           <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1.5 }}>
             <TextField label={t('admin.fieldPaperType')} size="small" value={editForm.paper_type || ''}
               onChange={e => setEditForm({ ...editForm, paper_type: e.target.value })} />
+            <Autocomplete<ClassificationTerm | string, true, false, true>
+              multiple
+              freeSolo
+              options={classificationCatalogs?.material_families || []}
+              loading={!classificationCatalogs && !classificationCatalogError}
+              value={editMaterialFamilies.map(selection => {
+                if (selection.id == null) return selection.name
+                return classificationCatalogs?.material_families?.find(item => item.id === selection.id) || selection.name
+              })}
+              getOptionLabel={option => typeof option === 'string' ? option : familyName(option, lang)}
+              isOptionEqualToValue={(option, value) => (
+                typeof option !== 'string' && typeof value !== 'string' && option.id === value.id
+              )}
+              onChange={(_, values) => setEditMaterialFamilies(values.map(value => (
+                typeof value === 'string' ? pendingSelection(value) : selectionForTerm(value)
+              )).filter((value): value is FamilySelection => Boolean(value)))}
+              renderInput={params => (
+                <TextField
+                  {...params}
+                  size="small"
+                  label={t('upload.materialFamilyField')}
+                  error={Boolean(classificationCatalogError)}
+                  helperText={classificationCatalogError || undefined}
+                />
+              )}
+            />
             <TextField label={t('admin.fieldKeywordsTags')} size="small" value={editForm.keywords_tags || ''}
               onChange={e => setEditForm({ ...editForm, keywords_tags: e.target.value })} />
             <TextField label={t('admin.fieldSourceFilePath')} size="small" value={editForm.source_file_path || ''}

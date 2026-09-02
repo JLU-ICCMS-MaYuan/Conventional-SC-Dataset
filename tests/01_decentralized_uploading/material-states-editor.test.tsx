@@ -39,7 +39,6 @@ vi.mock('../../frontend/src/components/StructureCandidatePanel', () => ({
 
 const makeState = (overrides: Partial<DraftMaterialState> = {}): DraftMaterialState => ({
   material: 'LaH10',
-  material_family: null,
   structure_families: [],
   element_count: 2,
   material_dimensionality: 'unknown',
@@ -253,9 +252,10 @@ describe('T010：UploadTaskEditor 集成（Issue #77）', () => {
     paper: {
       title: 'Hg study', authors: [], paper_type: 'experimental',
       research_materials: ['Hg'], keywords_tags: [], methodology: [],
+      material_families: [{ id: 1, name: '单质超导体', status: 'confirmed' }],
     },
     material_states: [{
-      material: 'Hg', material_family: null, structure_families: [],
+      material: 'Hg', structure_families: [],
       element_count: 1, material_dimensionality: 'unknown',
       tc_results: [], properties: [],
     }],

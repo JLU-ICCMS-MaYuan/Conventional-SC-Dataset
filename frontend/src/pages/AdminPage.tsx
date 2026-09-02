@@ -190,7 +190,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
   /* ── Review actions ──────────────────────────── */
   const openReview = async (paper: PaperRecord) => {
     setReviewDlg({ paper, open: true })
-    setReviewStatus(paper.review_status || 'pending')
+    setReviewStatus(paper.review_status === 'rejected' ? 'rejected' : 'pending')
     setReviewComment(paper.review_comment || '')
   }
 
@@ -690,7 +690,6 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
               label={t('admin.reviewResult')}
               onChange={e=>setReviewStatus(e.target.value)}
             >
-              <MenuItem value="approved">{t('admin.reviewApprove')}</MenuItem>
               <MenuItem value="rejected">{t('admin.reviewReject')}</MenuItem>
               <MenuItem value="pending">{t('admin.reviewBackToPending')}</MenuItem>
             </Select>

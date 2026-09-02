@@ -29,6 +29,7 @@ func paperDetailTestDB(t *testing.T) *gorm.DB {
 		&models.Superconductor{},
 		&models.MaterialState{},
 		&models.MaterialFamily{},
+		&models.PaperMaterialFamily{},
 		&models.MaterialStateStructureFamily{},
 		&models.StructureFamily{},
 		&models.TcResult{},
@@ -511,7 +512,7 @@ func TestAdminPaperDetailPreloadsScientificData(t *testing.T) {
 	}
 }
 
-// T054（Issue #76，FR-024）：详情响应（管理端与公开）的 material_family 必须返回
+// Issue #79：详情响应（管理端与公开）的论文级 material_families 必须返回
 // name_en——英文界面据此显示规范英文名（如「单质超导体」→ Elemental superconductor）。
 // 修复前：管理端详情走模型序列化，NameEN 是 json:"-"；公开详情 materialStatesToDict
 // 只回 name。两者都会让英文界面拿不到英文名而回退中文。
@@ -525,20 +526,21 @@ func TestPaperDetailReturnsFamilyNameEn(t *testing.T) {
 	}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Model(&models.MaterialState{}).Where("id = ?", 1).
-		Update("material_family_id", 8).Error; err != nil {
+	if err := db.Create(&models.PaperMaterialFamily{
+		PaperID: 4, PaperRevision: 1, MaterialFamilyID: 8,
+	}).Error; err != nil {
 		t.Fatal(err)
 	}
 
 	assertFamilyNameEn := func(t *testing.T, label string, body map[string]any) {
 		t.Helper()
-		state := firstMaterialState(t, body)
-		family, ok := state["material_family"].(map[string]any)
-		if !ok {
-			t.Fatalf("%s material_family 缺失或类型异常：%#v", label, state["material_family"])
+		families, ok := body["material_families"].([]any)
+		if !ok || len(families) != 1 {
+			t.Fatalf("%s material_families 缺失或类型异常：%#v", label, body["material_families"])
 		}
+		family := families[0].(map[string]any)
 		if family["name"] != "单质超导体" || family["name_en"] != "Elemental superconductor" {
-			t.Fatalf("%s material_family = %#v，期望 name=单质超导体 且 name_en=Elemental superconductor", label, family)
+			t.Fatalf("%s material_families = %#v，期望 name=单质超导体 且 name_en=Elemental superconductor", label, family)
 		}
 	}
 

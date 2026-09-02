@@ -31,6 +31,7 @@ interface DataPoint {
   y: number
   material: string
   familyId: number
+  familyIds: number[]
   familyName: string
   articleType: string | null
   year: number | null
@@ -229,18 +230,25 @@ const SharePage: React.FC = () => {
   }
 
   const buildBgPoints = (data: any[]): DataPoint[] =>
-    (Array.isArray(data) ? data : []).map(d => ({
-      x: d.x,
-      y: d.y,
-      material: d.label || d.formula || '?',
-      familyId: d.family_id ?? UNCLASSIFIED_FAMILY_ID,
-      familyName: resolveFamilyName(d.family_id, d.family_name || t('share.unclassifiedFamily')),
-      articleType: d.type === 'experimental' ? 'e' : 't',
-      year: d.year || null,
-      doi: d.doi || null,
-      label: d.label || d.formula || '?',
-      paperId: d.paper_id || undefined,
-    }))
+    (Array.isArray(data) ? data : []).map(d => {
+      const familyIds = Array.isArray(d.family_ids) && d.family_ids.length > 0
+        ? d.family_ids
+        : [d.family_id ?? UNCLASSIFIED_FAMILY_ID]
+      const familyId = familyIds[0] ?? UNCLASSIFIED_FAMILY_ID
+      return {
+        x: d.x,
+        y: d.y,
+        material: d.label || d.formula || '?',
+        familyId,
+        familyIds,
+        familyName: resolveFamilyName(familyId, d.family_name || t('share.unclassifiedFamily')),
+        articleType: d.type === 'experimental' ? 'e' : 't',
+        year: d.year || null,
+        doi: d.doi || null,
+        label: d.label || d.formula || '?',
+        paperId: d.paper_id || undefined,
+      }
+    })
 
   // ── Chart data composition ──
   const chart1Data: DataPoint[] = buildBgPoints(pressureData)

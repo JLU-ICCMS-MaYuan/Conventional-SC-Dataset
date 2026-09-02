@@ -125,32 +125,55 @@ def convert_legacy_draft(
     converted = deepcopy(dict(draft))
     raw_value = converted.pop("sc_type", None)
     converted.pop("sc_type_review_status", None)
+    paper = converted.get("paper")
+    if not isinstance(paper, dict):
+        paper = {}
+        converted["paper"] = paper
     states = converted.get("material_states")
     if not isinstance(states, list):
         states = []
         converted["material_states"] = states
-    if raw_value in (None, ""):
-        return converted
-
-    seed_match = resolve_seed_material_family(raw_value)
-    selection = None
-    if seed_match:
-        family = families_by_code.get(seed_match.code)
-        if family:
-            selection = {
-                "id": int(family["id"]),
-                "name": str(family.get("name") or seed_match.name),
-                "status": "confirmed",
-            }
-    if selection is None:
-        selection = _pending_selection(raw_value)
+    selections = list(paper.get("material_families") or [])
+    had_state_family = False
+    if raw_value not in (None, ""):
+        seed_match = resolve_seed_material_family(raw_value)
+        selection = None
+        if seed_match:
+            family = families_by_code.get(seed_match.code)
+            if family:
+                selection = {
+                    "id": int(family["id"]),
+                    "name": str(family.get("name") or seed_match.name),
+                    "status": "confirmed",
+                }
+        selections.append(selection or _pending_selection(raw_value))
 
     for state in states:
-        if isinstance(state, dict) and not state.get("material_family"):
-            state["material_family"] = deepcopy(selection)
-    warnings = list(converted.get("classification_migration_warnings") or [])
-    warnings.append("旧材料类型已转换；保存后将只保留材料状态级分类。")
-    converted["classification_migration_warnings"] = warnings
+        if isinstance(state, dict):
+            family = state.pop("material_family", None)
+            if isinstance(family, dict) and str(family.get("name") or "").strip():
+                had_state_family = True
+                selections.append(deepcopy(family))
+
+    deduplicated = []
+    seen = set()
+    for selection in selections:
+        if not isinstance(selection, dict) or not str(selection.get("name") or "").strip():
+            continue
+        key = (
+            f"id:{selection['id']}"
+            if selection.get("id") not in (None, "")
+            else f"name:{normalize_classification_name(selection['name'])}"
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduplicated.append(selection)
+    paper["material_families"] = deduplicated
+    if raw_value not in (None, "") or had_state_family or len(deduplicated) != len(selections):
+        warnings = list(converted.get("classification_migration_warnings") or [])
+        warnings.append("旧材料类型已转换为论文级 Material family；保存后不再保留状态级字段。")
+        converted["classification_migration_warnings"] = warnings
     return converted
 
 

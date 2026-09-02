@@ -130,6 +130,7 @@ def test_referenced_classification_candidates_are_internal_only():
 
     summarized = _summary_classification_candidates(candidates)
     assert [state["material"] for state in summarized[0]["material_states"]] == ["Li2MgH16"]
+    # 分块候选阶段仍可保留状态级证据，最终草稿归一化时才提升到论文级。
     assert summarized[0]["material_states"][0]["material_family"] is None
     assert [item["name"] for item in summarized[0]["material_states"][0]["structure_families"]] == ["笼状结构"]
 
@@ -290,10 +291,12 @@ def test_submission_rejects_unknown_paper_type_but_accepts_pending_material_fami
             "title": "Example",
             "paper_type": "experimental",
             "research_materials": ["Example2H3"],
+            "material_families": [
+                {"id": None, "name": "new_family", "status": "pending"}
+            ],
         },
         "material_states": [{
             "material": "Example2H3",
-            "material_family": {"id": None, "name": "new_family", "status": "pending"},
             "tc_results": [{"tc_value_k": 42, "result_kind": "experimental"}],
         }],
     })
@@ -379,7 +382,10 @@ def test_build_candidate_draft_merges_first_candidates():
     assert len(draft["material_states"]) == 1
     state = draft["material_states"][0]
     assert state["material"] == "LaH10"
-    assert state["material_family"] == {"id": None, "name": "hydride", "status": "pending"}
+    assert draft["paper"]["material_families"] == [
+        {"id": None, "name": "hydride", "status": "pending"}
+    ]
+    assert "material_family" not in state
     assert state["structure_families"][0]["name"] == "fcc"
     assert "evidence" not in state and "scope" not in state
 

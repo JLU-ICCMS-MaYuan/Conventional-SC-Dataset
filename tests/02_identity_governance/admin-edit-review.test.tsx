@@ -33,6 +33,7 @@ const paper = {
   year: 2026, review_status: 'pending', review_comment: null, reviewer_name: null,
   uploader_name: 'author', created_at: '2026-08-31', record_count: 0,
   show_in_chart: true, compound_symbols: null, article_types: [],
+  material_families: [{ id: 1, name: '氢基超导体', status: 'confirmed' }],
 }
 
 beforeEach(() => {
@@ -96,14 +97,14 @@ describe('编辑页内审核', () => {
     expect(body).toHaveProperty('review_request_id')
   })
 
-  it('审核结果只提供拒绝与退回，不提供批准', async () => {
+  it('审核结果提供批准、拒绝与退回', async () => {
     const user = await openEditDialog()
 
     await user.click(screen.getByRole('combobox', { name: '审核结果' }))
-    // 批准需逐个确认材料分类，编辑页没有该区域，放开只会得到必然 409 的按钮
+    // Material family 已提升到论文级并可在编辑页维护，因此可以直接批准。
     expect(await screen.findByRole('option', { name: '❌ 拒绝' })).toBeVisible()
-    expect(screen.getByRole('option', { name: '退回待审核' })).toBeVisible()
-    expect(screen.queryByRole('option', { name: /通过/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /退回待审核/ })).toBeVisible()
+    expect(screen.getByRole('option', { name: /通过/ })).toBeVisible()
   })
 })
 

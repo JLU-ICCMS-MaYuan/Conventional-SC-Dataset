@@ -262,6 +262,7 @@ export default {
   applyToSameMaterial: 'Apply to same material',
   materialField: 'Chemical formula',
   materialFamilyField: 'Material family',
+  materialFamilyRequired: 'Select at least one paper-level material family',
   elementCountField: 'Distinct element count',
   elementCountInvalid: 'Enter an integer from 1 to 118',
   elementCountAuto: 'Auto-calculated; editable manually',

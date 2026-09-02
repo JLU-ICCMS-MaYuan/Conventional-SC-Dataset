@@ -86,6 +86,9 @@ func cascadeDeleteInDB(tx *gorm.DB, paperID uint) error {
 	if err := tx.Where("paper_id = ?", paperID).Delete(&models.MaterialState{}).Error; err != nil {
 		return fmt.Errorf("删除 material_states 失败: %w", err)
 	}
+	if err := tx.Where("paper_id = ?", paperID).Delete(&models.PaperMaterialFamily{}).Error; err != nil {
+		return fmt.Errorf("删除 paper_material_families 失败: %w", err)
+	}
 
 	// 7. 证据 → 分块 → 文件：paper_evidences 引用 paper_chunks，后者引用 paper_files
 	rest := []struct {

@@ -81,7 +81,7 @@ equal contribution、contributed equally 等明确声明识别。证据不足时
   "key_findings": []
 }"""
 
-CHUNK_RESULT_SCHEMA_VERSION = 5
+CHUNK_RESULT_SCHEMA_VERSION = 6
 
 PUBLIC_CHUNK_RESULT_FIELDS = {
     "metadata", "paper_type_evidence", "research_materials",
@@ -142,11 +142,11 @@ key_finding 保留原有格式，提供完整的核心发现描述。
     "year": null, "abstract": null, "summary": "", "paper_type": "theoretical|experimental|review|unknown",
     "theoretical_subtype": null, "keywords_tags": [], "methodology": [],
     "knowledge_graph_title": "", "key_finding": "",
-    "research_motivation": "", "research_materials": [], "material_relations": [], "builds_on": []
+    "research_motivation": "", "research_materials": [], "material_relations": [], "builds_on": [],
+    "material_families": [{"id": null, "name": "自由材料家族名称", "status": "pending", "evidence": {"section": "", "page": null, "quote": ""}}]
   },
   "material_states": [{
     "material": "",
-    "material_family": {"id": null, "name": "自由材料家族名称", "status": "pending", "evidence": {"section": "", "page": null, "quote": ""}},
     "structure_families": [{"id": null, "name": "结构家族名称", "is_primary": true, "status": "pending", "evidence": {"section": "", "page": null, "quote": ""}}],
     "element_count": null,
     "material_dimensionality": "zero_dimensional|one_dimensional|two_dimensional|three_dimensional|quasi_one_dimensional|quasi_two_dimensional|unknown",
@@ -946,19 +946,7 @@ def _normalize_material_states(value: Any) -> list[dict[str, Any]]:
                 element_count = _int_or_none(state.get("element_count"))
             state["element_count"] = element_count
         state.pop("phase_label", None)
-        family = state.get("material_family")
-        if isinstance(family, dict) and family.get("scope") == "referenced_work":
-            family = None
-        if isinstance(family, str):
-            family = {"id": None, "name": family.strip(), "status": "pending"}
-        elif isinstance(family, dict):
-            family = {
-                "id": family.get("id"),
-                "name": str(family.get("name") or family.get("value") or "").strip(),
-                "status": "confirmed" if family.get("id") not in (None, "") else "pending",
-                **({"evidence": family["evidence"]} if isinstance(family.get("evidence"), dict) else {}),
-            }
-        state["material_family"] = family if isinstance(family, dict) and family.get("name") else None
+        state.pop("material_family", None)
         structure_families = []
         for structure_family in _as_list(state.get("structure_families")):
             if isinstance(structure_family, str):
@@ -1097,6 +1085,32 @@ def _normalize_draft(raw: dict[str, Any]) -> dict[str, Any]:
         raw_paper.get("research_materials"), "material", "value", "name",
     )
     authors = _normalize_authors(raw_paper.get("authors") or parsed.paper.get("authors"))
+    family_values = list(_as_list(raw_paper.get("material_families")))
+    for raw_state in _as_list(raw.get("material_states")):
+        if isinstance(raw_state, dict) and raw_state.get("scope") != "referenced_work":
+            family_values.append(raw_state.get("material_family"))
+    material_families = []
+    seen_families = set()
+    for value in family_values:
+        if isinstance(value, str):
+            selection = {"id": None, "name": value.strip(), "status": "pending"}
+        elif isinstance(value, dict) and value.get("scope") != "referenced_work":
+            selection = {
+                "id": value.get("id"),
+                "name": str(value.get("name") or value.get("value") or "").strip(),
+                "status": "confirmed" if value.get("id") not in (None, "") else "pending",
+                **({"evidence": value["evidence"]} if isinstance(value.get("evidence"), dict) else {}),
+            }
+        else:
+            continue
+        if not selection["name"]:
+            continue
+        key = f"id:{selection['id']}" if selection["id"] not in (None, "") else f"name:{selection['name'].strip().lower()}"
+        if key in seen_families:
+            continue
+        seen_families.add(key)
+        material_families.append(selection)
+
     paper = {
         "title": raw_paper.get("title") or parsed.paper.get("title") or "",
         "doi": raw_paper.get("doi") or parsed.paper.get("doi"),
@@ -1111,6 +1125,7 @@ def _normalize_draft(raw: dict[str, Any]) -> dict[str, Any]:
         "summary": raw_paper.get("summary") or parsed.summary or "",
         "paper_type": paper_type,
         "theoretical_subtype": subtype,
+        "material_families": material_families,
         "keywords_tags": keywords or _normalize_text_items(parsed.keywords_tags, "keyword", "value", "name")[0],
         "methodology": methodology,
         "knowledge_graph_title": raw_paper.get("knowledge_graph_title") or "",

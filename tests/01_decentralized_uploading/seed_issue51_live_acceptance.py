@@ -118,7 +118,6 @@ def main() -> None:
             paper_id=paper.id,
             paper_revision=1,
             superconductor_id=superconductor.id,
-            material_family_id=None,
             element_count=2,
             material_dimensionality="three_dimensional",
             state_kind="experimental",
@@ -143,15 +142,13 @@ def main() -> None:
                 "authors": ["Acceptance Author"],
                 "paper_type": "experimental",
                 "research_materials": ["LaH10"],
+                "material_families": [
+                    {"id": family.id, "name": family.name_zh, "status": "confirmed"}
+                ],
             },
             "material_states": [
                 {
                     "material": "LaH10",
-                    "material_family": {
-                        "id": family.id,
-                        "name": family.name_zh,
-                        "status": "confirmed",
-                    },
                     "structure_families": [
                         {"id": 1, "name": "笼状结构", "status": "confirmed", "is_primary": True}
                     ],

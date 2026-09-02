@@ -6,14 +6,14 @@
 
 ## 当前行为
 
-- Alembic 的 fresh 链可在全新空 MySQL 创建 20 张目标业务表；`0007` 建立论文 revision、
+- Alembic 的 fresh 链可在全新空 MySQL 创建 21 张目标业务表；`0007` 建立论文 revision、
   File、Chunk、Evidence 和审核事件约束，`0008` 建立条件化科学数据模型。
 - SQLAlchemy `Base.metadata` 只包含目标表，不再把 `key_properties`、
   `superconductor_records` 或 `superconductors_structures` 纳入 fresh Schema。
 - `MaterialState` 表达论文当前 revision 中的材料状态；`StructureModel`、
   `CalculationContext` 和 `ExperimentalContext` 分别表达结构、理论计算和实验测量上下文。
 - `MaterialState.reported_space_group_symbol/number` 保存论文报告但没有完整结构几何时的空间群事实；只有存在真实结构文本时才创建 `StructureModel`，不会为凑必填字段伪造 CIF/POSCAR。
-- `MaterialState` 不再包含 `phase_label`；空间群不属于分类树。材料家族和结构家族是相互独立、在论文审核内确认的分类维度。
+- `MaterialState` 不再包含 `phase_label` 或材料家族外键；空间群不属于分类树。Material family 是论文 revision 级多选分类，结构家族仍是材料状态级多选标签，两者在论文审核内确认。
 - `TcResult` 纵向保存每条 Tc；`PropertyDefinition` 和
   `SuperconductorProperty` 保存 Tc 之外的普通物性，表名为
   `superconductor_properties`，同时保留论文原文和可空规范值。
@@ -94,15 +94,13 @@ fresh 目标 Schema 已落实以下边界：
 - 可推导字段采用“上传时生成、入库前人工复核、读取时直接使用”的策略；不以运行时重复计算替代持久化字段。
 - 一致性校验用于发现和提示差异，不自动覆盖人工确认的数据。
 
-## 材料状态多维分类
+## 论文与材料状态分类
 
-材料分类现在属于 `material_states`，不再属于整篇论文或旧 `key_properties`。每个状态分别保存
-`material_family_id`、由规范化化学式计算的 `element_count`、`material_dimensionality`、压力和结构家族关联。
-材料家族单选；结构家族可多选，并通过生成列唯一约束保证最多一个主结构家族。
+Material family 属于论文当前 revision，通过 `paper_material_families(paper_id, paper_revision, material_family_id)` 建立多对多关系；一篇论文可关联多个 family，`Paper type` 及理论论文子分类保持原结构。`material_states` 不再保存 `material_family_id`，每个状态继续独立保存由规范化化学式计算的 `element_count`、`material_dimensionality`、压力和结构家族关联。结构家族即界面中的 `More type labels`，可多选，并通过生成列唯一约束保证最多一个主结构家族。
 
 `material_families`、`structure_families` 及各自 seed 别名表提供确定性目录。普通接口只返回目录 ID 和规范中文名，
 不暴露内部 `code`。AI 建议仅作为论文审核上下文，不进入独立建议表；审核者可认可、改选已有目录项或输入新名称。
-批准事务在同一事务内创建必要的目录项、写入人工确认的正式 ID，并把 AI 上下文与最终选择保存到
+批准事务在同一事务内解析并去重论文级 family、创建必要的目录项、整体替换正式关联，并把 AI 上下文与最终选择保存到
 `paper_review_events.classification_snapshot`。拒绝或退回不创建分类。`papers.referenced_materials` 已从目标 Schema 删除。
 
 ## 代码与测试
@@ -125,6 +123,8 @@ fresh 目标 Schema 已落实以下边界：
   已完成上传草稿、编辑器和提交事务向条件化科学实体图的切换。
 - [Feature #51：材料状态多维分类目录](../../specs/51-material-state-classification/spec.md)
   建立数据库目录、确定性 seed 别名映射、材料状态级分类和审核内人工确认，不迁移旧 655 篇论文数据库。
+- [Feature #79：论文级 Material family 多选分类](../../specs/79-paper-material-families/spec.md)
+  将 Material family 提升到论文 revision 级多选关联，保留状态级结构家族标签，并提供旧状态数据的去重迁移。
 
 ## 已知问题
 

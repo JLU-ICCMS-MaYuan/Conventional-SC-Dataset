@@ -16,7 +16,6 @@ import {
   selectionForTerm,
 } from '../lib/classifications'
 import { useLanguage } from '../context/LanguageContext'
-import ClassificationAutocomplete from './ClassificationAutocomplete'
 import StructureCandidatePanel from './StructureCandidatePanel'
 import {
   CRYSTAL_SYSTEM_VALUES, CrystalSystem, DraftKeyProperty, DraftMaterialState, DraftTcResult, SourceEvidence,
@@ -272,22 +271,6 @@ const MaterialStatesEditor: React.FC<MaterialStatesEditorProps> = ({
     }))
   }
 
-  const applyClassificationToSameMaterial = (sourceIndex: number) => {
-    const source = states[sourceIndex]
-    const material = source.material?.trim().toLocaleLowerCase()
-    if (!material) return
-    emitStates(states.map((state, index) => (
-      index !== sourceIndex && state.material?.trim().toLocaleLowerCase() === material
-        ? {
-            ...state,
-            material_family: source.material_family ? { ...source.material_family } : null,
-            structure_families: (source.structure_families || []).map(item => ({ ...item })),
-            material_dimensionality: source.material_dimensionality || 'unknown',
-          }
-        : state
-    )))
-  }
-
   const uploadStructureForState = async (stateIndex: number, file: File) => {
     if (readOnly) return
     setStructureUploading(current => ({ ...current, [stateIndex]: true }))
@@ -449,7 +432,6 @@ const MaterialStatesEditor: React.FC<MaterialStatesEditorProps> = ({
   const addState = () => {
     emitStates([...states, {
       material: '',
-      material_family: null,
       structure_families: [],
       element_count: null,
       element_count_locked: false,
@@ -589,15 +571,6 @@ const MaterialStatesEditor: React.FC<MaterialStatesEditorProps> = ({
                       {state.material?.trim() && (
                         <Typography variant="body2" color="text.secondary" noWrap>{state.material}</Typography>
                       )}
-                      {state.material_family && states.some((item, itemIndex) => (
-                        itemIndex !== index
-                        && item.material?.trim().toLocaleLowerCase() === state.material?.trim().toLocaleLowerCase()
-                      )) && (
-                        <Button size="small" onClick={event => {
-                          event.stopPropagation()
-                          applyClassificationToSameMaterial(index)
-                        }}>{t('upload.applyToSameMaterial')}</Button>
-                      )}
                     </Box>
                     <Button size="small" color="error" startIcon={<DeleteIcon />}
                       onClick={event => {
@@ -611,14 +584,6 @@ const MaterialStatesEditor: React.FC<MaterialStatesEditorProps> = ({
                     <TextField label={t('upload.materialField')} value={state.material || ''}
                       {...issueProps(`material_states[${index}].material`)}
                       onChange={event => updateMaterialState(index, 'material', event.target.value)} />
-                    <ClassificationAutocomplete
-                      label={t('upload.materialFamilyField')}
-                      options={catalogs?.material_families || []}
-                      value={state.material_family}
-                      loading={catalogLoading}
-                      error={catalogError}
-                      onChange={value => updateMaterialState(index, 'material_family', value)}
-                    />
                     <TextField
                       label={t('upload.elementCountField')}
                       value={elementCountEdits[index]?.text ?? (state.element_count ?? '')}

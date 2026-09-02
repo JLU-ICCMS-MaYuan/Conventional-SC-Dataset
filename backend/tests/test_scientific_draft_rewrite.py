@@ -161,10 +161,17 @@ def _seed_paper(engine, *, review_status: str, paper_id: int = 10):
         )
         connection.execute(
             text(
+                "INSERT INTO paper_material_families"
+                " (paper_id, paper_revision, material_family_id) VALUES (:pid, 1, 1)"
+            ),
+            {"pid": paper_id},
+        )
+        connection.execute(
+            text(
                 "INSERT INTO material_states (id, paper_id, paper_revision, superconductor_id,"
-                " material_family_id, material_dimensionality, superconductor_kind,"
+                " material_dimensionality, superconductor_kind,"
                 " crystal_system, pressure_value_gpa, state_kind, created_at, updated_at)"
-                " VALUES (1, :pid, 1, 1, 1, 'three_dimensional', 'conventional',"
+                " VALUES (1, :pid, 1, 1, 'three_dimensional', 'conventional',"
                 " 'tetragonal', 0.001, 'experimental', NOW(), NOW())"
             ),
             {"pid": paper_id},
@@ -290,10 +297,12 @@ def clean_data(migrated_engine):
 def _rewrite_payload(states=None, paper_type="experimental"):
     return {
         "paper_type": paper_type,
+        "material_families": [
+            {"id": 1, "name": "单质超导体", "status": "confirmed"}
+        ],
         "material_states": states if states is not None else [
             {
                 "material": "Sn",
-                "material_family": {"id": 1, "name": "单质超导体", "status": "confirmed"},
                 "structure_families": [],
                 "element_count": 1,
                 "material_dimensionality": "three_dimensional",
@@ -356,7 +365,6 @@ def test_rewrite_deletes_in_dependency_order_and_rebuilds(migrated_engine):
     payload = _rewrite_payload(states=[
         {
             "material": "Pb",
-            "material_family": {"id": 1, "name": "单质超导体", "status": "confirmed"},
             "structure_families": [],
             "element_count": 1,
             "material_dimensionality": "three_dimensional",
@@ -387,11 +395,11 @@ def test_rewrite_deletes_in_dependency_order_and_rebuilds(migrated_engine):
 
 
 def test_rewrite_reuses_validation_rules(migrated_engine):
-    """T024：校验规则复用——缺化学式 / 缺家族 / 压强区间 → 400 且带序号。"""
+    """T024：校验规则复用——缺化学式 / 缺论文级家族 / 压强区间 → 400。"""
     _seed_paper(migrated_engine, review_status="pending")
 
     missing_material = _rewrite_payload(states=[{
-        "material": "", "material_family": {"id": 1, "name": "单质超导体", "status": "confirmed"},
+        "material": "",
         "structure_families": [], "element_count": 1, "material_dimensionality": "three_dimensional",
         "superconductor_kind": "conventional", "crystal_system": "tetragonal", "state_kind": "experimental",
         "tc_results": [], "properties": [],
@@ -403,17 +411,18 @@ def test_rewrite_reuses_validation_rules(migrated_engine):
     assert "第 1 个材料状态" in detail["message"]
 
     missing_family = _rewrite_payload(states=[{
-        "material": "Sn", "material_family": None,
+        "material": "Sn",
         "structure_families": [], "element_count": 1, "material_dimensionality": "three_dimensional",
         "superconductor_kind": "conventional", "crystal_system": "tetragonal", "state_kind": "experimental",
         "tc_results": [], "properties": [],
     }])
+    missing_family["material_families"] = []
     data, error = _call_endpoint(missing_family)
     assert error is not None and error.status_code == 400
     assert error.detail["code"] == "material_family_required"
 
     bad_pressure = _rewrite_payload(states=[{
-        "material": "Sn", "material_family": {"id": 1, "name": "单质超导体", "status": "confirmed"},
+        "material": "Sn",
         "structure_families": [], "element_count": 1, "material_dimensionality": "three_dimensional",
         "superconductor_kind": "conventional", "crystal_system": "tetragonal", "state_kind": "experimental",
         "pressure_min_gpa": 10, "pressure_max_gpa": 5,
@@ -517,7 +526,7 @@ def test_failed_rewrite_rolls_back_everything(migrated_engine):
 
     # 非法材料维度会在 _resolve_draft_classifications 抛 400 → 事务回滚
     bad_payload = _rewrite_payload(states=[{
-        "material": "Sn", "material_family": {"id": 1, "name": "单质超导体", "status": "confirmed"},
+        "material": "Sn",
         "structure_families": [], "element_count": 1, "material_dimensionality": "not_a_dimension",
         "superconductor_kind": "conventional", "crystal_system": "tetragonal", "state_kind": "experimental",
         "tc_results": [], "properties": [],

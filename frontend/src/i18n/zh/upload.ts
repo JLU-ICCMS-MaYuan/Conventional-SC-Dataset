@@ -264,6 +264,7 @@ export default {
   applyToSameMaterial: '应用到同材料',
   materialField: '化学式',
   materialFamilyField: '材料家族',
+  materialFamilyRequired: '请至少选择一个论文级材料家族',
   elementCountField: '不同元素种类数',
   elementCountInvalid: '请输入 1–118 的整数',
   elementCountAuto: '自动计算，可手动修改',

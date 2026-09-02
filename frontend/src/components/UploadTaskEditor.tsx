@@ -7,7 +7,7 @@ import SaveIcon from '@mui/icons-material/Save'
 import SendIcon from '@mui/icons-material/Send'
 import { api, ApiError } from '../lib/api'
 import {
-  ClassificationCatalogs,
+  ClassificationCatalogs, ClassificationTerm, familyName, pendingSelection, selectionForTerm,
   loadClassificationCatalogs,
 } from '../lib/classifications'
 import { useLanguage } from '../context/LanguageContext'
@@ -247,6 +247,9 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
     }
     if (draft.paper.paper_type === 'theoretical' && !draft.paper.theoretical_subtype) {
       issues.push({ field: 'paper.theoretical_subtype', message: t('upload.theoreticalSubtypeRequired') })
+    }
+    if (!draft.paper.material_families?.length) {
+      issues.push({ field: 'paper.material_families', message: t('upload.materialFamilyRequired') })
     }
     if (draft.paper.paper_type !== 'review' && draft.material_states.length === 0) {
       issues.push({ field: 'material_states', message: t('upload.materialStateRequired') })
@@ -518,6 +521,34 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
           <IssueText field="paper.theoretical_subtype" />
           <EvidenceNotes label={t('upload.theoreticalSubtypeField')} aiValue={aiPaper.theoretical_subtype} />
         </FormControl>
+        <Box data-issue-field="paper.material_families" sx={{ gridColumn: '1 / -1' }}>
+          <Autocomplete<ClassificationTerm | string, true, false, true>
+            multiple
+            freeSolo
+            options={catalogs?.material_families || []}
+            loading={catalogLoading}
+            value={(draft.paper.material_families || []).map(selection => {
+              if (selection.id == null) return selection.name
+              return catalogs?.material_families?.find(item => item.id === selection.id) || selection.name
+            })}
+            getOptionLabel={option => typeof option === 'string' ? option : familyName(option, lang)}
+            isOptionEqualToValue={(option, value) => (
+              typeof option !== 'string' && typeof value !== 'string' && option.id === value.id
+            )}
+            onChange={(_, values) => setPaperField('material_families', values.map(value => (
+              typeof value === 'string' ? pendingSelection(value) : selectionForTerm(value)
+            )).filter(Boolean))}
+            renderInput={params => (
+              <TextField
+                {...params}
+                label={t('upload.materialFamilyField')}
+                error={hasIssue('paper.material_families') || Boolean(catalogError)}
+                helperText={issues.find(item => item.field === 'paper.material_families')?.message || catalogError || undefined}
+              />
+            )}
+          />
+          <EvidenceNotes label={t('upload.materialFamilyField')} aiValue={aiPaper.material_families} evidence={classificationEvidence} />
+        </Box>
       </Box>
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mt: 2, '& > *': { minWidth: 0 } }}>

@@ -38,16 +38,15 @@ const draft = {
   paper: {
     title: '氢化物研究', authors: [], paper_type: 'experimental',
     research_materials: ['LaH10'],
+    material_families: [{ id: 1, name: '氢基超导体', status: 'confirmed' }],
   },
   material_states: [
     {
       material: 'LaH10',
-      material_family: { id: 1, name: '氢基超导体', status: 'confirmed' },
       structure_families: [], element_count: 2, material_dimensionality: 'unknown',
     },
     {
       material: ' lah10 ',
-      material_family: null,
       structure_families: [], element_count: 2, material_dimensionality: 'unknown',
     },
   ],
@@ -65,14 +64,16 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('材料状态多维分类编辑', () => {
-  it('保存维度与多选类型标签（不写主项标记），并把分类应用到同一材料', { timeout: 15000 }, async () => {
+describe('论文级材料家族与材料状态多维分类编辑', () => {
+  it('在论文级保存多个材料家族，状态级保留多选类型标签且不写主项标记', { timeout: 15000 }, async () => {
     render(<UploadTaskEditor taskId={'5'.repeat(32)} onSubmitted={vi.fn()} />)
 
     const elementCounts = await screen.findAllByLabelText('不同元素种类数')
     expect(elementCounts).toHaveLength(2)
     expect(elementCounts[0]).toHaveValue('2')
     expect(elementCounts[0]).not.toHaveAttribute('readonly')
+    expect(screen.getAllByLabelText('材料家族')).toHaveLength(1)
+    expect(screen.getByText('氢基超导体')).toBeVisible()
 
     const dimensionalities = screen.getAllByLabelText('材料维度')
     fireEvent.mouseDown(dimensionalities[0])
@@ -85,7 +86,6 @@ describe('材料状态多维分类编辑', () => {
     fireEvent.change(structureInputs[0], { target: { value: '层状' } })
     fireEvent.click(await screen.findByText('层状结构'))
 
-    fireEvent.click(screen.getAllByRole('button', { name: '应用到同材料' })[0])
     fireEvent.click(screen.getByRole('button', { name: '立即保存' }))
 
     await waitFor(() => expect(mockedApi.put).toHaveBeenCalledTimes(1))
@@ -99,14 +99,10 @@ describe('材料状态多维分类编辑', () => {
           { id: 11, name: '层状结构', status: 'confirmed', is_primary: false },
         ],
       }),
-      expect.objectContaining({
-        material_family: { id: 1, name: '氢基超导体', status: 'confirmed' },
-        material_dimensionality: 'three_dimensional',
-        structure_families: [
-          { id: 10, name: '笼状结构', status: 'confirmed', is_primary: false },
-          { id: 11, name: '层状结构', status: 'confirmed', is_primary: false },
-        ],
-      }),
+      expect.not.objectContaining({ material_family: expect.anything() }),
+    ])
+    expect(saved.paper.material_families).toEqual([
+      { id: 1, name: '氢基超导体', status: 'confirmed' },
     ])
   })
 

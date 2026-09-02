@@ -126,6 +126,8 @@ type Paper struct {
 	Chunks         []PaperChunk       `gorm:"foreignKey:PaperID,PaperRevision;references:ID,ContentRevision" json:"chunks,omitempty"`
 	Evidences      []PaperEvidence    `gorm:"foreignKey:PaperID,PaperRevision;references:ID,ContentRevision" json:"evidences,omitempty"`
 	ReviewEvents   []PaperReviewEvent `gorm:"foreignKey:PaperID;references:ID" json:"review_events,omitempty"`
+	MaterialFamilyLinks []PaperMaterialFamily `gorm:"foreignKey:PaperID,PaperRevision;references:ID,ContentRevision" json:"-"`
+	MaterialFamilies    []MaterialFamily      `gorm:"-" json:"material_families,omitempty"`
 	MaterialStates []MaterialState    `gorm:"foreignKey:PaperID,PaperRevision;references:ID,ContentRevision" json:"material_states,omitempty"`
 	KeyProperties  []KeyProperty      `gorm:"foreignKey:PaperID,PaperRevision;references:ID,ContentRevision" json:"key_properties,omitempty"`
 }
@@ -235,6 +237,14 @@ type MaterialFamilyAlias struct {
 	CreatedAt        time.Time `json:"created_at"`
 }
 
+type PaperMaterialFamily struct {
+	PaperID          uint           `gorm:"primaryKey" json:"paper_id"`
+	PaperRevision    uint           `gorm:"primaryKey" json:"paper_revision"`
+	MaterialFamilyID uint           `gorm:"primaryKey;index" json:"material_family_id"`
+	CreatedAt        time.Time      `json:"created_at"`
+	MaterialFamily   MaterialFamily `gorm:"foreignKey:MaterialFamilyID" json:"material_family"`
+}
+
 type StructureFamily struct {
 	ID              uint                   `gorm:"primaryKey" json:"id"`
 	Code            string                 `gorm:"size:64;not null;uniqueIndex" json:"-"`
@@ -263,7 +273,6 @@ type MaterialState struct {
 	PaperID                uint   `gorm:"not null;index:ix_material_states_paper_revision,priority:1;uniqueIndex:uq_material_states_identity_revision,priority:2" json:"paper_id"`
 	PaperRevision          uint   `gorm:"not null;index:ix_material_states_paper_revision,priority:2;uniqueIndex:uq_material_states_identity_revision,priority:3" json:"paper_revision"`
 	SuperconductorID       uint   `gorm:"not null;index" json:"superconductor_id"`
-	MaterialFamilyID       *uint  `gorm:"index" json:"material_family_id"`
 	ElementCount           *int16 `json:"element_count"`
 	MaterialDimensionality string `gorm:"size:32;not null;default:unknown" json:"material_dimensionality"`
 	SuperconductorKind     string `gorm:"size:32;not null;default:unknown" json:"superconductor_kind"`
@@ -291,7 +300,6 @@ type MaterialState struct {
 	TcResults                []TcResult                     `gorm:"foreignKey:MaterialStateID" json:"tc_results,omitempty"`
 	Properties               []SuperconductorProperty       `gorm:"foreignKey:MaterialStateID" json:"properties,omitempty"`
 	Superconductor           Superconductor                 `gorm:"foreignKey:SuperconductorID" json:"superconductor,omitempty"`
-	MaterialFamily           *MaterialFamily                `gorm:"foreignKey:MaterialFamilyID" json:"material_family,omitempty"`
 	StructureFamilyLinks     []MaterialStateStructureFamily `gorm:"foreignKey:MaterialStateID" json:"structure_families,omitempty"`
 }
 

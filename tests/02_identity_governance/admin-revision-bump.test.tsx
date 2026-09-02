@@ -48,11 +48,11 @@ const approvedPaper = {
 const detailWithState = {
   ...approvedPaper,
   paper_type: 'experimental',
+  material_families: [{ id: 8, name: '单质超导体', name_en: 'Elemental superconductor' }],
   key_properties: [],
   material_states: [{
     id: 11,
     superconductor: { id: 22, chemical_formula: 'Sn' },
-    material_family: { id: 8, name: '单质超导体', name_en: 'Elemental superconductor' },
     structure_families: [],
     element_count: 1,
     material_dimensionality: 'three_dimensional',

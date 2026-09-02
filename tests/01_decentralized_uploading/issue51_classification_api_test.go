@@ -36,6 +36,7 @@ func newAPIFixture(t *testing.T) *apiFixture {
 	if err := db.AutoMigrate(
 		&models.User{}, &models.Paper{}, &models.PaperReviewEvent{},
 		&models.MaterialFamily{}, &models.MaterialFamilyAlias{},
+		&models.PaperMaterialFamily{},
 		&models.StructureFamily{}, &models.StructureFamilyAlias{},
 		&models.MaterialState{}, &models.MaterialStateStructureFamily{},
 	); err != nil {
@@ -142,8 +143,16 @@ func seedPaperState(t *testing.T, db *gorm.DB, paperID uint, revision uint, elem
 }
 
 func approvedBody(requestID string, states []map[string]any) map[string]any {
+	families := make([]any, 0)
+	for _, state := range states {
+		if family, ok := state["material_family"]; ok {
+			families = append(families, family)
+			delete(state, "material_family")
+		}
+	}
 	return map[string]any{
 		"status": "approved", "comment": "证据充分", "review_request_id": requestID,
+		"material_families": families,
 		"material_states": states,
 		"classification_context": map[string]any{
 			"classification_scope": []map[string]any{
@@ -198,7 +207,8 @@ func TestApprovalMapsAliasesCreatesNewTermsAndStoresVerifiedSnapshot(t *testing.
 	}
 
 	fixture.db.First(&state, state.ID)
-	if state.MaterialFamilyID == nil || *state.MaterialFamilyID != hydride.ID || state.MaterialDimensionality != "three_dimensional" {
+	var paperFamily models.PaperMaterialFamily
+	if err := fixture.db.Where("paper_id = ? AND material_family_id = ?", 41, hydride.ID).First(&paperFamily).Error; err != nil || state.MaterialDimensionality != "three_dimensional" {
 		t.Fatalf("unexpected final state: %#v", state)
 	}
 	var layered models.StructureFamily
@@ -256,9 +266,10 @@ func TestApprovalRollsBackCreatedTermsAndStateChangesOnLaterInvalidSelection(t *
 	if count != 0 {
 		t.Fatalf("rollback left %d catalog terms", count)
 	}
-	fixture.db.First(&first, first.ID)
-	if first.MaterialFamilyID != nil {
-		t.Fatal("rollback left material classification")
+	var linkCount int64
+	fixture.db.Model(&models.PaperMaterialFamily{}).Where("paper_id = ?", 42).Count(&linkCount)
+	if linkCount != 0 {
+		t.Fatalf("rollback left %d paper family links", linkCount)
 	}
 	var events int64
 	fixture.db.Model(&models.PaperReviewEvent{}).Where("paper_id = ?", 42).Count(&events)
@@ -284,8 +295,9 @@ func TestRejectedReviewDoesNotCreateOrOverwriteClassification(t *testing.T) {
 	if count != 0 {
 		t.Fatal("rejected review created a catalog term")
 	}
-	fixture.db.First(&state, state.ID)
-	if state.MaterialFamilyID != nil {
+	var rejectedLinkCount int64
+	fixture.db.Model(&models.PaperMaterialFamily{}).Where("paper_id = ?", 43).Count(&rejectedLinkCount)
+	if rejectedLinkCount != 0 {
 		t.Fatal("rejected review changed classification")
 	}
 }

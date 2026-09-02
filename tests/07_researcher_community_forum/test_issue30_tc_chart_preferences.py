@@ -49,7 +49,9 @@ def test_go_stats_queries_enforce_public_record_boundaries():
     assert "FROM tc_results t" in source
     assert "JOIN material_states ms ON ms.id = t.material_state_id" in source
     assert "JOIN superconductors sc ON sc.id = ms.superconductor_id" in source
-    assert "LEFT JOIN material_families mf ON mf.id = ms.material_family_id" in source
+    assert "FROM paper_material_families pmf" in source
+    assert "material_states ms ON ms.id = t.material_state_id" in source
+    assert "JOIN paper_material_families" not in source
 
     # 只公开审核通过、且属于已批准那一版内容的数据
     assert "p.review_status = 'approved'" in source

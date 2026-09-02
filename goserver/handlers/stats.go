@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -220,29 +221,27 @@ const chartApprovedJoin = `
 	JOIN superconductors sc ON sc.id = ms.superconductor_id
 	JOIN papers p ON p.id = t.paper_id
 		AND p.review_status = 'approved'
-		AND t.paper_revision = p.content_revision
-	LEFT JOIN material_families mf ON mf.id = ms.material_family_id`
+		AND t.paper_revision = p.content_revision`
+
+const chartFamilyIDsExpr = `(SELECT GROUP_CONCAT(pmf.material_family_id ORDER BY pmf.material_family_id)
+	FROM paper_material_families pmf
+	WHERE pmf.paper_id = p.id AND pmf.paper_revision = p.content_revision)`
 
 // 只有区间没有单值的 Tc 条目取区间中点，否则这些数据永远上不了图。
 const chartTcValueExpr = `CAST(COALESCE(t.tc_value_k, (t.tc_min_k + t.tc_max_k) / 2) AS DOUBLE)`
 
-// 分类维度取材料家族（material_families），支持用户自建家族；
-// 未分类的状态归入 family_id = 0 的「其他」。
-//
-// 注意：这两个字段必须直接声明在各 row 结构体上。GORM 的 Raw().Scan() 走
-// 原始列名匹配，不会填充匿名嵌入结构体的字段，嵌入会让家族恒为 NULL。
-func chartFamilyID(id *uint) uint {
-	if id == nil {
-		return 0
+func chartFamilyIDs(value *string) []uint {
+	result := make([]uint, 0)
+	if value == nil {
+		return result
 	}
-	return *id
-}
-
-func chartFamilyName(name *string) string {
-	if name == nil || *name == "" {
-		return "其他"
+	for _, raw := range strings.Split(*value, ",") {
+		id, err := strconv.ParseUint(strings.TrimSpace(raw), 10, 64)
+		if err == nil && id > 0 {
+			result = append(result, uint(id))
+		}
 	}
-	return *name
+	return result
 }
 
 func chartCacheKey(chart, field string) string {
@@ -272,8 +271,7 @@ func TcPressureChart(c *gin.Context) {
 		Material   string  `gorm:"column:material"`
 		Tc         float64 `gorm:"column:y"`
 		Pressure   float64 `gorm:"column:x"`
-		FamilyID   *uint   `gorm:"column:family_id"`
-		FamilyName *string `gorm:"column:family_name"`
+		FamilyIDs  *string `gorm:"column:family_ids"`
 		Type       string  `gorm:"column:type"`
 		PaperID    uint    `gorm:"column:paper_id"`
 		DOI        string  `gorm:"column:doi"`
@@ -283,14 +281,14 @@ func TcPressureChart(c *gin.Context) {
 	query := fmt.Sprintf(`
 		SELECT sc.chemical_formula AS material,
 			%s AS y, CAST(ms.pressure_value_gpa AS DOUBLE) AS x,
-			ms.material_family_id AS family_id, mf.name_zh AS family_name,
+			%s AS family_ids,
 			t.result_kind AS type,
 			t.paper_id AS paper_id, COALESCE(p.doi,'') AS doi, COALESCE(p.year,0) AS year
 		%s
 		WHERE t.tc_method = ?
 			AND %s IS NOT NULL
 			AND ms.pressure_value_gpa IS NOT NULL
-	`, chartTcValueExpr, chartApprovedJoin, chartTcValueExpr)
+	`, chartTcValueExpr, chartFamilyIDsExpr, chartApprovedJoin, chartTcValueExpr)
 	if err := database.DB.Raw(query, tcMethod).Scan(&rows).Error; err != nil {
 		// 静默返回空数组会把 schema 漂移伪装成「暂无数据」，#30 的旧表查询正是这样
 		// 在条件化模型迁移后无声失效的。这里必须让错误浮出来，且不缓存失败结果。
@@ -301,10 +299,11 @@ func TcPressureChart(c *gin.Context) {
 
 	result = make([]gin.H, 0, len(rows))
 	for _, r := range rows {
+		familyIDs := chartFamilyIDs(r.FamilyIDs)
 		item := gin.H{
 			"formula": r.Material,
 			"y":       r.Tc, "x": r.Pressure,
-			"family_id": chartFamilyID(r.FamilyID), "family_name": chartFamilyName(r.FamilyName),
+			"family_ids": familyIDs,
 			"type": chartResultType(r.Type), "tc_field": tcField,
 			"doi": r.DOI, "year": r.Year,
 		}
@@ -345,8 +344,7 @@ func TcYearChart(c *gin.Context) {
 		Year       int      `gorm:"column:x"`
 		Tc         float64  `gorm:"column:y"`
 		Type       string   `gorm:"column:type"`
-		FamilyID   *uint    `gorm:"column:family_id"`
-		FamilyName *string  `gorm:"column:family_name"`
+		FamilyIDs  *string  `gorm:"column:family_ids"`
 		Material   string   `gorm:"column:formula"`
 		DOI        string   `gorm:"column:doi"`
 		PaperID    uint     `gorm:"column:paper_id"`
@@ -356,14 +354,14 @@ func TcYearChart(c *gin.Context) {
 	query := fmt.Sprintf(`
 		SELECT p.year AS x, %s AS y,
 			t.result_kind AS type,
-			ms.material_family_id AS family_id, mf.name_zh AS family_name,
+			%s AS family_ids,
 			sc.chemical_formula AS formula, COALESCE(p.doi,'') AS doi,
 			t.paper_id AS paper_id, CAST(ms.pressure_value_gpa AS DOUBLE) AS pressure_gpa
 		%s
 		WHERE t.tc_method = ?
 			AND %s IS NOT NULL
 			AND p.year IS NOT NULL
-	`, chartTcValueExpr, chartApprovedJoin, chartTcValueExpr)
+	`, chartTcValueExpr, chartFamilyIDsExpr, chartApprovedJoin, chartTcValueExpr)
 	if err := database.DB.Raw(query, tcMethod).Scan(&rows).Error; err != nil {
 		log.Printf("Tc-Year 图表查询失败 (tc_field=%s): %v", tcField, err)
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "图表数据暂不可用"})
@@ -372,9 +370,10 @@ func TcYearChart(c *gin.Context) {
 
 	result = make([]gin.H, 0, len(rows))
 	for _, r := range rows {
+		familyIDs := chartFamilyIDs(r.FamilyIDs)
 		item := gin.H{
 			"x": r.Year, "y": r.Tc, "type": chartResultType(r.Type),
-			"family_id": chartFamilyID(r.FamilyID), "family_name": chartFamilyName(r.FamilyName),
+			"family_ids": familyIDs,
 			"formula": r.Material, "doi": r.DOI,
 			"year": r.Year, "tc_field": tcField,
 		}

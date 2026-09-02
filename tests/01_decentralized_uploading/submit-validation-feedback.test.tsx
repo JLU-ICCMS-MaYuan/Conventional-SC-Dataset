@@ -32,7 +32,6 @@ const mockedApi = vi.mocked(api)
 
 const makeState = (overrides: Partial<DraftMaterialState> = {}): DraftMaterialState => ({
   material: 'LaH10',
-  material_family: null,
   structure_families: [],
   element_count: 2,
   material_dimensionality: 'unknown',
@@ -44,6 +43,7 @@ const makeState = (overrides: Partial<DraftMaterialState> = {}): DraftMaterialSt
 const makeDraft = (states: DraftMaterialState[], paper: Record<string, unknown> = {}) => ({
   paper: {
     title: '测试论文', authors: [], paper_type: 'experimental',
+    material_families: [{ id: 1, name: '氢基超导体', status: 'confirmed' }],
     keywords_tags: ['超导'], methodology: ['高压合成'],
     ...paper,
   },

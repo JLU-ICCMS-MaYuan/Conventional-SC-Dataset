@@ -65,11 +65,10 @@ beforeEach(() => {
     if (path === '/api/admin/papers/51') {
       return {
         id: 51,
+        material_families: [],
         material_states: [{
           id: 501,
           superconductor: { chemical_formula: 'LaH10' },
-          material_family: null,
-          material_family_id: null,
           element_count: 2,
           material_dimensionality: 'three_dimensional',
           structure_families: [],
@@ -80,19 +79,23 @@ beforeEach(() => {
       return {
         data: {
           ai_values: {
-            paper: { title: 'Hydride paper', research_motivation: '论文明确称为 hydride' },
+            paper: {
+              title: 'Hydride paper', research_motivation: '论文明确称为 hydride',
+              material_families: [{ id: 1, name: '氢基超导体', status: 'confirmed' }],
+            },
             material_states: [{
               material: 'LaH10',
-              material_family: { id: 1, name: '氢基超导体', status: 'confirmed' },
               structure_families: [],
               material_dimensionality: 'three_dimensional',
             }],
           },
           user_values: {
-            paper: { title: 'Hydride paper' },
+            paper: {
+              title: 'Hydride paper',
+              material_families: [{ id: 1, name: '氢基超导体', status: 'confirmed' }],
+            },
             material_states: [{
               material: 'LaH10',
-              material_family: { id: 1, name: '氢基超导体', status: 'confirmed' },
               structure_families: [],
               material_dimensionality: 'three_dimensional',
             }],
@@ -117,8 +120,8 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('论文审核弹窗仅提交审核结果与意见', () => {
-  it('不再显示材料状态分类，只提交审核结果和审核意见', async () => {
+describe('论文快速审核弹窗仅处理拒绝与退回', () => {
+  it('不显示分类或批准入口，只提交退回结果和审核意见', async () => {
     const user = userEvent.setup()
     render(<MemoryRouter><AdminPage /></MemoryRouter>)
 
@@ -133,14 +136,15 @@ describe('论文审核弹窗仅提交审核结果与意见', () => {
     expect(screen.queryByRole('combobox', { name: 'LaH10 的材料家族' })).not.toBeInTheDocument()
 
     fireEvent.mouseDown(screen.getByRole('combobox', { name: '审核结果' }))
-    await user.click(await screen.findByRole('option', { name: '✅ 通过' }))
+    expect(screen.queryByRole('option', { name: /通过/ })).not.toBeInTheDocument()
+    await user.click(await screen.findByRole('option', { name: /退回待审核/ }))
     await user.click(screen.getByRole('button', { name: '确认审核' }))
 
     await waitFor(() => expect(mockedApi.post).toHaveBeenCalledTimes(1))
     const [path, body] = mockedApi.post.mock.calls[0]
     expect(path).toBe('/api/admin/papers/51/review')
     expect(body).toMatchObject({
-      status: 'approved',
+      status: 'pending',
       comment: '',
     })
     expect(mockedApi.put).not.toHaveBeenCalled()
@@ -154,7 +158,7 @@ describe('论文审核弹窗仅提交审核结果与意见', () => {
     await user.click(screen.getByRole('button', { name: '审核' }))
 
     fireEvent.mouseDown(screen.getByRole('combobox', { name: '审核结果' }))
-    await user.click(await screen.findByRole('option', { name: '✅ 通过' }))
+    await user.click(await screen.findByRole('option', { name: /退回待审核/ }))
     await user.click(screen.getByRole('button', { name: '确认审核' }))
 
     await waitFor(() => expect(mockedApi.post).toHaveBeenCalledTimes(1))

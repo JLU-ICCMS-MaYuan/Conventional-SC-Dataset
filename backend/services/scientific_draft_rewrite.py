@@ -65,7 +65,6 @@ async def delete_scientific_entities(session: AsyncSession, paper_id: int) -> No
         text("DELETE FROM material_states WHERE paper_id = :pid"), {"pid": paper_id}
     )
 
-
 async def bump_paper_revision(session: AsyncSession, paper: Paper) -> None:
     """升版：单条 UPDATE 三个版本字段，触发外键级联迁移血缘数据。
 

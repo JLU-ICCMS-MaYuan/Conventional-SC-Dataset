@@ -16,6 +16,7 @@ def test_material_state_classification_tables_exist():
     expected = {
         "material_families",
         "material_family_aliases",
+        "paper_material_families",
         "structure_families",
         "structure_family_aliases",
         "material_state_structure_families",
@@ -29,12 +30,17 @@ def test_material_state_classification_tables_exist():
     }.isdisjoint(Base.metadata.tables)
 
 
-def test_material_states_hold_independent_classification_dimensions():
+def test_papers_hold_material_families_while_states_keep_other_dimensions():
     states = Base.metadata.tables["material_states"]
+    paper_families = Base.metadata.tables["paper_material_families"]
 
-    assert "material_family_id" in states.c
+    assert "material_family_id" not in states.c
     assert "element_count" in states.c
     assert "material_dimensionality" in states.c
+    assert {"paper_id", "paper_revision", "material_family_id"} <= set(paper_families.c.keys())
+    assert set(paper_families.primary_key.columns.keys()) == {
+        "paper_id", "paper_revision", "material_family_id",
+    }
     assert "ck_material_states_element_count" in _constraint_names(states, CheckConstraint)
     assert "ck_material_states_dimensionality" in _constraint_names(states, CheckConstraint)
 

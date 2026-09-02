@@ -22,6 +22,7 @@ interface DataPoint {
   y: number
   material: string
   familyId: number
+  familyIds?: number[]
   familyName: string
   articleType: string | null
   year: number | null
@@ -174,7 +175,14 @@ const ChartScatter: React.FC<Props> = ({
   emptyHint, minHeight = 320,
 }) => {
   const { t } = useLanguage()
-  const visibleData = data.filter(d => visibleFamilies.has(d.familyId))
+  const visibleData = data.flatMap(point => {
+    const visibleFamily = (point.familyIds || [point.familyId]).find(id => visibleFamilies.has(id))
+    return visibleFamily == null ? [] : [{
+      ...point,
+      familyId: visibleFamily,
+      familyName: familyStyleOf(familyStyles, visibleFamily).name,
+    }]
+  })
 
   // 每个 (家族 × 实验/计算) 组合一条 Scatter：家族定形状与描边色，实验/计算定实心或空心。
   //

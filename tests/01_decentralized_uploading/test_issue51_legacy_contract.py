@@ -92,9 +92,10 @@ def test_old_draft_get_converts_once_without_returning_legacy_fields(tmp_path, m
 
     assert response.status_code == 200
     data = response.json()["data"]
-    assert data["material_states"][0]["material_family"] == {
+    assert data["paper"]["material_families"] == [{
         "id": 1, "name": "氢基超导体", "status": "confirmed",
-    }
+    }]
+    assert "material_family" not in data["material_states"][0]
     assert "classification_migration_warnings" in data
     for field in ("sc_type", "sc_type_review_status", "type_code", "type_proposal_raw"):
         assert field not in data

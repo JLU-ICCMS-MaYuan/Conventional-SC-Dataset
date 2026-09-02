@@ -45,7 +45,6 @@ type structureClassificationSelection struct {
 
 type materialClassificationUpdate struct {
 	ID                     uint64                             `json:"id"`
-	MaterialFamily         classificationSelection            `json:"material_family"`
 	MaterialDimensionality string                             `json:"material_dimensionality"`
 	StructureFamilies      []structureClassificationSelection `json:"structure_families"`
 }
@@ -58,11 +57,15 @@ type classificationSnapshotTerm struct {
 
 type classificationSnapshotState struct {
 	ID                     uint64                       `json:"id"`
-	MaterialFamily         classificationSnapshotTerm   `json:"material_family"`
 	MaterialDimensionality string                       `json:"material_dimensionality"`
 	SuperconductorKind     string                       `json:"superconductor_kind"`
 	CrystalSystem          string                       `json:"crystal_system"`
 	StructureFamilies      []classificationSnapshotTerm `json:"structure_families"`
+}
+
+type paperClassificationSnapshot struct {
+	MaterialFamilies []classificationSnapshotTerm  `json:"material_families"`
+	MaterialStates   []classificationSnapshotState `json:"material_states"`
 }
 
 func normalizeClassificationName(value string) string {
@@ -229,17 +232,48 @@ func applyPaperClassifications(
 	tx *gorm.DB,
 	paper *models.Paper,
 	actorID uint,
+	materialFamilies []classificationSelection,
 	updates []materialClassificationUpdate,
-) ([]classificationSnapshotState, error) {
+) (paperClassificationSnapshot, error) {
 	revision := paper.ContentRevision
 	if revision == 0 {
 		revision = 1
 	}
+	if len(materialFamilies) == 0 {
+		return paperClassificationSnapshot{}, errClassificationInvalid
+	}
+	seenFamilies := make(map[uint]bool, len(materialFamilies))
+	familySnapshots := make([]classificationSnapshotTerm, 0, len(materialFamilies))
+	for _, selection := range materialFamilies {
+		family, err := resolveMaterialFamily(tx, actorID, selection)
+		if err != nil {
+			return paperClassificationSnapshot{}, err
+		}
+		if seenFamilies[family.ID] {
+			continue
+		}
+		seenFamilies[family.ID] = true
+		familySnapshots = append(familySnapshots, classificationSnapshotTerm{
+			ID: family.ID, Name: family.NameZH,
+		})
+	}
+	if err := tx.Where("paper_id = ? AND paper_revision = ?", paper.ID, revision).
+		Delete(&models.PaperMaterialFamily{}).Error; err != nil {
+		return paperClassificationSnapshot{}, err
+	}
+	for _, family := range familySnapshots {
+		if err := tx.Create(&models.PaperMaterialFamily{
+			PaperID: paper.ID, PaperRevision: revision, MaterialFamilyID: family.ID,
+		}).Error; err != nil {
+			return paperClassificationSnapshot{}, err
+		}
+	}
+
 	seenStates := make(map[uint64]bool, len(updates))
 	snapshots := make([]classificationSnapshotState, 0, len(updates))
 	for _, update := range updates {
 		if update.ID == 0 || seenStates[update.ID] || !validMaterialDimensionality(update.MaterialDimensionality) {
-			return nil, errClassificationInvalid
+			return paperClassificationSnapshot{}, errClassificationInvalid
 		}
 		seenStates[update.ID] = true
 
@@ -247,11 +281,7 @@ func applyPaperClassifications(
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("id = ? AND paper_id = ? AND paper_revision = ?", update.ID, paper.ID, revision).
 			First(&state).Error; err != nil {
-			return nil, errClassificationNotFound
-		}
-		materialFamily, err := resolveMaterialFamily(tx, actorID, update.MaterialFamily)
-		if err != nil {
-			return nil, err
+			return paperClassificationSnapshot{}, errClassificationNotFound
 		}
 
 		primaryCount := 0
@@ -265,10 +295,10 @@ func applyPaperClassifications(
 				ID: selection.ID, Name: selection.Name,
 			})
 			if err != nil {
-				return nil, err
+				return paperClassificationSnapshot{}, err
 			}
 			if seenStructures[family.ID] {
-				return nil, errClassificationInvalid
+				return paperClassificationSnapshot{}, errClassificationInvalid
 			}
 			seenStructures[family.ID] = true
 			if selection.IsPrimary {
@@ -280,18 +310,17 @@ func applyPaperClassifications(
 			}{Family: family, IsPrimary: selection.IsPrimary})
 		}
 		if primaryCount > 1 {
-			return nil, errClassificationInvalid
+			return paperClassificationSnapshot{}, errClassificationInvalid
 		}
 
 		if err := tx.Model(&state).Updates(map[string]interface{}{
-			"material_family_id":      materialFamily.ID,
 			"material_dimensionality": update.MaterialDimensionality,
 		}).Error; err != nil {
-			return nil, err
+			return paperClassificationSnapshot{}, err
 		}
 		if err := tx.Where("material_state_id = ?", state.ID).
 			Delete(&models.MaterialStateStructureFamily{}).Error; err != nil {
-			return nil, err
+			return paperClassificationSnapshot{}, err
 		}
 
 		structureSnapshot := make([]classificationSnapshotTerm, 0, len(resolvedStructures))
@@ -301,7 +330,7 @@ func applyPaperClassifications(
 				IsPrimary: resolved.IsPrimary,
 			}
 			if err := tx.Create(&link).Error; err != nil {
-				return nil, err
+				return paperClassificationSnapshot{}, err
 			}
 			isPrimary := resolved.IsPrimary
 			structureSnapshot = append(structureSnapshot, classificationSnapshotTerm{
@@ -311,12 +340,14 @@ func applyPaperClassifications(
 
 		snapshots = append(snapshots, classificationSnapshotState{
 			ID:                     state.ID,
-			MaterialFamily:         classificationSnapshotTerm{ID: materialFamily.ID, Name: materialFamily.NameZH},
 			MaterialDimensionality: update.MaterialDimensionality,
 			SuperconductorKind:     state.SuperconductorKind,
 			CrystalSystem:          state.CrystalSystem,
 			StructureFamilies:      structureSnapshot,
 		})
 	}
-	return snapshots, nil
+	return paperClassificationSnapshot{
+		MaterialFamilies: familySnapshots,
+		MaterialStates: snapshots,
+	}, nil
 }

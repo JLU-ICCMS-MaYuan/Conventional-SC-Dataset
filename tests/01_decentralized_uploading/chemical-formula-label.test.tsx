@@ -43,11 +43,11 @@ const draft: UploadDraft = {
   paper: {
     title: 'Hydrogen study', authors: [], paper_type: 'experimental',
     research_materials: ['LaH10'],
+    material_families: [{ id: 1, name: '氢基超导体', status: 'confirmed' }],
   },
   material_states: [
     {
       material: 'LaH10',
-      material_family: null,
       structure_families: [],
       element_count: 2,
       material_dimensionality: 'unknown',

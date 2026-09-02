@@ -111,7 +111,6 @@ export type CrystalSystem = typeof CRYSTAL_SYSTEM_VALUES[number]
 
 export interface DraftMaterialState {
   material?: string
-  material_family?: FamilySelection | null
   structure_families?: StructureFamilySelection[]
   crystal_system?: CrystalSystem
   element_count?: number | null
@@ -148,6 +147,7 @@ export interface PaperDraftFields {
   summary?: string
   paper_type?: 'theoretical' | 'experimental' | 'review' | 'unknown' | string
   theoretical_subtype?: 'calculation' | 'method' | 'theory' | null | string
+  material_families?: FamilySelection[]
   keywords_tags?: string[]
   methodology?: string[]
   key_finding?: string
@@ -219,6 +219,7 @@ export function emptyUploadDraft(): UploadDraft {
       title: '', doi: '', authors: [], corresponding_authors: [], co_first_authors: [],
       journal: '', volume: '', pages: '', year: null,
       abstract: '', summary: '', paper_type: 'unknown', theoretical_subtype: null,
+      material_families: [],
       keywords_tags: [], methodology: [], key_finding: '', research_motivation: '',
       research_materials: [], material_relations: [], builds_on: [],
     },
@@ -261,12 +262,20 @@ function normalizePaperFields(value: unknown): PaperDraftFields {
     const selected = new Set(normalizeTextItems(roles, ['name', 'value']).map(name => name.toLowerCase()))
     return authors.filter(author => selected.has(author.toLowerCase()))
   }
+  const materialFamilies = (Array.isArray(paper.material_families) ? paper.material_families : [])
+    .filter((item): item is FamilySelection => Boolean(item && typeof item === 'object' && item.name?.trim()))
+    .filter((item, index, all) => all.findIndex(candidate => (
+      item.id != null && candidate.id != null
+        ? item.id === candidate.id
+        : item.name.trim().toLocaleLowerCase() === candidate.name.trim().toLocaleLowerCase()
+    )) === index)
   return {
     ...empty,
     ...paper,
     authors,
     corresponding_authors: normalizeRoles(paper.corresponding_authors),
     co_first_authors: normalizeRoles(paper.co_first_authors),
+    material_families: materialFamilies,
     keywords_tags: normalizeTextItems(paper.keywords_tags, ['keyword', 'value', 'name']),
     methodology: normalizeTextItems(paper.methodology, ['method', 'value', 'name']),
     research_materials: normalizeTextItems(paper.research_materials, ['material', 'value', 'name']),
@@ -297,14 +306,22 @@ export function normalizeUploadDraft(value: unknown): UploadDraft {
   return {
     ...empty,
     ...raw,
-    paper: normalizePaperFields(rawPaper),
+    paper: normalizePaperFields({
+      ...rawPaper,
+      material_families: [
+        ...(Array.isArray(rawPaper.material_families) ? rawPaper.material_families : []),
+        ...(Array.isArray(raw.material_states)
+          ? raw.material_states.map(state => (state as DraftMaterialState & { material_family?: unknown }).material_family).filter(Boolean)
+          : []),
+      ],
+    }),
     material_states: Array.isArray(raw.material_states) ? raw.material_states.map(state => {
       const normalizedState = { ...state }
       delete (normalizedState as { phase_label?: unknown }).phase_label
+      delete (normalizedState as { material_family?: unknown }).material_family
       const rawCrystalSystem = String(state.crystal_system || 'unknown')
       return {
         ...normalizedState,
-        material_family: state.material_family || null,
         structure_families: Array.isArray(state.structure_families) ? state.structure_families : [],
         crystal_system: (CRYSTAL_SYSTEM_VALUES as readonly string[]).includes(rawCrystalSystem)
           ? rawCrystalSystem as CrystalSystem

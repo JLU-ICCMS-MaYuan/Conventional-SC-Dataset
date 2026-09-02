@@ -24,11 +24,11 @@ describe('只读详情页与校对表单字段一致（Issue #59）', () => {
     const paper = {
       id: 1,
       title: '测试论文',
+      material_families: [{ id: 1, name: '氢化物' }],
       material_states: [
         {
           id: 1,
           material: 'LaH10',
-          material_family: { id: 1, name: '氢化物' },
           element_count: 2,
           material_dimensionality: '3D',
           structure_families: [

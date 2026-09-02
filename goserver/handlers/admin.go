@@ -125,8 +125,8 @@ func GetPaperDetail(c *gin.Context) {
 	// （GORM 未预加载的关联序列化为空，且接口返回 200 无错误信号）。
 	if err := database.DB.
 		Preload("KeyProperties").
+		Preload("MaterialFamilyLinks.MaterialFamily").
 		Preload("MaterialStates.Superconductor").
-		Preload("MaterialStates.MaterialFamily").
 		Preload("MaterialStates.StructureFamilyLinks.StructureFamily").
 		Preload("MaterialStates.TcResults").
 		Preload("MaterialStates.Properties").
@@ -135,6 +135,7 @@ func GetPaperDetail(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "论文不存在"})
 		return
 	}
+	paper.MaterialFamilies = materialFamiliesFromLinks(paper.MaterialFamilyLinks)
 	c.JSON(http.StatusOK, paper)
 }
 
@@ -403,6 +404,7 @@ func ReviewPaper(c *gin.Context) {
 		Comment               string                         `json:"comment"`
 		ReviewRequestID       string                         `json:"review_request_id"`
 		AdminInternalNote     *string                        `json:"admin_internal_note"`
+		MaterialFamilies      []classificationSelection      `json:"material_families"`
 		MaterialStates        []materialClassificationUpdate `json:"material_states"`
 		ClassificationContext json.RawMessage                `json:"classification_context"`
 	}
@@ -463,7 +465,9 @@ func ReviewPaper(c *gin.Context) {
 		}
 		var classificationSnapshot json.RawMessage
 		if body.Status == reviewStatusApproved {
-			states, err := applyPaperClassifications(tx, &paper, user.ID, body.MaterialStates)
+			snapshot, err := applyPaperClassifications(
+				tx, &paper, user.ID, body.MaterialFamilies, body.MaterialStates,
+			)
 			if err != nil {
 				return err
 			}
@@ -475,9 +479,14 @@ func ReviewPaper(c *gin.Context) {
 				context = json.RawMessage(`{}`)
 			}
 			classificationSnapshot, err = json.Marshal(struct {
-				Context        json.RawMessage               `json:"context"`
-				MaterialStates []classificationSnapshotState `json:"material_states"`
-			}{Context: context, MaterialStates: states})
+				Context          json.RawMessage               `json:"context"`
+				MaterialFamilies []classificationSnapshotTerm  `json:"material_families"`
+				MaterialStates   []classificationSnapshotState `json:"material_states"`
+			}{
+				Context: context,
+				MaterialFamilies: snapshot.MaterialFamilies,
+				MaterialStates: snapshot.MaterialStates,
+			})
 			if err != nil {
 				return err
 			}
@@ -554,9 +563,18 @@ func validatePaperClassificationComplete(tx *gorm.DB, paper *models.Paper) error
 	if len(states) == 0 && paper.PaperType != nil && *paper.PaperType != "review" {
 		return &classificationIncompleteError{MaterialStateIDs: []uint64{}}
 	}
+	var familyCount int64
+	if err := tx.Model(&models.PaperMaterialFamily{}).
+		Where("paper_id = ? AND paper_revision = ?", paper.ID, revision).
+		Count(&familyCount).Error; err != nil {
+		return err
+	}
+	if familyCount == 0 {
+		return &classificationIncompleteError{MaterialStateIDs: []uint64{}}
+	}
 	missing := make([]uint64, 0)
 	for _, state := range states {
-		if state.MaterialFamilyID == nil || state.ElementCount == nil || *state.ElementCount < 1 || *state.ElementCount > 118 {
+		if state.ElementCount == nil || *state.ElementCount < 1 || *state.ElementCount > 118 {
 			missing = append(missing, state.ID)
 		}
 	}

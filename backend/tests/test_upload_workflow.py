@@ -239,14 +239,15 @@ class FakePaperSession:
 
 
 def _state_with_material(material):
-    return {
-        "material": material,
-        "material_family": {"id": None, "name": "氢化物", "status": "pending"},
-    }
+    return {"material": material}
 
 
 def _minimal_non_review_draft(material_states, research_materials=None):
-    paper = {"title": "测试论文", "paper_type": "experimental"}
+    paper = {
+        "title": "测试论文",
+        "paper_type": "experimental",
+        "material_families": [{"id": None, "name": "氢化物", "status": "pending"}],
+    }
     if research_materials is not None:
         paper["research_materials"] = research_materials
     return {"paper": paper, "material_states": material_states}

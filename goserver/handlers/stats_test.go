@@ -3,10 +3,24 @@ package handlers
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 )
+
+func stringPointer(value string) *string { return &value }
+
+func TestChartFamilyIDsSupportsPaperLevelMultipleLabels(t *testing.T) {
+	ids := chartFamilyIDs(stringPointer("1,8,13"))
+	if len(ids) != 3 || ids[0] != 1 || ids[1] != 8 || ids[2] != 13 {
+		t.Fatalf("chartFamilyIDs = %#v", ids)
+	}
+	if !strings.Contains(chartFamilyIDsExpr, "paper_material_families") ||
+		strings.Contains(chartApprovedJoin, "paper_material_families") {
+		t.Fatal("family 必须通过论文级相关子查询读取，基础结果集不得 JOIN 多标签关系")
+	}
+}
 
 func TestResolveChartTcField(t *testing.T) {
 	tests := []struct {

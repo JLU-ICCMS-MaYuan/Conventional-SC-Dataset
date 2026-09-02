@@ -157,6 +157,16 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
                     <Typography variant="caption" color="text.secondary">{t('paperDetail.fieldSummary')}</Typography>
                     <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{editSummary || '-'}</Typography>
                   </Box>
+                  {(paper.material_families || []).length > 0 && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">{t('paperDetail.fieldMaterialFamily')}</Typography>
+                      <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', mt: 0.5 }}>
+                        {paper.material_families.map((family: any) => (
+                          <Chip key={family.id ?? family.name} size="small" label={familyName(family, lang)} />
+                        ))}
+                      </Box>
+                    </Box>
+                  )}
                   {editKnowledgeGraphTitle && (
                     <Box>
                       <Typography variant="caption" color="text.secondary">{t('paperDetail.fieldKgTitle')}</Typography>
@@ -192,12 +202,6 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
                       </Typography>
 
                       <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 1.5, mb: 2 }}>
-                        {state.material_family && (
-                          <Box>
-                            <Typography variant="caption" color="text.secondary">{t('paperDetail.fieldMaterialFamily')}</Typography>
-                            <Typography variant="body2">{familyName(state.material_family, lang)}</Typography>
-                          </Box>
-                        )}
                         {state.element_count != null && (
                           <Box>
                             <Typography variant="caption" color="text.secondary">{t('paperDetail.fieldElementCount')}</Typography>

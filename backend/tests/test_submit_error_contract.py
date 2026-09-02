@@ -94,10 +94,13 @@ def test_missing_material_contract_names_chemical_formula(client):
             "title": "测试论文",
             "paper_type": "experimental",
             "research_materials": ["LaH10"],
+            "material_families": [
+                {"id": None, "name": "氢基超导体", "status": "pending"}
+            ],
         },
         "material_states": [
-            {"material": "", "material_family": {"name": "氢基超导体"}},
-            {"material": "H3S", "material_family": {"name": "氢基超导体"}},
+            {"material": ""},
+            {"material": "H3S"},
         ],
     }
 

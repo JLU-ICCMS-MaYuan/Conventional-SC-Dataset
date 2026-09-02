@@ -639,10 +639,14 @@ describe('论文上传工作区', () => {
       data: {
         status: 'reading', stage: 'reading', files: [], chunks: [],
         partial_draft: {
-          paper: { title: 'Main title', authors: [], paper_type: 'unknown' },
+          paper: {
+            title: 'Main title', authors: [], paper_type: 'unknown',
+            material_families: [
+              { id: null, name: '高压三元氢化物超导体', status: 'pending' },
+            ],
+          },
           material_states: [{
             material: 'Li2MgH16',
-            material_family: { id: null, name: '高压三元氢化物超导体', status: 'pending' },
             tc_results: [], properties: [],
           }],
           research_motivation: '',
@@ -656,8 +660,7 @@ describe('论文上传工作区', () => {
     expect(await screen.findByText('只读预览')).toBeVisible()
     expect(screen.queryByText('候选尚未汇总')).not.toBeInTheDocument()
     expect(screen.getByText('暂不确定')).toBeInTheDocument()
-    expect(screen.getByDisplayValue('高压三元氢化物超导体')).toBeInTheDocument()
-    expect(screen.getByText('新名称，将在论文审核通过时创建')).toBeInTheDocument()
+    expect(screen.getByText('高压三元氢化物超导体')).toBeInTheDocument()
     expect(screen.getByLabelText('化学式')).toHaveValue('Li2MgH16')
     expect(screen.getByLabelText('标题')).toHaveValue('Main title')
     expect(screen.getByLabelText('研究驱动力')).toHaveValue('')

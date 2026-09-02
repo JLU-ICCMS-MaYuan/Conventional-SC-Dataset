@@ -6,15 +6,15 @@
 
 ## 当前行为
 
-- Go API `/api/papers/stats/tc-pressure` 与 `/api/papers/stats/tc-year` 查条件化模型：`tc_results` JOIN `material_states` JOIN `superconductors` JOIN `papers`，并左连 `material_families`。只公开 `review_status = 'approved'` 且 `tc_results.paper_revision = papers.content_revision` 的数据，即审核通过的那一版内容。
+- Go API `/api/papers/stats/tc-pressure` 与 `/api/papers/stats/tc-year` 查条件化模型：`tc_results` JOIN `material_states` JOIN `superconductors` JOIN `papers`，再用论文 revision 相关子查询读取 `paper_material_families`。只公开 `review_status = 'approved'` 且 `tc_results.paper_revision = papers.content_revision` 的数据，即审核通过的那一版内容；主查询不直接 JOIN 多标签表，因此一篇论文关联多个 family 不会把未筛选数据点重复展开。
 - 两个 API 接受白名单 `tc_field`：`experimental_tc`、`anisotropic_eliashberg_tc`、`isotropic_eliashberg_tc`、`allen_dynes_tc`、`mcmillan_tc`；默认使用 `experimental_tc`，非法字段返回 HTTP 400。该字段现在映射到 `tc_results.tc_method` 的行过滤值（如 `experimental_tc` → `experimental`），而非旧模型的列名。
 - Tc 取值为 `COALESCE(tc_value_k, (tc_min_k + tc_max_k) / 2)`，只登记区间的条目按中点上图。
 - 实验/计算的判定来自 `tc_results.result_kind`；`experimental` 为实验，其余（含未知取值）按计算处理。
 - 查询失败返回 HTTP 503 且不写缓存，不再返回空数组——静默空结果会把 schema 漂移伪装成「暂无数据」。
-- 分类维度是材料家族（`material_families` 目录），由 `/api/classification-catalogs` 动态提供，含用户自建家族；`material_family_id` 为空的状态归入 `family_id = 0` 的「其他」。
+- 分类维度是论文级材料家族标签（`material_families` 目录），由 `/api/classification-catalogs` 动态提供，含用户自建家族；API 为每个数据点返回所属论文的 `family_ids[]`，没有论文级 family 时归入 ID 0 的「其他」。
 - `/share` 页面在宽屏并排、窄屏单列显示 Tc-Pressure 与 Tc-Year；两张图可独立选择 Tc 字段与材料家族多选组合，并分别呈现加载失败状态。
 - 两张图恒对齐：控件区与图例区高度固定，材料家族选择框宽度固定（190 px），因此选中项数量与文本长度不影响图表纵向位置。选中项名称过长时折叠为「已选 N 项」，全选显示「全部」，一个不选显示「未选择」。
-- 每张图有独立的材料家族多选下拉，默认全选，与图例点击双向同步；多个家族可组合显示在同一张图里。社区页不再提供图表组合入口，材料家族多选已承担材料筛选职责。
+- 每张图有独立的材料家族多选下拉，默认全选，与图例点击双向同步；多个家族可组合显示在同一张图里。筛选任一 family 时，命中论文的全部材料结果都纳入，单个数据点即使同时命中多个已选 family 也只绘制一次。社区页不再提供图表组合入口，材料家族多选已承担论文标签筛选职责。
 - 登录用户的字段与家族偏好按 `user.id` 隔离保存在浏览器 `localStorage`（键名 `scwiki_chart_preferences:v2:<id>`），恢复默认只清除当前用户配置；匿名用户不持久化。家族选择存 `null` 表示「全部」，因此后续新增的家族自动可见。
 - 没有数据点时仍渲染坐标系与背景分区，只在图内提示无数据点。压力图横轴固定 0–400 GPa，年份图横轴固定 1900–次年；纵轴由两图共用，固定 0–500 K，以便并排直接比对 Tc 高度。
 - Tc-Pressure 图绘制 Pickard 品质因子 `S = Tc / sqrt(39² + P²)` 的动态等值线（绿色虚线），并在相邻档位之间填充色带形成区域划分（`<0.2 / 0.2–0.5 / 0.5–1 / 1–2 / 2–3 / >3`）。色带用 recharts `Customized` 在数据空间画多边形，因为 `ReferenceArea` 只能画轴对齐矩形，跟不了曲线。
@@ -57,6 +57,7 @@
 
 - [Feature #30：社区 Tc 双图个人配置与品质因子](../../specs/30-community-tc-chart-preferences/spec.md)
 - [Feature #72：图表数据源迁移到条件化模型并恢复背景分区与家族筛选](../../specs/72-chart-data-source-and-family-filter/spec.md)
+- [Feature #79：论文级 Material family 多选分类](../../specs/79-paper-material-families/spec.md)
 
 ## 已知问题
 

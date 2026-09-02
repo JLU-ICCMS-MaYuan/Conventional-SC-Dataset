@@ -7,9 +7,9 @@
 ## 当前行为
 
 - 新上传提交链路写入条件化目标模型：`material_states` 保存压力与论文报告的空间群，`calculation_contexts` 保存 λ/ωlog，`tc_results` 保存理论或实验 Tc，`superconductor_properties` 只保存 Tc 之外的普通物性。
-- 材料状态不再保存含义不清的 `phase_label`；空间群是结构事实，未来结构家族分类另行建模。
+- 材料状态不再保存含义不清的 `phase_label` 或 Material family；空间群是结构事实，`More type labels` 继续由状态级结构家族关联表达。
 - 结果主链路为 `papers` 与条件化科学实体：论文保存 DOI、标题、作者、年份、摘要、审核状态和 LLM 富化字段；普通物性保存材料原文名、规范物性名、数值（原文值与解析值）、单位与条件说明。压强与温度属材料状态、结构文本属 `structure_models`，都不在物性上重复承载。（[Issue #57](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/57)）
-- Go API `GET /api/papers/:id` 返回论文详情、普通物性，以及按材料状态嵌套的 `tc_results`、`calculation_contexts` 与 `structures`；`tc_max` 由 `tc_results` 聚合。（[Issue #57](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/57)）
+- Go API `GET /api/papers/:id` 在论文顶层返回全部 `material_families[]`，并返回普通物性以及按材料状态嵌套的 `structure_families[]`、`tc_results`、`calculation_contexts` 与 `structures`；状态对象不再返回 `material_family`，`tc_max` 由 `tc_results` 聚合。（[Issue #57](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/57)、[Issue #79](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/79)）
 - Go API `POST /api/papers/search/records` 返回扁平列表行，包含 `record_id`、`paper_id`、`year`、`formula`、`type`、`pressure`、`tc`、`space_group`、`source`、`status`、`doi` 等字段。
 - `/search` 页面单击或选择记录后可显示详情；如果记录有 `paper_id`，会请求论文详情；结构预览的数据源是材料状态下的 `structures`。（[Issue #57](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/57)）**#57 确立的是 API 契约，前端直到 Issue #65 才真正照此读取**——在此之前探索页与社区页仍读 `key_properties[].structure_text`，该字段在 Go 侧标记 `gorm:"-"` 从不落库，结构预览恒显示「暂无结构数据」。
 - 探索页与社区页的关键物性表覆盖三类来源，顺序为 Tc（`tc_results`）→ 计算参数（`calculation_contexts` 的 λ/ωlog/μ*）→ 普通物性（`superconductor_properties`）。Tc 排最前是因为它是超导论文的核心结论，而非按存储顺序排列。此前两页只读 `key_properties`，只报告 Tc 的实验论文（超导领域最常见的一类）整块显示「该论文暂无结构化物性数据」，用户上传的核心数据完全不可见。计算参数中数值为 NULL 的项不产生表格行——后端返回全部记录是为了不擅自判定有效性，展示侧渲染空行则对读者无意义。物性与结构的提取逻辑收敛到 `frontend/src/lib/paperDetailView.ts`：同一读取错误此前在详情页、探索页、社区页各存一份，Issue #59 只修了详情页那份。社区页另新增结构预览区块（此前完全没有）。（[Issue #65](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/65)）
@@ -47,6 +47,7 @@
 - [Issue #68：修复探索页与社区页核心发现、论文总结丢失用户录入的换行](../../specs/68-preserve-multiline-text/spec.md)
 - [Issue #69：修复长文本正文字号字重压过标签导致视觉层级颠倒](../../specs/69-detail-text-hierarchy/spec.md)
 - [Issue #70：知识图谱节点专用标题 - 高度凝练论文核心贡献](../../specs/70-knowledge-graph-title/spec.md)
+- [Feature #79：论文级 Material family 多选分类](../../specs/79-paper-material-families/spec.md)
 
 ## 已知问题
 

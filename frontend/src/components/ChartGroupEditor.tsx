@@ -202,9 +202,8 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
       setSnackbar({ message: t('share.duplicatePoint'), severity: 'error' })
       return
     }
-    // 压强与分类属材料状态，不在物性上；物性表没有这两列。
-    // 分类维度取 material_family（材料家族），不是 state_kind——后者是
-    // theoretical/experimental/mixed/unknown，属数据来源性质，与家族分类无关。
+    // 压强属于材料状态；Material family 已提升为论文级多选标签。
+    const firstPaperFamily = kp.paper?.material_families?.[0]
     const newItem: LocalItem = {
       sort_order: group.items.length,
       source: 'kp',
@@ -212,8 +211,8 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
       material: kp.material,
       tc: kp.value_max ?? kp.value_number ?? null,
       pressure: kp.material_state?.pressure_value_gpa ?? null,
-      type: kp.material_state?.material_family?.id != null
-        ? String(kp.material_state.material_family.id)
+      type: firstPaperFamily?.id != null
+        ? String(firstPaperFamily.id)
         : null,
       year: null,
     }
@@ -473,7 +472,9 @@ const ChartGroupEditor: React.FC<Props> = ({ open, groupId, onClose, onSaved }) 
                         <Typography variant="body2" fontWeight={600}>{kp.material}</Typography>
                         <Typography variant="caption" color="text.secondary">
                           Tc: {formatValue(kp.value_max ?? kp.value_number)}K · P: {formatValue(kp.material_state?.pressure_value_gpa)}GPa
-                          {kp.material_state?.material_family ? ` · ${familyName(kp.material_state.material_family, lang)}` : ''}
+                          {kp.paper?.material_families?.length
+                            ? ` · ${kp.paper.material_families.map((item: any) => familyName(item, lang)).join(' / ')}`
+                            : ''}
                         </Typography>
                       </Box>
                       <Add fontSize="small" color="action" />

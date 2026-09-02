@@ -55,8 +55,8 @@ func GetPaper(c *gin.Context) {
 	var paper models.Paper
 	if err := database.DB.
 		Preload("KeyProperties.PropertyDefinition").
+		Preload("MaterialFamilyLinks.MaterialFamily").
 		Preload("MaterialStates.Superconductor").
-		Preload("MaterialStates.MaterialFamily").
 		Preload("MaterialStates.StructureFamilyLinks.StructureFamily").
 		Preload("MaterialStates.TcResults").
 		Preload("MaterialStates.CalculationContexts").
@@ -501,22 +501,34 @@ func paperToDict(p models.Paper) gin.H {
 		"updated_at":            p.UpdatedAt,
 		"tc_max":                tcMax,
 		"key_properties":        keyPropertiesToDict(p.KeyProperties),
+		"material_families":     materialFamiliesToDict(p.MaterialFamilyLinks),
 		"material_states":       materialStatesToDict(p.MaterialStates),
 	}
+}
+
+func materialFamiliesFromLinks(links []models.PaperMaterialFamily) []models.MaterialFamily {
+	result := make([]models.MaterialFamily, 0, len(links))
+	for _, link := range links {
+		result = append(result, link.MaterialFamily)
+	}
+	return result
+}
+
+func materialFamiliesToDict(links []models.PaperMaterialFamily) []gin.H {
+	result := make([]gin.H, 0, len(links))
+	for _, link := range links {
+		family := link.MaterialFamily
+		result = append(result, gin.H{
+			"id": family.ID, "name": family.NameZH, "name_zh": family.NameZH,
+			"name_en": family.NameEN, "status": "confirmed",
+		})
+	}
+	return result
 }
 
 func materialStatesToDict(states []models.MaterialState) []gin.H {
 	result := make([]gin.H, 0, len(states))
 	for _, state := range states {
-		var family interface{}
-		if state.MaterialFamily != nil {
-			// Issue #76（FR-024）：返回 name_en 供英文界面显示规范英文名，
-			// name 键保持规范中文名不变（向后兼容的增量）。
-			family = gin.H{
-				"id": state.MaterialFamily.ID, "name": state.MaterialFamily.NameZH,
-				"name_en": state.MaterialFamily.NameEN, "status": "confirmed",
-			}
-		}
 		structures := make([]gin.H, 0, len(state.StructureFamilyLinks))
 		for _, link := range state.StructureFamilyLinks {
 			structures = append(structures, gin.H{
@@ -527,7 +539,7 @@ func materialStatesToDict(states []models.MaterialState) []gin.H {
 		}
 		result = append(result, gin.H{
 			"id": state.ID, "material": state.Superconductor.ChemicalFormula,
-			"material_family": family, "structure_families": structures,
+			"structure_families": structures,
 			"element_count": state.ElementCount, "material_dimensionality": state.MaterialDimensionality,
 			"superconductor_kind": state.SuperconductorKind,
 			"crystal_system":      state.CrystalSystem,
@@ -782,6 +794,7 @@ func searchLocalAll(elements []string, mode string) []gin.H {
 	var papers []models.Paper
 	database.DB.
 		Preload("KeyProperties.PropertyDefinition").
+		Preload("MaterialFamilyLinks.MaterialFamily").
 		Preload("MaterialStates.Superconductor").
 		Preload("MaterialStates.TcResults").
 		Where("review_status = ?", reviewStatusApproved).

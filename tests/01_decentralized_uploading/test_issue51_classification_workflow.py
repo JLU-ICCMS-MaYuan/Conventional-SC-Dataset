@@ -22,6 +22,13 @@ def _install_upload_dependency_stubs():
         rq_job = types.ModuleType("rq.job")
         rq_job.Job = type("Job", (), {})
         sys.modules.update({"rq": rq_module, "rq.exceptions": rq_exceptions, "rq.job": rq_job})
+    if importlib.util.find_spec("spglib") is None:
+        space_groups = types.ModuleType("backend.services.space_groups")
+        space_groups.CRYSTAL_SYSTEMS = {
+            "triclinic", "monoclinic", "orthorhombic", "tetragonal",
+            "trigonal", "hexagonal", "cubic", "unknown",
+        }
+        sys.modules["backend.services.space_groups"] = space_groups
 
 
 _install_upload_dependency_stubs()
@@ -89,15 +96,22 @@ def test_submission_keeps_classification_in_review_artifact_until_approval(tmp_p
                 "paper_type": "experimental",
                 "authors": ["A. Author"],
                 "research_materials": ["LaH10", "CeCu2Si2"],
-            },
-            "material_states": [
-                {
-                    "material": "LaH10",
-                    "material_family": {
+                "material_families": [
+                    {
                         "id": catalog_ids[0],
                         "name": "氢基超导体",
                         "status": "confirmed",
                     },
+                    {
+                        "id": None,
+                        "name": "重费米子超导体",
+                        "status": "pending",
+                    },
+                ],
+            },
+            "material_states": [
+                {
+                    "material": "LaH10",
                     "structure_families": [
                         {
                             "id": catalog_ids[1],
@@ -111,11 +125,6 @@ def test_submission_keeps_classification_in_review_artifact_until_approval(tmp_p
                 },
                 {
                     "material": "CeCu2Si2",
-                    "material_family": {
-                        "id": None,
-                        "name": "重费米子超导体",
-                        "status": "pending",
-                    },
                     "structure_families": [
                         {"id": None, "name": "四方结构", "status": "pending", "is_primary": False}
                     ],
@@ -147,7 +156,6 @@ def test_submission_keeps_classification_in_review_artifact_until_approval(tmp_p
 
     states, link_count, task_id = asyncio.run(scenario())
 
-    assert [item.material_family_id for item in states] == [None, None]
     assert [item.element_count for item in states] == [2, 3]
     assert [item.material_dimensionality for item in states] == [
         "three_dimensional",
@@ -157,8 +165,11 @@ def test_submission_keeps_classification_in_review_artifact_until_approval(tmp_p
 
     snapshot_path = tmp_path / "review_artifacts" / task_id / "result.json"
     snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
-    assert snapshot["user_values"]["material_states"][0]["material_family"]["name"] == "氢基超导体"
-    assert snapshot["user_values"]["material_states"][1]["material_family"]["name"] == "重费米子超导体"
+    assert [item["name"] for item in snapshot["user_values"]["paper"]["material_families"]] == [
+        "氢基超导体",
+        "重费米子超导体",
+    ]
+    assert all("material_family" not in item for item in snapshot["user_values"]["material_states"])
 
 
 def test_models_exclude_the_superseded_classification_governance_schema():

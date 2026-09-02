@@ -59,12 +59,11 @@ def test_old_draft_is_converted_once_without_retaining_sc_type():
     )
 
     assert "sc_type" not in converted
-    assert converted["material_states"][0]["material_family"] == {
-        "id": 1,
-        "name": "氢基超导体",
-        "status": "confirmed",
-    }
-    assert converted["material_states"][1]["material_family"]["id"] == 9
+    assert all("material_family" not in state for state in converted["material_states"])
+    assert converted["paper"]["material_families"] == [
+        {"id": 1, "name": "氢基超导体", "status": "confirmed"},
+        {"id": 9, "name": "已确认", "status": "confirmed"},
+    ]
     assert converted["classification_migration_warnings"]
 
 
@@ -74,8 +73,9 @@ def test_ambiguous_old_values_become_pending_instead_of_guessed():
         families_by_code={},
     )
 
-    assert converted["material_states"][0]["material_family"] == {
+    assert converted["paper"]["material_families"][0] == {
         "id": None,
         "name": "carbon",
         "status": "pending",
     }
+    assert "material_family" not in converted["material_states"][0]

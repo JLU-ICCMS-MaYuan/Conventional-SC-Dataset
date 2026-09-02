@@ -127,6 +127,11 @@ def _draft_values(draft: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str,
 def _reject_legacy_classification_contract(draft: dict[str, Any]) -> None:
     legacy_fields = {"sc_type", "sc_type_review_status", "type_code", "type_proposal_raw"}
     present = sorted(field for field in legacy_fields if field in draft)
+    if any(
+        isinstance(state, dict) and "material_family" in state
+        for state in draft.get("material_states") or []
+    ):
+        present.append("material_states[].material_family")
     if present:
         raise _upload_error(
             400,
@@ -143,6 +148,35 @@ async def _resolve_draft_classifications(session, draft: dict[str, Any]) -> None
         resolve_structure_family,
     )
 
+    paper = draft.get("paper") if isinstance(draft.get("paper"), dict) else {}
+    resolved_families = []
+    seen_family_keys: set[str] = set()
+    for family in paper.get("material_families") or []:
+        if not isinstance(family, dict) or not str(family.get("name") or "").strip():
+            continue
+        term = None
+        if family.get("id") not in (None, ""):
+            try:
+                term = await session.get(models.MaterialFamily, int(family["id"]))
+            except (TypeError, ValueError):
+                term = None
+            if term is None:
+                raise _upload_error(404, "classification_not_found", "材料家族目录项不存在")
+        else:
+            term = await resolve_material_family(session, family.get("name"))
+        resolved = (
+            {"id": term.id, "name": term.name_zh, "status": "confirmed"}
+            if term is not None
+            else {"id": None, "name": str(family["name"]).strip(), "status": "pending"}
+        )
+        if isinstance(family.get("evidence"), dict):
+            resolved["evidence"] = family["evidence"]
+        key = f"id:{resolved['id']}" if resolved["id"] is not None else f"name:{resolved['name'].casefold()}"
+        if key not in seen_family_keys:
+            seen_family_keys.add(key)
+            resolved_families.append(resolved)
+    paper["material_families"] = resolved_families
+
     for state_index, state in enumerate(draft.get("material_states") or []):
         if not isinstance(state, dict):
             continue
@@ -154,27 +188,6 @@ async def _resolve_draft_classifications(session, draft: dict[str, Any]) -> None
                 f"第 {state_index + 1} 个材料状态的材料维度无效",
             )
         state["material_dimensionality"] = dimensionality
-
-        family = state.get("material_family")
-        if isinstance(family, dict) and str(family.get("name") or "").strip():
-            term = None
-            if family.get("id") not in (None, ""):
-                try:
-                    term = await session.get(models.MaterialFamily, int(family["id"]))
-                except (TypeError, ValueError):
-                    term = None
-                if term is None:
-                    raise _upload_error(404, "classification_not_found", "材料家族目录项不存在")
-            else:
-                term = await resolve_material_family(session, family.get("name"))
-            resolved_family = (
-                {"id": term.id, "name": term.name_zh, "status": "confirmed"}
-                if term is not None
-                else {"id": None, "name": str(family["name"]).strip(), "status": "pending"}
-            )
-            if isinstance(family.get("evidence"), dict):
-                resolved_family["evidence"] = family["evidence"]
-            state["material_family"] = resolved_family
 
         resolved_structures = []
         seen_ids: set[int] = set()
@@ -240,6 +253,19 @@ def _validate_draft(
         raise _upload_error(400, "theoretical_subtype_required", "理论论文必须选择二级类型")
     if paper_type != "theoretical":
         paper["theoretical_subtype"] = None
+    families = [item for item in paper.get("material_families") or [] if isinstance(item, dict)]
+    if not families:
+        raise _upload_error(400, "material_family_required", "请至少选择一个论文级 Material family")
+    for family in families:
+        if not str(family.get("name") or "").strip():
+            raise _upload_error(400, "invalid_material_family", "材料家族名称不能为空")
+        status = family.get("status")
+        if status not in {"confirmed", "pending"}:
+            raise _upload_error(400, "invalid_material_family", "材料家族状态无效")
+        if status == "confirmed" and family.get("id") in (None, ""):
+            raise _upload_error(400, "invalid_material_family", "已确认材料家族缺少目录 ID")
+        if status == "pending" and family.get("id") not in (None, ""):
+            raise _upload_error(400, "invalid_material_family", "待确认材料家族不能包含目录 ID")
     if (
         paper_type != "review"
         and not paper.get("research_materials")
@@ -252,23 +278,6 @@ def _validate_draft(
     for state_index, state in enumerate(material_states):
         if not str(state.get("material") or "").strip():
             raise _upload_error(400, "state_material_required", f"第 {state_index + 1} 个材料状态缺少化学式")
-        family = state.get("material_family")
-        if paper_type != "review" and (
-            not isinstance(family, dict) or not str(family.get("name") or "").strip()
-        ):
-            raise _upload_error(
-                400,
-                "material_family_required",
-                f"第 {state_index + 1} 个材料状态缺少材料家族",
-            )
-        if isinstance(family, dict):
-            status = family.get("status")
-            if status not in {"confirmed", "pending"}:
-                raise _upload_error(400, "invalid_material_family", "材料家族状态无效")
-            if status == "confirmed" and family.get("id") in (None, ""):
-                raise _upload_error(400, "invalid_material_family", "已确认材料家族缺少目录 ID")
-            if status == "pending" and family.get("id") not in (None, ""):
-                raise _upload_error(400, "invalid_material_family", "待确认材料家族不能包含目录 ID")
         structures = [item for item in state.get("structure_families") or [] if isinstance(item, dict)]
         if sum(bool(item.get("is_primary")) for item in structures) > 1:
             raise _upload_error(400, "multiple_primary_structure_families", "一个材料状态只能有一个主结构家族")
@@ -982,6 +991,10 @@ async def _create_pending_paper(
     state: dict[str, Any],
     draft: dict[str, Any],
 ) -> int:
+    # 先拒绝旧客户端契约，再加载科学数据处理依赖；这样非法请求不会被无关的
+    # PDF/晶体学可选依赖阻断，也不会进入任何持久化准备步骤。
+    _reject_legacy_classification_contract(draft)
+
     from backend.ingest.chunker import chunk_paper
     from backend.ingest.scientific_drafts import (
         add_scientific_evidence_link,
@@ -991,7 +1004,6 @@ async def _create_pending_paper(
     from backend.ingest.upload_tasks import markdown_path
     from backend.rag.database import async_session_factory
 
-    _reject_legacy_classification_contract(draft)
     draft = _normalize_draft(draft)
     paper_data, material_states = _validate_draft(draft)
     doi = normalize_doi(paper_data.get("doi"))
@@ -1593,7 +1605,10 @@ async def _rewrite_paper_scientific_draft_in_tx(
     # 复用上传提交的既有校验（FR-020）：论文级字段来自数据库，
     # 请求体只携带科学数据部分（契约 C1 的形态）。
     full_draft = {
-        "paper": _paper_as_draft_dict(paper, paper_type),
+        "paper": {
+            **_paper_as_draft_dict(paper, paper_type),
+            "material_families": draft.get("material_families") or [],
+        },
         "material_states": material_states,
         "structure_candidates": draft.get("structure_candidates") or [],
     }
