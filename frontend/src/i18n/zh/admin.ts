@@ -61,7 +61,7 @@ export default {
   reviewResult: '审核结果',
   reviewApprove: '✅ 通过',
   reviewReject: '❌ 拒绝',
-  reviewBackToPending: '退回待审核',
+  reviewBackToPending: '↩️ 退回待审核',
   reviewComment: '审核意见',
   confirmReview: '确认审核',
   reviewDataLoadFailed: '审核资料加载失败: {reason}',

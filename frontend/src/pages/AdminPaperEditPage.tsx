@@ -192,13 +192,8 @@ const AdminPaperEditPage: React.FC = () => {
   }, [paperId])
 
   // 编辑页内提交审核。只允许拒绝与退回待审核：
-  // 批准要求逐个材料状态确认分类（不完整则后端返回 409 classification_incomplete），
-  // 而编辑页没有分类确认区，放开批准只会得到一个必然失败的按钮。
+  // 批准时由后端校验编辑页已保存的材料状态分类完整性。
   const handleEditReview = async () => {
-    if (editReviewStatus === 'approved') {
-      setSnackbar(t('admin.approvalNeedsClassification'))
-      return
-    }
     setEditReviewSaving(true)
     try {
       await api.post(`/api/admin/papers/${paperId}/review`, {
@@ -319,6 +314,7 @@ const AdminPaperEditPage: React.FC = () => {
                   label={t('admin.reviewResult')}
                   onChange={e => setEditReviewStatus(e.target.value)}
                 >
+                  <MenuItem value="approved">{t('admin.reviewApprove')}</MenuItem>
                   <MenuItem value="rejected">{t('admin.reviewReject')}</MenuItem>
                   <MenuItem value="pending">{t('admin.reviewBackToPending')}</MenuItem>
                 </Select>

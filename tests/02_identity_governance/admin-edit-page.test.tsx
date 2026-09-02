@@ -119,6 +119,7 @@ const renderPage = () => render(
 
 describe('Issue #78：管理端论文编辑独立页', () => {
   it('渲染论文级字段（含 knowledge_graph_title）、材料状态区与审核区', async () => {
+    const user = userEvent.setup()
     renderPage()
 
     // 页面标题与返回按钮
@@ -135,8 +136,12 @@ describe('Issue #78：管理端论文编辑独立页', () => {
     expect(await screen.findByText('材料状态 #1')).toBeVisible()
     expect(screen.getByLabelText('化学式')).toHaveValue('Sn')
 
-    // 审核区：只拒绝/退回 + 审核意见 + 提交审核
+    // 审核区：通过/拒绝/退回 + 审核意见 + 提交审核
     expect(screen.getByRole('combobox', { name: '审核结果' })).toBeVisible()
+    await user.click(screen.getByRole('combobox', { name: '审核结果' }))
+    expect(await screen.findByRole('option', { name: '✅ 通过' })).toBeVisible()
+    expect(screen.getByRole('option', { name: /退回待审核/ })).toBeVisible()
+    await user.click(screen.getByRole('option', { name: /退回待审核/ }))
     expect(screen.getByRole('textbox', { name: '审核意见' })).toBeVisible()
     expect(screen.getByRole('button', { name: '提交审核' })).toBeVisible()
   })

@@ -63,7 +63,7 @@ export default {
   reviewResult: 'Review Result',
   reviewApprove: '✅ Approve',
   reviewReject: '❌ Reject',
-  reviewBackToPending: 'Send back to pending',
+  reviewBackToPending: '↩️ Send back to pending',
   reviewComment: 'Review Comment',
   confirmReview: 'Confirm Review',
   reviewDataLoadFailed: 'Failed to load review data: {reason}',
