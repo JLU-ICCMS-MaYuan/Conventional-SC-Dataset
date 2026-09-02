@@ -8,7 +8,7 @@
 ## 安装和静态验证
 ```bash
 uv venv .venv-news
-uv pip install --python .venv-news/bin/python -r requirements-news.txt pytest alembic
+uv pip install --python .venv-news/bin/python -r requirements.txt pytest alembic
 cd frontend
 npm ci
 npm run build

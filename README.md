@@ -55,11 +55,11 @@ rag界面
 `/news` 增加 arXiv、Crossref、Phys.org 自动资讯，按类型筛选和分页；保留人工快讯与诺贝尔奖里程碑。
 自动资讯标注“自动采集，未经本站审核”，只进入独立资讯表，不进入正式论文、材料或 PDF 解析队列。
 
-Python 进程使用 `requirements-news.txt` 中的基础库，不复制外部项目仓库：
+Python 进程使用统一的 `requirements.txt`，不复制外部项目仓库：
 
 ```bash
 uv venv .venv-news
-uv pip install --python .venv-news/bin/python -r requirements-news.txt
+uv pip install --python .venv-news/bin/python -r requirements.txt
 ```
 
 运行前为进程提供明确的 `DATABASE_URL`、`REDIS_URL`。需要先经部署者确认，使用既有 Alembic 流程应用迁移 `20260831_0063`；以下命令不会自动建表。

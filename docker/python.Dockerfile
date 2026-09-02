@@ -8,8 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends build-essential
     && rm -rf /var/lib/apt/lists/*
 
 COPY docker/requirements.txt .
-COPY requirements-news.txt .
-RUN pip install --no-cache-dir -r requirements.txt -r requirements-news.txt \
+RUN pip install --no-cache-dir -r requirements.txt \
     && apt-get purge -y build-essential gcc g++ cpp binutils \
     && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*

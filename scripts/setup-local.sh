@@ -116,7 +116,6 @@ setup_python() {
   # watchfiles 供 uvicorn --reload 与 goserver 热重载使用（uvicorn 非 [standard] 不自带）。
   "$PY_BIN/python" -m pip install -q \
     -r "$REPO_ROOT/docker/requirements.txt" \
-    -r "$REPO_ROOT/requirements-news.txt" \
     watchfiles || die "Python 依赖安装失败"
   ok "Python 依赖就绪"
 }
