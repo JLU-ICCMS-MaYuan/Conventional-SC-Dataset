@@ -3,6 +3,7 @@ import re
 
 
 COMPOSE_PATH = Path(__file__).parents[2] / "docker" / "compose.yaml"
+DEV_SCRIPT_PATH = Path(__file__).parents[2] / "scripts" / "dev.sh"
 
 
 def service_block(compose: str, name: str) -> str:
@@ -36,3 +37,11 @@ def test_news_services_are_started_separately_from_upload_worker():
             'restart: unless-stopped',
         ):
             assert value in block
+
+
+def test_local_dev_starts_news_processes_by_default():
+    dev_script = DEV_SCRIPT_PATH.read_text()
+
+    assert "APP_SERVICES=(python worker news-worker news-scheduler goserver frontend)" in dev_script
+    assert 'spawn news-worker "$PY_BIN/python" -m backend.news worker' in dev_script
+    assert 'spawn news-scheduler "$PY_BIN/python" -m backend.news schedule' in dev_script

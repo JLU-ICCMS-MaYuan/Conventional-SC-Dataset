@@ -63,7 +63,14 @@ uv pip install --python .venv-news/bin/python -r requirements.txt
 ```
 
 运行前为进程提供明确的 `DATABASE_URL`、`REDIS_URL`。需要先经部署者确认，使用既有 Alembic 流程应用迁移 `20260831_0063`；以下命令不会自动建表。
-分别在两个受进程管理器管理的进程中运行：
+使用本地开发编排脚本时，News 两个进程会随默认服务一起启动：
+
+```bash
+scripts/dev.sh start
+scripts/dev.sh status
+```
+
+脚本会分别启动 `news-worker` 和 `news-scheduler`；也可以使用 `scripts/dev.sh logs news-worker` 或 `scripts/dev.sh logs news-scheduler` 查看日志。手动启动时，仍需分别运行下列两个进程：
 
 ```bash
 .venv-news/bin/python -m backend.news worker

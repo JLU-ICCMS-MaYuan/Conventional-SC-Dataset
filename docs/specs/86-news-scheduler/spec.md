@@ -10,7 +10,7 @@
 
 资讯采集代码已有每天北京时间 08:00 调度、失败重试和独立 `scwiki-news` 队列，但 Docker Compose 未启动 scheduler 和该队列的 Worker。上传 Worker 不消费资讯队列，导致部署环境从不执行自动采集。
 
-本修复将 News scheduler 和 Worker 作为独立 Compose 服务常驻运行，保证容器重启后恢复每日自动采集，且不改变上传任务的队列职责。
+本修复将 News scheduler 和 Worker 作为独立 Compose 服务以及本地开发编排服务常驻运行，保证容器或本地开发服务重启后恢复每日自动采集，且不改变上传任务的队列职责。
 
 ## 用户场景与验收
 
@@ -37,12 +37,14 @@
 - **FR-003**：两个服务必须使用既有 Python 镜像，并显式传入 `DATABASE_URL`、`REDIS_URL`、`NEWS_DAILY_HOUR=8`、`NEWS_TIMEZONE=Asia/Shanghai`、`NEWS_INITIAL_DAYS=7`、`NEWS_MAX_PAGES=100`。
 - **FR-004**：两个服务必须依赖 `migrate: service_completed_successfully` 与 `redis: service_healthy`，并使用 `restart: unless-stopped`。
 - **FR-005**：自动化测试必须核验 Compose 服务命令、环境、依赖、重启策略和上传 Worker 不变；既有调度时间测试必须继续通过。
+- **FR-006**：`scripts/dev.sh start` 不带服务参数时必须启动 `news-worker` 和 `news-scheduler`；停止、状态和日志命令必须继续覆盖这两个服务。
 
 ## 成功标准
 
 - **SC-001**：`docker compose config` 成功渲染并包含两个 News 服务，均使用已有 Python 镜像、正确命令与运行依赖。
 - **SC-002**：配置级测试验证 News Worker 和上传 Worker 不共享命令或队列职责。
 - **SC-003**：资讯调度单元测试通过，并证明默认时区在 08:00 触发日调度。
+- **SC-004**：本地开发启动脚本的默认服务列表包含两个 News 进程，且其进程命令分别为 `backend.news worker` 和 `backend.news schedule`。
 
 ## 假设与依赖
 

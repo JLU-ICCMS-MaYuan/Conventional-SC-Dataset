@@ -26,7 +26,7 @@
 ## 工作流程
 Python 采集进程负责外部访问、过滤、规范化和写表；Go 仅提供只读列表接口；前端读取持久化结果，不现场抓取。
 独立 schedule 进程每分钟检查日任务，默认北京时间 08:00；停机后按成功水位补跑，失败一小时后重试。
-Docker Compose 以 `news-scheduler` 运行该调度进程，并以 `news-worker` 专门消费 `scwiki-news` 队列；两者等待迁移成功和 Redis 健康后启动，容器重启时自动恢复。上传 Worker 不消费资讯队列。
+Docker Compose 以 `news-scheduler` 运行该调度进程，并以 `news-worker` 专门消费 `scwiki-news` 队列；两者等待迁移成功和 Redis 健康后启动，容器重启时自动恢复。上传 Worker 不消费资讯队列。本地开发执行 `scripts/dev.sh start` 时也会默认启动这两个进程，日志和 PID 分别由 `scripts/dev.sh logs/status` 管理。
 Redis 互斥锁防止并发采集。
 任务最长 900 秒，单请求有限重试；失败不前移成功水位，不清空已有资讯。
 

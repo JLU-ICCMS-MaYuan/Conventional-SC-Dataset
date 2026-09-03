@@ -6,13 +6,12 @@
 #   scripts/dev.sh status            查看状态
 #   scripts/dev.sh logs <服务>       跟踪日志
 #
-# 服务名：mysql redis neo4j qdrant grobid python worker goserver frontend
-# news-worker / news-scheduler 需显式指定，日常开发用不上。
+# 服务名：mysql redis neo4j qdrant grobid python worker news-worker news-scheduler goserver frontend
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib-local.sh"
 
 INFRA_SERVICES=(mysql redis neo4j qdrant grobid)
-APP_SERVICES=(python worker goserver frontend)
+APP_SERVICES=(python worker news-worker news-scheduler goserver frontend)
 ALL_SERVICES=("${INFRA_SERVICES[@]}" "${APP_SERVICES[@]}")
 
 # ── 通用进程管理 ────────────────────────────────────────────
