@@ -17,6 +17,8 @@ from typing import Any, Literal, Annotated, TypedDict
 
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
+from backend.rag.llm_client import get_llm_client
+from backend.rag.llm_context import get_llm_config
 
 
 class InspirationState(TypedDict):
@@ -56,12 +58,9 @@ CLARIFY_PROMPT = """你是超导材料研究顾问。当前处于「提问与澄
 
 def clarify_node(state: InspirationState) -> dict:
     """Stage1: 了解用户 → 决定是否进入 Stage2"""
-    from openai import OpenAI
-    from backend.rag.config import settings
-
-    client = OpenAI(api_key=settings.deepseek_api_key, base_url=settings.deepseek_base_url)
+    client = get_llm_client()
     resp = client.chat.completions.create(
-        model=settings.deepseek_model,
+        model=get_llm_config().model,
         messages=[{"role": "system", "content": CLARIFY_PROMPT}] +
                  [{"role": "user" if getattr(m, "type", "") in ("human", "user")
                    else "assistant", "content": m.content}
@@ -127,8 +126,6 @@ def design_evidence_node(state: InspirationState) -> dict:
     from backend.rag.inspiration.session import MODE_LABELS
     from backend.rag.inspiration.retrieval import format_rag_context
     from backend.rag.inspiration.prompts import EVIDENCE_BUILDER_SYSTEM, build_explore_prompt
-    from openai import OpenAI
-    from backend.rag.config import settings
 
     question = ""
     for m in state["messages"]:
@@ -139,9 +136,9 @@ def design_evidence_node(state: InspirationState) -> dict:
     prompt = build_explore_prompt(
         question=question, mode=state["mode"], mode_label=mode_label,
         rationale="", rag_context=rag_context, history=[])
-    client = OpenAI(api_key=settings.deepseek_api_key, base_url=settings.deepseek_base_url)
+    client = get_llm_client()
     resp = client.chat.completions.create(
-        model=settings.deepseek_model,
+        model=get_llm_config().model,
         messages=[{"role": "system", "content": EVIDENCE_BUILDER_SYSTEM},
                   {"role": "user", "content": prompt}],
         temperature=0.7, max_tokens=3500, stream=False)
@@ -170,8 +167,6 @@ def discuss_node(state: InspirationState) -> dict:
     """Stage3: 讨论方案 → 用户反馈 → revise / done"""
     from backend.rag.inspiration.reviewer import parse_review_verdicts
     from backend.rag.inspiration.prompts import REVIEWER_SYSTEM
-    from openai import OpenAI
-    from backend.rag.config import settings
 
     ideas = state.get("ideas", [])
 
@@ -183,9 +178,9 @@ def discuss_node(state: InspirationState) -> dict:
 
     review_text = ""
     if ideas and evidence_text:
-        client = OpenAI(api_key=settings.deepseek_api_key, base_url=settings.deepseek_base_url)
+        client = get_llm_client()
         resp = client.chat.completions.create(
-            model=settings.deepseek_model,
+            model=get_llm_config().model,
             messages=[{"role": "system", "content": REVIEWER_SYSTEM},
                       {"role": "user", "content": f"请审核以下研究点子的可行性。\n\n{evidence_text}"}],
             temperature=0.3, max_tokens=1000, stream=False)
@@ -193,9 +188,9 @@ def discuss_node(state: InspirationState) -> dict:
         parse_review_verdicts(review_text)
 
     # 生成讨论回复
-    client = OpenAI(api_key=settings.deepseek_api_key, base_url=settings.deepseek_base_url)
+    client = get_llm_client()
     resp = client.chat.completions.create(
-        model=settings.deepseek_model,
+        model=get_llm_config().model,
         messages=[{"role": "system", "content": DISCUSS_SYSTEM}] +
                  [{"role": "user" if getattr(m, "type", "") in ("human", "user")
                    else "assistant", "content": m.content}

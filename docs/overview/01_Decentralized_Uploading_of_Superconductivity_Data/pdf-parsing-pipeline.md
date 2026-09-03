@@ -10,6 +10,7 @@
 - `POST /api/upload-tasks`（`backend/api/upload_tasks.py`）调用 `create_task`：任务状态存入 Redis（带 TTL），同一用户活动任务上限 100；`TASK_ID_PATTERN` 为 32 位十六进制。
 - 上传的原始文件落盘到 `upload_PDFs/{task_id}/`，状态中记录 `sha256`、大小和角色。
 - “开始上传并解析”后，任务被推入 RQ 队列 `scwiki-upload`，由 worker 容器（`rq worker --with-scheduler scwiki-upload`）执行 `backend.ingest.upload_jobs.process_upload_task`（`backend/ingest/upload_jobs.py`）。
+- 入队时把当前请求的 LLM 配置写入独立的 `upload:llm:{task_id}` Redis 瞬态键；Worker 开始处理时加载该配置，解析成功、失败、取消或任务清理时删除该键。公开任务状态最多返回 `llm_provider`，不包含密钥或完整配置。
 - `/api/upload-tasks` 在 Docker 部署中由 Go 未匹配路由转发到 Python FastAPI；前端按约 2 秒间隔轮询 `/api/upload-tasks/{task_id}` 与 `/parsing` 获取进度。
 
 ## 五阶段状态机
@@ -36,7 +37,7 @@
 ### 第 3 步：AI 分段阅读（reading）
 
 - `chunker.py` 把合并前的各文件 Markdown 切成 `Chunk`，`_chunks_with_preamble` 为每个文件补一个前言段；分段清单写入 `review_artifacts/{task_id}/chunk_manifest.json`，每段状态在 `waiting / processing / completed / failed` 间流转。
-- 逐段调用 `_read_chunk`（LLM 提取，DeepSeek/OpenAI 配置），分段结果以 JSON 存到 `review_artifacts/{task_id}/chunks/`；任一分段异常即整任务失败。
+- 逐段调用 `_read_chunk`（使用当前请求选择的 OpenAI 兼容 LLM），分段结果以 JSON 存到 `review_artifacts/{task_id}/chunks/`；任一分段异常即整任务失败。
 - 每完成一段更新 `completed_chunks / total_chunks`，前端进度条（如“4/28 段”）即来源于此。
 
 ### 第 4 步：AI 汇总草稿（summarizing）
@@ -72,7 +73,7 @@
 
 - 旧 Neo4j 材料/作者图谱同步（`backend/ingest/sync_neo4j.py`）仍不在上传链路中自动触发；Issue #81 的论文引用图不依赖该同步，公开查询直接读取 MySQL 中的 `paper_references`。
 - `backend/ingest/PIPELINE.md` 描述的 `enrich_papers.py` → `clean_results/*.json` → `key_properties` 链路属于旧 `pipeline.py` 摄入路径；当前多文件上传链路不经过 `enrich_single` 与 `key_properties`。
-- 解析质量依赖 LLM 配置（`DEEPSEEK_*` / `OPENAI_*`）；向量化发布依赖 Embedding 配置（`EMBEDDING_*`）与 Qdrant；缺省配置时对应阶段失败。
+- 解析质量依赖服务端默认 LLM 配置（`LLM_*` / `DEEPSEEK_*`）或用户请求中的临时配置；向量化发布仍独立依赖 Embedding 配置（`EMBEDDING_*`）与 Qdrant，用户供应商切换不改变 Embedding。
 
 ## 代码与测试
 

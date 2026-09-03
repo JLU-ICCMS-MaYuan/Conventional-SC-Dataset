@@ -21,7 +21,7 @@ from langgraph.prebuilt import ToolNode
 
 from backend.rag.agent.state import AgentState
 from backend.rag.agent.tools import ALL_TOOLS
-from backend.rag.config import settings
+from backend.rag.llm_client import get_langchain_llm
 
 
 SYSTEM_PROMPT = """你是超导材料研究助理，风格是苏格拉底式的——通过提问引导学生自己思考。
@@ -48,13 +48,7 @@ ROUTE_PROMPT = """看完整对话。最后一句话属于：
 
 
 def _build_llm() -> ChatOpenAI:
-    return ChatOpenAI(
-        model=settings.deepseek_model,
-        api_key=settings.deepseek_api_key,
-        base_url=settings.deepseek_base_url,
-        temperature=0.3,
-        max_tokens=2000,
-    )
+    return get_langchain_llm()
 
 
 # ═══════════════════════════════════════════════

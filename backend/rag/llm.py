@@ -6,21 +6,13 @@ import json
 from collections.abc import Callable
 from typing import Any
 
-import httpx
 from openai import APIConnectionError, APITimeoutError, OpenAI
-
-from backend.rag.config import settings
+from backend.rag.llm_client import get_llm_client
+from backend.rag.llm_context import get_llm_config
 
 
 def _client(read_timeout: float) -> OpenAI:
-    if not settings.completion_api_key:
-        raise RuntimeError("LLM API key 未配置")
-    return OpenAI(
-        api_key=settings.completion_api_key,
-        base_url=settings.completion_base_url,
-        max_retries=0,
-        timeout=httpx.Timeout(600.0, connect=10.0, read=read_timeout),
-    )
+    return get_llm_client(read_timeout=read_timeout)
 
 
 def _extract_json(content: str) -> dict[str, Any]:
@@ -44,7 +36,7 @@ def _stream_json(
 ) -> dict[str, Any]:
     """单次流式调用：逐块累积文本，可选回报中间内容，结束后解析 JSON。"""
     stream = _client(read_timeout).chat.completions.create(
-        model=settings.completion_model,
+        model=get_llm_config().model,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},

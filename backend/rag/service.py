@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import contextvars
 import json
 from pathlib import Path
 from typing import Any, AsyncIterator
@@ -12,6 +13,7 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.orm import joinedload
 
 from backend.rag.config import get_rag_settings
+from backend.rag.llm_context import UserCredentialError, get_llm_config
 
 
 class RagDataUnavailableError(RuntimeError):
@@ -53,7 +55,8 @@ def health() -> dict[str, Any]:
     except Exception:
         pass
 
-    chat_available = settings.chat_configured
+    # 健康检查也位于请求上下文内；这样用户自带凭据不会被服务端默认配置覆盖。
+    chat_available = bool(get_llm_config().api_key)
     available = database_available and qdrant_available
 
     if not available:
@@ -80,7 +83,7 @@ def _ensure_data_available() -> None:
 
 def _ensure_chat_available() -> None:
     _ensure_data_available()
-    if not get_rag_settings().chat_configured:
+    if not get_llm_config().api_key:
         raise RagChatUnavailableError("LLM 问答未配置")
 
 
@@ -90,7 +93,7 @@ async def search(query: str, top_k: int = 10, mode: str | None = None) -> dict[s
         from backend.rag.search.engine import search as rag_search
 
         return await rag_search(query, mode=mode, top_k=top_k)
-    except (RagDataUnavailableError, RagChatUnavailableError):
+    except (RagDataUnavailableError, RagChatUnavailableError, UserCredentialError):
         raise
     except Exception as exc:
         raise RagInternalError(str(exc)) from exc
@@ -130,8 +133,11 @@ async def chat(
                 else:
                     prev_msgs.append(HumanMessage(content=content))
 
-        return run(question, prev_messages=prev_msgs)
-    except (RagDataUnavailableError, RagChatUnavailableError):
+        result = run(question, prev_messages=prev_msgs)
+        result.setdefault("provider", get_llm_config().provider)
+        result.setdefault("model", get_llm_config().model)
+        return result
+    except (RagDataUnavailableError, RagChatUnavailableError, UserCredentialError):
         raise
     except Exception as exc:
         raise RagInternalError(str(exc)) from exc
@@ -164,8 +170,9 @@ async def chat_stream(
                         prev_msgs.append(HumanMessage(content=content))
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                ctx = contextvars.copy_context()
                 result = await asyncio.get_event_loop().run_in_executor(
-                    pool, run, question, prev_msgs
+                    pool, ctx.run, run, question, prev_msgs
                 )
 
             answer = result.get("answer", "")
@@ -179,10 +186,12 @@ async def chat_stream(
                     "answer": answer,
                     "source": f"inspire_{result.get('mode', '')}",
                     "ideas": result.get("ideas", []),
+                    "provider": get_llm_config().provider,
+                    "model": get_llm_config().model,
                 },
             }
             return
-        except (RagDataUnavailableError, RagChatUnavailableError):
+        except (RagDataUnavailableError, RagChatUnavailableError, UserCredentialError):
             raise
         except Exception as exc:
             raise RagInternalError(str(exc)) from exc
@@ -207,8 +216,13 @@ async def chat_stream(
                     prev_msgs.append(HumanMessage(content=content))
 
         async for event in run_stream(question, prev_messages=prev_msgs):
+            if event.get("type") == "done":
+                data = dict(event.get("data") or {})
+                data.setdefault("provider", get_llm_config().provider)
+                data.setdefault("model", get_llm_config().model)
+                event = {**event, "data": data}
             yield event
-    except (RagDataUnavailableError, RagChatUnavailableError):
+    except (RagDataUnavailableError, RagChatUnavailableError, UserCredentialError):
         raise
     except Exception as exc:
         raise RagInternalError(str(exc)) from exc

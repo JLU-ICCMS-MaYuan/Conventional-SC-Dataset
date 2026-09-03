@@ -15,9 +15,13 @@ from backend.ingest.upload_contracts import (
 )
 from backend.models import User
 from backend.security import get_current_user
+from backend.rag.llm_context import request_llm_config
 
 
-router = APIRouter(prefix="/api/upload-tasks", tags=["upload-tasks"])
+router = APIRouter(
+    prefix="/api/upload-tasks", tags=["upload-tasks"],
+    dependencies=[Depends(request_llm_config)],
+)
 
 
 class FileDeclaration(BaseModel):

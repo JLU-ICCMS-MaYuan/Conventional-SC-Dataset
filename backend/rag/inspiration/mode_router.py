@@ -10,9 +10,8 @@ import logging
 import sys
 import time as _time
 
-from openai import OpenAI
-
-from backend.rag.config import settings
+from backend.rag.llm_client import get_llm_client
+from backend.rag.llm_context import get_llm_config
 from backend.rag.inspiration.session import ModeResult
 from backend.rag.inspiration.prompts import MODE_ROUTER_SYSTEM
 
@@ -54,10 +53,7 @@ async def route_mode(
     history: list[dict] | None = None,
 ) -> ModeResult:
     """LLM 判断用户问题最适合哪种思考模式。"""
-    client = OpenAI(
-        api_key=settings.deepseek_api_key,
-        base_url=settings.deepseek_base_url,
-    )
+    client = get_llm_client()
 
     messages: list[dict] = [
         {"role": "system", "content": MODE_ROUTER_SYSTEM},
@@ -69,7 +65,7 @@ async def route_mode(
     t0 = _time.time()
     try:
         resp = client.chat.completions.create(
-            model=settings.deepseek_model,
+            model=get_llm_config().model,
             messages=messages,
             response_format={"type": "json_object"},
             temperature=0,

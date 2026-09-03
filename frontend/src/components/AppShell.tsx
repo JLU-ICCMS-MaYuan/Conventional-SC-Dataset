@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { useLanguage } from '../context/LanguageContext'
 import type { Lang } from '../i18n'
 import AuthDialog from './AuthDialog'
+import LlmProviderSwitcher from './LlmProviderSwitcher'
 
 // 导航项的标签走字典键，path 是路由契约不随语言变化。
 const NAV_ITEMS = [
@@ -56,6 +57,7 @@ const AppShell: React.FC = () => {
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             {/* 语言切换控件位于头像左侧。Issue #73 的 AI 供应商切换器将排在本控件左侧。 */}
+            <LlmProviderSwitcher />
             <Box
               role="group"
               aria-label={t('nav.languageGroup')}

@@ -27,6 +27,7 @@ PUBLIC_TASK_FIELDS = {
     "state_schema_version",
     "duplicate", "existing_paper_id", "existing_paper_status", "allowed_actions",
     "duplicate_reason", "paper_id",
+    "llm_provider",
     "consistency", "completed_chunks", "total_chunks", "stage_index", "stage_total",
 }
 PUBLIC_FILE_FIELDS = {

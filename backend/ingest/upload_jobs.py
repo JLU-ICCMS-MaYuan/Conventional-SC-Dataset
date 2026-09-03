@@ -26,6 +26,8 @@ from backend.ingest.upload_tasks import (
     save_draft,
     schedule_cleanup,
     update_state,
+    load_llm_config,
+    delete_llm_config,
 )
 from backend.ingest.upload_contracts import (
     UPLOAD_STATE_SCHEMA_VERSION,
@@ -1377,6 +1379,19 @@ def _handle_duplicate(task_id: str, state: dict[str, Any], existing: Any) -> dic
 
 
 def process_upload_task(task_id: str) -> dict[str, Any]:
+    """Run a task with its short-lived request-scoped LLM configuration."""
+    from backend.rag.llm_context import reset_llm_config, resolve_llm_config, set_llm_config
+
+    config = load_llm_config(task_id)
+    token = set_llm_config(config or resolve_llm_config())
+    try:
+        return _process_upload_task(task_id)
+    finally:
+        delete_llm_config(task_id)
+        reset_llm_config(token)
+
+
+def _process_upload_task(task_id: str) -> dict[str, Any]:
     """Extract, read every chunk, and build an editable draft."""
     state = get_state(task_id)
     if not state:

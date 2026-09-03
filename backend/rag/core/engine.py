@@ -11,9 +11,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from openai import OpenAI
-
-from backend.rag.config import settings
+from backend.rag.llm_client import get_llm_client
+from backend.rag.llm_context import get_llm_config
 from backend.rag.core.prompts import build_rag_prompt, is_greeting, build_fusion_prompt
 from backend.rag.inspiration.session import InspirationSession
 from backend.rag.inspiration.mode_router import route_mode
@@ -112,7 +111,7 @@ def _extract_intent(question: str) -> dict:
         }
         解析失败时返回默认值。
     """
-    client = OpenAI(api_key=settings.deepseek_api_key, base_url=settings.deepseek_base_url)
+    client = get_llm_client()
 
     _prompt = """分析问题，只返回 JSON。
 
@@ -149,7 +148,7 @@ numeric_compare 时额外输出 operator（">"|"<"|">="|"<="）和 value（数�
 
     try:
         resp = client.chat.completions.create(
-            model=settings.deepseek_model,
+            model=get_llm_config().model,
             messages=[{"role": "user", "content": _prompt}],
             response_format={"type": "json_object"},
             temperature=0,
@@ -189,7 +188,7 @@ async def ask(
 
     if is_greeting(question):
         return {"answer": GREETING_RESPONSE, "chunks_used": 0, "chunks": [], "citations": [],
-                "model": model or settings.deepseek_model, "source": "greeting"}
+                "model": model or get_llm_config().model, "source": "greeting"}
 
     # ── 1. 意图解析 ──
     intent = _extract_intent(question)
@@ -259,7 +258,7 @@ async def ask(
     if not kg_results and not rag_chunks:
         return {"answer": "抱歉，在已有文献中没有找到与您问题相关的信息。",
                 "chunks_used": 0, "chunks": [], "citations": [],
-                "model": model or settings.deepseek_model, "source": "rag"}
+                "model": model or get_llm_config().model, "source": "rag"}
 
     # ── 3. 构造 Prompt ──
     from sqlalchemy import select, func as sa_func
@@ -283,14 +282,14 @@ async def ask(
         prompt = build_rag_prompt(question, rag_chunks, history=history, db_context=db_context)
         source = "rag"
 
-    if not settings.deepseek_api_key:
+    if not get_llm_config().api_key:
         return {"answer": "错误：DEEPSEEK_API_KEY 未配置。", "chunks_used": len(rag_chunks),
                 "chunks": rag_chunks, "citations": [], "source": "rag"}
 
     # ── 4. LLM 生成 ──
-    client = OpenAI(api_key=settings.deepseek_api_key, base_url=settings.deepseek_base_url)
+    client = get_llm_client()
     resp = client.chat.completions.create(
-        model=model or settings.deepseek_model,
+        model=model or get_llm_config().model,
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3, max_tokens=2000,
     )
@@ -329,7 +328,7 @@ async def ask(
 
     return {"answer": resp.choices[0].message.content, "chunks_used": len(rag_chunks),
             "chunks": rag_chunks, "citations": [{"paper_id": ch.get("paper_id")} for ch in rag_chunks],
-            "model": model or settings.deepseek_model, "source": source,
+            "model": model or get_llm_config().model, "source": source,
             "papers": papers_dict, "top10": top10}
 
 
@@ -341,7 +340,7 @@ async def ask_stream(
     history: list[dict] | None = None,
     explore: bool = False,
 ):
-    model_name = model or settings.deepseek_model
+    model_name = model or get_llm_config().model
 
     if is_greeting(question):
         yield {"type": "greeting", "data": ""}
@@ -587,19 +586,19 @@ async def ask_stream(
     if kg_results and source == "hybrid":
         yield {"type": "fusion", "data": {"source": "hybrid", "kg_count": len(kg_results), "chunk_count": len(rag_chunks)}}
 
-    if not settings.deepseek_api_key:
+    if not get_llm_config().api_key:
         yield {"type": "token", "data": "错误：DEEPSEEK_API_KEY 未配置。"}
         yield {"type": "done", "data": {"citations": [], "answer": "错误：DEEPSEEK_API_KEY 未配置。", "source": "rag"}}
         return
 
     # ── 4. LLM 流式生成 ──
     yield {"type": "status", "data": {"action": "generating", "message": "正在生成回答..."}}
-    client = OpenAI(api_key=settings.deepseek_api_key, base_url=settings.deepseek_base_url)
+    client = get_llm_client()
 
     full_answer = ""
     try:
         stream = client.chat.completions.create(
-            model=model_name,
+            model=model_name or get_llm_config().model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3, max_tokens=2000, stream=True,
         )

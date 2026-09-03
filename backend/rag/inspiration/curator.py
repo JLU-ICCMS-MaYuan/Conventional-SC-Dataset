@@ -9,10 +9,10 @@ import json
 import logging
 from typing import Any, AsyncIterator
 
-from openai import OpenAI
 from sqlalchemy import select
 
-from backend.rag.config import settings
+from backend.rag.llm_client import get_llm_client
+from backend.rag.llm_context import get_llm_config
 from backend.rag.database import async_session_factory
 from backend.models import Paper
 from backend.rag.inspiration.prompts import CURATOR_SYSTEM
@@ -63,10 +63,7 @@ async def curate_papers(
         catalog.append(f"[ID:{pid}] {info['title']} ({info['year']})\n  预览: {preview[:150]}...")
     catalog_text = "\n\n".join(catalog)
 
-    client = OpenAI(
-        api_key=settings.deepseek_api_key,
-        base_url=settings.deepseek_base_url,
-    )
+    client = get_llm_client()
 
     prompt = f"""用户问题: {question}
 
@@ -78,7 +75,7 @@ async def curate_papers(
 
     try:
         resp = client.chat.completions.create(
-            model=settings.deepseek_model,
+            model=get_llm_config().model,
             messages=[
                 {"role": "system", "content": CURATOR_SYSTEM},
                 {"role": "user", "content": prompt},

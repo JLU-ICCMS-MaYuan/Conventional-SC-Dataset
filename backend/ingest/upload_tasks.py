@@ -18,6 +18,10 @@ from rq.job import Job
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.rag.config import settings
+from backend.rag.llm_context import (
+    LlmConfig, UserCredentialError, get_llm_config, set_llm_config,
+    reset_llm_config, validate_base_url,
+)
 from backend.ingest.upload_contracts import (
     FIXED_TERMINAL_STATUSES,
     RUNNING_STATUSES,
@@ -61,6 +65,45 @@ def draft_key(task_id: str) -> str:
 
 def lock_key(task_id: str) -> str:
     return f"upload:{task_id}:lock"
+
+
+def llm_config_key(task_id: str) -> str:
+    return f"upload:llm:{task_id}"
+
+
+def save_llm_config(task_id: str, config: LlmConfig) -> None:
+    client = redis_client()
+    payload = json.dumps({
+        "provider": config.provider, "base_url": config.base_url,
+        "model": config.model, "api_key": config.api_key,
+    }, ensure_ascii=False)
+    client.setex(llm_config_key(task_id), max(1, int(settings.upload_task_ttl_seconds)), payload)
+
+
+def load_llm_config(task_id: str) -> LlmConfig | None:
+    raw = redis_client().get(llm_config_key(task_id))
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+        provider = str(data["provider"]).strip()
+        base_url = validate_base_url(str(data["base_url"]))
+        model = str(data["model"]).strip()
+        api_key = str(data["api_key"]).strip()
+        if not all((provider, base_url, model, api_key)):
+            raise ValueError("LLM 配置字段不完整")
+        return LlmConfig(
+            provider=provider, base_url=base_url, model=model, api_key=api_key,
+            user_supplied=True,
+        )
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError, UserCredentialError):
+        # 凭据键是短生命周期的瞬态数据，损坏时删除并让任务回退服务端配置。
+        delete_llm_config(task_id)
+        return None
+
+
+def delete_llm_config(task_id: str) -> None:
+    redis_client().delete(llm_config_key(task_id))
 
 
 def user_tasks_key(user_id: int) -> str:
@@ -406,7 +449,7 @@ def cleanup_transient_data(
     if cleanup_context.processing_job_id:
         _delete_processing_job(cleanup_context.processing_job_id)
     client = redis_client()
-    client.delete(task_key(task_id), draft_key(task_id))
+    client.delete(task_key(task_id), draft_key(task_id), llm_config_key(task_id))
     if cleanup_context.user_id is not None:
         client.zrem(user_tasks_key(cleanup_context.user_id), task_id)
 
@@ -443,6 +486,8 @@ def cleanup_duplicate_candidate(task_id: str, existing_paper_id: int | None) -> 
 def enqueue_processing(task_id: str) -> str:
     from backend.ingest.upload_jobs import process_upload_task
 
+    config = get_llm_config()
+    save_llm_config(task_id, config)
     job = upload_queue().enqueue(
         process_upload_task,
         task_id,
@@ -450,7 +495,10 @@ def enqueue_processing(task_id: str) -> str:
         result_ttl=TASK_TTL,
         failure_ttl=TASK_TTL,
     )
-    update_state(task_id, job_id=job.id, processing_status="processing", processing_error=None)
+    update_state(
+        task_id, job_id=job.id, processing_status="processing", processing_error=None,
+        llm_provider=config.provider,
+    )
     return job.id
 
 

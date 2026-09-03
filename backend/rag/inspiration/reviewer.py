@@ -9,9 +9,9 @@ import json
 import logging
 from typing import Any, AsyncIterator
 
-from openai import OpenAI
 
-from backend.rag.config import settings
+from backend.rag.llm_client import get_llm_client
+from backend.rag.llm_context import get_llm_config
 from backend.rag.inspiration.prompts import REVIEWER_SYSTEM
 
 logger = logging.getLogger(__name__)
@@ -72,10 +72,7 @@ async def review_stream(
         _sys.stderr.flush()
         return
 
-    client = OpenAI(
-        api_key=settings.deepseek_api_key,
-        base_url=settings.deepseek_base_url,
-    )
+    client = get_llm_client()
 
     review_prompt = f"""请审核以下研究点子的可行性。对每个点子，找出至少 2 个潜在漏洞。
 
@@ -92,7 +89,7 @@ async def review_stream(
     full_text = ""
     try:
         stream = client.chat.completions.create(
-            model=settings.deepseek_model,
+            model=get_llm_config().model,
             messages=messages,
             temperature=0.3,
             max_tokens=1000,

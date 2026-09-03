@@ -17,13 +17,18 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
+from openai import APIConnectionError, APIStatusError, APITimeoutError
 
 from backend import models
 from backend.models import Paper, PaperChunk, PaperEvidence, PaperFile, User
 from backend.rag import service
+from backend.rag.llm_client import get_llm_client
+from backend.rag.llm_context import get_llm_config, request_llm_config, UserCredentialError
 from backend.security import get_current_admin, get_current_user
 
-router = APIRouter(prefix="/api/rag", tags=["rag"])
+router = APIRouter(
+    prefix="/api/rag", tags=["rag"], dependencies=[Depends(request_llm_config)]
+)
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 PAPER_TYPES = {"theoretical", "experimental", "review"}
@@ -519,6 +524,8 @@ def _service_error(status_code: int, message: str, detail: str | None = None) ->
 
 
 def _map_internal_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, UserCredentialError):
+        return HTTPException(status_code=400, detail={"code": exc.code, "message": str(exc)})
     if isinstance(exc, service.RagDataUnavailableError):
         return _service_error(503, "AI 文献助手数据不可用")
     if isinstance(exc, service.RagChatUnavailableError):
@@ -528,6 +535,52 @@ def _map_internal_error(exc: Exception) -> HTTPException:
     if isinstance(exc, service.RagInternalError):
         return _service_error(502, "AI 文献助手返回错误", str(exc))
     return _service_error(502, "AI 文献助手返回错误", str(exc))
+
+
+@router.post("/llm/test-connection")
+def test_llm_connection():
+    """Probe the configured provider without persisting or echoing credentials."""
+    config = get_llm_config()
+    if not config.api_key:
+        raise HTTPException(status_code=400, detail={
+            "code": "LLM_AUTH_FAILED", "message": "API Key 无效或已过期",
+        })
+    started = time.perf_counter()
+    try:
+        get_llm_client(read_timeout=15).chat.completions.create(
+            model=config.model,
+            messages=[{"role": "user", "content": "ping"}],
+            max_tokens=1,
+        )
+    except APITimeoutError as exc:
+        raise HTTPException(status_code=504, detail={
+            "code": "LLM_TIMEOUT", "message": "连接测试超时，请重试",
+        }) from exc
+    except APIConnectionError as exc:
+        raise HTTPException(status_code=502, detail={
+            "code": "LLM_UNREACHABLE", "message": "服务地址不可达",
+        }) from exc
+    except APIStatusError as exc:
+        status = getattr(exc, "status_code", None)
+        message = str(exc).lower()
+        if status in {401, 403} or "api key" in message or "authentication" in message:
+            code, text = "LLM_AUTH_FAILED", "API Key 无效或已过期"
+            response_status = 400
+        elif status == 404 or "model" in message and ("not found" in message or "does not exist" in message):
+            code, text = "LLM_MODEL_NOT_FOUND", "模型名不存在"
+            response_status = 400
+        else:
+            code, text = "LLM_UNREACHABLE", "服务地址不可达"
+            response_status = 502
+        raise HTTPException(status_code=response_status, detail={"code": code, "message": text}) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail={
+            "code": "LLM_UNREACHABLE", "message": "服务地址不可达",
+        }) from exc
+    return {"ok": True, "data": {
+        "provider": config.provider, "model": config.model,
+        "latency_ms": round((time.perf_counter() - started) * 1000),
+    }}
 
 
 def _history_dicts(messages: list[RagMessage]) -> list[dict[str, str]]:

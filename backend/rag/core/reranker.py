@@ -10,9 +10,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from openai import OpenAI
-
-from backend.rag.config import settings
+from backend.rag.llm_client import get_llm_client
+from backend.rag.llm_context import get_llm_config
 from backend.rag.core.prompts import RERANK_SYSTEM_PROMPT
 
 
@@ -36,7 +35,7 @@ async def rerank_chunks(
     if not chunks:
         return []
 
-    if not settings.deepseek_api_key:
+    if not get_llm_config().api_key:
         # 没有 API key 时，全部保留（不评分）
         return chunks[:top_k]
 
@@ -52,14 +51,11 @@ async def rerank_chunks(
 
 请对每个片段的相关性评分。"""
 
-    client = OpenAI(
-        api_key=settings.deepseek_api_key,
-        base_url=settings.deepseek_base_url,
-    )
+    client = get_llm_client()
 
     try:
         resp = client.chat.completions.create(
-            model=settings.deepseek_model,
+            model=get_llm_config().model,
             messages=[
                 {"role": "system", "content": RERANK_SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},

@@ -1,4 +1,5 @@
 import { getStoredToken } from '../context/AuthContext'
+import { buildLlmHeaders } from './llmProvider'
 
 export interface ApiError extends Error {
   status?: number
@@ -20,6 +21,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: {
       ...authHeaders(),
+      ...buildLlmHeaders(),
       ...(init?.headers as Record<string, string>),
     },
   })
@@ -92,7 +94,7 @@ export const api = {
   postStream: (url: string, data?: unknown) =>
     fetch(url, {
       method: 'POST',
-      headers: { ...authHeaders(), ...buildHeaders(data) },
+      headers: { ...authHeaders(), ...buildLlmHeaders(), ...buildHeaders(data) },
       body: buildBody(data),
     }),
 }

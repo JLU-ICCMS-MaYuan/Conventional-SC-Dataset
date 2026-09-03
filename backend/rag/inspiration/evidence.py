@@ -9,9 +9,8 @@ import json
 import logging
 from typing import Any, AsyncIterator
 
-from openai import OpenAI
-
-from backend.rag.config import settings
+from backend.rag.llm_client import get_llm_client
+from backend.rag.llm_context import get_llm_config
 from backend.rag.inspiration.prompts import (
     EVIDENCE_BUILDER_SYSTEM,
     build_explore_prompt,
@@ -89,10 +88,7 @@ async def build_evidence_stream(
     import sys as _sys, time as _time
     _t0 = _time.time()
 
-    client = OpenAI(
-        api_key=settings.deepseek_api_key,
-        base_url=settings.deepseek_base_url,
-    )
+    client = get_llm_client()
 
     messages: list[dict] = [
         {"role": "system", "content": EVIDENCE_BUILDER_SYSTEM},
@@ -107,7 +103,7 @@ async def build_evidence_stream(
     full_text = ""
     try:
         stream = client.chat.completions.create(
-            model=settings.deepseek_model,
+            model=get_llm_config().model,
             messages=messages,
             temperature=0.7,
             max_tokens=3500,

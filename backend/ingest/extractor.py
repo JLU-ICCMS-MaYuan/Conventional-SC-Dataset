@@ -15,6 +15,8 @@ from typing import Any
 from openai import OpenAI
 
 from backend.rag.config import settings
+from backend.rag.llm_client import get_llm_client
+from backend.rag.llm_context import get_llm_config
 
 
 SYSTEM_PROMPT = """你是一个材料科学专家，专门研究超导材料。从论文文本中提取结构化元信息，严格按照以下 JSON 格式返回。
@@ -51,10 +53,7 @@ SYSTEM_PROMPT = """你是一个材料科学专家，专门研究超导材料。�
 
 
 def _openai_client() -> OpenAI:
-    return OpenAI(
-        api_key=settings.deepseek_api_key,
-        base_url=settings.deepseek_base_url,
-    )
+    return get_llm_client()
 
 
 @dataclass
@@ -69,7 +68,7 @@ class ExtractionResult:
 
 def extract_from_markdown(markdown_text: str, model: str | None = None) -> ExtractionResult:
     """调 DeepSeek 从 Markdown 中提取论文元信息。"""
-    model_name = model or settings.deepseek_model
+    model_name = model or get_llm_config().model
     client = _openai_client()
 
     # 分类必须基于全文；不再固定截断输入。
