@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from backend.news.scheduler import due, scheduled_at
+from backend.news.scheduler import due, redis_connection, scheduled_at
 from backend.news.models import NewsFeedSource
 
 
@@ -21,3 +21,9 @@ def test_daily_cutoff_and_recovery():
     state.status = "running"
     state.last_started_at = "2026-08-30T23:00:00Z"
     assert due(state, cutoff, now)
+
+
+def test_worker_redis_connection_has_no_read_timeout(monkeypatch):
+    monkeypatch.setenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+    connection = redis_connection()
+    assert connection.connection_pool.connection_kwargs["socket_timeout"] is None

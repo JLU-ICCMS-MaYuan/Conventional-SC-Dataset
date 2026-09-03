@@ -2,9 +2,24 @@
 import argparse
 import logging
 import os
+import time
+
+from redis.exceptions import RedisError
 
 from .domain import SOURCES
 from .scheduler import QUEUE_NAME, redis_connection, run_job, schedule_forever
+
+
+def run_worker(worker_cls, connection_factory=redis_connection, sleep=time.sleep):
+    """Redis 短暂故障后重建 RQ Worker 连接，避免资讯采集永久退出。"""
+    while True:
+        try:
+            worker_cls([QUEUE_NAME], connection=connection_factory()).work()
+        except RedisError:
+            logging.getLogger(__name__).warning("news worker redis disconnected; reconnecting")
+            sleep(5)
+            continue
+        return
 
 
 def main():
@@ -21,7 +36,7 @@ def main():
         parser.error("采集窗口/页数必须为正数，小时范围 0–23")
     if args.command == "worker":
         from rq import Worker
-        Worker([QUEUE_NAME], connection=connection).work()
+        run_worker(Worker)
     elif args.command == "schedule":
         schedule_forever(engine, connection, hour, os.environ.get("NEWS_TIMEZONE", "Asia/Shanghai"))
     else:

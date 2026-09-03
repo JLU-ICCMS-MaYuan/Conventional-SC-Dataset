@@ -5,7 +5,15 @@ from html.parser import HTMLParser
 import re
 from urllib.parse import unquote, urlsplit, urlunsplit
 
-SOURCES = ("arxiv", "crossref", "physorg")
+SOURCES = ("arxiv", "crossref", "openalex", "physorg")
+DISPLAY_KINDS = ("news", "preprint", "journal_article")
+CONTENT_TYPES = ("peer_reviewed", "preprint", "research_report", "social_industry")
+
+PUBLISHERS = {
+    "10.1103/": "aps", "10.1021/": "acs", "10.1038/": "nature", "10.1126/": "science",
+    "10.1093/nsr": "nsr", "10.1088/0256-307x": "cpl", "10.1088/1674-1056": "cpb",
+    "10.1016/j.mattod": "materials_today",
+}
 
 
 class CollectionError(Exception):
@@ -68,6 +76,22 @@ def relevant(text: str) -> bool:
     return bool(re.search(r"superconduct\w*|超导|\bjosephson\b|\bcooper[ -]pairs?\b|\bmeissner\b", text, re.I))
 
 
+def publisher_for_doi(doi: str) -> str:
+    value = normalize_doi(doi)
+    for prefix, publisher in PUBLISHERS.items():
+        if value.startswith(prefix):
+            return publisher
+    return ""
+
+
+def relevance_evidence(title: str, abstract: str = "", keywords: str = "", category: str = "") -> str:
+    for name, value in (("title", title), ("abstract", abstract), ("keywords", keywords), ("category", category)):
+        match = re.search(r"superconduct\w*|超导|\bjosephson\b|\bcooper[ -]pairs?\b|\bmeissner\b", value, re.I)
+        if match:
+            return f"{name}: {match.group(0).lower()}"
+    return ""
+
+
 @dataclass(frozen=True)
 class Record:
     source: str
@@ -85,14 +109,25 @@ class Record:
     published_at: str = ""
     date_precision: str = "day"
     source_updated_at: str = ""
+    content_type: str = ""
+    display_kind: str = ""
+    discovery_source: str = ""
+    original_source: str = ""
+    relevance_evidence: str = ""
 
     def validate(self):
-        if self.source not in SOURCES or self.kind not in ("news", "preprint", "journal_article"):
+        if self.source not in SOURCES or self.kind not in DISPLAY_KINDS:
             raise CollectionError("invalid_record")
         if not self.title.strip() or not self.external_id or len(self.title) > 4000 or len(self.external_id) > 2000:
             raise CollectionError("invalid_record")
         safe_url(self.url)
         if len(self.arxiv_id) > 100 or len(self.summary) > 16000 or self.version < 0:
+            raise CollectionError("invalid_record")
+        if self.content_type and self.content_type not in CONTENT_TYPES:
+            raise CollectionError("invalid_record")
+        if self.display_kind and self.display_kind not in DISPLAY_KINDS:
+            raise CollectionError("invalid_record")
+        if any(len(value) > 64 for value in (self.discovery_source, self.original_source)) or len(self.relevance_evidence) > 500:
             raise CollectionError("invalid_record")
         if self.published_at:
             parse_time(self.published_at)

@@ -75,7 +75,7 @@ func TestNewsFeedPaginationAndKinds(t *testing.T) {
 	if body.Total != 2 || len(body.Items) != 1 || body.Items[0].ID != "a" {
 		t.Fatalf("%+v", body)
 	}
-	if body.Items[0].Notice != "自动采集，未经本站审核" || len(body.Sources) != 3 || body.Sources[0].Status != "never" {
+	if body.Items[0].Notice != "自动采集，未经本站审核" || len(body.Sources) != 4 || body.Sources[0].Status != "never" {
 		t.Fatalf("%+v", body)
 	}
 }

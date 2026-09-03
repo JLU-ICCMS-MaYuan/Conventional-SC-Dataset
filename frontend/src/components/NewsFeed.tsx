@@ -12,12 +12,13 @@ const kindColors: Record<Kind, { bg: string; color: string }> = {
   preprint: { bg: '#f3e5f5', color: '#7b1fa2' },
   journal_article: { bg: '#e8f5e9', color: '#388e3c' }
 }
-const sourceNames: Record<string, string> = { arxiv: 'arXiv', crossref: 'Crossref', physorg: 'Phys.org' }
+const sourceNames: Record<string, string> = { arxiv: 'arXiv', crossref: 'Crossref', openalex: 'OpenAlex', physorg: 'Phys.org', aps: 'APS', acs: 'ACS', nature: 'Nature', science: 'Science', nsr: 'NSR', cpl: 'CPL', cpb: 'CPB', materials_today: 'Materials Today' }
 type TFunc = (key: string, vars?: Record<string, string | number>) => string
 interface FeedItem {
   id: string; title: string; kind: Exclude<Kind, ''>; source: string; url: string
   summary: string; summary_source: string; authors: string[]; journal: string; doi: string
   published_at: string; date_precision: string; last_seen_at: string; version: number
+  content_type: string; display_kind: Kind; discovery_source: string; original_source: string; relevance_evidence: string
   links: { source: string; url: string }[]
 }
 interface SourceState {
@@ -144,7 +145,7 @@ function FeedColumn({ kind, label, onSelect, onSources }: FeedColumnProps) {
           <Stack direction="row" useFlexGap flexWrap="wrap" alignItems="center" gap={0.75} sx={{ mb: 0.5 }}>
             <Chip
               size="small"
-              label={kinds[item.kind]}
+              label={item.content_type === 'research_report' ? t('news.kindResearchReport') : kinds[item.kind]}
               sx={{
                 bgcolor: kindColors[item.kind].bg,
                 color: kindColors[item.kind].color,
@@ -152,7 +153,7 @@ function FeedColumn({ kind, label, onSelect, onSources }: FeedColumnProps) {
                 border: 'none'
               }}
             />
-            <Typography variant="body2" color="text.secondary">{sourceNames[item.source] || item.source}</Typography>
+            <Typography variant="body2" color="text.secondary">{sourceNames[item.original_source] || sourceNames[item.source] || item.source}</Typography>
             <Typography variant="body2" color="text.secondary">{t('news.publishedAt', { date: dateLabel(t, item.published_at, item.date_precision) })}</Typography>
             {item.kind === 'preprint' && item.version > 0 && <Typography variant="body2" color="text.secondary">v{item.version}</Typography>}
           </Stack>
@@ -228,7 +229,7 @@ export default function NewsFeed() {
         <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Chip
             size="small"
-            label={kinds[selectedItem.kind]}
+            label={selectedItem.content_type === 'research_report' ? t('news.kindResearchReport') : kinds[selectedItem.kind]}
             sx={{
               bgcolor: kindColors[selectedItem.kind].bg,
               color: kindColors[selectedItem.kind].color,
@@ -251,7 +252,9 @@ export default function NewsFeed() {
           </Typography>}
 
           <Stack direction="row" useFlexGap flexWrap="wrap" gap={1.5} sx={{ mb: 3 }}>
-            <Typography variant="body2" color="text.secondary"><strong>{t('news.sourceLabel')}</strong>{sourceNames[selectedItem.source] || selectedItem.source}</Typography>
+            <Typography variant="body2" color="text.secondary"><strong>{t('news.sourceLabel')}</strong>{sourceNames[selectedItem.discovery_source] || sourceNames[selectedItem.source] || selectedItem.source}</Typography>
+            {selectedItem.original_source && <Typography variant="body2" color="text.secondary"><strong>{t('news.originalSourceLabel')}</strong>{sourceNames[selectedItem.original_source] || selectedItem.original_source}</Typography>}
+            {selectedItem.relevance_evidence && <Typography variant="body2" color="text.secondary"><strong>{t('news.relevanceLabel')}</strong>{selectedItem.relevance_evidence}</Typography>}
             <Typography variant="body2" color="text.secondary"><strong>{t('news.publishedLabel')}</strong>{dateLabel(t, selectedItem.published_at, selectedItem.date_precision)}</Typography>
             {selectedItem.kind === 'preprint' && selectedItem.version > 0 && <Typography variant="body2" color="text.secondary"><strong>{t('news.versionLabel')}</strong>v{selectedItem.version}</Typography>}
             <Typography variant="body2" color="text.secondary"><strong>{t('news.collectedLabel')}</strong>{dateLabel(t, selectedItem.last_seen_at)}</Typography>

@@ -22,7 +22,7 @@ def _links(*groups):
     links = {}
     for group in groups:
         for link in group:
-            links[link["source"]] = link
+            links[(link["source"], link.get("role", "discovery"))] = link
     return json.dumps(list(links.values()), ensure_ascii=False)
 
 
@@ -41,6 +41,7 @@ def upsert(db, record, now):
         url=record.url, summary="", summary_source="", doi="", arxiv_id="", version=0,
         authors="[]", journal="", links="[]", published_at="", date_precision="unknown",
         source_updated_at="", first_seen_at=now, last_seen_at=now,
+        content_type="", display_kind="", discovery_source="", original_source="", relevance_evidence="",
     )
     if not matches:
         db.add(item)
@@ -59,7 +60,8 @@ def upsert(db, record, now):
     if not stale and (item.kind != "journal_article" or record.kind == "journal_article"):
         # 来源更新时间相同仍允许补全 DOI；更旧的同源元数据不回退主字段。
         if record.source != item.source or record.source_updated_at >= item.source_updated_at:
-            for name in ("kind", "title", "source", "url", "published_at", "date_precision", "journal", "source_updated_at"):
+            for name in ("kind", "title", "source", "url", "published_at", "date_precision", "journal", "source_updated_at",
+                         "content_type", "display_kind", "discovery_source", "original_source", "relevance_evidence"):
                 setattr(item, name, getattr(record, name))
             item.authors = json.dumps(record.authors, ensure_ascii=False)
     if record.summary and not stale:
@@ -67,7 +69,15 @@ def upsert(db, record, now):
     item.doi = record.doi or item.doi
     item.arxiv_id = record.arxiv_id or item.arxiv_id
     item.version = max(record.version, item.version)
-    item.links = _links(json.loads(item.links), [{"source": record.source, "url": record.url}])
+    item.display_kind = record.display_kind or record.kind
+    item.content_type = record.content_type or item.content_type
+    item.discovery_source = record.discovery_source or record.source
+    item.original_source = record.original_source or item.original_source
+    item.relevance_evidence = record.relevance_evidence or item.relevance_evidence
+    item.links = _links(json.loads(item.links), [
+        {"source": record.discovery_source or record.source, "url": record.url, "role": "discovery"},
+        *([{"source": record.original_source, "url": record.url, "role": "original"}] if record.original_source else []),
+    ])
     item.last_seen_at = now
     for key in keys:
         existing = db.get(NewsFeedIdentity, key)

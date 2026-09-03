@@ -30,6 +30,13 @@ CROSSREF = {"message": {"items": [{"DOI": "10.1234/TEST", "type": "journal-artic
  "container-title": ["Test Journal"], "published": {"date-parts": [[2026, 8]]},
  "indexed": {"date-time": "2026-08-30T10:00:00Z"}, "abstract": "Do not republish"}],
  "next-cursor": "next"}}
+OPENALEX = {"results": [{
+ "id": "https://openalex.org/W123", "doi": "https://doi.org/10.1021/test", "title": "Superconductivity in an ACS test material",
+ "publication_date": "2026-08-30", "updated_date": "2026-08-31T10:00:00Z",
+ "authorships": [{"author": {"display_name": "Test Author"}}],
+ "primary_location": {"landing_page_url": "https://pubs.acs.org/doi/10.1021/test", "source": {"display_name": "Journal of the ACS"}},
+ "abstract_inverted_index": {"Superconductivity": [0], "test": [1]},
+}], "meta": {"count": 1}}
 
 
 @pytest.fixture
@@ -78,18 +85,29 @@ def test_three_sources_and_rights():
             return httpx.Response(200, content=ATOM)
         if request.url.host == "api.crossref.org":
             return httpx.Response(200, json=CROSSREF)
+        if request.url.host == "api.openalex.org":
+            return httpx.Response(200, json=OPENALEX)
         return httpx.Response(200, content=RSS)
     src = Sources(transport(handler))
     since = datetime(2026, 8, 24, tzinfo=timezone.utc)
     arxiv = src.fetch("arxiv", since, NOW)[0]
     crossref = src.fetch("crossref", since, NOW)[0]
     physorg = src.fetch("physorg", since, NOW)[0]
+    openalex = src.fetch("openalex", since, NOW)[0]
     assert (arxiv.external_id, arxiv.version, arxiv.doi) == ("2608.12345", 2, "10.1234/test")
     assert crossref.summary == ""
     assert crossref.date_precision == "month"
     assert crossref.authors == ["Test Author"]
     assert physorg.title == "Original superconductivity headline"
     assert physorg.summary == "Test excerpt"
+    assert openalex.doi == "10.1021/test"
+    assert openalex.original_source == "acs"
+    assert openalex.discovery_source == "openalex"
+    assert openalex.relevance_evidence == "title: superconductivity"
+    assert openalex.content_type == "peer_reviewed"
+    assert openalex.display_kind == "journal_article"
+    assert physorg.content_type == "research_report"
+    assert physorg.display_kind == "journal_article"
 
 
 @pytest.mark.parametrize("payload", [b"<html>blocked</html>", b"<rss><channel>", b""])

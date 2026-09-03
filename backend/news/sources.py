@@ -9,11 +9,13 @@ import time
 import feedparser
 import httpx
 
-from .domain import CollectionError, Record, canonical_url, iso, normalize_doi, parse_time, plain, relevant, safe_url
+from .domain import (CollectionError, Record, canonical_url, iso, normalize_doi, parse_time, plain,
+                     publisher_for_doi, relevance_evidence, relevant, safe_url)
 
 ENDPOINTS = {
     "arxiv": "https://export.arxiv.org/api/query",
     "crossref": "https://api.crossref.org/works",
+    "openalex": "https://api.openalex.org/works",
     "physorg": "https://phys.org/rss-feed/physics-news/superconductivity/",
 }
 
@@ -190,6 +192,7 @@ class Sources:
                 updated = item.get("indexed", {}).get("date-time", "")
                 if updated:
                     updated = iso(parse_time(updated))
+                evidence = relevance_evidence(title)
                 result.append(Record(
                     source="crossref", external_id=doi, kind="journal_article",
                     title=title, doi=doi, url="https://doi.org/" + doi,
@@ -197,12 +200,65 @@ class Sources:
                              for a in item.get("author", [])][:100],
                     journal=plain(" ".join(item.get("container-title", [])), 1000),
                     published_at=published, date_precision=precision, source_updated_at=updated,
+                    content_type="peer_reviewed", display_kind="journal_article", discovery_source="crossref",
+                    original_source=publisher_for_doi(doi), relevance_evidence=evidence,
                 ))
             if len(items) < 100:
                 return result
             next_cursor = body.get("next-cursor")
             if not next_cursor:
                 raise CollectionError("invalid_feed")
+            cursor = next_cursor
+        raise CollectionError("page_limit")
+
+    def openalex(self, since, until):
+        result, cursor = [], "*"
+        for _ in range(self.max_pages):
+            params = {
+                "search": "superconduct",
+                "filter": f"from_publication_date:{since.date()},to_publication_date:{until.date()}",
+                "per-page": 100,
+                "cursor": cursor,
+            }
+            try:
+                body = json.loads(self.transport.get("openalex", ENDPOINTS["openalex"], params))
+                items = body["results"]
+                if not isinstance(items, list):
+                    raise ValueError("results")
+            except (KeyError, ValueError, TypeError):
+                raise CollectionError("invalid_feed")
+            self.fetched += len(items)
+            for item in items:
+                title = plain(item.get("title", ""), 4000)
+                abstract = openalex_abstract(item.get("abstract_inverted_index"))
+                evidence = relevance_evidence(title, abstract)
+                if not title or not evidence:
+                    continue
+                doi = normalize_doi(item.get("doi", ""))
+                location = item.get("primary_location") or {}
+                url = safe_url(location.get("landing_page_url") or ("https://doi.org/" + doi if doi else item.get("id", "")))
+                published = item.get("publication_date", "")
+                if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", published):
+                    raise CollectionError("invalid_record")
+                updated = item.get("updated_date", "")
+                if updated:
+                    updated = iso(parse_time(updated))
+                authors = [plain((row.get("author") or {}).get("display_name", ""), 120)
+                           for row in item.get("authorships", [])][:100]
+                journal = plain(((location.get("source") or {}).get("display_name", "")), 1000)
+                external_id = str(item.get("id", "")).rsplit("/", 1)[-1]
+                if not external_id:
+                    raise CollectionError("invalid_record")
+                result.append(Record(
+                    source="openalex", external_id=external_id, kind="journal_article", title=title, url=url,
+                    summary=abstract, summary_source="openalex" if abstract else "", doi=doi, authors=authors,
+                    journal=journal, published_at=published + "T00:00:00Z", source_updated_at=updated,
+                    content_type="peer_reviewed", display_kind="journal_article", discovery_source="openalex",
+                    original_source=publisher_for_doi(doi), relevance_evidence=evidence,
+                ))
+            next_cursor = (body.get("meta") or {}).get("next_cursor")
+            if not next_cursor or not items:
+                return result
             cursor = next_cursor
         raise CollectionError("page_limit")
 
@@ -223,5 +279,18 @@ class Sources:
                 source="physorg", external_id=canonical_url(url), kind="news", title=title,
                 url=url, summary=plain(entry.get("summary", "")), summary_source="physorg",
                 published_at=published, source_updated_at=published,
+                content_type="research_report", display_kind="journal_article", discovery_source="physorg",
+                original_source="physorg", relevance_evidence=relevance_evidence(title, entry.get("summary", "")),
             ))
         return result
+
+
+def openalex_abstract(index):
+    if not isinstance(index, dict):
+        return ""
+    words = []
+    for word, positions in index.items():
+        if not isinstance(positions, list):
+            return ""
+        words.extend((position, word) for position in positions if isinstance(position, int) and position >= 0)
+    return " ".join(word for _, word in sorted(words))

@@ -43,7 +43,8 @@ def redis_connection():
     url = os.environ.get("REDIS_URL")
     if not url:
         raise RuntimeError("REDIS_URL 未设置，资讯进程拒绝使用隐式默认连接")
-    return Redis.from_url(url, socket_timeout=10, socket_connect_timeout=10)
+    # RQ Worker 通过 PubSub 长时间阻塞读取；短 socket_timeout 会让空闲队列错误退出。
+    return Redis.from_url(url, socket_timeout=None, socket_connect_timeout=10)
 
 
 def enqueue_due(engine, connection, now=None, hour=8, zone="Asia/Shanghai"):

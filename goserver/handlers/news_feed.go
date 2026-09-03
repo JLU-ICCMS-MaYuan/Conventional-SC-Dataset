@@ -39,7 +39,7 @@ func ListNewsFeed(c *gin.Context) {
 	fail := func() { c.JSON(http.StatusInternalServerError, gin.H{"error": "资讯读取失败，请稍后重试"}) }
 	query := database.DB.WithContext(c.Request.Context()).Model(&models.NewsFeedItem{})
 	if kind != "" {
-		query = query.Where("kind = ?", kind)
+		query = query.Where("CASE WHEN display_kind = '' THEN kind ELSE display_kind END = ?", kind)
 	}
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
@@ -72,14 +72,23 @@ func ListNewsFeed(c *gin.Context) {
 		return
 	}
 	sources := make([]models.NewsFeedSource, 0, 3)
-	for _, name := range []string{"arxiv", "crossref", "physorg"} {
-		state := models.NewsFeedSource{Source: name, Status: "never"}
-		for _, candidate := range states {
+	for _, candidate := range states {
+		if candidate.Source != "" {
+			sources = append(sources, candidate)
+		}
+	}
+	for _, name := range []string{"arxiv", "crossref", "openalex", "physorg"} {
+		found := false
+		for _, candidate := range sources {
 			if candidate.Source == name {
-				state = candidate
+				found = true
 				break
 			}
 		}
+		if found {
+			continue
+		}
+		state := models.NewsFeedSource{Source: name, Status: "never"}
 		sources = append(sources, state)
 	}
 	c.Header("Cache-Control", "no-store")

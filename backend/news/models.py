@@ -22,6 +22,11 @@ class NewsFeedItem(Base):
     published_at: Mapped[str] = mapped_column(String(20), default="")
     date_precision: Mapped[str] = mapped_column(String(10), default="unknown")
     source_updated_at: Mapped[str] = mapped_column(String(20), default="")
+    content_type: Mapped[str] = mapped_column(String(24), default="")
+    display_kind: Mapped[str] = mapped_column(String(24), default="")
+    discovery_source: Mapped[str] = mapped_column(String(64), default="")
+    original_source: Mapped[str] = mapped_column(String(64), default="")
+    relevance_evidence: Mapped[str] = mapped_column(String(500), default="")
     first_seen_at: Mapped[str] = mapped_column(String(20))
     last_seen_at: Mapped[str] = mapped_column(String(20))
     __table_args__ = (
