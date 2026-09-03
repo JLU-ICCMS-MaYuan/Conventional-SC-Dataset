@@ -24,6 +24,9 @@ import { useLanguage } from '../context/LanguageContext'
  */
 const materialStateFromDetail = (state: Record<string, any>): DraftMaterialState => {
   const { superconductor_kind: _legacySuperconductorKind, ...stateWithoutLegacyKind } = state
+  const contextsById = new Map(
+    (state.calculation_contexts || []).map((context: Record<string, any>) => [context.id, context]),
+  )
   return {
     ...stateWithoutLegacyKind,
     material: state.superconductor?.chemical_formula || state.material || '',
@@ -35,7 +38,12 @@ const materialStateFromDetail = (state: Record<string, any>): DraftMaterialState
       status: 'confirmed',
       is_primary: Boolean(item.is_primary),
     })),
-    tc_results: state.tc_results || [],
+    tc_results: (state.tc_results || []).map((result: Record<string, any>) => ({
+      ...result,
+      calculation_context: result.calculation_context
+        || contextsById.get(result.calculation_context_id)
+        || undefined,
+    })),
     properties: (state.properties || []).map((item: any) => ({
       ...item,
       value_raw: item.value_raw ?? (item.value == null ? '' : String(item.value)),

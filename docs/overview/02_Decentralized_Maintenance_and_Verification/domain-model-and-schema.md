@@ -17,6 +17,8 @@
 - `TcResult` 纵向保存每条 Tc；`PropertyDefinition` 和
   `SuperconductorProperty` 保存 Tc 之外的普通物性，表名为
   `superconductor_properties`，同时保留论文原文和可空规范值。
+- `TcResult.tc_method` 是 Tc 结果语义和上下文关联的权威字段。`experimental` 必须同时满足 `result_kind='experimental'`、`calculation_context_id IS NULL` 和非空 `experimental_context_id`；其他方法必须是理论结果、关联 `CalculationContext` 且不关联实验上下文。`ck_tc_results_context_kind` 在 MySQL 中强制该规则。
+- Alembic revision `experimental_tc_context` 会将历史 `tc_method='experimental'` 的错误计算上下文关联清空、修正其 `result_kind`，并只删除没有被任何 Tc 或普通物性引用的 `calculation_contexts`。迁移不会伪造缺失的 `experimental_context_id`，发现此类历史行会带 ID 失败。
 - 科学子实体没有独立审核状态。论文一次审核覆盖当前 revision 的 File、Chunk、Evidence、
   结构、Tc 和普通物性；只有 `approved_revision = content_revision` 才具备公开资格。
 - Go 模型已经映射目标表；`KeyProperty` 仅保留为旧 Handler 的临时编译别名，实际表名仍是
@@ -93,6 +95,7 @@ fresh 目标 Schema 已落实以下边界：
 - 运行数据库的逐表字段和关系以 [运行中 MySQL 表目录](mysql-schema-catalog.md) 的实测盘点为准。
 - 可推导字段采用“上传时生成、入库前人工复核、读取时直接使用”的策略；不以运行时重复计算替代持久化字段。
 - 一致性校验用于发现和提示差异，不自动覆盖人工确认的数据。
+- 应用层同样校验 `tc_method` 与 `result_kind` 及条目级 `calculation_context` 的组合；上传草稿、上传提交和管理员科学数据重写会在事务重建前拒绝实验 Tc 的计算上下文，数据库约束负责阻止绕过 API 的写入。
 
 ## 论文与材料状态分类
 
@@ -127,6 +130,8 @@ Material family 属于论文当前 revision，通过 `paper_material_families(pa
   将 Material family 提升到论文 revision 级多选关联，保留状态级结构家族标签，并提供旧状态数据的去重迁移。
 - [Feature #80：论文级 Superconductor type 单选分类](../../specs/80-paper-superconductor-kind/spec.md)
   将 Superconductor type 提升为论文 revision 级单选字段，保留状态级 More type labels 和条件化科学数据。
+- [Feature #84：实验 Tc 的条件字段与计算上下文一致性](../../specs/84-experimental-tc-fields/spec.md)
+  已将 Tc 方法确定为字段和上下文关联的唯一开关，并增加应用层与 MySQL 的双重约束。
 
 ## 已知问题
 

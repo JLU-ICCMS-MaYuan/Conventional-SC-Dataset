@@ -241,6 +241,32 @@ def test_theoretical_tc_without_entry_context_keeps_shared_state_context():
     assert float(contexts[0].lambda_ep) == 2.5
 
 
+def test_experimental_tc_never_persists_calculation_context():
+    session = _RecordingAsyncSession()
+    paper = models.Paper(id=25, content_revision=1)
+
+    asyncio.run(persist_scientific_draft(session, paper, {
+        "material_states": [{
+            "material": "Pb",
+            "tc_results": [{
+                "result_kind": "theoretical",
+                "tc_method": "experimental",
+                "tc_value_k": 7.2,
+                "value_raw": "7.2",
+                "unit_raw": "K",
+                "calculation_context": {"lambda_ep": 1.5, "omega_log_k": 100, "mu_star": 0.1},
+            }],
+        }],
+    }))
+
+    tc_result = next(item for item in session.added if isinstance(item, models.TcResult))
+    assert tc_result.tc_method == "experimental"
+    assert tc_result.result_kind == "experimental"
+    assert tc_result.calculation_context_id is None
+    assert tc_result.experimental_context_id is not None
+    assert not any(isinstance(item, models.CalculationContext) for item in session.added)
+
+
 def test_draft_element_count_takes_precedence_over_formula_count():
     draft = {
         "paper": {"superconductor_kind": "unconventional"},

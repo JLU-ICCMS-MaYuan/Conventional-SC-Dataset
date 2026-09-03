@@ -130,6 +130,7 @@ func GetPaperDetail(c *gin.Context) {
 		Preload("MaterialStates.Superconductor").
 		Preload("MaterialStates.StructureFamilyLinks.StructureFamily").
 		Preload("MaterialStates.TcResults").
+		Preload("MaterialStates.CalculationContexts").
 		Preload("MaterialStates.Properties").
 		Preload("MaterialStates.Structures").
 		First(&paper, id).Error; err != nil {

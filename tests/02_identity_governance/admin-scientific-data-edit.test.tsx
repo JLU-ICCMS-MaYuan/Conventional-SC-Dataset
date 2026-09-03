@@ -62,9 +62,11 @@ const detailWithStates = {
     state_kind: 'experimental',
     pressure_value_gpa: 0.001,
     tc_results: [{
-      id: 31, result_kind: 'experimental', tc_method: 'experimental',
+      id: 31, result_kind: 'theoretical', tc_method: 'mcmillan',
       tc_value_k: 3.78, value_raw: '3.78', unit_raw: 'K', is_representative: true,
+      calculation_context_id: 71,
     }],
+    calculation_contexts: [{ id: 71, lambda_ep: 1.2, omega_log_k: 150, mu_star: 0.1 }],
     properties: [{ id: 41, material: 'Sn', name_raw: 'threshold current', value_raw: '0.28', unit: 'A' }],
     structures: [],
   }],
@@ -168,6 +170,25 @@ describe('T027：待审核论文科学数据原地编辑', () => {
     expect(mockedApi.put.mock.calls[0][0]).toBe('/api/admin/papers/88')
     // 弹窗不关闭，提示失败
     expect(await screen.findByText(/论文级字段校验失败/)).toBeVisible()
+  })
+
+  it('切换为实验测量后，科学数据保存请求不携带计算上下文', async () => {
+    const user = await openEditDialog()
+
+    expect(screen.getByLabelText('电声耦合强度 λ')).toHaveValue(1.2)
+    await user.click(screen.getByRole('combobox', { name: 'Tc 方法' }))
+    await user.click(await screen.findByRole('option', { name: '实验测量' }))
+    expect(screen.queryByLabelText('电声耦合强度 λ')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('对数声子频率 ωlog (K)')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('库仑屏蔽常数 μ*')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '保存修改' }))
+
+    await waitFor(() => expect(mockedApi.put).toHaveBeenCalledTimes(2))
+    const [, scientificPayload] = mockedApi.put.mock.calls[1]
+    const result = scientificPayload.material_states[0].tc_results[0]
+    expect(result).toMatchObject({ tc_method: 'experimental', result_kind: 'experimental' })
+    expect(result).not.toHaveProperty('calculation_context')
   })
 })
 

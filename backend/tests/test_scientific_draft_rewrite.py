@@ -431,6 +431,21 @@ def test_rewrite_reuses_validation_rules(migrated_engine):
     assert error.detail["code"] == "invalid_pressure_range"
 
 
+def test_rewrite_rejects_experimental_tc_calculation_context_without_partial_write(migrated_engine):
+    """#84：管理员重写在删除旧科学数据之前必须拒绝实验 Tc 的计算参数。"""
+    _seed_paper(migrated_engine, review_status="pending")
+    payload = _rewrite_payload()
+    payload["material_states"][0]["tc_results"][0]["calculation_context"] = {"lambda_ep": 1.2}
+
+    data, error = _call_endpoint(payload)
+
+    assert data is None
+    assert error is not None and error.status_code == 400
+    assert error.detail["code"] == "experimental_tc_calculation_context_forbidden"
+    assert "第 1 个材料状态的第 1 条 Tc" in error.detail["message"]
+    assert _count(migrated_engine, "tc_results") == 1
+
+
 def test_review_paper_can_save_without_material_states(migrated_engine):
     """T025：综述论文空 material_states 保存成功。"""
     engine = migrated_engine

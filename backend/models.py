@@ -1471,16 +1471,17 @@ class TcResult(Base):
         CheckConstraint(
             """
             (
-                result_kind = 'theoretical'
-                AND calculation_context_id IS NOT NULL
-                AND experimental_context_id IS NULL
+                tc_method = 'experimental'
+                AND result_kind = 'experimental'
+                AND calculation_context_id IS NULL
+                AND experimental_context_id IS NOT NULL
             )
             OR
             (
-                result_kind = 'experimental'
-                AND calculation_context_id IS NULL
-                AND experimental_context_id IS NOT NULL
-                AND tc_method = 'experimental'
+                tc_method <> 'experimental'
+                AND result_kind = 'theoretical'
+                AND calculation_context_id IS NOT NULL
+                AND experimental_context_id IS NULL
             )
             """,
             name="ck_tc_results_context_kind",

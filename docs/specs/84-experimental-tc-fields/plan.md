@@ -29,6 +29,7 @@
 
 ```text
 frontend/src/components/MaterialStatesEditor.tsx
+frontend/src/i18n/zh/enums.ts
 backend/api/rag.py
 backend/ingest/scientific_drafts.py
 backend/models.py
@@ -43,7 +44,7 @@ tests/01_decentralized_uploading/
 
 | 来源 | 设计组件/接口 | 验证方式 |
 | --- | --- | --- |
-| FR-001 至 FR-003 | `MaterialStatesEditor.tsx` | Vitest 交互测试 |
+| FR-001 至 FR-003、FR-008 | `MaterialStatesEditor.tsx`、`zh/enums.ts` | Vitest 交互与中文标签测试 |
 | FR-004 | `_validate_draft` 与科学数据重写入口 | pytest API 契约测试 |
 | FR-005 | `persist_scientific_draft` | pytest 持久化对象测试 |
 | FR-006 至 FR-007 | 迁移与模型约束 | 隔离 MySQL 迁移/约束测试 |

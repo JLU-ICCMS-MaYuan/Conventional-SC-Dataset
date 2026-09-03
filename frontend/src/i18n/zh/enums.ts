@@ -26,16 +26,15 @@ export default {
     cubic: '立方',
     unknown: '未知',
   },
-  // Tc 计算与测量方法。McMillan、Allen-Dynes、Eliashberg、SCDFT 是人名与专有方法名，
-  // 两种语言下都保留原文。
+  // Tc 计算与测量方法。专有方法名保留原文，中文界面补足方法语义。
   tcMethod: {
     unknown: '未知',
     experimental: '实验测量',
-    mcmillan: 'McMillan',
-    allen_dynes: 'Allen-Dynes-McMillan',
-    isotropic_eliashberg: 'isotropic Migdal-Eliashberg',
-    anisotropic_eliashberg: 'anisotropic Migdal-Eliashberg',
-    scdft: 'SCDFT',
+    mcmillan: 'McMillan 方法',
+    allen_dynes: 'Allen-Dynes 方法',
+    isotropic_eliashberg: '各向同性 Migdal-Eliashberg 方法',
+    anisotropic_eliashberg: '各向异性 Migdal-Eliashberg 方法',
+    scdft: '超导密度泛函理论（SCDFT）',
     other: '其他',
   },
   // 论文整体类型：与 backend/api/rag.py 的 PAPER_TYPES 对齐（unknown 为前端待选态）

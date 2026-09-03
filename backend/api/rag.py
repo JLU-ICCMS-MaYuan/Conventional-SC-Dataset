@@ -36,6 +36,10 @@ router = APIRouter(
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 PAPER_TYPES = {"theoretical", "experimental", "review"}
 THEORETICAL_SUBTYPES = {"calculation", "method", "theory"}
+TC_METHODS = {
+    "experimental", "mcmillan", "allen_dynes", "isotropic_eliashberg",
+    "anisotropic_eliashberg", "scdft", "other", "unknown",
+}
 DOI_PATTERN = re.compile(r"^10\.\d{4,9}/\S+$", re.IGNORECASE)
 
 
@@ -254,6 +258,7 @@ def _validate_draft(
     draft: dict[str, Any], *, partial: bool = False
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     paper, material_states = _draft_values(draft)
+    _validate_tc_method_invariants(material_states, partial=partial)
     if partial:
         # 草稿保存（PUT）仅做结构性检查，业务字段校验留给提交时执行，
         # 避免半成品草稿被 400 拒绝导致编辑丢失。
@@ -368,6 +373,43 @@ def _validate_draft(
         except Exception as exc:
             raise _upload_error(400, "structure_validation_failed", f"第 {candidate_index + 1} 个结构候选未通过服务端校验") from exc
     return paper, material_states
+
+
+def _validate_tc_method_invariants(
+    material_states: list[dict[str, Any]], *, partial: bool
+) -> None:
+    for state_index, state in enumerate(material_states):
+        for tc_index, item in enumerate(state.get("tc_results") or []):
+            if not isinstance(item, dict):
+                continue
+            method = str(item.get("tc_method") or "").strip()
+            kind = item.get("result_kind")
+            field_label = f"第 {state_index + 1} 个材料状态的第 {tc_index + 1} 条 Tc"
+            if method == "experimental" and item.get("calculation_context") is not None:
+                raise _upload_error(
+                    400,
+                    "experimental_tc_calculation_context_forbidden",
+                    f"{field_label} 选择 experimental 方法时不能包含计算上下文",
+                )
+            if not method:
+                if partial:
+                    continue
+                raise _upload_error(400, "tc_method_required", f"{field_label} 缺少 Tc 方法")
+            if method not in TC_METHODS:
+                raise _upload_error(400, "invalid_tc_method", f"{field_label} 的 Tc 方法无效")
+            expected_kind = "experimental" if method == "experimental" else "theoretical"
+            if kind not in (None, "") and kind != expected_kind:
+                raise _upload_error(
+                    400,
+                    "tc_method_result_kind_mismatch",
+                    f"{field_label} 的 Tc 方法与结果类型不一致",
+                )
+            if not partial and kind != expected_kind:
+                raise _upload_error(
+                    400,
+                    "tc_method_result_kind_mismatch",
+                    f"{field_label} 的 Tc 方法与结果类型不一致",
+                )
 
 
 def _fit_column(value: str | None, limit: int) -> str | None:

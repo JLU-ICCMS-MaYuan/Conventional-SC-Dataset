@@ -220,8 +220,7 @@ describe('上传校对页布局与材料状态折叠', () => {
 })
 
 describe('超导类型与条件化 Tc 字段', () => {
-  // 重度交互用例：单跑约 3s，默认 5s 上限在多文件并行下余量不足，会偶发超时
-  it('论文级类型同步控制全部材料状态的 Tc 字段，切换类型不删除已有数据', { timeout: 15000 }, async () => {
+  it('每条 Tc 方法独立控制计算字段，论文级超导类型不再影响字段集', async () => {
     render(<UploadTaskEditor taskId={'d'.repeat(32)} onSubmitted={vi.fn()} draftOverride={makeDraft([makeState(), makeState({ material: 'H3S' })])} />)
 
     const addTcButtons = await screen.findAllByRole('button', { name: '添加 Tc' })
@@ -230,27 +229,19 @@ describe('超导类型与条件化 Tc 字段', () => {
     expect(await screen.findAllByLabelText('Tc 数值 (K)')).toHaveLength(2)
     expect(screen.queryByLabelText('电声耦合强度 λ')).not.toBeInTheDocument()
 
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: '超导类型' }))
-    fireEvent.click(await screen.findByRole('option', { name: '常规超导体（BCS超导体）' }))
-    expect(await screen.findAllByLabelText('电声耦合强度 λ')).toHaveLength(2)
-    expect(screen.getAllByLabelText('对数声子频率 ωlog (K)')).toHaveLength(2)
-    expect(screen.getAllByLabelText('库伦屏蔽常数 μ*')).toHaveLength(2)
-    expect(screen.getAllByRole('combobox', { name: 'Tc 方法' })).toHaveLength(2)
-
     fireEvent.mouseDown(screen.getAllByRole('combobox', { name: 'Tc 方法' })[0])
-    fireEvent.click(await screen.findByRole('option', { name: '其他' }))
-    fireEvent.change(await screen.findByLabelText('自定义 Tc 方法'), { target: { value: 'two-band model' } })
-    fireEvent.change(screen.getAllByLabelText('电声耦合强度 λ')[0], { target: { value: '1.5' } })
+    fireEvent.click(await screen.findByRole('option', { name: 'McMillan 方法' }))
+    expect(await screen.findAllByLabelText('电声耦合强度 λ')).toHaveLength(1)
+    expect(screen.getAllByLabelText('对数声子频率 ωlog (K)')).toHaveLength(1)
+    expect(screen.getAllByLabelText('库伦屏蔽常数 μ*')).toHaveLength(1)
+
+    fireEvent.mouseDown(screen.getAllByRole('combobox', { name: 'Tc 方法' })[1])
+    fireEvent.click(await screen.findByRole('option', { name: '实验测量' }))
+    expect(screen.getAllByLabelText('电声耦合强度 λ')).toHaveLength(1)
 
     fireEvent.mouseDown(screen.getByRole('combobox', { name: '超导类型' }))
     fireEvent.click(await screen.findByRole('option', { name: '非常规超导体' }))
-    expect(screen.queryByLabelText('电声耦合强度 λ')).not.toBeInTheDocument()
-    expect(screen.getAllByLabelText('Tc 数值 (K)')).toHaveLength(2)
-
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: '超导类型' }))
-    fireEvent.click(await screen.findByRole('option', { name: '常规超导体（BCS超导体）' }))
-    expect((await screen.findAllByLabelText('电声耦合强度 λ'))[0]).toHaveValue(1.5)
-    expect(screen.getByLabelText('自定义 Tc 方法')).toHaveValue('two-band model')
+    expect(screen.getAllByLabelText('电声耦合强度 λ')).toHaveLength(1)
   })
 
   it('非常规类型添加 Tc 仅含数值框，且不再显示状态级 λ/ωlog 输入框', async () => {
@@ -265,21 +256,19 @@ describe('超导类型与条件化 Tc 字段', () => {
     expect(screen.queryByLabelText('库伦屏蔽常数 μ*')).not.toBeInTheDocument()
   })
 
-  it('首次添加常规 Tc 条目时用状态级旧值一次性预填 λ/ωlog', async () => {
+  it('新增 Tc 只有选中非实验方法后才创建空计算上下文，不复制状态级旧值', async () => {
     const draft = makeDraft([makeState({
       calculation_context: { phonon_nuclear_treatment: 'unknown', lambda_ep: 1.2, omega_log_k: 210, mu_star: 0.1 },
     })])
-    draft.paper.superconductor_kind = 'conventional'
     render(<UploadTaskEditor taskId={'f'.repeat(32)} onSubmitted={vi.fn()} draftOverride={draft} />)
 
     fireEvent.click(await screen.findByRole('button', { name: '添加 Tc' }))
-    expect(await screen.findByLabelText('电声耦合强度 λ')).toHaveValue(1.2)
-    expect(screen.getByLabelText('对数声子频率 ωlog (K)')).toHaveValue(210)
+    expect(screen.queryByLabelText('电声耦合强度 λ')).not.toBeInTheDocument()
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Tc 方法' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'McMillan 方法' }))
+    expect(await screen.findByLabelText('电声耦合强度 λ')).toHaveValue(null)
+    expect(screen.getByLabelText('对数声子频率 ωlog (K)')).toHaveValue(null)
     expect(screen.getByLabelText('库伦屏蔽常数 μ*')).toHaveValue(null)
-
-    fireEvent.click(screen.getByRole('button', { name: '添加 Tc' }))
-    const lambdas = screen.getAllByLabelText('电声耦合强度 λ')
-    expect(lambdas[1]).toHaveValue(null)
   })
 
   it('论文级超导类型下拉含完整单选值域', async () => {

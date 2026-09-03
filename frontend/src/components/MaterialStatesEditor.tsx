@@ -39,6 +39,17 @@ const TC_METHOD_VALUES = [
   'isotropic_eliashberg', 'anisotropic_eliashberg', 'scdft', 'other',
 ] as const
 
+const emptyTcCalculationContext = () => ({
+  phonon_nuclear_treatment: 'unknown',
+  lambda_ep: null,
+  omega_log_k: null,
+  mu_star: null,
+})
+
+const showsTcCalculationContext = (method: string | null | undefined) => (
+  method != null && method !== 'unknown' && method !== 'experimental'
+)
+
 const ENERGY_ABOVE_HULL_NAME = 'energy above hull'
 
 // 晶系↔群号静态范围表（与 backend/services/space_groups.py 一致；群号是晶系的权威来源）
@@ -118,7 +129,7 @@ interface MaterialStatesEditorProps {
   taskId?: string
   /** 论文类型：决定新增材料状态的默认计算/实验上下文 */
   paperType?: string
-  /** 论文级超导类型：统一控制所有材料状态的 Tc 编辑字段 */
+  /** 仅为兼容现有调用方保留；Tc 字段由每条 tc_method 决定。 */
   superconductorKind?: 'conventional' | 'unconventional' | 'unknown'
   /**
    * 结构上传回调（论文宿主，管理端编辑弹窗用，T034）。
@@ -149,7 +160,6 @@ const MaterialStatesEditor: React.FC<MaterialStatesEditorProps> = ({
   catalogError = '',
   taskId,
   paperType,
-  superconductorKind = 'unknown',
   onUploadStructure,
   onError,
 }) => {
@@ -273,27 +283,14 @@ const MaterialStatesEditor: React.FC<MaterialStatesEditorProps> = ({
     } : state))
   }
 
-  // 常规 (BCS) 论文的 Tc 条目带独立计算上下文；首个条目用状态级旧值一次性预填 λ/ωlog
+  // 新增 Tc 必须先选择方法，不能从论文或材料状态类型推断计算上下文。
   const addTcResult = (index: number) => {
     emitStates(states.map((item, itemIndex) => {
       if (itemIndex !== index) return item
-      const isConventional = superconductorKind === 'conventional'
-      const legacy = item.calculation_context
-      const prefillLegacy = isConventional
-        && (legacy?.lambda_ep != null || legacy?.omega_log_k != null)
-        && !(item.tc_results || []).some(entry => entry.calculation_context)
       const entry: DraftTcResult = {
-        result_kind: item.state_kind === 'experimental' ? 'experimental' : 'theoretical',
-        tc_method: item.state_kind === 'experimental' ? 'experimental' : 'unknown',
+        result_kind: 'theoretical',
+        tc_method: 'unknown',
         tc_value_k: null, tc_min_k: null, tc_max_k: null, value_raw: '', unit_raw: 'K',
-      }
-      if (isConventional) {
-        entry.calculation_context = {
-          phonon_nuclear_treatment: 'unknown',
-          lambda_ep: prefillLegacy ? legacy?.lambda_ep ?? null : null,
-          omega_log_k: prefillLegacy ? legacy?.omega_log_k ?? null : null,
-          mu_star: null,
-        }
       }
       return { ...item, tc_results: [...(item.tc_results || []), entry] }
     }))
@@ -309,7 +306,22 @@ const MaterialStatesEditor: React.FC<MaterialStatesEditorProps> = ({
     emitStates(states.map((state, index) => index === stateIndex ? {
       ...state,
       tc_results: (state.tc_results || []).map((item, itemIndex) =>
-        itemIndex === resultIndex ? { ...item, [field]: value } : item),
+        itemIndex !== resultIndex ? item : (() => {
+          if (field !== 'tc_method') return { ...item, [field]: value }
+          const tcMethod = String(value || 'unknown')
+          if (tcMethod === 'experimental') {
+            const { calculation_context: _calculationContext, tc_method_custom: _customMethod, ...experimentalItem } = item
+            return { ...experimentalItem, tc_method: tcMethod, result_kind: 'experimental' }
+          }
+          const { tc_method_custom: _customMethod, ...theoreticalItem } = item
+          return {
+            ...theoreticalItem,
+            tc_method: tcMethod,
+            result_kind: 'theoretical',
+            calculation_context: item.calculation_context || emptyTcCalculationContext(),
+            ...(tcMethod === 'other' ? {} : { tc_method_custom: undefined }),
+          }
+        })()),
     } : state))
   }
 
@@ -461,7 +473,6 @@ const MaterialStatesEditor: React.FC<MaterialStatesEditorProps> = ({
           {states.map((state, index) => {
             const stateCandidates = (structureCandidates || []).filter(candidate => candidate.material_state_ref === `material_states[${index}]`)
             const isCollapsed = !readOnly && Boolean(collapsedStates[index])
-            const isConventional = superconductorKind === 'conventional'
             // 晶系未知时显示全部 230 条空间群，否则仅显示该晶系群号范围内的符号
             const crystalSystem = state.crystal_system || 'unknown'
             const spaceGroupOptions = crystalSystem === 'unknown'
@@ -602,19 +613,7 @@ const MaterialStatesEditor: React.FC<MaterialStatesEditorProps> = ({
                     <IssueText field={`material_states[${index}].tc_results`} />
                   </Box>
                   {(state.tc_results || []).map((result, resultIndex) => (
-                    isConventional ? (
                       <Box key={resultIndex} sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: 'repeat(3, 1fr)' }, gap: 1, mt: 1 }}>
-                        <TextField size="small" label={t('upload.lambdaLabel')} type="number" value={result.calculation_context?.lambda_ep ?? ''}
-                          onChange={event => updateTcCalculationContext(index, resultIndex, 'lambda_ep', event.target.value ? Number(event.target.value) : null)}
-                          slotProps={{ htmlInput: { min: 0, step: 'any' } }} />
-                        <TextField size="small" label={t('upload.omegaLogLabel')} type="number" value={result.calculation_context?.omega_log_k ?? ''}
-                          onChange={event => updateTcCalculationContext(index, resultIndex, 'omega_log_k', event.target.value ? Number(event.target.value) : null)}
-                          slotProps={{ htmlInput: { min: 0, step: 'any' } }} />
-                        <TextField size="small" label={t('upload.muStarLabel')} type="number" value={result.calculation_context?.mu_star ?? ''}
-                          onChange={event => updateTcCalculationContext(index, resultIndex, 'mu_star', event.target.value ? Number(event.target.value) : null)}
-                          slotProps={{ htmlInput: { min: 0, step: 'any' } }} />
-                        <TextField size="small" label={t('upload.tcValueLabel')} type="number" value={result.tc_value_k ?? ''}
-                          onChange={event => updateTcResult(index, resultIndex, 'tc_value_k', event.target.value ? Number(event.target.value) : null)} />
                         <FormControl size="small">
                           <InputLabel id={`tc-method-${index}-${resultIndex}-label`}>{t('upload.tcMethodField')}</InputLabel>
                           <Select
@@ -626,19 +625,25 @@ const MaterialStatesEditor: React.FC<MaterialStatesEditorProps> = ({
                             {TC_METHOD_VALUES.map(value => <MenuItem key={value} value={value}>{dict.enums.tcMethod[value]}</MenuItem>)}
                           </Select>
                         </FormControl>
+                        <TextField size="small" label={t('upload.tcValueLabel')} type="number" value={result.tc_value_k ?? ''}
+                          onChange={event => updateTcResult(index, resultIndex, 'tc_value_k', event.target.value ? Number(event.target.value) : null)} />
                         {result.tc_method === 'other' && (
                           <TextField size="small" label={t('upload.tcMethodCustomField')} value={result.tc_method_custom || ''}
                             onChange={event => updateTcResult(index, resultIndex, 'tc_method_custom', event.target.value || null)} />
                         )}
+                        {showsTcCalculationContext(result.tc_method) && <>
+                        <TextField size="small" label={t('upload.lambdaLabel')} type="number" value={result.calculation_context?.lambda_ep ?? ''}
+                          onChange={event => updateTcCalculationContext(index, resultIndex, 'lambda_ep', event.target.value ? Number(event.target.value) : null)}
+                          slotProps={{ htmlInput: { min: 0, step: 'any' } }} />
+                        <TextField size="small" label={t('upload.omegaLogLabel')} type="number" value={result.calculation_context?.omega_log_k ?? ''}
+                          onChange={event => updateTcCalculationContext(index, resultIndex, 'omega_log_k', event.target.value ? Number(event.target.value) : null)}
+                          slotProps={{ htmlInput: { min: 0, step: 'any' } }} />
+                        <TextField size="small" label={t('upload.muStarLabel')} type="number" value={result.calculation_context?.mu_star ?? ''}
+                          onChange={event => updateTcCalculationContext(index, resultIndex, 'mu_star', event.target.value ? Number(event.target.value) : null)}
+                          slotProps={{ htmlInput: { min: 0, step: 'any' } }} />
+                        </>}
                         <Button size="small" color="error" onClick={() => removeTcResult(index, resultIndex)}>{t('common.delete')}</Button>
                       </Box>
-                    ) : (
-                      <Box key={resultIndex} sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr auto' }, gap: 1, mt: 1 }}>
-                        <TextField size="small" label={t('upload.tcValueLabel')} type="number" value={result.tc_value_k ?? ''}
-                          onChange={event => updateTcResult(index, resultIndex, 'tc_value_k', event.target.value ? Number(event.target.value) : null)} />
-                        <Button size="small" color="error" onClick={() => removeTcResult(index, resultIndex)}>{t('common.delete')}</Button>
-                      </Box>
-                    )
                   ))}
 
                   <Box data-issue-field={`material_states[${index}].properties`}

@@ -68,7 +68,7 @@ describe('MaterialStatesEditor 共享组件（T017）', () => {
   })
 
   it('readOnly 模式下不可编辑：编辑输入不触发 onChange，卡片恒展开且无折叠交互', () => {
-    const { onChange } = renderEditor({
+    const { onChange, rerender } = renderEditor({
       readOnly: true,
       states: [makeState(), makeState({ material: 'H3S' }), makeState({ material: 'MgB2' })],
     })
@@ -114,6 +114,59 @@ describe('MaterialStatesEditor 共享组件（T017）', () => {
     expect(nextStates[0]).toEqual(expect.objectContaining({ material: 'H3S' }))
     expect(nextStates[1]).toEqual(expect.objectContaining({ material: 'MgB2', element_count: 2 }))
     expect(nextStates[0]).not.toBe(nextStates[1])
+  })
+
+  it('Tc 方法决定字段集：新增条目先选方法，切为实验后删除计算上下文', async () => {
+    const { onChange, rerender } = renderEditor({
+      superconductorKind: 'unconventional',
+      states: [makeState({
+        tc_results: [{
+          result_kind: 'theoretical', tc_method: 'mcmillan', tc_value_k: 39,
+          calculation_context: { lambda_ep: 1.1, omega_log_k: 600, mu_star: 0.1 },
+        }],
+      })],
+    })
+
+    expect(await screen.findByLabelText('电声耦合强度 λ')).toHaveValue(1.1)
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Tc 方法' }))
+    fireEvent.click(await screen.findByRole('option', { name: '实验测量' }))
+
+    const switchedStates = onChange.mock.calls.at(-1)?.[0] as DraftMaterialState[]
+    expect(switchedStates[0].tc_results?.[0]).toMatchObject({
+      result_kind: 'experimental', tc_method: 'experimental',
+    })
+    expect(switchedStates[0].tc_results?.[0].calculation_context).toBeUndefined()
+
+    rerender(
+      <MaterialStatesEditor
+        states={switchedStates}
+        onChange={onChange}
+        catalogs={null}
+        taskId={'5'.repeat(32)}
+        superconductorKind="unconventional"
+      />,
+    )
+    expect(screen.queryByLabelText('电声耦合强度 λ')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '添加 Tc' }))
+    const addedStates = onChange.mock.calls.at(-1)?.[0] as DraftMaterialState[]
+    expect(addedStates[0].tc_results).toHaveLength(2)
+    expect(addedStates[0].tc_results?.[1]).toMatchObject({
+      result_kind: 'theoretical', tc_method: 'unknown',
+    })
+    expect(addedStates[0].tc_results?.[1].calculation_context).toBeUndefined()
+  })
+
+  it('中文界面的 Tc 方法选项均使用中文说明', async () => {
+    renderEditor({ states: [makeState({ tc_results: [{ result_kind: 'theoretical', tc_method: 'unknown' }] })] })
+
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: 'Tc 方法' }))
+
+    expect(await screen.findByRole('option', { name: 'McMillan 方法' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Allen-Dynes 方法' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '各向同性 Migdal-Eliashberg 方法' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '各向异性 Migdal-Eliashberg 方法' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '超导密度泛函理论（SCDFT）' })).toBeInTheDocument()
   })
 })
 

@@ -349,7 +349,7 @@ async def persist_scientific_draft(
         tc_items = [item for item in state_data.get("tc_results") or [] if isinstance(item, dict)]
         calculation_data = state_data.get("calculation_context")
         needs_calculation = isinstance(calculation_data, dict) or any(
-            item.get("result_kind") == "theoretical" for item in tc_items
+            (item.get("tc_method") or "unknown") != "experimental" for item in tc_items
         )
         calculation = None
         if needs_calculation:
@@ -364,7 +364,7 @@ async def persist_scientific_draft(
 
         experimental_data = state_data.get("experimental_context")
         needs_experiment = isinstance(experimental_data, dict) or any(
-            item.get("result_kind") == "experimental" for item in tc_items
+            item.get("tc_method") == "experimental" for item in tc_items
         )
         experimental = None
         if needs_experiment:
@@ -385,13 +385,16 @@ async def persist_scientific_draft(
             await session.flush()
 
         for tc_index, item in enumerate(tc_items):
-            result_kind = item.get("result_kind") or "theoretical"
+            requested_kind = item.get("result_kind") or "theoretical"
             value_raw = str(item.get("value_raw") or item.get("tc_value_k") or "").strip()
-            tc_method = "experimental" if result_kind == "experimental" else item.get("tc_method") or "unknown"
+            tc_method = item.get("tc_method") or (
+                "experimental" if requested_kind == "experimental" else "unknown"
+            )
+            result_kind = "experimental" if tc_method == "experimental" else "theoretical"
             field_path = f"{state_path}.tc_results[{tc_index}]"
             item_calculation = None
             item_calculation_data = item.get("calculation_context")
-            if result_kind == "theoretical" and isinstance(item_calculation_data, dict) and any(
+            if tc_method != "experimental" and isinstance(item_calculation_data, dict) and any(
                 _number(item_calculation_data.get(key)) is not None
                 for key in ("lambda_ep", "omega_log_k", "mu_star")
             ):
@@ -403,7 +406,7 @@ async def persist_scientific_draft(
                         f"{field_path}.calculation_context", item_calculation_data["evidence"]
                     ))
             calculation_context_id = None
-            if result_kind == "theoretical":
+            if tc_method != "experimental":
                 context = item_calculation or calculation
                 calculation_context_id = context.id if context is not None else None
             tc_result = models.TcResult(

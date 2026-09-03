@@ -516,6 +516,9 @@ func TestAdminPaperDetailPreloadsScientificData(t *testing.T) {
 	if tcResults, ok := state["tc_results"].([]any); !ok || len(tcResults) == 0 {
 		t.Fatalf("tc_results 未预加载：%#v", state["tc_results"])
 	}
+	if contexts, ok := state["calculation_contexts"].([]any); !ok || len(contexts) == 0 {
+		t.Fatalf("calculation_contexts 未预加载：%#v", state["calculation_contexts"])
+	}
 	if properties, ok := state["properties"].([]any); !ok || len(properties) == 0 {
 		t.Fatalf("properties 未预加载：%#v", state["properties"])
 	}

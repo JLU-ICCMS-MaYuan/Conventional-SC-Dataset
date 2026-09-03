@@ -32,13 +32,18 @@ def _config(database_url=None):
     config.set_main_option("script_location", str(REPO_ROOT / "alembic"))
     if database_url:
         config.set_main_option("sqlalchemy.url", database_url)
+        # alembic/env.py 从运行环境读取主库地址，不能只修改 Config。
+        os.environ["DATABASE_URL"] = database_url
+        os.environ["RAG_DATABASE_URL"] = database_url
     return config
 
 
 def test_alembic_has_one_ordered_head():
     script = ScriptDirectory.from_config(_config())
 
-    assert script.get_heads() == ["paper_citation_graph"]
+    # 新迁移会正常成为 head；这里验证迁移链保持单头且 #84 正确接在既有链上。
+    assert len(script.get_heads()) == 1
+    assert script.get_revision("experimental_tc_context").down_revision == "paper_citation_graph"
     assert script.get_revision("revision_cascade_chain").down_revision == "add_kg_title"
     assert script.get_revision("add_kg_title").down_revision == "20260831_0066"
     assert script.get_revision("20260831_0066").down_revision == "20260831_0065"
@@ -142,6 +147,94 @@ def test_fresh_mysql_upgrade_downgrade_guard_and_constraints():
         engine.dispose()
 
 
+def test_experimental_tc_context_migration_cleans_legacy_rows_and_enforces_method_invariant():
+    database_url = os.environ.get("FRESH_MYSQL_DATABASE_URL")
+    if not database_url:
+        pytest.skip("仅在提供 FRESH_MYSQL_DATABASE_URL 时运行隔离 MySQL 验收")
+
+    database_name = make_url(database_url).database or ""
+    assert "test" in database_name.lower(), "只允许连接名称含 test 的隔离数据库"
+    engine = create_engine(database_url, future=True)
+    config = _config(database_url)
+    try:
+        _drop_all_tables(engine)
+        command.upgrade(config, "paper_citation_graph")
+        _seed_constraint_rows(engine)
+        with engine.begin() as connection:
+            connection.execute(text(
+                "INSERT INTO experimental_contexts "
+                "(id, paper_id, paper_revision, material_state_id, structure_id, tc_criterion) "
+                "VALUES (1, 1, 1, 1, NULL, 'author_reported')"
+            ))
+            connection.execute(text(
+                "INSERT INTO calculation_contexts "
+                "(id, paper_id, paper_revision, material_state_id, structure_id, "
+                "missing_structure_reason, phonon_nuclear_treatment) "
+                "VALUES (2, 1, 1, 1, NULL, 'legacy orphan', 'unknown'), "
+                "(3, 1, 1, 1, NULL, 'property context', 'unknown')"
+            ))
+            connection.execute(text(
+                "INSERT INTO property_definitions (id, code, display_name, value_kind, is_active) "
+                "VALUES (1, 'test_density', 'test density', 'number', 1)"
+            ))
+            connection.execute(text(
+                "INSERT INTO superconductor_properties "
+                "(id, paper_id, paper_revision, material_state_id, calculation_context_id, "
+                "property_definition_id, material_raw, name_raw, value_raw, source_fingerprint) "
+                "VALUES (1, 1, 1, 1, 3, 1, 'LaH10', 'test density', '1', :fingerprint)"
+            ), {"fingerprint": "p" * 64})
+            # 模拟约束投入前留下的错误关联；现有理论 Tc 和普通物性仍分别引用上下文 1、3。
+            connection.execute(text("ALTER TABLE tc_results DROP CHECK ck_tc_results_context_kind"))
+            connection.execute(text(
+                "ALTER TABLE tc_results ADD CONSTRAINT ck_tc_results_context_kind CHECK (1 = 1)"
+            ))
+            connection.execute(text(
+                "INSERT INTO tc_results "
+                "(id, paper_id, paper_revision, material_state_id, calculation_context_id, "
+                "experimental_context_id, result_kind, tc_method, tc_value_k, value_raw, "
+                "unit_raw, source_fingerprint, is_representative) "
+                "VALUES "
+                "(2, 1, 1, 1, 1, 1, 'theoretical', 'experimental', 251, '251 K', 'K', :first, 0), "
+                "(3, 1, 1, 1, 2, 1, 'theoretical', 'experimental', 252, '252 K', 'K', :second, 0)"
+            ), {"first": "c" * 64, "second": "d" * 64})
+
+        command.upgrade(config, "experimental_tc_context")
+
+        with engine.connect() as connection:
+            migrated = connection.execute(text(
+                "SELECT id, result_kind, calculation_context_id, experimental_context_id "
+                "FROM tc_results WHERE id IN (2, 3) ORDER BY id"
+            )).all()
+            assert migrated == [(2, "experimental", None, 1), (3, "experimental", None, 1)]
+            context_ids = connection.execute(text(
+                "SELECT id FROM calculation_contexts ORDER BY id"
+            )).scalars().all()
+            assert context_ids == [1, 3]
+
+        with pytest.raises(DBAPIError):
+            with engine.begin() as connection:
+                connection.execute(text(
+                    "INSERT INTO tc_results "
+                    "(id, paper_id, paper_revision, material_state_id, calculation_context_id, "
+                    "experimental_context_id, result_kind, tc_method, tc_value_k, value_raw, "
+                    "unit_raw, source_fingerprint, is_representative) "
+                    "VALUES (4, 1, 1, 1, 1, 1, 'theoretical', 'experimental', 253, "
+                    "'253 K', 'K', :fingerprint, 0)"
+                ), {"fingerprint": "e" * 64})
+    finally:
+        _drop_all_tables(engine)
+        engine.dispose()
+
+
+def _drop_all_tables(engine):
+    inspector = inspect(engine)
+    with engine.begin() as connection:
+        connection.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
+        for table in inspector.get_table_names():
+            connection.execute(text(f"DROP TABLE IF EXISTS `{table}`"))
+        connection.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+
+
 def _seed_constraint_rows(engine):
     with engine.begin() as connection:
         connection.execute(
@@ -159,11 +252,11 @@ def _seed_constraint_rows(engine):
         connection.execute(
             text(
                 """
-                    INSERT INTO papers
-                        (id, doi, title, authors, uploaded_by_user_id, review_status,
-                         year, content_revision, approved_revision)
-                    VALUES
-                        (1, '10.0000/schema', 'Schema paper', :authors, 2024, 1, 'pending', 1, NULL)
+                INSERT INTO papers
+                    (id, doi, title, authors, uploaded_by_user_id, review_status,
+                     year, content_revision, approved_revision)
+                VALUES
+                    (1, '10.0000/schema', 'Schema paper', :authors, 1, 'pending', 2024, 1, NULL)
                 """
             ),
             {"authors": json.dumps(["Schema"])},

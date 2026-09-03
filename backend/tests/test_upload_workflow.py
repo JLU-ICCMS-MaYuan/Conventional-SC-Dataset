@@ -377,12 +377,47 @@ def test_put_draft_saves_half_filled_draft(monkeypatch):
     assert saved["draft"] == result["data"]
 
 
+def test_put_draft_rejects_experimental_tc_calculation_context(monkeypatch):
+    import backend.rag.database as rag_database
+    from backend.ingest import upload_jobs
+
+    task_id = "f" * 32
+    draft = _minimal_non_review_draft([{
+        "material": "LaH10",
+        "tc_results": [{
+            "result_kind": "experimental",
+            "tc_method": "experimental",
+            "tc_value_k": 203,
+            "calculation_context": {"lambda_ep": 2.1},
+        }],
+    }])
+    monkeypatch.setattr(rag, "_task_for_user", lambda _task_id, _user: {"task_id": task_id})
+    monkeypatch.setattr(upload_tasks, "get_draft", lambda _task_id: None)
+    monkeypatch.setattr(upload_jobs, "_normalize_draft", lambda value: value)
+
+    async def _resolve_noop(_session, _draft):
+        return None
+
+    monkeypatch.setattr(rag, "_resolve_draft_classifications", _resolve_noop)
+    monkeypatch.setattr(rag_database, "async_session_factory", lambda: FakeAsyncSession())
+    monkeypatch.setattr(upload_tasks, "save_draft", lambda *_args: (_ for _ in ()).throw(AssertionError("不应保存非法草稿")))
+
+    try:
+        asyncio.run(rag.put_upload_draft(task_id, draft, SimpleNamespace(id=1)))
+    except HTTPException as exc:
+        assert exc.status_code == 400
+        assert exc.detail["code"] == "experimental_tc_calculation_context_forbidden"
+        assert "第 1 个材料状态的第 1 条 Tc" in exc.detail["message"]
+    else:
+        raise AssertionError("实验 Tc 携带计算上下文必须被草稿保存端点拒绝")
+
+
 def test_submit_rejects_same_half_filled_draft():
     try:
         rag._validate_draft(_half_filled_draft())
     except HTTPException as exc:
         assert exc.status_code == 400
-        assert exc.detail["code"] == "tc_value_required"
+        assert exc.detail["code"] == "tc_method_required"
     else:
         raise AssertionError("半成品草稿在提交校验时必须拒绝")
 
