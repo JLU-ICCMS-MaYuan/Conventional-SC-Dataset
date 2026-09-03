@@ -185,7 +185,6 @@ export interface UploadDraft {
   classification_evidence?: SourceEvidence[]
   classification_migration_warnings?: string[]
   field_evidence?: Record<string, SourceEvidence[]>
-  ai_original?: Partial<UploadDraft> | null
 }
 
 export interface UploadTaskState {
@@ -248,7 +247,6 @@ export function emptyUploadDraft(): UploadDraft {
     research_motivation: '',
     classification_evidence: [],
     field_evidence: {},
-    ai_original: null,
   }
 }
 
@@ -349,7 +347,6 @@ export function normalizeUploadDraft(value: unknown): UploadDraft {
   delete raw.sc_type_review_status
   const empty = emptyUploadDraft()
   const rawPaper = raw.paper && typeof raw.paper === 'object' ? raw.paper : {}
-  const aiRaw = raw.ai_original && typeof raw.ai_original === 'object' ? raw.ai_original : null
   const existingEvidence = raw.field_evidence && typeof raw.field_evidence === 'object'
     ? raw.field_evidence
     : {}
@@ -408,12 +405,6 @@ export function normalizeUploadDraft(value: unknown): UploadDraft {
       ? raw.classification_evidence
       : [],
     field_evidence: fieldEvidence,
-    ai_original: aiRaw ? {
-      ...aiRaw,
-      paper: normalizePaperFields(aiRaw.paper),
-      material_states: Array.isArray(aiRaw.material_states) ? aiRaw.material_states : [],
-      citation_extraction: normalizeCitationExtraction(aiRaw.citation_extraction),
-    } : null,
   }
 }
 

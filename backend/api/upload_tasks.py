@@ -34,7 +34,6 @@ class FileDeclaration(BaseModel):
 
 class CreateUploadTask(BaseModel):
     files: list[FileDeclaration] = Field(min_length=1)
-    suggestion_language: Literal["zh", "en"] = "zh"
 
 
 def _error(status: int, code: str, message: str) -> HTTPException:
@@ -78,7 +77,6 @@ def create_upload_task(
         state = create_task(
             current_user.id,
             files=[item.model_dump() for item in body.files],
-            suggestion_language=body.suggestion_language,
         )
     except ValueError as exc:
         message = str(exc)

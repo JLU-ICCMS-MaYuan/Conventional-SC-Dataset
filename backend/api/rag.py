@@ -877,12 +877,6 @@ async def get_upload_draft(
         if converted.get("classification_migration_warnings"):
             normalized["classification_migration_warnings"] = converted["classification_migration_warnings"]
         await _resolve_draft_classifications(session, normalized)
-        if isinstance(draft.get("ai_original"), dict):
-            ai_converted = convert_legacy_draft(
-                draft["ai_original"], families_by_code=families_by_code,
-            )
-            normalized["ai_original"] = _normalize_draft(ai_converted)
-            await _resolve_draft_classifications(session, normalized["ai_original"])
     return {"ok": True, "data": normalized}
 
 
@@ -911,8 +905,6 @@ async def put_upload_draft(
     normalized = _normalize_draft(draft)
     # citation_extraction 是服务端 GROBID 产物，不能接受浏览器回传值覆盖。
     normalized["citation_extraction"] = previous.get("citation_extraction")
-    if isinstance(previous.get("ai_original"), dict):
-        normalized["ai_original"] = _normalize_draft(previous["ai_original"])
     async with async_session_factory() as session:
         await _resolve_draft_classifications(session, normalized)
     _validate_draft(normalized, partial=True)
@@ -1056,14 +1048,13 @@ async def use_manual_upload_draft(
     if state.get("processing_status") != "failed":
         raise _upload_error(409, "manual_not_allowed", "只有解析失败的任务可以改为手动填写")
     draft = empty_draft()
-    draft["ai_original"] = empty_draft()
     save_draft(task_id, draft)
     artifact_path(task_id).write_text(
         json.dumps(
             {
                 "task_id": task_id,
                 "paper_id": None,
-                "ai_values": draft["ai_original"],
+                "ai_values": draft,
                 "user_values": None,
                 "evidence": {"classification": [], "key_properties": []},
             },
@@ -1331,11 +1322,18 @@ def _record_submitted_upload(
 
     result_path = artifact_path(task_id)
     artifact = json.loads(result_path.read_text(encoding="utf-8")) if result_path.exists() else {}
+    canonical_ai_values = artifact.get("ai_values") or draft
+    if isinstance(canonical_ai_values, dict):
+        canonical_ai_values = {
+            key: value for key, value in canonical_ai_values.items() if key != "ai_original"
+        }
+    else:
+        canonical_ai_values = {}
     snapshot = {
         "task_id": task_id,
         "paper_id": paper_id,
         "paper_revision": paper_revision,
-        "ai_values": artifact.get("ai_values") or draft.get("ai_original") or {},
+        "ai_values": canonical_ai_values,
         "user_values": {key: value for key, value in draft.items() if key != "ai_original"},
         "evidence": artifact.get("evidence") or {},
     }

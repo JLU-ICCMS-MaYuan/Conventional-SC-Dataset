@@ -8,7 +8,6 @@ os.environ.setdefault("DATABASE_URL", "sqlite:////tmp/scwiki-upload-jobs-test.db
 os.environ.setdefault("JWT_SECRET_KEY", "test-only-secret")
 
 from backend.ingest.upload_jobs import (
-    _build_ai_suggestions,
     CHUNK_SYSTEM_PROMPT,
     PUBLIC_CHUNK_RESULT_FIELDS,
     SUMMARY_SYSTEM_PROMPT,
@@ -53,52 +52,6 @@ def test_normalize_draft_flattens_evidenced_text_lists():
     assert draft["field_evidence"]["research_materials"] == [evidence]
     assert draft["field_evidence"]["methodology"] == [evidence]
     assert draft["material_states"][0]["tc_results"][0]["value_raw"] == "42"
-
-
-def test_chinese_ai_suggestions_do_not_replace_english_canonical_draft(monkeypatch):
-    canonical = _normalize_draft({
-        "paper": {
-            "title": "Original English Title",
-            "summary": "Lead becomes superconducting near 6 K.",
-            "methodology": ["Electrical resistance measurement"],
-            "material_families": [{"name": "Elemental superconductors"}],
-        },
-        "material_states": [{
-            "material": "Pb",
-            "structure_families": [{"name": "Close-packed metal"}],
-            "properties": [{"name": "critical current", "value_raw": "1.2", "unit": "A"}],
-        }],
-        "classification_evidence": [{"quote": "\u539f\u59cb\u4e2d\u6587\u8bc1\u636e"}],
-    })
-
-    def localized_response(_system_prompt, _user_prompt):
-        return {
-            "paper": {
-                "summary": "\u94c5\u5728\u7ea66 K\u65f6\u8fdb\u5165\u8d85\u5bfc\u6001\u3002",
-                "methodology": ["\u7535\u963b\u6d4b\u91cf"],
-                "material_families": [{"name": "\u5355\u8d28\u8d85\u5bfc\u4f53"}],
-            },
-            "material_states": [{
-                "structure_families": [{"name": "\u5bc6\u5806\u79ef\u91d1\u5c5e"}],
-                "properties": [{"name": "\u4e34\u754c\u7535\u6d41"}],
-            }],
-        }
-
-    monkeypatch.setattr("backend.ingest.upload_jobs.complete_json", localized_response)
-
-    suggestions = _build_ai_suggestions(canonical, "zh")
-
-    assert canonical["paper"]["summary"] == "Lead becomes superconducting near 6 K."
-    assert canonical["paper"]["methodology"] == ["Electrical resistance measurement"]
-    assert suggestions["paper"]["title"] == "Original English Title"
-    assert suggestions["paper"]["summary"] == "\u94c5\u5728\u7ea66 K\u65f6\u8fdb\u5165\u8d85\u5bfc\u6001\u3002"
-    assert suggestions["paper"]["methodology"] == ["\u7535\u963b\u6d4b\u91cf"]
-    assert suggestions["material_states"][0]["material"] == "Pb"
-    assert suggestions["material_states"][0]["structure_families"][0]["name"] == "\u5bc6\u5806\u79ef\u91d1\u5c5e"
-    assert suggestions["classification_evidence"][0]["quote"] == "\u539f\u59cb\u4e2d\u6587\u8bc1\u636e"
-    assert _build_ai_suggestions(canonical, "en")["paper"]["methodology"] == [
-        "Electrical resistance measurement",
-    ]
 
 
 def test_llm_draft_cannot_supply_citation_extraction():

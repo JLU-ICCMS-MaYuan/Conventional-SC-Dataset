@@ -63,7 +63,6 @@ export default {
   recordsChip: '记录: {value}',
   confirmMaterialStates: '确认材料状态分类',
   materialStateFallback: '材料状态 #{n}',
-  aiSuggestion: 'AI 建议：{name}',
   materialFamilyOf: '{label} 的材料家族',
   materialDimensionality: '材料维度',
   structureFamily: '结构家族',

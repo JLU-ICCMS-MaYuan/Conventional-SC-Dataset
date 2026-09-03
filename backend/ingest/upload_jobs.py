@@ -193,13 +193,6 @@ key_finding 保留原有格式，提供完整的核心发现描述。
 }"""
 
 
-AI_SUGGESTION_SYSTEM_PROMPT = """You localize AI-generated suggestions in a superconductivity-paper review form.
-
-Target language: {target_language}.
-
-Translate only the supplied AI-generated text fields into the target language. Return JSON with exactly the same array ordering and only the supplied fields. Do not add facts, change chemical formulas, numbers, identifiers, enum codes, titles, abstracts, authors, raw values, units, or any quote/evidence text. An empty source value must remain empty. The result is display-only AI suggestion text; the source data remains the canonical record."""
-
-
 class UploadCancelled(RuntimeError):
     """任务已请求取消，Worker 应停止且不得写回成功状态。"""
 
@@ -1266,98 +1259,6 @@ def _normalize_draft(
     }
 
 
-_SUGGESTION_PAPER_TEXT_FIELDS = (
-    "summary", "keywords_tags", "methodology", "key_finding", "research_motivation",
-    "knowledge_graph_title", "research_materials",
-)
-_SUGGESTION_PAPER_NAMED_FIELDS = ("material_families",)
-
-
-def _suggestion_source(draft: dict[str, Any]) -> dict[str, Any]:
-    """仅把可本地化的 AI 归纳字段交给模型，事实字段始终留在 canonical draft。"""
-    paper = draft.get("paper") if isinstance(draft.get("paper"), dict) else {}
-    return {
-        "paper": {
-            **{field: paper.get(field) for field in _SUGGESTION_PAPER_TEXT_FIELDS},
-            **{
-                field: [{"name": item.get("name")} for item in paper.get(field) or [] if isinstance(item, dict)]
-                for field in _SUGGESTION_PAPER_NAMED_FIELDS
-            },
-        },
-        "research_motivation": draft.get("research_motivation"),
-        "material_states": [
-            {
-                "structure_families": [
-                    {"name": item.get("name")}
-                    for item in state.get("structure_families") or []
-                    if isinstance(item, dict)
-                ],
-                "properties": [
-                    {"name": item.get("name")}
-                    for item in state.get("properties") or []
-                    if isinstance(item, dict)
-                ],
-            }
-            for state in draft.get("material_states") or []
-            if isinstance(state, dict)
-        ],
-    }
-
-
-def _localized_text(canonical: Any, localized: Any) -> Any:
-    if isinstance(canonical, str):
-        return localized.strip() if isinstance(localized, str) and localized.strip() else canonical
-    if isinstance(canonical, list):
-        if not isinstance(localized, list):
-            return canonical
-        return [
-            _localized_text(value, localized[index] if index < len(localized) else None)
-            for index, value in enumerate(canonical)
-        ]
-    return canonical
-
-
-def _overlay_named_suggestions(canonical: list[Any], localized: Any) -> None:
-    if not isinstance(localized, list):
-        return
-    for index, item in enumerate(canonical):
-        if not isinstance(item, dict) or index >= len(localized):
-            continue
-        candidate = localized[index]
-        if isinstance(candidate, dict):
-            item["name"] = _localized_text(item.get("name"), candidate.get("name"))
-
-
-def _build_ai_suggestions(canonical: dict[str, Any], suggestion_language: str) -> dict[str, Any]:
-    """生成展示建议副本；canonical draft 永远是用于表单和数据库的英文值。"""
-    suggestions = json.loads(json.dumps(canonical, ensure_ascii=False))
-    if suggestion_language != "zh":
-        return suggestions
-
-    localized = complete_json(
-        AI_SUGGESTION_SYSTEM_PROMPT.replace("{target_language}", "Simplified Chinese"),
-        json.dumps(_suggestion_source(canonical), ensure_ascii=False),
-    )
-    localized_paper = localized.get("paper") if isinstance(localized.get("paper"), dict) else {}
-    suggestion_paper = suggestions.get("paper") if isinstance(suggestions.get("paper"), dict) else {}
-    for field in _SUGGESTION_PAPER_TEXT_FIELDS:
-        suggestion_paper[field] = _localized_text(suggestion_paper.get(field), localized_paper.get(field))
-    for field in _SUGGESTION_PAPER_NAMED_FIELDS:
-        _overlay_named_suggestions(suggestion_paper.get(field) or [], localized_paper.get(field))
-    suggestions["research_motivation"] = _localized_text(
-        suggestions.get("research_motivation"), localized.get("research_motivation"),
-    )
-
-    localized_states = localized.get("material_states") if isinstance(localized.get("material_states"), list) else []
-    for index, state in enumerate(suggestions.get("material_states") or []):
-        if not isinstance(state, dict) or index >= len(localized_states) or not isinstance(localized_states[index], dict):
-            continue
-        localized_state = localized_states[index]
-        _overlay_named_suggestions(state.get("structure_families") or [], localized_state.get("structure_families"))
-        _overlay_named_suggestions(state.get("properties") or [], localized_state.get("properties"))
-    return suggestions
-
-
 def empty_draft() -> dict[str, Any]:
     return _normalize_draft({"paper": {"paper_type": "unknown"}, "material_states": []})
 
@@ -1708,17 +1609,12 @@ def _process_upload_task(task_id: str) -> dict[str, Any]:
             return _handle_duplicate(task_id, current_state, existing)
 
         ai_values = json.loads(json.dumps(draft, ensure_ascii=False))
-        suggestion_language = str(current_state.get("suggestion_language") or "zh")
-        ai_suggestions = _build_ai_suggestions(ai_values, suggestion_language)
-        draft["ai_original"] = ai_suggestions
         artifact_path(task_id).write_text(
             json.dumps(
                 {
                     "task_id": task_id,
                     "paper_id": None,
                     "ai_values": ai_values,
-                    "ai_suggestions": ai_suggestions,
-                    "suggestion_language": suggestion_language,
                     "user_values": None,
                     "evidence": {
                         "classification": draft.get("classification_evidence", []),

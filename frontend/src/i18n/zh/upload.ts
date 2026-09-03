@@ -48,7 +48,6 @@ export default {
   selectPlaceholder: '请选择',
   originalText: '原文',
   bodyText: '正文',
-  aiSuggestion: 'AI 建议：{value}',
   pageRef: '第 {page} 页',
   quoteSuffix: '：“{quote}”',
   saveAction: '保存',
@@ -65,9 +64,6 @@ export default {
   uploadFailed: '上传失败',
   uploadFailedHttp: '上传失败（HTTP {status}）',
   networkError: '网络错误，上传失败',
-  toggleAiExplainAria: '{action} {label}的 AI 解释',
-  collapseAiExplain: '收起 AI 解释',
-  expandAiExplain: '展开 AI 解释',
 
   // ── UploadPage ──
   pageTitle: '上传',

@@ -1,10 +1,9 @@
 import '@testing-library/jest-dom/vitest'
 import React from 'react'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import UploadTaskEditor from '../../frontend/src/components/UploadTaskEditor'
-import { LanguageProvider } from '../../frontend/src/context/LanguageContext'
 import { api } from '../../frontend/src/lib/api'
 import type { ApiError } from '../../frontend/src/lib/api'
 import type { DraftMaterialState, UploadDraft } from '../../frontend/src/lib/paperProcessing'
@@ -84,19 +83,18 @@ afterEach(() => {
 })
 
 describe('上传校对页布局与材料状态折叠', () => {
-  it('英文规范表单值与中文 AI 建议分离显示', async () => {
+  it('历史建议副本不显示，正式表单值保持英文', async () => {
     const draft = makeDraft([makeState()])
-    draft.paper.methodology = ['Electrical resistance measurement']
-    draft.ai_original = { paper: { methodology: ['液氦温区电阻测量'] } }
+    const legacyDraft = {
+      ...draft,
+      paper: { ...draft.paper, methodology: ['Electrical resistance measurement'] },
+      ai_original: { paper: { methodology: ['液氦温区电阻测量'] } },
+    } as UploadDraft
 
-    render(
-      <LanguageProvider>
-        <UploadTaskEditor taskId={'f'.repeat(32)} onSubmitted={vi.fn()} draftOverride={draft} />
-      </LanguageProvider>,
-    )
+    render(<UploadTaskEditor taskId={'f'.repeat(32)} onSubmitted={vi.fn()} draftOverride={legacyDraft} />)
 
     expect(await screen.findByLabelText('研究方法（每行一项）')).toHaveValue('Electrical resistance measurement')
-    expect(screen.getByText('AI 建议：液氦温区电阻测量')).toBeVisible()
+    expect(screen.queryByText(/AI 建议|AI suggestion/)).not.toBeInTheDocument()
   })
 
   it('论文级 Material family 与 Superconductor type 在同一分类网格行', async () => {
@@ -331,44 +329,6 @@ describe('energy above hull 预置物性', () => {
     ])} />)
 
     expect(await screen.findByRole('button', { name: 'energy above hull' })).toBeDisabled()
-  })
-})
-
-describe('AI 建议单行截断与展开收起', () => {
-  afterEach(() => {
-    vi.restoreAllMocks()
-  })
-
-  it('长建议默认单行截断，点击展开显示全文，再点击收起恢复单行；短建议无展开按钮', async () => {
-    // jsdom 无布局，用 scrollHeight 模拟：含长建议的内容块 240px（>120 阈值），其余 48px
-    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (this: HTMLElement) {
-      return this.textContent?.includes('超长AI建议') ? 240 : 48
-    })
-    const draftWithAi = {
-      ...makeDraft([makeState()]),
-      ai_original: {
-        paper: { keywords_tags: [Array.from({ length: 12 }, (_, index) => `超长AI建议${index + 1}`).join('、')] },
-      },
-    } as UploadDraft
-    render(<UploadTaskEditor taskId={'4'.repeat(32)} onSubmitted={vi.fn()} draftOverride={draftWithAi} />)
-
-    const keywordsCell = (await screen.findByLabelText('关键词（每行一个）')).closest('.MuiTextField-root')!.parentElement!
-    const collapsedSuggestion = within(keywordsCell).getByText(/^AI 建议：/)
-    expect(collapsedSuggestion).toHaveStyle({ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' })
-    // 单行截断仅影响展示，完整文本仍保留在 DOM 中
-    expect(collapsedSuggestion.textContent).toContain('超长AI建议12')
-
-    fireEvent.click(within(keywordsCell).getByRole('button', { name: '展开 关键词（每行一个）的 AI 解释' }))
-    expect(within(keywordsCell).getByText(/^AI 建议：/)).toHaveStyle({ whiteSpace: 'pre-wrap' })
-
-    fireEvent.click(within(keywordsCell).getByRole('button', { name: '收起 关键词（每行一个）的 AI 解释' }))
-    expect(within(keywordsCell).getByText(/^AI 建议：/)).toHaveStyle({ whiteSpace: 'nowrap' })
-    expect(within(keywordsCell).getByRole('button', { name: '展开 关键词（每行一个）的 AI 解释' })).toBeInTheDocument()
-
-    // 短建议（标题的「未提供」）未溢出，不出现展开按钮
-    const titleCell = screen.getByLabelText('标题').closest('.MuiTextField-root')!.parentElement!
-    expect(within(titleCell).getByText('AI 建议：未提供')).toBeInTheDocument()
-    expect(within(titleCell).queryByRole('button', { name: /展开/ })).not.toBeInTheDocument()
   })
 })
 

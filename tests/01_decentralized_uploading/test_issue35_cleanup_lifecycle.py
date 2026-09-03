@@ -371,6 +371,8 @@ def test_submitted_review_snapshot_keeps_only_review_fields(tmp_path, monkeypatc
     assert snapshot["paper_revision"] == 4
     assert snapshot["ai_values"]["paper"]["title"] == "AI title"
     assert snapshot["user_values"]["paper"]["title"] == "User title"
+    assert "ai_original" not in snapshot["ai_values"]
+    assert "ai_original" not in snapshot["user_values"]
 
 
 def test_pending_paper_transaction_matches_current_revision_schema(tmp_path, monkeypatch):

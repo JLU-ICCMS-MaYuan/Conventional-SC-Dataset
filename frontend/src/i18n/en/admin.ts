@@ -65,7 +65,6 @@ export default {
   recordsChip: 'Records: {value}',
   confirmMaterialStates: 'Confirm material state classification',
   materialStateFallback: 'Material state #{n}',
-  aiSuggestion: 'AI suggestion: {name}',
   materialFamilyOf: 'Material family of {label}',
   materialDimensionality: 'Material dimensionality',
   structureFamily: 'Structure family',

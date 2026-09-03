@@ -218,65 +218,6 @@ describe('论文上传工作区', () => {
     })
   })
 
-  it('可编辑草稿中的长 AI 解释按字段宽度收起并可独立展开', async () => {
-    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function () {
-      return this.textContent?.includes('CALYPSO群智能结构搜索') ? 240 : 48
-    })
-    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
-      const data = String(input).endsWith('/parsing')
-        ? {
-            status: 'ready', stage: 'ready', files: [], chunks: [],
-            form_preview: { status: 'ready', read_only: false, groups: [] },
-            summary: { status: 'completed', completed: 1, total: 1 }, next_poll_ms: null,
-          }
-        : {
-            paper: {
-              title: 'Hydride study', authors: [], research_materials: ['Li2MgH16'],
-              methodology: ['CALYPSO群智能结构搜索'],
-            },
-            material_states: [], sc_type: 'hydride', classification_evidence: [],
-            field_evidence: {
-              methodology: [{
-                section: 'Supplementary Material', page: 2,
-                quote: 'The simulations were performed with several first-principles methods and detailed convergence checks.',
-              }],
-            },
-            ai_original: {
-              paper: {
-                title: 'Short AI title',
-                methodology: Array.from({ length: 20 }, (_, index) => `CALYPSO群智能结构搜索 ${index + 1}`),
-              },
-            },
-          }
-      return new Response(JSON.stringify({ ok: true, data }), {
-        status: 200, headers: { 'Content-Type': 'application/json' },
-      })
-    }))
-
-    render(<UploadParsingDetail taskId={'m'.repeat(32)} onSubmitted={vi.fn()} />)
-
-    expect(await screen.findByText(/AI 建议：Short AI title/)).toBeVisible()
-    expect(screen.queryByRole('button', { name: '展开 标题的 AI 解释' })).not.toBeInTheDocument()
-
-    const expandButton = screen.getByRole('button', { name: '展开 研究方法（每行一项）的 AI 解释' })
-    expect(expandButton).toHaveAttribute('aria-expanded', 'false')
-    const explanation = document.getElementById(expandButton.getAttribute('aria-controls') || '')
-    expect(explanation).toBeInTheDocument()
-    expect(expandButton.parentElement?.parentElement).toHaveStyle({
-      width: '100%', maxWidth: '100%', minWidth: '0',
-    })
-
-    fireEvent.click(expandButton)
-
-    expect(screen.getByRole('button', { name: '收起 研究方法（每行一项）的 AI 解释' }))
-      .toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByText(/detailed convergence checks/)).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: '收起 研究方法（每行一项）的 AI 解释' }))
-    expect(screen.getByRole('button', { name: '展开 研究方法（每行一项）的 AI 解释' }))
-      .toHaveAttribute('aria-expanded', 'false')
-  })
-
   it('按材料状态显示压强与空间群，并以新契约保存', async () => {
     const savedBodies: unknown[] = []
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -550,56 +491,6 @@ describe('论文上传工作区', () => {
 
     await waitFor(() => expect(screen.getByLabelText('标题')).toHaveValue('第二篇草稿标题'))
     expect(screen.getByText('只读预览')).toBeVisible()
-  })
-
-  it('布局变化后重新判断 AI 解释是否溢出', async () => {
-    let measuredHeight = 80
-    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(() => measuredHeight)
-    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
-      const data = String(input).endsWith('/parsing')
-        ? {
-            status: 'ready', stage: 'ready', files: [], chunks: [],
-            summary: { status: 'completed', completed: 1, total: 1 }, next_poll_ms: null,
-          }
-        : {
-            paper: {
-              title: 'Hydride study', authors: [], paper_type: 'review',
-              methodology: ['CALYPSO群智能结构搜索'],
-            },
-            material_states: [], classification_evidence: [],
-            field_evidence: {
-              methodology: [{
-                section: 'Supplementary Material', page: 2,
-                quote: 'The simulations were performed with several first-principles methods.',
-              }],
-            },
-            ai_original: {
-              paper: {
-                methodology: Array.from({ length: 20 }, (_, index) => `CALYPSO群智能结构搜索 ${index + 1}`),
-              },
-            },
-          }
-      return new Response(JSON.stringify({ ok: true, data }), {
-        status: 200, headers: { 'Content-Type': 'application/json' },
-      })
-    }))
-
-    render(<UploadParsingDetail taskId={'k'.repeat(32)} onSubmitted={vi.fn()} />)
-
-    expect(await screen.findByText(/AI 建议：CALYPSO群智能结构搜索/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '展开 研究方法（每行一项）的 AI 解释' })).not.toBeInTheDocument()
-
-    measuredHeight = 240
-    await waitFor(() => {
-      fireEvent(window, new Event('resize'))
-      expect(screen.getByRole('button', { name: '展开 研究方法（每行一项）的 AI 解释' })).toBeInTheDocument()
-    })
-
-    measuredHeight = 80
-    await waitFor(() => {
-      fireEvent(window, new Event('resize'))
-      expect(screen.queryByRole('button', { name: '展开 研究方法（每行一项）的 AI 解释' })).not.toBeInTheDocument()
-    })
   })
 
   it('轮询更新局部草稿时只读预览实时刷新内容', async () => {

@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   Alert, Autocomplete, Box, Button, Card, CardContent, Chip, Collapse, FormControl,
-  FormHelperText, InputLabel, MenuItem, Select, TextField, Typography, useMediaQuery,
+  FormHelperText, InputLabel, MenuItem, Select, TextField, Typography,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import DeleteIcon from '@mui/icons-material/Delete'
@@ -56,63 +56,13 @@ const crystalSystemForNumber = (value: number): CrystalSystem => (
   CRYSTAL_SYSTEM_NUMBER_RANGES.find(range => value >= range.min && value <= range.max)?.value ?? 'unknown'
 )
 
-const COLLAPSED_EVIDENCE_HEIGHT = 120
-// AI 建议折叠后仅保留单行（MUI caption 行高约 20px），完整文本仍保留在草稿数据中
-const COLLAPSED_AI_LINE_HEIGHT = 20
-
-// 证据注释：展示 AI 建议与文献出处，溢出时按字段宽度收起并可独立展开
+// 证据注释只展示可逐字核验的论文原文。
 export const EvidenceNotes: React.FC<{
-  label: string
-  aiValue?: unknown
   evidence?: SourceEvidence | SourceEvidence[] | null
-}> = ({ label, aiValue, evidence }) => {
+}> = ({ evidence }) => {
   const { t } = useLanguage()
   const items = evidenceList(evidence)
-  const contentId = useId()
-  const contentRef = useRef<HTMLDivElement>(null)
-  const overflowRef = useRef(false)
-  const [isOverflowing, setIsOverflowing] = useState(false)
-  const [expanded, setExpanded] = useState(false)
-  const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
-
-  const displayValue = (value: unknown) => {
-    if (value == null || value === '') return t('common.notProvided')
-    if (Array.isArray(value)) return value.join(t('upload.listSeparator')) || t('common.notProvided')
-    if (typeof value === 'object') return JSON.stringify(value)
-    return String(value)
-  }
-
-  const measureOverflow = useCallback(() => {
-    const nextOverflowing = (contentRef.current?.scrollHeight || 0) > COLLAPSED_EVIDENCE_HEIGHT
-    if (nextOverflowing === overflowRef.current) return
-
-    overflowRef.current = nextOverflowing
-    setIsOverflowing(nextOverflowing)
-    setExpanded(false)
-  }, [])
-
-  useLayoutEffect(() => {
-    measureOverflow()
-  }, [aiValue, evidence, measureOverflow])
-
-  useEffect(() => {
-    const content = contentRef.current
-    if (!content) return undefined
-
-    window.addEventListener('resize', measureOverflow)
-    let observer: ResizeObserver | undefined
-    if (typeof ResizeObserver !== 'undefined') {
-      observer = new ResizeObserver(measureOverflow)
-      observer.observe(content)
-    }
-
-    return () => {
-      observer?.disconnect()
-      window.removeEventListener('resize', measureOverflow)
-    }
-  }, [measureOverflow])
-
-  if (aiValue === undefined && items.length === 0) return null
+  if (items.length === 0) return null
   return (
     <Box sx={{
       mt: 0.75,
@@ -124,53 +74,12 @@ export const EvidenceNotes: React.FC<{
       borderRadius: 1,
       bgcolor: 'action.hover',
     }}>
-      <Collapse
-        in={!isOverflowing || expanded}
-        collapsedSize={isOverflowing ? COLLAPSED_AI_LINE_HEIGHT : 0}
-        timeout={prefersReducedMotion ? 0 : 180}
-      >
-        <Box id={contentId} ref={contentRef} sx={{ minWidth: 0 }}>
-          {aiValue !== undefined && (
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              display="block"
-              style={isOverflowing && !expanded
-                ? { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
-                : { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
-            >
-              {t('upload.aiSuggestion', { value: displayValue(aiValue) })}
-            </Typography>
-          )}
-          {items.map((item, index) => (
-            <Typography key={index} variant="caption" color="text.secondary" display="block" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-              {[item.section, item.page ? t('upload.pageRef', { page: item.page }) : ''].filter(Boolean).join(' · ') || t('upload.originalText')}
-              {item.quote ? t('upload.quoteSuffix', { quote: item.quote }) : ''}
-            </Typography>
-          ))}
-        </Box>
-      </Collapse>
-      {isOverflowing && (
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 0.25 }}>
-          <Button
-            size="small"
-            aria-expanded={expanded}
-            aria-controls={contentId}
-            aria-label={t('upload.toggleAiExplainAria', {
-              action: expanded ? t('upload.collapse') : t('upload.expand'),
-              label,
-            })}
-            onClick={() => setExpanded(value => !value)}
-            endIcon={<ExpandMoreIcon sx={{
-              transform: expanded ? 'rotate(180deg)' : 'none',
-              transition: prefersReducedMotion ? 'none' : 'transform 180ms ease',
-            }} />}
-            sx={{ minHeight: 28, px: 1 }}
-          >
-            {expanded ? t('upload.collapseAiExplain') : t('upload.expandAiExplain')}
-          </Button>
-        </Box>
-      )}
+      {items.map((item, index) => (
+        <Typography key={index} variant="caption" color="text.secondary" display="block" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+          {[item.section, item.page ? t('upload.pageRef', { page: item.page }) : ''].filter(Boolean).join(' · ') || t('upload.originalText')}
+          {item.quote ? t('upload.quoteSuffix', { quote: item.quote }) : ''}
+        </Typography>
+      ))}
     </Box>
   )
 }
@@ -191,8 +100,6 @@ interface MaterialStatesEditorProps {
   onStructureCandidatesChange?: (next: StructureCandidate[]) => void
   /** 空间群标准表（由父组件加载） */
   spaceGroups?: SpaceGroupOption[]
-  /** AI 原始建议中的材料状态，供证据注释展示 */
-  aiMaterialStates?: DraftMaterialState[]
   catalogLoading?: boolean
   catalogError?: string
   /** 结构上传所在的上传任务 */
@@ -226,7 +133,6 @@ const MaterialStatesEditor: React.FC<MaterialStatesEditorProps> = ({
   structureCandidates,
   onStructureCandidatesChange,
   spaceGroups = [],
-  aiMaterialStates,
   catalogLoading = false,
   catalogError = '',
   taskId,
@@ -541,7 +447,6 @@ const MaterialStatesEditor: React.FC<MaterialStatesEditorProps> = ({
 
         <Box data-testid="material-states-list" sx={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 1.5, mt: 1.5 }}>
           {states.map((state, index) => {
-            const aiState = aiMaterialStates?.[index]
             const stateCandidates = (structureCandidates || []).filter(candidate => candidate.material_state_ref === `material_states[${index}]`)
             const isCollapsed = !readOnly && Boolean(collapsedStates[index])
             const isConventional = superconductorKind === 'conventional'
@@ -672,9 +577,7 @@ const MaterialStatesEditor: React.FC<MaterialStatesEditorProps> = ({
                       slotProps={{ htmlInput: { min: 1, max: 230 } }} />
                   </Box>
                   <EvidenceNotes
-                    label={t('upload.materialStateNumber', { index: index + 1 })}
-                    aiValue={aiState ? `${aiState.material || ''} ${aiState.pressure_value_gpa ?? ''} GPa`.trim() : undefined}
-                    evidence={state.space_group_evidence || aiState?.space_group_evidence}
+                    evidence={state.space_group_evidence}
                   />
 
                   <Box data-issue-field={`material_states[${index}].calculation_context`}

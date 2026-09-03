@@ -46,7 +46,6 @@ export default {
   selectPlaceholder: 'Please select',
   originalText: 'Original',
   bodyText: 'Main text',
-  aiSuggestion: 'AI suggestion: {value}',
   pageRef: 'p. {page}',
   quoteSuffix: ': "{quote}"',
   saveAction: 'Save',
@@ -63,9 +62,6 @@ export default {
   uploadFailed: 'Upload failed',
   uploadFailedHttp: 'Upload failed (HTTP {status})',
   networkError: 'Network error, upload failed',
-  toggleAiExplainAria: '{action} {label} AI explanation',
-  collapseAiExplain: 'Collapse AI explanation',
-  expandAiExplain: 'Expand AI explanation',
 
   // ── UploadPage ──
   pageTitle: 'Upload',

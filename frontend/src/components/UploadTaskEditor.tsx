@@ -369,9 +369,6 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
   }
   if (!draft) return <Alert severity="error">{error || t('upload.draftMissing')}</Alert>
 
-  const ai = draft.ai_original || {}
-  const aiPaper = ai.paper || {}
-
   // 统一给出错字段加定位锚点、错误态与说明文字，避免每处重复拼装
   const issueOf = (field: string) => issues.find(item => item.field === field)
   const hasIssue = (field: string) => Boolean(issueOf(field))
@@ -425,13 +422,11 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
           <TextField fullWidth label={t('upload.title')} value={draft.paper.title || ''}
             {...issueProps('paper.title')}
             onChange={event => setPaperField('title', event.target.value)} />
-          <EvidenceNotes label={t('upload.title')} aiValue={aiPaper.title} />
         </Box>
         <Box>
           <TextField fullWidth label="DOI" value={draft.paper.doi || ''}
             {...issueProps('paper.doi')}
             onChange={event => setPaperField('doi', event.target.value.trim())} />
-          <EvidenceNotes label="DOI" aiValue={aiPaper.doi} />
         </Box>
         <Box>
           <Autocomplete
@@ -486,7 +481,6 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
               </MenuItem>
             ))}
           </Menu>
-          <EvidenceNotes label={t('upload.authorsField')} aiValue={aiPaper.authors} />
         </Box>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: '2fr 1fr 1fr 1fr' }, gap: 1 }}>
           <TextField label={t('upload.journal')} value={draft.paper.journal || ''}
@@ -498,7 +492,6 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
           <TextField label={t('upload.pages')} value={draft.paper.pages || ''}
             onChange={event => setPaperField('pages', event.target.value)} />
           <Box sx={{ gridColumn: '1 / -1' }}>
-            <EvidenceNotes label={t('upload.journalInfo')} aiValue={[aiPaper.journal, aiPaper.year, aiPaper.volume, aiPaper.pages].filter(Boolean).join(' · ')} />
           </Box>
         </Box>
       </Box>
@@ -511,7 +504,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
             {PAPER_TYPE_VALUES.map(value => <MenuItem key={value} value={value}>{dict.enums.paperType[value]}</MenuItem>)}
           </Select>
           <IssueText field="paper.paper_type" />
-          <EvidenceNotes label={t('upload.paperTypeField')} aiValue={aiPaper.paper_type} evidence={classificationEvidence} />
+          <EvidenceNotes evidence={classificationEvidence} />
         </FormControl>
         <FormControl fullWidth disabled={draft.paper.paper_type !== 'theoretical'}
           error={hasIssue('paper.theoretical_subtype')} data-issue-field="paper.theoretical_subtype">
@@ -523,7 +516,6 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
             <MenuItem value="theory">{dict.enums.theoreticalSubtype.theory}</MenuItem>
           </Select>
           <IssueText field="paper.theoretical_subtype" />
-          <EvidenceNotes label={t('upload.theoreticalSubtypeField')} aiValue={aiPaper.theoretical_subtype} />
         </FormControl>
         <FormControl fullWidth data-issue-field="paper.superconductor_kind">
           <InputLabel id="paper-superconductor-kind-label">{t('upload.superconductorKindField')}</InputLabel>
@@ -533,7 +525,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
               <MenuItem key={value} value={value}>{dict.enums.superconductorKind[value]}</MenuItem>
             ))}
           </Select>
-          <EvidenceNotes label={t('upload.superconductorKindField')} aiValue={aiPaper.superconductor_kind} evidence={classificationEvidence} />
+          <EvidenceNotes evidence={classificationEvidence} />
         </FormControl>
         <Box data-issue-field="paper.material_families">
           <Autocomplete<ClassificationTerm | string, true, false, true>
@@ -561,7 +553,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
               />
             )}
           />
-          <EvidenceNotes label={t('upload.materialFamilyField')} aiValue={aiPaper.material_families} evidence={classificationEvidence} />
+          <EvidenceNotes evidence={classificationEvidence} />
         </Box>
       </Box>
 
@@ -575,8 +567,6 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
               value={toLines(draft.paper[field as keyof UploadDraft['paper']] as string[] | undefined)}
               onChange={event => setPaperField(field as keyof UploadDraft['paper'], fromLines(event.target.value))} />
             <EvidenceNotes
-              label={label}
-              aiValue={aiPaper[field as keyof typeof aiPaper]}
               evidence={draft.field_evidence?.[field]}
             />
           </Box>
@@ -592,7 +582,6 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
           <TextField fullWidth label={String(label)} multiline minRows={Number(rows)}
             value={String(draft.paper[field as keyof UploadDraft['paper']] || '')}
             onChange={event => setPaperField(field as keyof UploadDraft['paper'], event.target.value)} />
-          <EvidenceNotes label={String(label)} aiValue={aiPaper[field as keyof typeof aiPaper]} />
         </Box>
       ))}
 
@@ -600,7 +589,7 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
         <TextField fullWidth label={t('upload.researchMotivationLabel')} multiline minRows={3}
           value={draft.research_motivation || ''}
           onChange={event => setDraftField('research_motivation', event.target.value)} />
-        <EvidenceNotes label={t('upload.researchMotivationLabel')} aiValue={ai.research_motivation} evidence={classificationEvidence} />
+        <EvidenceNotes evidence={classificationEvidence} />
       </Box>
 
       <MaterialStatesEditor
@@ -614,7 +603,6 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
         structureCandidates={draft.structure_candidates || []}
         onStructureCandidatesChange={next => setDraftField('structure_candidates', next)}
         spaceGroups={spaceGroups}
-        aiMaterialStates={ai.material_states}
         taskId={taskId}
         paperType={draft.paper.paper_type}
         superconductorKind={draft.paper.superconductor_kind}
