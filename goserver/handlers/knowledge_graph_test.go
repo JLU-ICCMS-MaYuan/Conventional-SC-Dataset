@@ -196,7 +196,7 @@ func TestReplacePaperGraphMarksRequiresAdminAndApprovedPaper(t *testing.T) {
 			c.Set("user_email", actor.Email)
 			c.Next()
 		})
-		router.PUT("/papers/:paperId/graph-marks", middleware.AdminRequired, ReplacePaperGraphMarks)
+		router.PUT("/papers/:id/graph-marks", middleware.AdminRequired, ReplacePaperGraphMarks)
 		recorder := httptest.NewRecorder()
 		request := httptest.NewRequest(http.MethodPut, "/papers/"+strconv.FormatUint(uint64(paperID), 10)+"/graph-marks", strings.NewReader(`{"marks":["origin","origin","breakthrough"]}`))
 		request.Header.Set("Content-Type", "application/json")

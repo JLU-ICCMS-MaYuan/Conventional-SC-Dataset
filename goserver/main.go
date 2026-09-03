@@ -172,27 +172,7 @@ func main() {
 	// 管理员路由组
 	admin := r.Group("/api/admin")
 	admin.Use(middleware.AuthRequired, middleware.AdminRequired)
-	{
-		admin.GET("/papers/all", handlers.GetPapers)
-		admin.GET("/papers/:id", handlers.GetPaperDetail)
-		admin.PUT("/papers/:id", handlers.UpdatePaper)
-		admin.POST("/papers/:id/review", handlers.ReviewPaper)
-		admin.PUT("/papers/:paperId/graph-marks", handlers.ReplacePaperGraphMarks)
-		admin.DELETE("/papers/:id", middleware.SuperAdminRequired, handlers.DeletePaper)
-		admin.POST("/papers/batch-review", handlers.BatchReview)
-		admin.POST("/papers/batch-delete", middleware.SuperAdminRequired, handlers.BatchDelete)
-		admin.GET("/users", middleware.SuperAdminRequired, handlers.GetUsers)
-		admin.PUT("/users/:id", middleware.SuperAdminRequired, handlers.UpdateUser)
-		admin.PUT("/users/:id/permissions", middleware.SuperAdminRequired, handlers.UpdateUser)
-		admin.DELETE("/users/:id", middleware.SuperAdminRequired, handlers.DeleteUser)
-		admin.PUT("/users/:id/username", middleware.SuperAdminRequired, handlers.AdminUpdateUsername)
-		admin.GET("/username-audit-events", middleware.SuperAdminRequired, handlers.GetUsernameAuditEvents)
-		admin.GET("/all-users", middleware.SuperAdminRequired, handlers.AllUsers)
-		admin.GET("/stats", handlers.GetStats)
-		admin.POST("/news", middleware.SuperAdminRequired, handlers.CreateNews)
-		admin.PUT("/news/:id", middleware.SuperAdminRequired, handlers.UpdateNews)
-		admin.DELETE("/news/:id", middleware.SuperAdminRequired, handlers.DeleteNews)
-	}
+	registerAdminRoutes(admin)
 
 	// 统计 API
 	r.GET("/api/community/contributions", middleware.OptionalAuth, handlers.CommunityContributions)
@@ -222,4 +202,27 @@ func main() {
 	// 8. 启动
 	log.Printf("Go server starting on :%s (Python backend: 8000)", cfg.Port)
 	r.Run(":" + cfg.Port) // 默认监听 0.0.0.0:8080
+}
+
+// registerAdminRoutes 保持管理员路由集中注册，使路由冲突可在无需启动数据库的测试中覆盖。
+func registerAdminRoutes(admin *gin.RouterGroup) {
+	admin.GET("/papers/all", handlers.GetPapers)
+	admin.GET("/papers/:id", handlers.GetPaperDetail)
+	admin.PUT("/papers/:id", handlers.UpdatePaper)
+	admin.POST("/papers/:id/review", handlers.ReviewPaper)
+	admin.PUT("/papers/:id/graph-marks", handlers.ReplacePaperGraphMarks)
+	admin.DELETE("/papers/:id", middleware.SuperAdminRequired, handlers.DeletePaper)
+	admin.POST("/papers/batch-review", handlers.BatchReview)
+	admin.POST("/papers/batch-delete", middleware.SuperAdminRequired, handlers.BatchDelete)
+	admin.GET("/users", middleware.SuperAdminRequired, handlers.GetUsers)
+	admin.PUT("/users/:id", middleware.SuperAdminRequired, handlers.UpdateUser)
+	admin.PUT("/users/:id/permissions", middleware.SuperAdminRequired, handlers.UpdateUser)
+	admin.DELETE("/users/:id", middleware.SuperAdminRequired, handlers.DeleteUser)
+	admin.PUT("/users/:id/username", middleware.SuperAdminRequired, handlers.AdminUpdateUsername)
+	admin.GET("/username-audit-events", middleware.SuperAdminRequired, handlers.GetUsernameAuditEvents)
+	admin.GET("/all-users", middleware.SuperAdminRequired, handlers.AllUsers)
+	admin.GET("/stats", handlers.GetStats)
+	admin.POST("/news", middleware.SuperAdminRequired, handlers.CreateNews)
+	admin.PUT("/news/:id", middleware.SuperAdminRequired, handlers.UpdateNews)
+	admin.DELETE("/news/:id", middleware.SuperAdminRequired, handlers.DeleteNews)
 }

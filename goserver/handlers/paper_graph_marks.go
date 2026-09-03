@@ -19,7 +19,7 @@ var validGraphMarkTypes = map[string]struct{}{
 // ReplacePaperGraphMarks 整体替换管理员确认的领域里程碑。引用关系不允许
 // 人工写入；这里仅维护无法由被引量自动判断的源头和突破。
 func ReplacePaperGraphMarks(c *gin.Context) {
-	parsedID, err := strconv.ParseUint(c.Param("paperId"), 10, 32)
+	parsedID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil || parsedID == 0 {
 		graphError(c, http.StatusBadRequest, "invalid_graph_mark", "论文 ID 无效")
 		return

@@ -43,3 +43,11 @@ func TestGzipMiddlewareDropsLateContentLength(t *testing.T) {
 		t.Fatalf("unexpected response body length: got %d want %d", len(decompressed), len(payload))
 	}
 }
+
+func TestAdminRoutesRegisterWithoutWildcardConflict(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	admin := router.Group("/api/admin")
+
+	registerAdminRoutes(admin)
+}
