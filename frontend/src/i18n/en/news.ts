@@ -2,18 +2,10 @@
 // 缺键会在 `tsc -b` 阶段报错，不会静默回退。
 export default {
   // Hero
-  heroTitle: 'Superconducting Literature Database',
-  heroSubtitle: 'A superconductivity-material search platform built around the periodic table. It covers conventional superconductors, cuprates, iron-based and high-pressure hydrides, with literature search, AI Q&A and Tc prediction.',
+  heroAffiliation: 'Key Laboratory of Material Simulation Methods & Software of Ministry of Education, Jilin University, China',
+  heroTitle: 'Superconduct Wiki',
+  heroSubtitle: 'An AI-driven, decentralized research infrastructure for superconductivity, unifying curated scientific data, Tc prediction, a superconductivity knowledge graph, and retrieval-augmented AI assistance.',
   startExploring: 'Start Exploring',
-  aiAssistant: 'AI Literature Assistant',
-
-  // Feature cards
-  featureElementSearch: 'Element Search',
-  featureElementSearchDesc: 'Pick elements from the periodic table to search superconductivity records, filterable by Tc, pressure and space group.',
-  featureAiQa: 'AI Q&A',
-  featureAiQaDesc: 'Ask in natural language; AI answers with streaming output and cited sources.',
-  featureTcPredict: 'Tc Prediction',
-  featureTcPredictDesc: 'Upload structural files and density of states to estimate the superconducting critical temperature.',
 
   // Nobel milestones
   nobelMilestones: 'Nobel Prize Milestones',
@@ -54,11 +46,12 @@ export default {
   // Feed
   feedTitle: 'Superconductivity News & Latest Papers',
   feedSubtitle: 'Collected daily from official sources · Sorted by publication date',
-  kindLabel: 'Content type',
-  kindAll: 'All content',
   kindNews: 'News',
   kindPreprint: 'Preprint',
   kindJournalArticle: 'Journal article',
+  feedNewsColumn: 'News',
+  feedPreprintsColumn: 'Preprints',
+  feedArticlesColumn: 'Articles',
   autoCollected: 'Auto-collected, not reviewed by this site',
   loadingFeed: 'Loading news…',
   feedLoadFailed: 'Failed to load the feed. Please retry. This does not mean there is no news.',

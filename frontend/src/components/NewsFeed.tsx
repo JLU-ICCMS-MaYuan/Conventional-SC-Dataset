@@ -1,12 +1,13 @@
-import React, { useEffect, useState } from 'react'
-import { Alert, Box, Button, Chip, Drawer, FormControl, IconButton, InputLabel, Link, NativeSelect, Paper, Skeleton, Stack, Typography } from '@mui/material'
+import React, { useCallback, useEffect, useState } from 'react'
+import { Alert, Box, Button, Chip, Drawer, IconButton, Link, Paper, Skeleton, Stack, Typography } from '@mui/material'
 import { Close as CloseIcon } from '@mui/icons-material'
 import { api } from '../lib/api'
 import { useLanguage } from '../context/LanguageContext'
 import type { Lang } from '../i18n'
 
-type Kind = '' | 'news' | 'preprint' | 'journal_article'
-const kindColors: Record<Exclude<Kind, ''>, { bg: string; color: string }> = {
+type Kind = 'news' | 'preprint' | 'journal_article'
+const PAGE_SIZE = 5
+const kindColors: Record<Kind, { bg: string; color: string }> = {
   news: { bg: '#e3f2fd', color: '#1976d2' },
   preprint: { bg: '#f3e5f5', color: '#7b1fa2' },
   journal_article: { bg: '#e8f5e9', color: '#388e3c' }
@@ -74,14 +75,20 @@ function FeedLoading({ label }: { label: string }) {
   </Box>
 }
 
-export default function NewsFeed() {
+interface FeedColumnProps {
+  kind: Kind
+  label: string
+  onSelect: (item: FeedItem) => void
+  onSources: (sources: SourceState[]) => void
+}
+
+function FeedColumn({ kind, label, onSelect, onSources }: FeedColumnProps) {
   const { t, lang } = useLanguage()
-  const [query, setQuery] = useState<{ kind: Kind; page: number }>({ kind: '', page: 1 })
+  const [page, setPage] = useState(1)
   const [revision, setRevision] = useState(0)
   const [data, setData] = useState<FeedResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
-  const [selectedItem, setSelectedItem] = useState<FeedItem | null>(null)
   const kinds: Record<Exclude<Kind, ''>, string> = {
     news: t('news.kindNews'),
     preprint: t('news.kindPreprint'),
@@ -92,39 +99,24 @@ export default function NewsFeed() {
     const controller = new AbortController()
     setLoading(true)
     setError(false)
-    const params = new URLSearchParams({ page: String(query.page), page_size: '20' })
-    if (query.kind) params.set('kind', query.kind)
+    const params = new URLSearchParams({ kind, page: String(page), page_size: String(PAGE_SIZE) })
     api.get<FeedResponse>('/api/news/feed?' + params, { signal: controller.signal })
       .then(result => {
         if (!Array.isArray(result.items) || !Array.isArray(result.sources) || typeof result.total !== 'number') throw new Error('invalid feed response')
-        if (!controller.signal.aborted) setData(result)
+        if (!controller.signal.aborted) {
+          setData(result)
+          onSources(result.sources)
+        }
       })
       .catch(() => { if (!controller.signal.aborted) setError(true) })
       .finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return () => controller.abort()
-  }, [query, revision])
+  }, [kind, onSources, page, revision])
 
-  const pages = data ? Math.min(10000, Math.max(1, Math.ceil(data.total / 20))) : 1
-  return <Box component="section" aria-labelledby="news-feed-heading" sx={{ mb: 6 }}>
-    <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'center' }} gap={2} sx={{ mb: 2 }}>
-      <Box>
-        <Typography id="news-feed-heading" component="h2" variant="h2">{t('news.feedTitle')}</Typography>
-        <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>{t('news.feedSubtitle')}</Typography>
-      </Box>
-      <FormControl variant="standard" sx={{ minWidth: 160 }}>
-        <InputLabel htmlFor="news-kind" shrink>{t('news.kindLabel')}</InputLabel>
-        <NativeSelect value={query.kind} onChange={event => setQuery({ kind: event.target.value as Kind, page: 1 })} inputProps={{ id: 'news-kind' }}>
-          <option value="">{t('news.kindAll')}</option>
-          <option value="news">{t('news.kindNews')}</option>
-          <option value="preprint">{t('news.kindPreprint')}</option>
-          <option value="journal_article">{t('news.kindJournalArticle')}</option>
-        </NativeSelect>
-      </FormControl>
-    </Stack>
-    <Typography variant="body2" sx={{ mb: 2, color: 'text.primary' }}>
-      {t('news.autoCollected')}
-    </Typography>
-    <Paper variant="outlined" sx={{ px: { xs: 2, sm: 3 }, borderRadius: 2, boxShadow: 'none' }}>
+  const pages = data ? Math.min(10000, Math.max(1, Math.ceil(data.total / PAGE_SIZE))) : 1
+  return <Paper component="section" aria-label={label} variant="outlined" sx={{ minWidth: 0, px: { xs: 2, md: 2.5 }, borderRadius: 2, boxShadow: 'none' }}>
+    <Typography component="h3" variant="h3" sx={{ pt: 2, pb: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>{label}</Typography>
+    <Box sx={{ minHeight: 450 }}>
       {loading ? <FeedLoading label={t('news.loadingFeed')} /> : error ? <Alert severity="error" sx={{ my: 2 }} action={<Button color="inherit" onClick={() => setRevision(v => v + 1)}>{t('common.retry')}</Button>}>
         {t('news.feedLoadFailed')}
       </Alert> : data?.items.length === 0 ? <Box sx={{ py: 5 }} role="status">
@@ -134,9 +126,9 @@ export default function NewsFeed() {
         {data?.items.map(item => <Box
           component="li"
           key={item.id}
-          onClick={() => setSelectedItem(item)}
+          onClick={() => onSelect(item)}
           sx={{
-            py: 2.5,
+            py: 1.25,
             borderBottom: '1px solid',
             borderColor: 'divider',
             '&:last-child': { borderBottom: 0 },
@@ -145,9 +137,10 @@ export default function NewsFeed() {
             transition: 'background-color 0.2s',
             px: 1,
             mx: -1,
-            borderRadius: 1
+            borderRadius: 1,
+            minHeight: 74,
           }}>
-          <Stack direction="row" useFlexGap flexWrap="wrap" alignItems="center" gap={1} sx={{ mb: 1 }}>
+          <Stack direction="row" useFlexGap flexWrap="wrap" alignItems="center" gap={0.75} sx={{ mb: 0.5 }}>
             <Chip
               size="small"
               label={kinds[item.kind]}
@@ -162,28 +155,56 @@ export default function NewsFeed() {
             <Typography variant="body2" color="text.secondary">{t('news.publishedAt', { date: dateLabel(t, item.published_at, item.date_precision) })}</Typography>
             {item.kind === 'preprint' && item.version > 0 && <Typography variant="body2" color="text.secondary">v{item.version}</Typography>}
           </Stack>
-          <Typography component="h3" variant="h3" sx={{ lineHeight: 1.5, maxWidth: '80ch', fontWeight: 600 }}>
+          <Typography component="h4" variant="body2" sx={{ lineHeight: 1.4, fontWeight: 700, display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden' }}>
             {item.title}
           </Typography>
-          {(item.authors.length > 0 || item.journal) && <Typography variant="body2" sx={{ mt: 0.5, color: 'text.secondary' }}>
+          {(item.authors.length > 0 || item.journal) && <Typography variant="caption" sx={{ mt: 0.25, color: 'text.secondary', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {item.authors.slice(0, 4).join(lang === 'zh' ? '、' : ', ')}{item.authors.length > 4 ? t('news.etAl') : ''}{item.journal ? ' · ' + item.journal : ''}
           </Typography>}
         </Box>)}
       </Box>}
-    </Paper>
+    </Box>
     {!loading && !error && data && data.total > 0 && <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1} sx={{ mt: 2 }}>
-      <Typography variant="body2" aria-live="polite">{t('news.pageInfo', { total: data.total, page: query.page, pages })}</Typography>
+      <Typography variant="body2" aria-live="polite">{t('news.pageInfo', { total: data.total, page, pages })}</Typography>
       <Stack direction="row" gap={1}>
-        <Button variant="outlined" disabled={query.page <= 1} onClick={() => setQuery(q => ({ ...q, page: q.page - 1 }))}>{t('news.prevPage')}</Button>
-        <Button variant="outlined" disabled={query.page >= pages} onClick={() => setQuery(q => ({ ...q, page: q.page + 1 }))}>{t('news.nextPage')}</Button>
+        <Button variant="outlined" disabled={page <= 1} onClick={() => setPage(value => value - 1)}>{t('news.prevPage')}</Button>
+        <Button variant="outlined" disabled={page >= pages} onClick={() => setPage(value => value + 1)}>{t('news.nextPage')}</Button>
       </Stack>
     </Stack>}
-    {data && <Box component="details" sx={{ mt: 2, color: 'text.secondary', fontSize: 13 }}>
+  </Paper>
+}
+
+export default function NewsFeed() {
+  const { t, lang } = useLanguage()
+  const [selectedItem, setSelectedItem] = useState<FeedItem | null>(null)
+  const [sources, setSources] = useState<SourceState[]>([])
+  const handleSources = useCallback((nextSources: SourceState[]) => setSources(nextSources), [])
+  const columns: { kind: Kind; label: string }[] = [
+    { kind: 'news', label: t('news.feedNewsColumn') },
+    { kind: 'preprint', label: t('news.feedPreprintsColumn') },
+    { kind: 'journal_article', label: t('news.feedArticlesColumn') },
+  ]
+  const kinds: Record<Kind, string> = {
+    news: t('news.kindNews'),
+    preprint: t('news.kindPreprint'),
+    journal_article: t('news.kindJournalArticle'),
+  }
+
+  return <Box component="section" aria-labelledby="news-feed-heading" sx={{ mb: 6 }}>
+    <Box sx={{ mb: 2 }}>
+      <Typography id="news-feed-heading" component="h2" variant="h2">{t('news.feedTitle')}</Typography>
+      <Typography variant="body2" sx={{ mt: 0.5, color: 'text.secondary' }}>{t('news.feedSubtitle')}</Typography>
+      <Typography variant="body2" sx={{ mt: 1, color: 'text.primary' }}>{t('news.autoCollected')}</Typography>
+    </Box>
+    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 1fr))' }, gap: 2 }}>
+      {columns.map(column => <FeedColumn key={column.kind} {...column} onSelect={setSelectedItem} onSources={handleSources} />)}
+    </Box>
+    {sources.length > 0 && <Box component="details" sx={{ mt: 2, color: 'text.secondary', fontSize: 13 }}>
       <Box component="summary" sx={{ cursor: 'pointer', py: 1 }}>{t('news.sourceStatusTitle')}
-        {data.sources.some(s => sourceNeedsAttention(s)) ? t('news.sourcesNeedAttention') : ''}
+        {sources.some(sourceNeedsAttention) ? t('news.sourcesNeedAttention') : ''}
       </Box>
       <Stack gap={1} sx={{ pt: 1 }}>
-        {data.sources.map(state => <Box key={state.source}>
+        {sources.map(state => <Box key={state.source}>
           <Typography variant="body2">{t('news.sourceItem', { name: sourceNames[state.source] || state.source, status: sourceStatus(t, state) })}{state.error_code ? t('news.errorCode', { code: state.error_code }) : ''}</Typography>
           <Typography variant="body2">{t('news.lastSuccess', { time: timestamp(t, lang, state.last_success_at) })}</Typography>
         </Box>)}
@@ -191,7 +212,6 @@ export default function NewsFeed() {
       </Stack>
     </Box>}
 
-    {/* 右侧抽屉详情 */}
     <Drawer
       anchor="right"
       open={selectedItem !== null}

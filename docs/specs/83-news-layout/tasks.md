@@ -8,10 +8,10 @@
 
 **目的**：建立可观察的品牌、三列独立查询和交互回归基线。
 
-- [ ] T001 在 `tests/03_data_search_and_database_discovery/news-page-layout.test.tsx` 创建 News 页面测试夹具，覆盖三类各至少 6 条的 API 响应和中英文渲染。
-- [ ] T002 [US1] 在 `tests/03_data_search_and_database_discovery/news-page-layout.test.tsx` 先编写双语品牌、删除入口与 `/search` 跳转的失败测试。
-- [ ] T003 [US2] 在 `tests/03_data_search_and_database_discovery/news-page-layout.test.tsx` 先编写每栏 `page_size=5`、类型隔离和单栏 `Next` 不影响其他栏的失败测试。
-- [ ] T004 [US3] 在 `tests/03_data_search_and_database_discovery/news-page-layout.test.tsx` 先编写空/失败隔离、详情抽屉与安全外链的失败测试。
+- [x] T001 在 `tests/03_data_search_and_database_discovery/news-page-layout.test.tsx` 创建 News 页面测试夹具，覆盖三类各至少 6 条的 API 响应和中英文渲染。
+- [x] T002 [US1] 在 `tests/03_data_search_and_database_discovery/news-page-layout.test.tsx` 先编写双语品牌、删除入口与 `/search` 跳转的失败测试。
+- [x] T003 [US2] 在 `tests/03_data_search_and_database_discovery/news-page-layout.test.tsx` 先编写每栏 `page_size=5`、类型隔离和单栏 `Next` 不影响其他栏的失败测试。
+- [x] T004 [US3] 在 `tests/03_data_search_and_database_discovery/news-page-layout.test.tsx` 先编写空/失败隔离、详情抽屉与安全外链的失败测试。
 
 ## 阶段 2：用户故事 1——品牌与唯一探索入口（P1，MVP）
 
@@ -21,9 +21,9 @@
 
 ### 实施
 
-- [ ] T005 [P] [US1] 修改 `frontend/src/i18n/zh/news.ts`，写入已确认的中文品牌、机构署名与 Hero 简介，移除不再使用的 AI 助手文案键。
-- [ ] T006 [P] [US1] 修改 `frontend/src/i18n/en/news.ts`，写入已确认的英文品牌、机构署名与 Hero 简介，移除不再使用的 AI 助手文案键。
-- [ ] T007 [US1] 修改 `frontend/src/pages/NewsPage.tsx`，渲染本地化机构署名，删除三张功能卡和 AI 助手按钮，并保留标题下方跳至 `/search` 的主行动按钮。
+- [x] T005 [P] [US1] 修改 `frontend/src/i18n/zh/news.ts`，写入已确认的中文品牌、机构署名与 Hero 简介，移除不再使用的 AI 助手文案键。
+- [x] T006 [P] [US1] 修改 `frontend/src/i18n/en/news.ts`，写入已确认的英文品牌、机构署名与 Hero 简介，移除不再使用的 AI 助手文案键。
+- [x] T007 [US1] 修改 `frontend/src/pages/NewsPage.tsx`，渲染本地化机构署名，删除三张功能卡和 AI 助手按钮，并保留标题下方跳至 `/search` 的主行动按钮。
 
 ## 阶段 3：用户故事 2——三列独立资讯浏览（P1）
 
@@ -33,9 +33,9 @@
 
 ### 实施
 
-- [ ] T008 [US2] 重构 `frontend/src/components/NewsFeed.tsx`，以固定类型可复用资讯列封装独立页码、请求、加载、失败、重试、空状态和分页，并固定使用 `page_size=5`。
-- [ ] T009 [US2] 修改 `frontend/src/components/NewsFeed.tsx`，在页面级组装 News、Preprints、Articles 三个列，保留一个共享详情抽屉和一个来源状态区。
-- [ ] T010 [US2] 修改 `frontend/src/pages/NewsPage.tsx` 与 `frontend/src/components/NewsFeed.tsx`，完成桌面三列与窄屏纵向响应式布局，保证 1440×900 首屏的分页可见性。
+- [x] T008 [US2] 重构 `frontend/src/components/NewsFeed.tsx`，以固定类型可复用资讯列封装独立页码、请求、加载、失败、重试、空状态和分页，并固定使用 `page_size=5`。
+- [x] T009 [US2] 修改 `frontend/src/components/NewsFeed.tsx`，在页面级组装 News、Preprints、Articles 三个列，保留一个共享详情抽屉和一个来源状态区。
+- [x] T010 [US2] 修改 `frontend/src/pages/NewsPage.tsx` 与 `frontend/src/components/NewsFeed.tsx`，完成桌面三列与窄屏纵向响应式布局，保证 1440×900 首屏的分页可见性。
 
 ## 阶段 4：用户故事 3——保留详情与异常反馈（P2）
 
@@ -45,13 +45,13 @@
 
 ### 实施
 
-- [ ] T011 [US3] 修改 `frontend/src/components/NewsFeed.tsx`，使每个列条目都能更新共享选中项并复用现有详情抽屉、安全外链和来源状态行为。
+- [x] T011 [US3] 修改 `frontend/src/components/NewsFeed.tsx`，使每个列条目都能更新共享选中项并复用现有详情抽屉、安全外链和来源状态行为。
 
 ## 最终阶段：完善与验证
 
-- [ ] T012 [US1] [US2] [US3] 运行 `npx vitest run --config vitest.config.ts tests/03_data_search_and_database_discovery/news-page-layout.test.tsx` 和 `npm --prefix frontend run build`，修复本 Feature 引入的回归。
+- [x] T012 [US1] [US2] [US3] 运行 `frontend/node_modules/.bin/vitest run --config vitest.config.ts tests/03_data_search_and_database_discovery/news-page-layout.test.tsx`、英文全站巡检和 `npm --prefix frontend run build`，修复本 Feature 引入的回归。
 - [ ] T013 [US2] [US3] 按 `docs/specs/83-news-layout/quickstart.md` 在 1440×900 和窄屏完成浏览器验收，记录首屏、独立分页、详情抽屉和无横向溢出的证据。
-- [ ] T014 [US1] [US2] [US3] 实现验收后更新 `docs/overview/news.md`，记录实际已落地的三列分页布局，并回写 Issue #83 的 Documentation Impact。
+- [x] T014 [US1] [US2] [US3] 实现验收后更新 `docs/overview/news.md`，记录实际已落地的三列分页布局，并回写 Issue #83 的 Documentation Impact。
 
 ## 依赖与执行顺序
 

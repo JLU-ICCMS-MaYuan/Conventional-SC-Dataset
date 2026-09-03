@@ -12,37 +12,21 @@ const NewsPage: React.FC = () => {
   return (
     <Box>
       {/* Hero */}
-      <Box sx={{ textAlign: 'center', pt: { xs: 4, md: 10 }, pb: { xs: 4, md: 8 } }}>
-        <Typography variant="overline" sx={{ fontSize: 14, letterSpacing: '0.12em' }}>Jilin University · CALYPSO Group</Typography>
+      <Box sx={{ textAlign: 'center', pt: { xs: 4, md: 6 }, pb: { xs: 3, md: 4 } }}>
+        <Typography variant="overline" sx={{ display: 'block', maxWidth: 900, mx: 'auto', fontSize: 13, lineHeight: 1.6 }}>
+          {t('news.heroAffiliation')}
+        </Typography>
         <Typography variant="h1" sx={{ mt: 1 }}>
           {t('news.heroTitle')}
         </Typography>
         <Typography variant="body1" sx={{ mt: 2, maxWidth: 560, mx: 'auto', color: 'text.secondary', fontSize: 16, lineHeight: 1.8 }}>
           {t('news.heroSubtitle')}
         </Typography>
-        <Box sx={{ mt: 4, display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
-          <Button variant="contained" size="large" onClick={() => navigate('/search')} sx={{ borderRadius: 999, px: 4, py: 1.5 }}>
+        <Box sx={{ mt: 3 }}>
+          <Button variant="contained" size="large" onClick={() => navigate('/search')} sx={{ borderRadius: 2, px: 4, py: 1.25 }}>
             {t('news.startExploring')}
           </Button>
-          <Button variant="outlined" size="large" onClick={() => navigate('/rag')} sx={{ borderRadius: 999, px: 4, py: 1.5 }}>
-            {t('news.aiAssistant')}
-          </Button>
         </Box>
-      </Box>
-
-      {/* Feature cards */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 1fr))' }, gap: 3, mb: 6 }}>
-        {[
-          { icon: '🔍', title: t('news.featureElementSearch'), desc: t('news.featureElementSearchDesc'), path: '/search' },
-          { icon: '💬', title: t('news.featureAiQa'), desc: t('news.featureAiQaDesc'), path: '/rag' },
-          { icon: '⚛️', title: t('news.featureTcPredict'), desc: t('news.featureTcPredictDesc'), path: '/tc-predict' },
-        ].map(({ icon, title, desc, path }) => (
-          <Paper key={title} sx={{ p: 3, borderRadius: 4, cursor: 'pointer', transition: 'transform .16s, box-shadow .16s', '&:hover': { transform: 'translateY(-2px)', boxShadow: 3 } }} onClick={() => navigate(path)}>
-            <Typography sx={{ fontSize: 32, mb: 1 }}>{icon}</Typography>
-            <Typography variant="h2" gutterBottom>{title}</Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>{desc}</Typography>
-          </Paper>
-        ))}
       </Box>
 
       {/* News Section */}

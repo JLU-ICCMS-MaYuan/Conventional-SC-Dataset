@@ -2,18 +2,10 @@
 // 通用按钮（重试等）复用 common 域；仅此页专有的文案放在这里。
 export default {
   // Hero 区
-  heroTitle: '超导文献数据库',
-  heroSubtitle: '围绕元素周期表构建的超导材料检索平台。覆盖常规超导体、铜基、铁基、高压氢化物等体系，支持文献检索、AI 问答和 Tc 预测。',
+  heroAffiliation: '吉林大学 物质模拟方法与软件教育部重点实验室',
+  heroTitle: '超导维基',
+  heroSubtitle: '面向超导研究的 AI 驱动去中心化科研数据基础设施，融合可追溯科学数据、Tc 预测、超导知识图谱与 RAG 智能问答。',
   startExploring: '开始探索',
-  aiAssistant: 'AI 文献助手',
-
-  // 特性卡片
-  featureElementSearch: '元素检索',
-  featureElementSearchDesc: '从周期表选元素，搜索相关超导记录，按 Tc、压强、空间群筛选。',
-  featureAiQa: 'AI 问答',
-  featureAiQaDesc: '自然语言提问，AI 流式回答并标注引用来源。',
-  featureTcPredict: 'Tc 预测',
-  featureTcPredictDesc: '上传结构文件和态密度，估算超导临界温度。',
 
   // 诺贝尔奖里程碑
   nobelMilestones: '诺贝尔奖里程碑',
@@ -54,11 +46,12 @@ export default {
   // 信息流
   feedTitle: '超导快讯与最新论文',
   feedSubtitle: '官方来源每日采集 · 按发表时间排序',
-  kindLabel: '资讯类型',
-  kindAll: '全部资讯',
   kindNews: '新闻',
   kindPreprint: '预印本',
   kindJournalArticle: '期刊论文',
+  feedNewsColumn: '新闻',
+  feedPreprintsColumn: '预印本',
+  feedArticlesColumn: '期刊论文',
   autoCollected: '自动采集，未经本站审核',
   loadingFeed: '正在加载资讯…',
   feedLoadFailed: '资讯读取失败，请重试。此状态不代表没有新闻。',
