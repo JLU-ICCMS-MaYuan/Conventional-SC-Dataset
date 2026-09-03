@@ -30,6 +30,7 @@ export default {
 
   llmDefault: '默认模型',
   llmServerDefault: '服务端默认',
+  llmCurrentServer: '当前服务端默认：{provider} · {model}',
   llmConfigure: '配置 AI 供应商',
   llmTitle: 'AI 供应商',
   llmModel: '模型名',

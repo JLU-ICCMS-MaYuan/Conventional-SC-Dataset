@@ -123,7 +123,36 @@ POST /api/rag/llm/test-connection
 未配置用户返回 `provider: "server-default"` 与服务端实际模型名。流式端点在 `done`
 事件的 `data` 中携带同样字段。
 
-## 6. 用户凭据失败的错误契约
+## 6. 当前模型展示元数据
+
+```
+GET /api/rag/llm/current
+```
+
+**鉴权**：不要求登录，与 RAG 健康检查一致。
+
+**成功响应** `200`：
+
+```json
+{
+  "ok": true,
+  "data": {
+    "provider": "server-default",
+    "provider_name": "DeepSeek",
+    "model": "deepseek-chat",
+    "source": "server"
+  }
+}
+```
+
+`provider` 保持内部稳定标识；`provider_name` 是供顶栏展示的名称。若服务端 Base URL 无法映射到
+已知供应商，返回「服务端默认」/`Server default` 的本地化回退名。个人配置请求返回
+`source: "browser"` 及其请求级供应商、模型名。
+
+**禁止字段**：响应不得包含 `api_key`、`base_url`、`X-LLM-*`、请求头、密钥掩码或任何可用于重建
+凭据的字段。
+
+## 7. 用户凭据失败的错误契约
 
 用户自带凭据调用失败时（FR-019），**不得**改用服务端默认配置重试。错误响应须标明失败源：
 

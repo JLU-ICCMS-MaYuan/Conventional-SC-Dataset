@@ -75,3 +75,16 @@ def test_request_dependency_sets_and_resets_context(monkeypatch):
 def test_mask_api_key():
     assert llm_context.mask_api_key("sk-abcdefghijkl") == "sk-****ijkl"
     assert llm_context.mask_api_key("short") == "****"
+
+
+def test_display_metadata_excludes_endpoint_and_credential():
+    config = llm_context.LlmConfig(
+        "server-default", "https://api.deepseek.com/v1", "deepseek-chat", "secret-key"
+    )
+    metadata = llm_context.llm_display_metadata(config)
+    assert metadata == {
+        "provider": "server-default", "provider_name": "DeepSeek",
+        "model": "deepseek-chat", "source": "server",
+    }
+    assert "secret-key" not in str(metadata)
+    assert "base_url" not in metadata

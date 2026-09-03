@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle,
   MenuItem, Select, Stack, TextField, Typography,
@@ -13,6 +13,13 @@ import { api } from '../lib/api'
 
 const DEFAULT_ID = 'server-default'
 
+interface CurrentLlm {
+  provider: string
+  provider_name: string
+  model: string
+  source: 'browser' | 'server'
+}
+
 const LlmProviderSwitcher: React.FC = () => {
   const { lang } = useLanguage()
   const [open, setOpen] = useState(false)
@@ -24,14 +31,32 @@ const LlmProviderSwitcher: React.FC = () => {
   const [error, setError] = useState('')
   const [connection, setConnection] = useState('')
   const [testing, setTesting] = useState(false)
+  const [serverDefault, setServerDefault] = useState<CurrentLlm | null>(null)
 
   const { t } = useLanguage()
   const current = useMemo(
-    () => PROVIDER_PRESETS.find(item => item.id === saved?.provider)?.label || t('nav.llmDefault'),
-    [saved, t],
+    () => {
+      if (saved) {
+        const label = PROVIDER_PRESETS.find(item => item.id === saved.provider)?.label || saved.provider
+        return `${label} · ${saved.model}`
+      }
+      return serverDefault?.model
+        ? `${serverDefault.provider_name} · ${serverDefault.model}`
+        : t('nav.llmDefault')
+    },
+    [saved, serverDefault, t],
   )
   const selected = PROVIDER_PRESETS.find(item => item.id === provider) || PROVIDER_PRESETS[0]
   const isDefault = provider === DEFAULT_ID
+
+  useEffect(() => {
+    if (saved) return
+    let active = true
+    api.get<{ data: CurrentLlm }>('/api/rag/llm/current')
+      .then(result => { if (active) setServerDefault(result.data) })
+      .catch(() => { if (active) setServerDefault(null) })
+    return () => { active = false }
+  }, [saved])
 
   const openPanel = () => {
     const config = readStoredLlmConfig()
@@ -98,6 +123,9 @@ const LlmProviderSwitcher: React.FC = () => {
           <Select value={provider} onChange={event => selectProvider(event.target.value)} fullWidth aria-label={lang === 'en' ? 'AI provider' : 'AI 供应商'}>
             {PROVIDER_PRESETS.map(item => <MenuItem key={item.id} value={item.id}>{item.id === 'server-default' ? t('nav.llmServerDefault') : item.label}</MenuItem>)}
           </Select>
+          {isDefault && serverDefault?.model && <Typography variant="body2" color="text.secondary">
+            {t('nav.llmCurrentServer', { provider: serverDefault.provider_name, model: serverDefault.model })}
+          </Typography>}
           {!isDefault && <>
             <TextField label="Base URL" value={baseUrl} onChange={event => setBaseUrl(event.target.value)} placeholder={selected.baseUrl || 'https://your-gateway.example.com/v1'} fullWidth />
             <TextField label={t('nav.llmModel')} value={model} onChange={event => setModel(event.target.value)} placeholder={selected.model || 'model-name'} fullWidth />

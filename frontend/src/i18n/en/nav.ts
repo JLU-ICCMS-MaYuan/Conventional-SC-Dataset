@@ -27,6 +27,7 @@ export default {
 
   llmDefault: 'Default model',
   llmServerDefault: 'Server default',
+  llmCurrentServer: 'Current server default: {provider} · {model}',
   llmConfigure: 'Configure AI provider',
   llmTitle: 'AI provider',
   llmModel: 'Model',

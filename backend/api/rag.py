@@ -23,7 +23,9 @@ from backend import models
 from backend.models import Paper, PaperChunk, PaperEvidence, PaperFile, User
 from backend.rag import service
 from backend.rag.llm_client import get_llm_client
-from backend.rag.llm_context import get_llm_config, request_llm_config, UserCredentialError
+from backend.rag.llm_context import (
+    get_llm_config, llm_display_metadata, request_llm_config, UserCredentialError,
+)
 from backend.security import get_current_admin, get_current_user
 
 router = APIRouter(
@@ -581,6 +583,12 @@ def test_llm_connection():
         "provider": config.provider, "model": config.model,
         "latency_ms": round((time.perf_counter() - started) * 1000),
     }}
+
+
+@router.get("/llm/current")
+def current_llm():
+    """Expose only the effective provider/model metadata needed by the top bar."""
+    return {"ok": True, "data": llm_display_metadata()}
 
 
 def _history_dicts(messages: list[RagMessage]) -> list[dict[str, str]]:

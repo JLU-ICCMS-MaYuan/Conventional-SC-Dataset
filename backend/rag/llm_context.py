@@ -34,6 +34,25 @@ _current_config: contextvars.ContextVar[LlmConfig | None] = contextvars.ContextV
 )
 
 
+_PROVIDER_NAMES_BY_HOST = {
+    "api.deepseek.com": "DeepSeek",
+    "api.moonshot.cn": "Kimi",
+    "open.bigmodel.cn": "GLM",
+    "dashscope.aliyuncs.com": "Qwen",
+    "api.openai.com": "OpenAI",
+    "api.anthropic.com": "Claude",
+}
+_PROVIDER_NAMES_BY_ID = {
+    "deepseek": "DeepSeek",
+    "kimi": "Kimi",
+    "glm": "GLM",
+    "qwen": "Qwen",
+    "openai": "OpenAI",
+    "claude": "Claude",
+    "custom": "Custom",
+}
+
+
 def mask_api_key(value: str) -> str:
     value = str(value or "")
     if len(value) <= 8:
@@ -96,6 +115,23 @@ def reset_llm_config(token: contextvars.Token[LlmConfig | None]) -> None:
 
 def get_llm_config() -> LlmConfig:
     return _current_config.get() or resolve_llm_config()
+
+
+def llm_display_metadata(config: LlmConfig | None = None) -> dict[str, str]:
+    """Return safe-to-display LLM metadata without endpoint or credential fields."""
+    resolved = config or get_llm_config()
+    host = (urlparse(resolved.base_url).hostname or "").lower().rstrip(".")
+    provider_name = (
+        _PROVIDER_NAMES_BY_ID.get(resolved.provider)
+        if resolved.user_supplied
+        else _PROVIDER_NAMES_BY_HOST.get(host, "Server default")
+    )
+    return {
+        "provider": resolved.provider,
+        "provider_name": provider_name,
+        "model": resolved.model,
+        "source": "browser" if resolved.user_supplied else "server",
+    }
 
 
 def request_llm_config(request: Request):

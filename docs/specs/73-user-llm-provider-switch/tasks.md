@@ -186,6 +186,12 @@
 - [ ] T059 更新根 `README.md` 的模型配置说明，写明服务端默认与用户自带凭据两条路径
 - [ ] T060 用 `big-project-issue-manager` 完成 Issue #73 的关闭检查并勾选
       Documentation Impact
+- [x] T061 新增 `GET /api/rag/llm/current`：仅返回当前请求的供应商显示名、模型名和配置来源，
+      严禁返回 API Key、Base URL 或请求头（FR-024）
+- [x] T062 改造 `LlmProviderSwitcher.tsx`：未保存个人配置时加载并显示服务端默认供应商与模型；
+      已保存时显示本地供应商与模型（FR-024）
+- [x] T063 新增接口与组件测试：验证元数据字段白名单、服务端供应商推断、默认/个人配置顶栏展示
+      及失败回退（SC-009）
 
 ## 依赖与执行顺序
 
