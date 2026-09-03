@@ -34,6 +34,10 @@ from backend.ingest.upload_contracts import (
     compare_file_identities,
     structure_format_for_filename,
 )
+from backend.ingest.language_contract import (
+    validate_chunk_generated_english,
+    validate_draft_generated_english,
+)
 from backend.ingest.structure_extractor import extract_structure_candidates
 from backend.models import Paper, PaperFile
 from backend.rag.llm import complete_json
@@ -45,7 +49,10 @@ from backend.services.structure_candidates import (
 )
 
 
-CHUNK_SYSTEM_PROMPT = """你是超导论文证据提取助手。只根据给出的一个论文分段提取候选事实，返回 JSON。
+CHUNK_SYSTEM_PROMPT = """You are a superconductivity-paper evidence extraction assistant. Return JSON candidate facts from only the supplied paper chunk.
+
+Write every AI-generated label, material description, methodology item, finding, classification name, and relation in English. Preserve the source language exactly only in metadata title/abstract and every quote. Never translate or rewrite quote text.
+
 每个事实都要保留可逐字核对的原文 quote 和最近的 <!-- page: N --> 页码；没有信息时返回空数组或 null，不要猜测。
 论文整体类型和材料类型此时只给候选证据，不做最终决定。
 每条论文类型证据和材料类型候选必须标记 scope：current_paper 表示本文作者实际完成的工作，
@@ -84,7 +91,7 @@ equal contribution、contributed equally 等明确声明识别。证据不足时
   "key_findings": []
 }"""
 
-CHUNK_RESULT_SCHEMA_VERSION = 6
+CHUNK_RESULT_SCHEMA_VERSION = 7
 
 PUBLIC_CHUNK_RESULT_FIELDS = {
     "metadata", "paper_type_evidence", "research_materials",
@@ -92,7 +99,11 @@ PUBLIC_CHUNK_RESULT_FIELDS = {
 }
 
 
-SUMMARY_SYSTEM_PROMPT = """你是超导材料论文分类与结构化提取专家。汇总整篇论文各分段候选事实，去重并返回 JSON 草稿。
+SUMMARY_SYSTEM_PROMPT = """You are a superconductivity-paper classification and structured-extraction expert. Consolidate the candidate facts from every chunk, deduplicate them, and return a JSON draft.
+
+NON-NEGOTIABLE OUTPUT LANGUAGE: write every AI-generated summary, keyword, method, finding, motivation, graph title, material description, classification suggestion, and relation in English only. This requirement applies even when the source paper is Chinese. Preserve the source language exactly only for title, abstract, authors, raw values, units, and quote evidence. Do not translate, paraphrase, or fabricate quote evidence.
+
+你是超导材料论文分类与结构化提取专家。汇总整篇论文各分段候选事实，去重并返回 JSON 草稿。
 
 论文整体分类按核心贡献判断：
 - 理论提出主要结论、实验只验证理论，归 theoretical。
@@ -327,6 +338,7 @@ def _read_chunk(
         f"分段编号：{chunk.chunk_index}\n\n{chunk.content}"
     )
     result = complete_json(CHUNK_SYSTEM_PROMPT, prompt)
+    validate_chunk_generated_english(result)
     result["_schema_version"] = CHUNK_RESULT_SCHEMA_VERSION
     result["_source"] = {
         "file_id": file_id,
@@ -1588,6 +1600,7 @@ def _process_upload_task(task_id: str) -> dict[str, Any]:
             on_partial=_on_summary_partial,
         )
         draft = _normalize_draft(raw_draft, preserve_citation_extraction=False)
+        validate_draft_generated_english(draft)
         draft["structure_candidates"] = structure_candidates
         draft["citation_extraction"] = citation_extraction
         current_state = get_state(task_id) or state

@@ -1,5 +1,12 @@
 from backend.ingest.extractor import SYSTEM_PROMPT
-from backend.ingest.upload_jobs import SUMMARY_SYSTEM_PROMPT
+import pytest
+
+from backend.ingest.language_contract import (
+    GeneratedFieldLanguageError,
+    validate_chunk_generated_english,
+    validate_draft_generated_english,
+)
+from backend.ingest.upload_jobs import CHUNK_SYSTEM_PROMPT, SUMMARY_SYSTEM_PROMPT
 from backend.ingest.upload_jobs import _normalize_draft
 
 
@@ -15,6 +22,23 @@ def test_summary_prompt_requires_all_narrative_fields_in_english():
         assert field in SUMMARY_SYSTEM_PROMPT
     assert "必须使用英文输出" in SUMMARY_SYSTEM_PROMPT
     assert "10-15 个英文词" in SUMMARY_SYSTEM_PROMPT
+
+
+def test_chunk_prompt_requires_generated_content_in_english_but_preserves_quotes():
+    assert "AI-generated" in CHUNK_SYSTEM_PROMPT
+    assert "Preserve the source language exactly" in CHUNK_SYSTEM_PROMPT
+
+
+def test_language_contract_rejects_chinese_generated_fields_but_keeps_source_evidence():
+    with pytest.raises(GeneratedFieldLanguageError, match="paper.methodology\\[0\\]"):
+        validate_draft_generated_english({
+            "paper": {"methodology": ["液氦温区电阻测量"], "title": "中文原文标题"},
+        })
+
+    validate_chunk_generated_english({
+        "methodology": [{"method": "Liquid-helium resistance measurement", "quote": "中文原文"}],
+        "key_findings": [{"finding": "Lead becomes superconducting.", "quote": "中文证据"}],
+    })
 
 
 def test_prompts_forbid_unsupported_narrative_content():
