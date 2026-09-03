@@ -50,7 +50,7 @@
 ## 最终阶段：完善与验证
 
 - [x] T012 [US1] [US2] [US3] 运行 `frontend/node_modules/.bin/vitest run --config vitest.config.ts tests/03_data_search_and_database_discovery/news-page-layout.test.tsx`、英文全站巡检和 `npm --prefix frontend run build`，修复本 Feature 引入的回归。
-- [ ] T013 [US2] [US3] 按 `docs/specs/83-news-layout/quickstart.md` 在 1440×900 和窄屏完成浏览器验收，记录首屏、独立分页、详情抽屉和无横向溢出的证据。
+- [x] T013 [US2] [US3] 按 `docs/specs/83-news-layout/quickstart.md` 完成真实页面验收；用户确认三栏布局，并在发现行高和分页未对齐后完成修复与复核。
 - [x] T014 [US1] [US2] [US3] 实现验收后更新 `docs/overview/news.md`，记录实际已落地的三列分页布局，并回写 Issue #83 的 Documentation Impact。
 
 ## 依赖与执行顺序

@@ -51,5 +51,5 @@ RSS 只能补回当前订阅窗口；已移除的历史内容无法保证找回�
 分支原有论文删除模块的 Go 编译问题阻断全包验证，未把定向新闻测试当作完整服务构建通过。
 
 ## 相关变更记录
-[Feature #63](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/63) 与 [Spec](../specs/63-daily-superconductivity-news/spec.md)；[Bug #86](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/86) 补齐 Compose 中的 scheduler 和 worker。
+[Feature #63](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/63) 与 [Spec](../specs/63-daily-superconductivity-news/spec.md)；[Feature #83](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/83) 完成 News 品牌与三列独立分页；[Bug #86](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/86) 补齐 Compose 中的 scheduler 和 worker。
 未完成协作事项以该 Issue 为准；本页不维护第二套任务状态。
