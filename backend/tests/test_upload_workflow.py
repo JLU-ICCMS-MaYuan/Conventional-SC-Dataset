@@ -110,6 +110,63 @@ def test_save_draft_refreshes_state_and_draft_atomically(monkeypatch):
     assert client.ttls[upload_tasks.draft_key(task_id)] == upload_tasks.TASK_TTL
 
 
+def test_create_task_persists_suggestion_language(monkeypatch):
+    class FakePipeline:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def watch(self, *_args):
+            return None
+
+        def zrange(self, *_args):
+            return []
+
+        def multi(self):
+            return None
+
+        def zrem(self, *_args):
+            return None
+
+        def set(self, key, value):
+            self.client.values[key] = value
+
+        def zadd(self, *_args):
+            return None
+
+        def execute(self):
+            return None
+
+    class FakeRedisForCreate:
+        def __init__(self):
+            self.values = {}
+
+        def pipeline(self, transaction=True):
+            pipeline = FakePipeline()
+            pipeline.client = self
+            return pipeline
+
+        def zrange(self, *_args):
+            return []
+
+        def mget(self, *_args):
+            return []
+
+    client = FakeRedisForCreate()
+    monkeypatch.setattr(upload_tasks, "redis_client", lambda: client)
+
+    state = upload_tasks.create_task(
+        7,
+        files=[{"client_id": "main", "role": "main", "filename": "paper.pdf", "size": 1}],
+        suggestion_language="en",
+    )
+
+    assert state["suggestion_language"] == "en"
+    assert json.loads(client.values[upload_tasks.task_key(state["task_id"])])["suggestion_language"] == "en"
+
+
 def test_save_draft_rejects_expired_task(monkeypatch):
     monkeypatch.setattr(upload_tasks, "redis_client", lambda: FakeRedis({}))
     try:

@@ -43,7 +43,7 @@ function uploadOne(
 }
 
 const MultiFileUploadPanel: React.FC<Props> = ({ onCreated }) => {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const input = useRef<HTMLInputElement>(null)
   const [items, setItems] = useState<Selected[]>([])
   const [busy, setBusy] = useState(false)
@@ -91,6 +91,7 @@ const MultiFileUploadPanel: React.FC<Props> = ({ onCreated }) => {
     setBusy(true); setError('')
     try {
       const created = await api.post<{ ok: boolean; data: UploadTaskState }>('/api/upload-tasks', {
+        suggestion_language: lang,
         files: items.map(item => ({
           client_id: item.clientId, role: item.role, filename: item.file.name,
           size: item.file.size, media_type: item.file.type || null,

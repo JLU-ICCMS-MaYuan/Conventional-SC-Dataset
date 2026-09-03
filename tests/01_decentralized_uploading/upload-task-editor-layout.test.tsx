@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import UploadTaskEditor from '../../frontend/src/components/UploadTaskEditor'
+import { LanguageProvider } from '../../frontend/src/context/LanguageContext'
 import { api } from '../../frontend/src/lib/api'
 import type { ApiError } from '../../frontend/src/lib/api'
 import type { DraftMaterialState, UploadDraft } from '../../frontend/src/lib/paperProcessing'
@@ -83,6 +84,21 @@ afterEach(() => {
 })
 
 describe('上传校对页布局与材料状态折叠', () => {
+  it('英文规范表单值与中文 AI 建议分离显示', async () => {
+    const draft = makeDraft([makeState()])
+    draft.paper.methodology = ['Electrical resistance measurement']
+    draft.ai_original = { paper: { methodology: ['液氦温区电阻测量'] } }
+
+    render(
+      <LanguageProvider>
+        <UploadTaskEditor taskId={'f'.repeat(32)} onSubmitted={vi.fn()} draftOverride={draft} />
+      </LanguageProvider>,
+    )
+
+    expect(await screen.findByLabelText('研究方法（每行一项）')).toHaveValue('Electrical resistance measurement')
+    expect(screen.getByText('AI 建议：液氦温区电阻测量')).toBeVisible()
+  })
+
   it('论文级 Material family 与 Superconductor type 在同一分类网格行', async () => {
     render(<UploadTaskEditor taskId={'0'.repeat(32)} onSubmitted={vi.fn()} draftOverride={makeDraft([makeState()])} />)
 

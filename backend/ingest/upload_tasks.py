@@ -147,7 +147,10 @@ def create_task(
     file_kind: str | None = None,
     *,
     files: list[dict[str, Any]] | None = None,
+    suggestion_language: str = "zh",
 ) -> dict[str, Any]:
+    if suggestion_language not in {"zh", "en"}:
+        raise ValueError("AI 建议语言不支持")
     task_id = uuid.uuid4().hex
     now = int(time.time())
     manifest = validate_manifest(files) if files is not None else []
@@ -157,6 +160,7 @@ def create_task(
         "filename": filename or (manifest[0]["original_filename"] if manifest else ""),
         "file_kind": file_kind or (manifest[0]["kind"] if manifest else ""),
         "files": manifest,
+        "suggestion_language": suggestion_language,
         "status": "uploading",
         "stage": "saving_file",
         "stage_index": 1,

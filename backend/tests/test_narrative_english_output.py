@@ -40,6 +40,20 @@ def test_language_contract_rejects_chinese_generated_fields_but_keeps_source_evi
         "key_findings": [{"finding": "Lead becomes superconducting.", "quote": "中文证据"}],
     })
 
+    with pytest.raises(GeneratedFieldLanguageError, match="material_families\\[0\\].name"):
+        validate_draft_generated_english({
+            "paper": {"material_families": [{"name": "氢基超导体"}]},
+            "material_states": [],
+        })
+
+    with pytest.raises(GeneratedFieldLanguageError, match="structure_families\\[0\\]"):
+        validate_chunk_generated_english({
+            "material_states": [{
+                "material": "Pb",
+                "structure_families": [{"name": "密堆积金属", "quote": "原文证据"}],
+            }],
+        })
+
 
 def test_prompts_forbid_unsupported_narrative_content():
     assert "缺少原文依据时返回空字符串或空数组" in SUMMARY_SYSTEM_PROMPT

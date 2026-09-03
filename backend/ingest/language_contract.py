@@ -40,7 +40,27 @@ def validate_draft_generated_english(draft: dict[str, Any]) -> None:
     for field in _PAPER_GENERATED_FIELDS:
         _require_english(paper.get(field), f"paper.{field}")
 
+    for index, selection in enumerate(paper.get("material_families") or []):
+        if isinstance(selection, dict):
+            _require_english(selection.get("name"), f"paper.material_families[{index}].name")
+
     _require_english(draft.get("research_motivation"), "research_motivation")
+    for state_index, state in enumerate(draft.get("material_states") or []):
+        if not isinstance(state, dict):
+            continue
+        _require_english(state.get("material"), f"material_states[{state_index}].material")
+        for family_index, family in enumerate(state.get("structure_families") or []):
+            if isinstance(family, dict):
+                _require_english(
+                    family.get("name"),
+                    f"material_states[{state_index}].structure_families[{family_index}].name",
+                )
+        for property_index, property_value in enumerate(state.get("properties") or []):
+            if isinstance(property_value, dict):
+                _require_english(
+                    property_value.get("name"),
+                    f"material_states[{state_index}].properties[{property_index}].name",
+                )
 
 
 def validate_chunk_generated_english(result: dict[str, Any]) -> None:
@@ -57,3 +77,20 @@ def validate_chunk_generated_english(result: dict[str, Any]) -> None:
         if isinstance(item, dict):
             _require_english(item.get("material"), f"material_relations[{index}].material")
             _require_english(item.get("relation"), f"material_relations[{index}].relation")
+
+    for state_index, state in enumerate(result.get("material_states") or []):
+        if not isinstance(state, dict):
+            continue
+        _require_english(state.get("material"), f"material_states[{state_index}].material")
+        family = state.get("material_family")
+        if isinstance(family, dict):
+            _require_english(
+                family.get("name") or family.get("value"),
+                f"material_states[{state_index}].material_family",
+            )
+        for family_index, family in enumerate(state.get("structure_families") or []):
+            if isinstance(family, dict):
+                _require_english(
+                    family.get("name") or family.get("value"),
+                    f"material_states[{state_index}].structure_families[{family_index}]",
+                )

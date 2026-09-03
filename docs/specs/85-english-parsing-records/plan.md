@@ -1,4 +1,4 @@
-# 实施计划：上传解析记录的英文输出与持久化语言一致性
+# 实施计划：上传解析规范英文值与本地化 AI 建议
 
 **GitHub Issue**：[#85](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/85)
 
@@ -8,14 +8,14 @@
 
 ## 摘要
 
-在 `backend/ingest/` 中抽取一套生成字段语言策略，改写分段与汇总 prompt，并在分段清单、草稿保存、提交及正式持久化前调用它。前端不翻译数据，只展示已被验证的结果；测试覆盖中文/英文原文与完整存储边界。
+在 `backend/ingest/` 中抽取一套规范生成字段语言策略，改写分段与汇总 prompt，并在分段清单、草稿保存、提交及正式持久化前调用它。任务创建时固化界面语言；Worker 将英文 canonical draft 与按该快照本地化的 `ai_original` 建议副本分开。前端不翻译数据，只分别展示这两份已生成的值。
 
 ## 技术上下文
 
 - **语言与版本**：Python/FastAPI/Redis/MySQL，TypeScript/React。
 - **数据存储**：分段清单文件、Redis 任务草稿、MySQL `papers` 与科学实体。
 - **测试体系**：pytest 上传流程测试、Vitest 上传工作区测试、隔离 MySQL 提交测试。
-- **约束**：#74 单语英文存储；原文证据不可翻译；不新增 schema 列。
+- **约束**：#74 单语英文 MySQL 存储；原文证据不可翻译；不新增正式 schema 列；`ai_original` 仅存在于 Redis 审核草稿与任务快照。
 
 ## 质量门
 
@@ -49,6 +49,7 @@ frontend/src/components/UploadParsingDetail.tsx
 | FR-005 | `/parsing` 与 `UploadParsingDetail` | Vitest 预览测试 |
 | FR-006 | 策略排除字段 | 中文原文样本测试 |
 | FR-007 | 一次性修复命令 | 隔离 MySQL 审计测试 |
+| FR-008 至 FR-009 | 语言快照、建议副本与 Pb 定向修复 | pytest + 审核草稿核验 |
 
 ## 阶段与依赖
 

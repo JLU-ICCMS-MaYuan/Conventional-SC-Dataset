@@ -22,6 +22,7 @@
 - [ ] T010 [US3] 验证完成后删除 T009 的一次性脚本，保留测试或执行审计证据，确认 Redis 快照未迁移。
 - [ ] T011 运行相关 pytest、Vitest、隔离 MySQL 测试以及 quickstart 的中英文原文样本走查。
 - [ ] T012 使用 `big-project-overview-maintainer` 更新 PDF 解析、上传审核和格式存储 Overview 文档。
+- [x] T013 [US2] 在创建任务请求保存 `suggestion_language`，将英文 canonical draft 与 `ai_original` 建议副本分离；中文建议只本地化 AI 归纳字段，Pb 活跃任务使用已验证快照定向修复。
 
 ## 依赖与执行顺序
 
@@ -39,3 +40,4 @@
 | FR-005 | T002、T008 | 解析记录与实时预览 |
 | FR-006 | T001、T011 | 中文原文保留测试 |
 | FR-007 | T009、T010 | 正式历史数据受控收敛 |
+| FR-008 至 FR-009 | T013 | 语言快照、展示建议与活跃任务修复 |
