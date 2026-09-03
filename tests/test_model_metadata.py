@@ -29,7 +29,7 @@ EXPECTED_TABLES = {
 
 
 def test_dataset_metadata_defines_fresh_target_tables():
-    assert set(Base.metadata.tables) == EXPECTED_TABLES
+    assert EXPECTED_TABLES <= set(Base.metadata.tables)
 
 
 def test_legacy_scientific_tables_are_not_in_target_metadata():

@@ -93,7 +93,9 @@ def test_submission_keeps_classification_in_review_artifact_until_approval(tmp_p
         draft = {
             "paper": {
                 "title": "Material-state classification",
+                "year": 2024,
                 "paper_type": "experimental",
+                "superconductor_kind": "unknown",
                 "authors": ["A. Author"],
                 "research_materials": ["LaH10", "CeCu2Si2"],
                 "material_families": [

@@ -11,6 +11,7 @@
 | [PDF 解析管线](pdf-parsing-pipeline.md) | 五阶段解析状态机、提交落库与向量发布主链路 | RQ Worker、Redis、LLM、MySQL、Qdrant |
 | [PDF 摄入](pdf-ingestion.md) | 校验并摄入上传的 PDF/TXT/MD | 上传目录、摄入流水线 |
 | [上传、审核与默认结构](upload-review-and-default-selection.md) | 管理晶体结构 pending/approved/rejected 状态和默认项 | 用户认证、管理员权限 |
+| [上传数据结构与表单映射](data-structure-and-form-mapping.md) | 校对表单字段、Redis 草稿与 MySQL 关系表的映射 | 上传任务、科学数据模型 |
 
 ## 功能组成
 
