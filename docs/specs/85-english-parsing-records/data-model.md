@@ -1,10 +1,10 @@
-# 数据模型：英文规范值与原文证据
+# 数据模型：英文规范值与来源证据
 
 **GitHub Issue**：[#85](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/85)
 
 ## 字段语言分类
 
-| 数据位置 | 英文生成字段 | 保持原文的事实字段 |
+| 数据位置 | 英文生成字段 | 保持来源文本的事实字段 |
 | --- | --- | --- |
 | 分段候选 | `methodology`、`key_findings`、`research_materials`、关系描述、材料/结构家族 | `metadata.title`、`metadata.abstract`、所有 `quote`、原始物性文本 |
 | 汇总草稿 | `summary`、`keywords_tags`、`methodology`、`key_finding`、`research_motivation`、`knowledge_graph_title`、生成的分类/关系/材料名称 | 标题、摘要、作者、DOI、化学式、原始值、单位、证据 |
@@ -23,3 +23,7 @@ LLM chunk output
 ```
 
 `ai_original`、`ai_suggestions` 和 `suggestion_language` 不属于当前模型。旧数据可被读取并忽略；新状态、草稿、快照和正式数据均不得写入这些键。
+
+## 审核页展示边界
+
+`quote` 是 PDF 文本提取或 OCR 获得的来源片段，不是模型建议，也不保证逐字等同于扫描版论文。前端只为非空 `quote` 渲染默认折叠的“论文片段 / Source excerpt”；section/page 单独存在或证据对象为空时不渲染控件。

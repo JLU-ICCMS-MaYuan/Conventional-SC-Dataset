@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import {
-  Alert, Autocomplete, Box, Button, Card, CardContent, Chip, Collapse, FormControl,
+  Accordion, AccordionDetails, AccordionSummary, Alert, Autocomplete, Box, Button, Card, CardContent, Chip, Collapse, FormControl,
   FormHelperText, InputLabel, MenuItem, Select, TextField, Typography,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
@@ -62,25 +62,37 @@ export const EvidenceNotes: React.FC<{
 }> = ({ evidence }) => {
   const { t } = useLanguage()
   const items = evidenceList(evidence)
+    .map(item => ({ ...item, quote: String(item.quote || '').trim() }))
+    .filter(item => Boolean(item.quote))
   if (items.length === 0) return null
   return (
-    <Box sx={{
+    <Accordion disableGutters elevation={0} sx={{
       mt: 0.75,
       width: '100%',
       maxWidth: '100%',
       minWidth: 0,
       boxSizing: 'border-box',
-      p: 1,
       borderRadius: 1,
       bgcolor: 'action.hover',
+      '&:before': { display: 'none' },
     }}>
-      {items.map((item, index) => (
-        <Typography key={index} variant="caption" color="text.secondary" display="block" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-          {[item.section, item.page ? t('upload.pageRef', { page: item.page }) : ''].filter(Boolean).join(' · ') || t('upload.originalText')}
-          {item.quote ? t('upload.quoteSuffix', { quote: item.quote }) : ''}
+      <AccordionSummary
+        expandIcon={<ExpandMoreIcon />}
+        sx={{ minHeight: 32, px: 1, '& .MuiAccordionSummary-content': { my: 0.5 } }}
+      >
+        <Typography variant="caption" color="text.secondary">
+          {t('upload.sourceExcerpt', { count: items.length })}
         </Typography>
-      ))}
-    </Box>
+      </AccordionSummary>
+      <AccordionDetails sx={{ px: 1, pt: 0, pb: 1 }}>
+        {items.map((item, index) => (
+          <Typography key={index} variant="caption" color="text.secondary" display="block" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+            {[item.section, item.page ? t('upload.pageRef', { page: item.page }) : ''].filter(Boolean).join(' · ')}
+            {t('upload.quoteSuffix', { quote: item.quote })}
+          </Typography>
+        ))}
+      </AccordionDetails>
+    </Accordion>
   )
 }
 

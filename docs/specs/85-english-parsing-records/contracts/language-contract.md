@@ -1,4 +1,4 @@
-# 契约：英文规范值与原文证据
+# 契约：英文规范值与来源证据
 
 **GitHub Issue**：[#85](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/85)
 
@@ -14,4 +14,4 @@
 
 `POST /api/upload-tasks` 只接收文件声明，不再接收语言快照。Worker 不得生成建议副本；Redis 草稿与 `result.json` 只保留 canonical `ai_values`、用户值和证据。提交快照必须过滤遗留 `ai_original`。
 
-前端不得读取、传递或显示建议字段。`EvidenceNotes` 仅显示证据的来源位置与 `quote`。
+前端不得读取、传递或显示建议字段。`EvidenceNotes` 仅为非空 `quote` 显示默认折叠的“论文片段 / Source excerpt”；它保留来源位置与文本，但不得称为绝对准确的“原文”。

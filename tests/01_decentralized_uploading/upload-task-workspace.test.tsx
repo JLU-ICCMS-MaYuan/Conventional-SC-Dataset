@@ -112,7 +112,7 @@ describe('论文上传工作区', () => {
     expect(screen.queryByText(/Li2MgH16\.vasp：仅支持/)).not.toBeInTheDocument()
   })
 
-  it('分段尚未生成时仍显示临时表单和解析证据入口', async () => {
+  it('分段尚未生成时仍显示解析草稿和解析证据入口', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
       ok: true,
       data: {
@@ -130,7 +130,7 @@ describe('论文上传工作区', () => {
 
     render(<UploadParsingDetail taskId={'c'.repeat(32)} />)
 
-    expect(await screen.findByRole('tab', { name: 'AI 临时表单' })).toBeVisible()
+    expect(await screen.findByRole('tab', { name: '解析草稿' })).toBeVisible()
     expect(screen.getByRole('tab', { name: '分段解析与证据' })).toBeVisible()
     expect(await screen.findByText('只读预览')).toBeVisible()
     expect(screen.getByText('正在提取论文正文，完成后逐段解析。')).toBeVisible()
@@ -420,7 +420,7 @@ describe('论文上传工作区', () => {
     render(<UploadParsingDetail taskId={'g'.repeat(32)} />)
 
     expect(await screen.findByText('只读预览')).toBeVisible()
-    expect(screen.getByText('AI 分段阅读中 1/2，字段随分段完成逐步点亮。')).toBeVisible()
+    expect(screen.getByText('正在分段解析 1/2，字段随分段完成逐步点亮。')).toBeVisible()
     expect(screen.getByLabelText('标题')).toHaveValue('Li2MgH16 study')
     expect(screen.getByText('Ying Sun')).toBeVisible()
     expect(screen.getByText('材料状态 #1')).toBeVisible()
@@ -527,7 +527,7 @@ describe('论文上传工作区', () => {
       { timeout: 3000 },
     )
     expect(screen.getByText('只读预览')).toBeVisible()
-    expect(screen.getByText('AI 分段阅读中 2/2，字段随分段完成逐步点亮。')).toBeVisible()
+    expect(screen.getByText('正在分段解析 2/2，字段随分段完成逐步点亮。')).toBeVisible()
   })
 
   it('分段阅读中的只读预览展示局部草稿的分类与材料状态', async () => {

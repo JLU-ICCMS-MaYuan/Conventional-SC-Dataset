@@ -7,6 +7,8 @@ import UploadTaskEditor from '../../frontend/src/components/UploadTaskEditor'
 import { api } from '../../frontend/src/lib/api'
 import type { ApiError } from '../../frontend/src/lib/api'
 import type { DraftMaterialState, UploadDraft } from '../../frontend/src/lib/paperProcessing'
+import zhUpload from '../../frontend/src/i18n/zh/upload'
+import enUpload from '../../frontend/src/i18n/en/upload'
 
 vi.mock('../../frontend/src/lib/api', () => ({
   api: { get: vi.fn(), put: vi.fn(), post: vi.fn() },
@@ -95,6 +97,30 @@ describe('上传校对页布局与材料状态折叠', () => {
 
     expect(await screen.findByLabelText('研究方法（每行一项）')).toHaveValue('Electrical resistance measurement')
     expect(screen.queryByText(/AI 建议|AI suggestion/)).not.toBeInTheDocument()
+  })
+
+  it('仅为非空论文片段显示折叠证据，空证据不产生空框', async () => {
+    const draft = makeDraft([
+      makeState({ space_group_evidence: [{ section: 'Methods', page: 3, quote: '' }] }),
+    ])
+    draft.field_evidence = {
+      methodology: [{ section: 'Methods', page: 3, quote: 'Measured resistance at liquid-helium temperatures.' }],
+    }
+
+    render(<UploadTaskEditor taskId={'e'.repeat(32)} onSubmitted={vi.fn()} draftOverride={draft} />)
+
+    const excerpt = await screen.findByRole('button', { name: '论文片段（1）' })
+    expect(screen.queryAllByRole('button', { name: '论文片段（1）' })).toHaveLength(1)
+    expect(screen.getByText(/Measured resistance at liquid-helium temperatures/)).not.toBeVisible()
+    expect(screen.queryByText('原文')).not.toBeInTheDocument()
+
+    fireEvent.click(excerpt)
+    expect(screen.getByText(/Measured resistance at liquid-helium temperatures/)).toBeVisible()
+  })
+
+  it('上传审核文案不再将解析草稿称为 AI 草稿或 AI 建议', () => {
+    const text = `${JSON.stringify(zhUpload)} ${JSON.stringify(enUpload)}`
+    expect(text).not.toMatch(/AI\s*(草稿|临时表单|建议)|AI\s+(draft|suggestion)/i)
   })
 
   it('论文级 Material family 与 Superconductor type 在同一分类网格行', async () => {

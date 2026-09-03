@@ -8,3 +8,6 @@
 - [x] T004 [US2] 为遗留 `ai_original` 增加忽略与提交快照过滤测试。
 - [x] T005 [US3] 清理 Pb 活动任务遗留建议字段，并完成后端、Vitest 与构建验证。
 - [x] T006 更新 [PDF 解析管线](../../overview/01_Decentralized_Uploading_of_Superconductivity_Data/pdf-parsing-pipeline.md) 当前行为说明。
+- [x] T007 [US4] 过滤空证据、将非空证据改为默认折叠的论文片段，并移除“原文”误导性标签。
+- [x] T008 [US2] 移除上传审核页的 AI 草稿命名，补齐用户端与管理端的遗留建议回归测试。
+- [x] T009 [US4] 更新 Overview，运行后端、Vitest 与生产构建回归。

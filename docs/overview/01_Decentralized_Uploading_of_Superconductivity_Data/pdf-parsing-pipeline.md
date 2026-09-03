@@ -37,14 +37,14 @@
 ### 第 3 步：AI 分段阅读（reading）
 
 - `chunker.py` 把合并前的各文件 Markdown 切成 `Chunk`，`_chunks_with_preamble` 为每个文件补一个前言段；分段清单写入 `review_artifacts/{task_id}/chunk_manifest.json`，每段状态在 `waiting / processing / completed / failed` 间流转。
-- 逐段调用 `_read_chunk`（使用当前请求选择的 OpenAI 兼容 LLM）。分段中的 AI 生成研究材料、方法和核心发现必须为英文；服务端在写入 `review_artifacts/{task_id}/chunks/` 前拒绝这些字段中的中日韩字符。论文标题、摘要和 `quote` 属于原文事实，保持原语言，不翻译也不拦截。
+- 逐段调用 `_read_chunk`（使用当前请求选择的 OpenAI 兼容 LLM）。分段中的 AI 生成研究材料、方法和核心发现必须为英文；服务端在写入 `review_artifacts/{task_id}/chunks/` 前拒绝这些字段中的中日韩字符。论文标题、摘要和 `quote` 属于来源文本，保持输入语言，不翻译也不拦截；`quote` 可能来自 PDF 文本提取或 OCR，不承诺与扫描版逐字一致。
 - 分段结果以 JSON 存到 `review_artifacts/{task_id}/chunks/`；任一分段异常（包括生成字段语言不符合约束）即整任务失败。
 - 每完成一段更新 `completed_chunks / total_chunks`，前端进度条（如“4/28 段”）即来源于此。
 
 ### 第 4 步：AI 汇总草稿（summarizing）
 
 - `_summary_classification_candidates` 先过滤掉非当前论文的过期证据，再把分段候选交给 `complete_json(SUMMARY_SYSTEM_PROMPT, ...)` 汇总为一份结构化草稿。
-- 汇总 prompt（`SUMMARY_SYSTEM_PROMPT`）与正文提取（`extractor.py`）都要求以英文产出六个叙述字段（`summary`、`keywords_tags`、`methodology`、`key_finding`、`research_motivation`、`knowledge_graph_title`）；汇总归一化后、写入草稿和审核快照前会再次拒绝这些生成字段中的中日韩字符。标题、摘要、作者、原始数值、单位和 `quote` 保持输入原文语言。Worker 以验证后的英文 canonical draft 预填选项框和输入框；审核表单不生成或显示逐字段 AI 建议，证据区域只展示原文出处和 `quote`。某字段无原文依据时保持为空，不编造内容。（[Issue #74](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/74)、[#85](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/85)）
+- 汇总 prompt（`SUMMARY_SYSTEM_PROMPT`）与正文提取（`extractor.py`）都要求以英文产出六个叙述字段（`summary`、`keywords_tags`、`methodology`、`key_finding`、`research_motivation`、`knowledge_graph_title`）；汇总归一化后、写入草稿和审核快照前会再次拒绝这些生成字段中的中日韩字符。标题、摘要、作者、原始数值、单位和 `quote` 保持来源语言。Worker 以验证后的英文 canonical draft 预填选项框和输入框；审核表单不生成或显示逐字段 AI 建议，只有非空 `quote` 才作为默认折叠的“论文片段”显示。某字段无来源依据时保持为空，不编造内容。（[Issue #74](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/74)、[#85](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/85)）
 - 正文 PDF 在 Worker 中额外提交给本地 GROBID 的 `processFulltextDocument` 接口。GROBID 返回的 TEI `biblStruct` 会提取 DOI、题名、作者、年份和原始引文，随论文版本保存到 `paper_references`；GROBID 不可用或解析不完整时保存状态，不由 LLM 猜造引用边。（[Issue #81](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/81)）
 - `_normalize_draft` 把草稿归一化为当前数据契约：论文元信息（含单选 `superconductor_kind` 和多选 Material family）、`material_states`（材料、压强/温度/磁场、计算与实验上下文、`tc_results`、More type labels）、分类证据等。旧草稿的状态级 `superconductor_kind` 只在读取时一次性提升：唯一的非 `unknown` 值保留，冲突时回退 `unknown`；新提交拒绝该旧字段。
 - 汇总后执行查重：先按归一化 DOI（`normalize_doi`）查 `papers`，再按原始文件 SHA-256 查；命中即进入 `_handle_duplicate`，任务以 `duplicate` 状态短路结束。
