@@ -4,7 +4,7 @@
 
 **创建日期**：2026-09-03
 
-**状态**：已确认，待实施
+**状态**：已实现，待运行环境验收
 
 ## 背景与目标
 
@@ -56,3 +56,10 @@
 - 资讯采集源、API、数据库表和前端页面。
 - 立即启动、停止、重建或部署 Compose 服务。
 - 修改上传 Worker 的命令、并发策略或队列。
+
+## 实现记录
+
+- Docker Compose 已新增 `news-scheduler` 和 `news-worker`，分别运行调度命令和 `scwiki-news` 队列 Worker。
+- 本地 `scripts/dev.sh start` 的默认服务列表已包含 `news-worker` 和 `news-scheduler`；`make start` 会间接启动它们。
+- 已验证 3 个定向 pytest、`bash -n scripts/dev.sh` 和 `docker compose config`。
+- 尚未在真实部署环境执行 `docker compose up`，因此生产容器的实际运行状态仍需单独验收。
