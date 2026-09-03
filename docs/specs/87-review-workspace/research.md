@@ -1,27 +1,58 @@
-# 技术研究：审核编辑页元数据与成功返回工作台
+# 技术研究：文献处理历史
 
-**GitHub Issue**：[#87](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/87)
+**Feature**：[spec.md](spec.md)
 
-**日期**：2026-09-03
+## R1：当前编辑页的元数据缺口在真实接口
 
-**Spec**：[spec.md](spec.md)
+**决策**：修复 Go 管理端详情响应，不以继续扩充前端夹具代替。
 
-## R1：不改后端详情契约
+**理由**：`AdminPaperEditPage` 已读取 `uploader_name` 与 `record_count`，但
+`GetPaperDetail` 直接序列化 `Paper`；模型没有这两个 JSON 字段。前端只能显示回退值，
+测试的手工字段掩盖了问题。
 
-**决策**：前端直接使用详情对象的 `uploader_name` 与 `record_count`，不新增 API 字段或后端查询。
+**证据**：`goserver/handlers/admin.go` 的 `GetPaperDetail`；
+`frontend/src/pages/AdminPaperEditPage.tsx` 的元数据 Chip。
 
-**理由**：测试夹具与审核列表契约均已使用这两个字段，问题是编辑页未渲染上传者，且记录数误用了不匹配的翻译键。
+## R2：事件表应演进，而非并行复制
 
-**备选方案**：新增专用审核元数据接口。该方案增加网络请求与契约维护成本，没有当前需求所需价值，拒绝。
+**决策**：将 `paper_review_events` 重命名并演进为 `paper_history_events`，成为唯一写入来源。
 
-**证据**：`tests/02_identity_governance/admin-edit-page.test.tsx` 的 `paper` 夹具；`frontend/src/i18n/zh/admin.ts` 的 `thUploader` 和 `recordsChip`。
+**理由**：旧表的 `reviewer_user_id` 非空，`status` 也只允许审核状态；硬塞上传和修改会破坏
+名称、约束和审核贡献统计。额外新建表又会留下双写和双事实来源。
 
-## R2：成功后复用 workspacePath 导航
+**备选方案**：保留旧表并新增历史表。已拒绝，因为每次审核需要双写或两套查询，容易漂移。
 
-**决策**：`handleEditReview` 成功后调用 `navigate(workspacePath)`。
+**证据**：`backend/models.py` 中 `PaperReviewEvent` 的非空审核人与状态约束；
+`goserver/handlers/stats.go` 直接统计该表。
 
-**理由**：`workspacePath` 已按当前用户角色返回 `/superadmin` 或 `/admin`。复用它能让标题栏返回按钮和审核成功行为保持同一规则。
+## R3：两段保存需要一个操作标识
 
-**备选方案**：在成功分支再次判断角色。会复制角色规则，未来新增角色时容易漂移，拒绝。
+**决策**：编辑页生成一次 `history_operation_id`，论文级和科学数据级写入共享它；数据库唯一
+约束负责跨服务去重。
 
-**证据**：`frontend/src/pages/AdminPaperEditPage.tsx` 现有 `workspacePath` 与返回按钮实现。
+**理由**：现有保存先调 Go `PUT /api/admin/papers/:id`，再调 Python
+`PUT /api/rag/papers/:id/scientific-draft`。以请求数记历史会把一次用户修改误计为两条。
+
+**备选方案**：只在 Python 写历史。已拒绝，因为纯论文级修改不会进入 Python；只在 Go 写
+也会遗漏科学数据单独变化。
+
+**证据**：`AdminPaperEditPage.handleEditSave` 的两段请求；`backend/api/rag.py` 的科学数据
+整体重写。
+
+## R4：历史回填只能使用可证实事实
+
+**决策**：回填上传和审核，不回填修改。
+
+**理由**：`papers.created_at`、`uploaded_by_user_id` 和现有审核事件可提供时间和人员；
+`updated_at` 没有操作者且可能由系统更新，不能冒充人工修改。
+
+**证据**：`Paper` 模型和 `paper_review_events` 迁移定义。
+
+## R5：用户名使用事件快照
+
+**决策**：新增 `actor_username_snapshot`，新事件记录动作发生时的公开用户名。
+
+**理由**：用户允许改名。时间线只关联当前用户名会让过去的处理记录在改名后改变显示，
+不符合“忠实记录谁提交、谁审核”的目标。历史回填无法取得旧名称时仅能使用迁移时名称。
+
+**证据**：`goserver/handlers/username.go` 支持用户更名；现有事件仅保存用户 ID。

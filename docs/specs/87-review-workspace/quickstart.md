@@ -1,25 +1,47 @@
-# 快速验证：审核编辑页元数据与成功返回工作台
+# 快速验证：管理员文献处理历史
 
-**GitHub Issue**：[#87](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/87)
+**Feature**：[spec.md](spec.md)
 
-**日期**：2026-09-03
+## 前置条件
+
+```bash
+make start
+```
+
+使用管理员、超级管理员和普通上传者三个账号；准备一篇新上传论文和一篇已有审核意见的论文。
+
+## 场景 1：编辑页元数据
+
+1. 管理员打开论文编辑页。
+2. 检查“上传者”和“物性记录: N”。
+
+预期：上传者来自真实详情接口；物性数量对应当前版本
+`superconductor_properties`，不显示默认 `-` 或错误的 0。
+
+## 场景 2：处理记录
+
+1. 管理员点击“处理记录”。
+2. 检查上传、修改、审核事件顺序和字段。
+3. 以普通用户访问历史 URL。
+
+预期：管理员看到时间线及每次审核意见；普通用户收到 403，不能查看内部历史。
+
+## 场景 3：写入和去重
+
+1. 上传一篇新论文。
+2. 在编辑页改动论文级和科学数据后点击一次“保存修改”。
+3. 再次直接保存不改动的数据。
+4. 由两位管理员先后退回、通过。
+
+预期：时间线依次新增上传、一次修改、两次审核；无改动保存不增加事件。
 
 ## 自动化验证
 
 ```bash
-cd frontend && npx vitest run --config ../vitest.config.ts ../tests/02_identity_governance/admin-edit-page.test.tsx
+scripts/run-tests.sh go
+scripts/run-tests.sh backend
+cd frontend && npx vitest run --config ../vitest.config.ts ../tests/02_identity_governance/
 cd frontend && npm run build
 ```
 
-预期：目标 Vitest 用例和 TypeScript/Vite 生产构建均通过。
-
-## 手工验证
-
-1. 以超级管理员登录，进入论文审核并打开任意论文编辑页。
-   预期：元数据区显示“上传者”和“记录”。
-2. 选择“通过”并提交审核。
-   预期：接口成功后立即返回 `/superadmin`。
-3. 以管理员重复提交。
-   预期：接口成功后立即返回 `/admin`。
-4. 模拟审核接口失败。
-   预期：留在编辑页，并显示“审核失败”。
+预期：迁移、上传、审核、修改、统计、删除、权限和页面测试通过；生产构建无类型错误。

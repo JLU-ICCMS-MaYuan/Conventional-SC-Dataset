@@ -1,0 +1,66 @@
+# 接口契约：管理端文献处理历史
+
+**Feature**：[spec.md](../spec.md)
+
+## 管理端详情扩展
+
+`GET /api/admin/papers/{paper_id}` 保持现有管理员鉴权，并在现有详情字段上新增：
+
+```json
+{
+  "uploader_name": "author",
+  "record_count": 2
+}
+```
+
+- `uploader_name`：上传者的公开用户名；没有归属时为 `null`。
+- `record_count`：当前 `content_revision` 的 `superconductor_properties` 数量，始终为非负整数。
+
+## 读取处理历史
+
+`GET /api/admin/papers/{paper_id}/history`
+
+**权限**：active `admin` 或 active `superadmin`。
+
+**成功响应**：
+
+```json
+{
+  "paper_id": 87,
+  "events": [
+    {
+      "id": 1,
+      "event_type": "uploaded",
+      "paper_revision": 1,
+      "actor": { "username": "author", "unknown": false },
+      "occurred_at": "2026-09-03T10:00:00Z",
+      "review": null
+    },
+    {
+      "id": 2,
+      "event_type": "reviewed",
+      "paper_revision": 1,
+      "actor": { "username": "reviewer", "unknown": false },
+      "occurred_at": "2026-09-03T11:00:00Z",
+      "review": { "status": "approved", "comment": "证据充分" }
+    }
+  ]
+}
+```
+
+- 事件按 `occurred_at`、`id` 升序排列。
+- `uploaded` 与 `modified` 的 `review` 为 `null`。
+- 历史导入但没有上传者时，`actor.username` 为 `null`、`actor.unknown` 为 `true`；前端显示
+  “历史导入，上传者未知”。
+- 论文不存在返回 `404`；无管理员权限返回 `403`。
+
+## 写入操作标识
+
+管理员编辑页每次点击“保存修改”生成一个 UUID，并以 `history_operation_id` 同时传给：
+
+- `PUT /api/admin/papers/{paper_id}`
+- `PUT /api/rag/papers/{paper_id}/scientific-draft`
+
+两个端点仅在对应数据实际变化时尝试写入 `modified` 事件。`history_operation_id` 唯一约束
+保证同一次界面操作最多产生一条历史。新上传使用 `upload_task_id`，审核继续使用
+`review_request_id` 作为操作标识。
