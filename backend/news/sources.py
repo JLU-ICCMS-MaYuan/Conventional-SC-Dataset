@@ -9,7 +9,7 @@ import time
 import feedparser
 import httpx
 
-from .domain import (CollectionError, Record, canonical_url, iso, normalize_doi, parse_time, plain,
+from .domain import (CollectionError, PUBLISHER_SOURCES, Record, canonical_url, iso, normalize_doi, parse_time, plain,
                      publisher_for_doi, relevance_evidence, relevant, safe_url)
 
 ENDPOINTS = {
@@ -17,7 +17,9 @@ ENDPOINTS = {
     "crossref": "https://api.crossref.org/works",
     "openalex": "https://api.openalex.org/works",
     "physorg": "https://phys.org/rss-feed/physics-news/superconductivity/",
+    "google_news": "https://news.google.com/rss/search",
 }
+ENDPOINTS.update({source: ENDPOINTS["crossref"] for source in PUBLISHER_SOURCES})
 
 
 class Transport:
@@ -114,7 +116,7 @@ class Sources:
         self.fetched = 0
         if source not in ENDPOINTS:
             raise CollectionError("invalid_record")
-        result = getattr(self, source)(since, until)
+        result = self.publisher(source, since, until) if source in PUBLISHER_SOURCES else getattr(self, source)(since, until)
         for row in result:
             row.validate()
         return result
@@ -160,15 +162,23 @@ class Sources:
         raise CollectionError("page_limit")
 
     def crossref(self, since, until):
+        return self._crossref("crossref", since, until)
+
+    def publisher(self, source, since, until):
+        return self._crossref(source, since, until, PUBLISHER_SOURCES[source])
+
+    def _crossref(self, source, since, until, prefix=""):
         result, cursor, previous_ids = [], "*", None
         for _ in range(self.max_pages):
-            params = {"query": "superconduct", "filter": (
-                f"type:journal-article,from-index-date:{since.date()},until-index-date:{until.date()}"),
+            filters = f"type:journal-article,from-index-date:{since.date()},until-index-date:{until.date()}"
+            if prefix:
+                filters += ",prefix:" + prefix
+            params = {"query": "superconduct", "filter": filters,
                 "rows": 100, "cursor": cursor}
             if self.contact:
                 params["mailto"] = self.contact
             try:
-                body = json.loads(self.transport.get("crossref", ENDPOINTS["crossref"], params))["message"]
+                body = json.loads(self.transport.get(source, ENDPOINTS[source], params))["message"]
                 items = body["items"]
                 if not isinstance(items, list):
                     raise ValueError("items")
@@ -194,14 +204,14 @@ class Sources:
                     updated = iso(parse_time(updated))
                 evidence = relevance_evidence(title)
                 result.append(Record(
-                    source="crossref", external_id=doi, kind="journal_article",
+                    source=source, external_id=doi, kind="journal_article",
                     title=title, doi=doi, url="https://doi.org/" + doi,
                     authors=[plain(" ".join(filter(None, [a.get("given"), a.get("family"), a.get("name")])), 120)
                              for a in item.get("author", [])][:100],
                     journal=plain(" ".join(item.get("container-title", [])), 1000),
                     published_at=published, date_precision=precision, source_updated_at=updated,
                     content_type="peer_reviewed", display_kind="journal_article", discovery_source="crossref",
-                    original_source=publisher_for_doi(doi), relevance_evidence=evidence,
+                    original_source=publisher_for_doi(doi) or (source if source in PUBLISHER_SOURCES else ""), relevance_evidence=evidence,
                 ))
             if len(items) < 100:
                 return result
@@ -281,6 +291,30 @@ class Sources:
                 published_at=published, source_updated_at=published,
                 content_type="research_report", display_kind="journal_article", discovery_source="physorg",
                 original_source="physorg", relevance_evidence=relevance_evidence(title, entry.get("summary", "")),
+            ))
+        return result
+
+    def google_news(self, since, until):
+        parsed = feed(self.transport.get("google_news", ENDPOINTS["google_news"], {
+            "q": "superconduct OR 超导", "hl": "en-US", "gl": "US", "ceid": "US:en",
+        }))
+        self.fetched = len(parsed.entries)
+        result = []
+        for entry in parsed.entries:
+            title = plain(entry.get("title", ""), 4000)
+            summary = plain(entry.get("summary", ""))
+            evidence = relevance_evidence(title, summary)
+            if not evidence:
+                continue
+            published = rss_time(entry, "published")
+            if not since <= parse_time(published) <= until:
+                continue
+            url = safe_url(entry.get("link", ""))
+            result.append(Record(
+                source="google_news", external_id=canonical_url(url), kind="news", title=title, url=url,
+                summary=summary, summary_source="google_news", published_at=published, source_updated_at=published,
+                content_type="social_industry", display_kind="news", discovery_source="google_news",
+                original_source="", relevance_evidence=evidence,
             ))
         return result
 

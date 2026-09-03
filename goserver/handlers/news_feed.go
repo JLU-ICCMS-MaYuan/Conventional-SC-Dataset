@@ -77,7 +77,7 @@ func ListNewsFeed(c *gin.Context) {
 			sources = append(sources, candidate)
 		}
 	}
-	for _, name := range []string{"arxiv", "crossref", "openalex", "physorg"} {
+	for _, name := range []string{"arxiv", "crossref", "openalex", "aps", "acs", "nature", "science", "nsr", "cpl", "cpb", "materials_today", "physorg", "google_news"} {
 		found := false
 		for _, candidate := range sources {
 			if candidate.Source == name {

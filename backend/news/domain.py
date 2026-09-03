@@ -5,7 +5,12 @@ from html.parser import HTMLParser
 import re
 from urllib.parse import unquote, urlsplit, urlunsplit
 
-SOURCES = ("arxiv", "crossref", "openalex", "physorg")
+PUBLISHER_SOURCES = {
+    "aps": "10.1103", "acs": "10.1021", "nature": "10.1038", "science": "10.1126",
+    "nsr": "10.1093/nsr", "cpl": "10.1088/0256-307x", "cpb": "10.1088/1674-1056",
+    "materials_today": "10.1016/j.mattod",
+}
+SOURCES = ("arxiv", "crossref", "openalex", *PUBLISHER_SOURCES, "physorg", "google_news")
 DISPLAY_KINDS = ("news", "preprint", "journal_article")
 CONTENT_TYPES = ("peer_reviewed", "preprint", "research_report", "social_industry")
 

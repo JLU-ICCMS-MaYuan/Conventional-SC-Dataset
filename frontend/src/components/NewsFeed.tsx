@@ -12,7 +12,7 @@ const kindColors: Record<Kind, { bg: string; color: string }> = {
   preprint: { bg: '#f3e5f5', color: '#7b1fa2' },
   journal_article: { bg: '#e8f5e9', color: '#388e3c' }
 }
-const sourceNames: Record<string, string> = { arxiv: 'arXiv', crossref: 'Crossref', openalex: 'OpenAlex', physorg: 'Phys.org', aps: 'APS', acs: 'ACS', nature: 'Nature', science: 'Science', nsr: 'NSR', cpl: 'CPL', cpb: 'CPB', materials_today: 'Materials Today' }
+const sourceNames: Record<string, string> = { arxiv: 'arXiv', crossref: 'Crossref', openalex: 'OpenAlex', physorg: 'Phys.org', google_news: 'Google News', aps: 'APS', acs: 'ACS', nature: 'Nature', science: 'Science', nsr: 'NSR', cpl: 'CPL', cpb: 'CPB', materials_today: 'Materials Today' }
 type TFunc = (key: string, vars?: Record<string, string | number>) => string
 interface FeedItem {
   id: string; title: string; kind: Exclude<Kind, ''>; source: string; url: string

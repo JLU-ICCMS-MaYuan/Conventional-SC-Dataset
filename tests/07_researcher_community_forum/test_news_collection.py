@@ -1,6 +1,6 @@
 import json
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
 import pytest
@@ -24,6 +24,10 @@ ATOM = b'''<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"
 RSS = b'''<rss version="2.0"><channel><title>Superconductivity</title><item>
  <title>Original superconductivity headline</title><link>https://phys.org/news/2026-08-test.html</link>
  <description>&lt;p&gt;Test excerpt&lt;/p&gt;</description>
+ <pubDate>Sun, 30 Aug 2026 10:00:00 GMT</pubDate></item></channel></rss>'''
+GOOGLE_NEWS_RSS = b'''<rss version="2.0"><channel><title>Google News</title><item>
+ <title>Superconductivity company stock rises</title><link>https://news.google.com/articles/test</link>
+ <description>Industry news about superconductivity</description>
  <pubDate>Sun, 30 Aug 2026 10:00:00 GMT</pubDate></item></channel></rss>'''
 CROSSREF = {"message": {"items": [{"DOI": "10.1234/TEST", "type": "journal-article",
  "title": ["Superconductivity in a test material"], "author": [{"given": "Test", "family": "Author"}],
@@ -108,6 +112,12 @@ def test_three_sources_and_rights():
     assert openalex.display_kind == "journal_article"
     assert physorg.content_type == "research_report"
     assert physorg.display_kind == "journal_article"
+
+
+def test_google_news_is_social_industry_content():
+    item = Sources(transport(lambda _: httpx.Response(200, content=GOOGLE_NEWS_RSS))).fetch("google_news", NOW - timedelta(days=1), NOW)[0]
+    assert item.content_type == "social_industry"
+    assert item.display_kind == "news"
 
 
 @pytest.mark.parametrize("payload", [b"<html>blocked</html>", b"<rss><channel>", b""])
@@ -203,6 +213,18 @@ def test_crossref_cursor_and_filtered_count():
     src = Sources(transport(handler))
     assert len(src.fetch("crossref", NOW, NOW)) == 1
     assert src.fetched == 101 and seen == ["*", "cursor-token"]
+
+
+def test_publisher_source_uses_crossref_prefix_and_preserves_provenance():
+    seen = []
+    def handler(request):
+        seen.append(request.url.params["filter"])
+        return httpx.Response(200, json=CROSSREF)
+    item = Sources(transport(handler)).fetch("acs", NOW, NOW)[0]
+    assert "prefix:10.1021" in seen[0]
+    assert item.source == "acs"
+    assert item.discovery_source == "crossref"
+    assert item.original_source == "acs"
 
 
 def test_http_error_retry_after_and_body_limits():

@@ -14,7 +14,7 @@ go test ./goserver/handlers ./goserver/models
 npx vitest run tests/07_researcher_community_forum/news-feed.test.tsx
 ```
 
-预期：固定来源样本能发现并去重，OpenAlex/Crossref 补充来源保留出版商链接，Phys.org 位于期刊论文栏但显示科研报道标签；Redis 短暂故障后 Worker 继续消费。
+预期：固定来源样本能发现并去重，OpenAlex/Crossref 补充来源保留出版商链接，Phys.org 位于期刊论文栏但显示科研报道标签；Google News 样本归入社会/产业资讯；Redis 短暂故障后 Worker 继续消费。
 
 ## 在线样本
 
