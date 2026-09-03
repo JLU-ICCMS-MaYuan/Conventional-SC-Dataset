@@ -72,6 +72,7 @@
 - 本地开发环境的两个 conda 环境必须分开：把 `mysql-server` 装进 `sc-wiki` 会迫使 conda 将 `python` 从 `pkgs/main` 换成 `conda-forge` 版本，危及该环境已有的科学计算包。
 - 本地 MySQL 客户端命令必须带 `--defaults-file`：系统 `/etc/mysql/my.cnf` 含 `user = mysql` 与指向 `/var/log/mysql/` 的错误日志路径，以普通用户启动会失败。
 - 本地开发链路不含 nginx，`docker/nginx.conf` 中的 `client_max_body_size`、`proxy_request_buffering off` 与 `Accept-Encoding` 清空均不生效；`vite build` 期生效的 `removeHeavyPreloads` 与 `manualChunks` 在 dev 模式下同样不走。这不影响改动进入镜像（镜像内会重新构建源码），但同一份代码在两条链路下的上传与首屏行为可能不同，详见「本地改动如何进入 Docker 部署」。
+- 当前 WSL `networkingMode=mirrored` 本地开发环境中，UFW 必须保持停止且禁止开机启动。宝塔安装器启用 UFW 并设置默认拒绝策略后，`loopback0` 上的 localhost TCP 流量会被拦截，导致 VS Code Remote WSL 和 Windows 访问本地服务失败。该约束只适用于当前 WSL 本地开发环境，不改变生产服务器的防火墙策略（[Issue #89](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/89)）。
 
 ## 代码与测试
 
@@ -97,6 +98,7 @@
 ## 相关变更记录
 
 - [Issue #71](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/71)：本地化开发环境，移除 Docker 依赖（`docs/specs/71-local-dev-no-docker/`）
+- [Issue #89](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/89)：WSL mirrored 与宝塔防火墙的本地开发兼容性（[Spec](../../specs/89-local-dev-firewall-compatibility/spec.md)）
 
 ## 已知问题
 

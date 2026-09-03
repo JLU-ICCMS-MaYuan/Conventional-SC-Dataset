@@ -20,6 +20,34 @@ make logs S=python  # 跟踪日志（python/goserver/frontend/mysql/neo4j/qdrant
 make stop           # 停止全部
 ```
 
+## WSL mirrored 与 UFW
+
+当前本地 WSL 使用 `networkingMode=mirrored`。SC-Wiki 与 VS Code Remote WSL 都依赖
+`127.0.0.1` 连通；在该模式下，本地 TCP 流量会经过 `loopback0`。宝塔安装器启用 UFW 并设置
+默认拒绝策略后，UFW 默认只放行 `lo`，会阻断这部分流量，表现为 VS Code Remote WSL 无法连接或
+Windows 无法打开本地服务。
+
+本地开发环境的既定策略是让 UFW 保持停止且禁止开机启动。安装宝塔后，先检查：
+
+```bash
+sudo ufw status verbose       # 预期：Status: inactive
+systemctl is-enabled ufw      # 预期：disabled
+systemctl is-active ufw       # 预期：inactive
+```
+
+若 UFW 已启用，且当前确实是本地 WSL 开发环境，可恢复为本项目采用的本地策略：
+
+```bash
+sudo ufw --force reset
+sudo systemctl disable --now ufw
+```
+
+`ufw --force reset` 会删除现有 UFW 规则。不要在生产服务器执行这两条命令，也不要只为 VS Code
+临时放行单个端口：VS Code Server 和本地开发服务会使用多个或动态 localhost 端口。恢复后重新
+连接 VS Code Remote WSL，并访问 `http://127.0.0.1:5173` 验证。故障事实与边界见
+[Issue #89](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/89) 和
+[Spec](specs/89-local-dev-firewall-compatibility/spec.md)。
+
 ## 服务构成
 
 | 服务 | 地址 | 来源 | 热重载 |
