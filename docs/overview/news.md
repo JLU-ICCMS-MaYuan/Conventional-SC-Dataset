@@ -26,7 +26,8 @@
 ## 工作流程
 Python 采集进程负责外部访问、过滤、规范化和写表；Go 仅提供只读列表接口；前端读取持久化结果，不现场抓取。
 独立 schedule 进程每分钟检查日任务，默认北京时间 08:00；停机后按成功水位补跑，失败一小时后重试。
-worker 仅消费 scwiki-news 队列，与上传解析队列分离；Redis 互斥锁防止并发采集。
+Docker Compose 以 `news-scheduler` 运行该调度进程，并以 `news-worker` 专门消费 `scwiki-news` 队列；两者等待迁移成功和 Redis 健康后启动，容器重启时自动恢复。上传 Worker 不消费资讯队列。
+Redis 互斥锁防止并发采集。
 任务最长 900 秒，单请求有限重试；失败不前移成功水位，不清空已有资讯。
 
 ## 数据与约束
@@ -41,7 +42,7 @@ RSS 只能补回当前订阅窗口；已移除的历史内容无法保证找回�
 - [数据模型](../../backend/news/models.py)、[迁移](../../alembic/versions/20260831_0063_news_feed.py)。
 - [Go 列表接口](../../goserver/handlers/news_feed.go)、[React 资讯组件](../../frontend/src/components/NewsFeed.tsx)。
 - [Python 与页面测试](../../tests/07_researcher_community_forum/)、[Go 测试](../../goserver/handlers/news_feed_test.go)。
-- [完整运行与验证说明](../specs/63-daily-superconductivity-news/quickstart.md)。
+- [完整运行与验证说明](../specs/63-daily-superconductivity-news/quickstart.md)、[Compose 部署修复](../specs/86-news-scheduler/quickstart.md)。
 
 ## 验证与运行边界
 当前工作树通过 Python 单元测试、隔离 MySQL 迁移/RQ Worker 测试、Python 写入后 Go 读取的契约测试、页面交互测试和前端生产构建。
@@ -50,5 +51,5 @@ RSS 只能补回当前订阅窗口；已移除的历史内容无法保证找回�
 分支原有论文删除模块的 Go 编译问题阻断全包验证，未把定向新闻测试当作完整服务构建通过。
 
 ## 相关变更记录
-[Feature #63](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/63) 与 [Spec](../specs/63-daily-superconductivity-news/spec.md)。
+[Feature #63](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/63) 与 [Spec](../specs/63-daily-superconductivity-news/spec.md)；[Bug #86](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/86) 补齐 Compose 中的 scheduler 和 worker。
 未完成协作事项以该 Issue 为准；本页不维护第二套任务状态。

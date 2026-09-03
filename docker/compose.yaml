@@ -53,6 +53,7 @@ services:
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-}
       LLM_MODEL: ${LLM_MODEL:-}
+      LLM_PROVIDER_NAME: ${LLM_PROVIDER_NAME:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL}
       EMBEDDING_API_KEY: ${EMBEDDING_API_KEY}
@@ -70,6 +71,7 @@ services:
       - ./data/upload_PDFs:/data/upload_PDFs
       - ./data/parsed_markdown:/data/parsed_markdown
       - ./data/review_artifacts:/data/review_artifacts
+      - ./data/runtime:/data/runtime
       - ./data/property_name_mapping.json:/data/property_name_mapping.json
       - ./data/prop_name_ai_cache.json:/data/prop_name_ai_cache.json
     depends_on:
@@ -112,6 +114,7 @@ services:
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-}
       LLM_MODEL: ${LLM_MODEL:-}
+      LLM_PROVIDER_NAME: ${LLM_PROVIDER_NAME:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL}
       EMBEDDING_API_KEY: ${EMBEDDING_API_KEY}
@@ -129,6 +132,7 @@ services:
       - ./data/upload_PDFs:/data/upload_PDFs
       - ./data/parsed_markdown:/data/parsed_markdown
       - ./data/review_artifacts:/data/review_artifacts
+      - ./data/runtime:/data/runtime
       - ./data/property_name_mapping.json:/data/property_name_mapping.json
       - ./data/prop_name_ai_cache.json:/data/prop_name_ai_cache.json
     depends_on:
@@ -141,6 +145,42 @@ services:
       neo4j:
         condition: service_healthy
       grobid:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ────── 自动资讯调度（每天北京时间 08:00 入队） ──────
+  news-scheduler:
+    image: mayuanmark/scwiki-python:mayuan
+    command: ["python", "-m", "backend.news", "schedule"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: redis://redis:6379/0
+      NEWS_DAILY_HOUR: "8"
+      NEWS_TIMEZONE: Asia/Shanghai
+      NEWS_INITIAL_DAYS: "7"
+      NEWS_MAX_PAGES: "100"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ────── 自动资讯采集 Worker（仅消费 scwiki-news） ──────
+  news-worker:
+    image: mayuanmark/scwiki-python:mayuan
+    command: ["python", "-m", "backend.news", "worker"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: redis://redis:6379/0
+      NEWS_DAILY_HOUR: "8"
+      NEWS_TIMEZONE: Asia/Shanghai
+      NEWS_INITIAL_DAYS: "7"
+      NEWS_MAX_PAGES: "100"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
         condition: service_healthy
     restart: unless-stopped
 
