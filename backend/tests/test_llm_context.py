@@ -30,7 +30,8 @@ def test_resolve_all_user_fields_without_server_fallback(monkeypatch):
     assert config.user_supplied is True
 
 
-def test_missing_user_field_falls_back_to_server(monkeypatch):
+def test_missing_user_field_falls_back_to_server(monkeypatch, tmp_path):
+    monkeypatch.setattr(llm_context.settings, "sc_wiki_data_dir", tmp_path)
     monkeypatch.setattr(llm_context.settings, "llm_api_key", "server-key")
     monkeypatch.setattr(llm_context.settings, "llm_base_url", "https://server.example.com/v1")
     monkeypatch.setattr(llm_context.settings, "llm_model", "server-model")
@@ -77,7 +78,8 @@ def test_mask_api_key():
     assert llm_context.mask_api_key("short") == "****"
 
 
-def test_display_metadata_excludes_endpoint_and_credential():
+def test_display_metadata_excludes_endpoint_and_credential(monkeypatch):
+    monkeypatch.setattr(llm_context.settings, "llm_provider_name", "")
     config = llm_context.LlmConfig(
         "server-default", "https://api.deepseek.com/v1", "deepseek-chat", "secret-key"
     )
@@ -88,3 +90,26 @@ def test_display_metadata_excludes_endpoint_and_credential():
     }
     assert "secret-key" not in str(metadata)
     assert "base_url" not in metadata
+
+
+def test_superadmin_default_override_is_atomic_and_never_returns_key(monkeypatch, tmp_path):
+    monkeypatch.setattr(llm_context.settings, "sc_wiki_data_dir", tmp_path)
+    monkeypatch.setattr(llm_context.socket, "getaddrinfo", lambda *args, **kwargs: [
+        (None, None, None, None, ("93.184.216.34", 443))
+    ])
+
+    saved = llm_context.save_server_default_config(
+        provider_name="OpenAI", base_url="https://bot.ccnccn.cn/v1",
+        model="gpt-5.6-sol", api_key="replacement-key",
+    )
+    assert saved["provider_name"] == "OpenAI"
+    assert saved["api_key_configured"] is True
+    assert "replacement-key" not in str(saved)
+    assert llm_context.get_server_default_config().model == "gpt-5.6-sol"
+
+    retained = llm_context.save_server_default_config(
+        provider_name="OpenAI", base_url="https://bot.ccnccn.cn/v1",
+        model="gpt-5.6-sol", api_key=None,
+    )
+    assert retained["api_key_configured"] is True
+    assert llm_context._default_config_path().is_file()

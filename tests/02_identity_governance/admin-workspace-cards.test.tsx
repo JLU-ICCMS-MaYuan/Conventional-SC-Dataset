@@ -34,6 +34,9 @@ beforeEach(() => {
     if (path.startsWith('/api/superadmin/users')) return [{ id: 1 }, { id: 2 }, { id: 3 }]
     if (path.startsWith('/api/superadmin/admin-applications')) return []
     if (path.startsWith('/api/chart-groups')) return []
+    if (path.startsWith('/api/rag/llm/default-config')) return {
+      data: { provider_name: 'OpenAI', base_url: 'https://bot.ccnccn.cn/v1', model: 'gpt-5.6-sol', api_key_configured: true, source: 'environment' },
+    }
     return {}
   })
 })
@@ -72,6 +75,23 @@ describe('工作台卡片式导航', () => {
     }
     // 当前角色是身份展示，不做成可点击入口
     expect(screen.queryByRole('button', { name: '当前角色' })).not.toBeInTheDocument()
+    expect(await screen.findByText('默认 AI 模型')).toBeVisible()
+    expect(screen.getByDisplayValue('OpenAI')).toBeVisible()
+  })
+
+  it('默认模型配置只对超级管理员展示并经专用接口保存', async () => {
+    currentUser = { id: 1, username: 'superadmin_mayuan', role: 'superadmin', is_admin: true, is_superadmin: true }
+    const user = userEvent.setup()
+    render(<MemoryRouter><AdminPage mode="superadmin" /></MemoryRouter>)
+
+    const provider = await screen.findByDisplayValue('OpenAI')
+    await user.clear(provider)
+    await user.type(provider, 'OpenAI Gateway')
+    await user.click(screen.getByRole('button', { name: '保存默认模型' }))
+
+    await waitFor(() => expect(mockedApi.put).toHaveBeenCalledWith('/api/rag/llm/default-config', expect.objectContaining({
+      provider_name: 'OpenAI Gateway', model: 'gpt-5.6-sol',
+    })))
   })
 
   it('点击论文审核卡片进入论文列表', async () => {

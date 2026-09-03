@@ -21,6 +21,7 @@ import ChartGroupEditor from '../components/ChartGroupEditor'
 import NewsManager from '../components/NewsManager'
 import SuperAdminGovernance from '../components/SuperAdminGovernance'
 import UsernameField from '../components/UsernameField'
+import DefaultLlmConfigPanel from '../components/DefaultLlmConfigPanel'
 import { useLanguage } from '../context/LanguageContext'
 
 /* ── Types ───────────────────────────────────── */
@@ -379,6 +380,8 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
           </CardContent>
         </Card>
       </Box>
+
+      {isSuper && <DefaultLlmConfigPanel />}
 
       {/* ═══════════════════════════════════════════ */}
       {/* TAB 1: Paper Review */}

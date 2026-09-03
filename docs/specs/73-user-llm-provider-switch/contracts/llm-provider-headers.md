@@ -152,7 +152,31 @@ GET /api/rag/llm/current
 **禁止字段**：响应不得包含 `api_key`、`base_url`、`X-LLM-*`、请求头、密钥掩码或任何可用于重建
 凭据的字段。
 
-## 7. 用户凭据失败的错误契约
+## 7. 超级管理员默认配置
+
+```
+GET /api/rag/llm/default-config
+PUT /api/rag/llm/default-config
+```
+
+两条接口都必须通过 `get_current_superadmin`。普通用户和管理员返回 `403`。
+
+`PUT` 请求体：
+
+```json
+{
+  "provider_name": "OpenAI",
+  "base_url": "https://bot.ccnccn.cn/v1",
+  "model": "gpt-5.6-sol",
+  "api_key": "optional-replacement-key"
+}
+```
+
+`api_key` 缺省或空字符串表示保留既有密钥；响应只返回 `provider_name`、`base_url`、`model`、
+`api_key_configured` 和 `source`，绝不回显密钥。配置原子写入 Python API 与 Worker 共用的
+`/data/runtime/default_llm.json`，优先级高于部署环境变量，供后续调用立即读取。
+
+## 8. 用户凭据失败的错误契约
 
 用户自带凭据调用失败时（FR-019），**不得**改用服务端默认配置重试。错误响应须标明失败源：
 

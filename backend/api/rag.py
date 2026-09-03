@@ -24,9 +24,10 @@ from backend.models import Paper, PaperChunk, PaperEvidence, PaperFile, User
 from backend.rag import service
 from backend.rag.llm_client import get_llm_client
 from backend.rag.llm_context import (
-    get_llm_config, llm_display_metadata, request_llm_config, UserCredentialError,
+    get_llm_config, llm_display_metadata, request_llm_config, save_server_default_config,
+    server_default_metadata, UserCredentialError,
 )
-from backend.security import get_current_admin, get_current_user
+from backend.security import get_current_admin, get_current_superadmin, get_current_user
 
 router = APIRouter(
     prefix="/api/rag", tags=["rag"], dependencies=[Depends(request_llm_config)]
@@ -40,6 +41,13 @@ DOI_PATTERN = re.compile(r"^10\.\d{4,9}/\S+$", re.IGNORECASE)
 
 class SubmitUploadOptions(BaseModel):
     consistency_acknowledged: bool = False
+
+
+class DefaultLlmConfigRequest(BaseModel):
+    provider_name: str = Field(min_length=1, max_length=100)
+    base_url: str = Field(min_length=1, max_length=500)
+    model: str = Field(min_length=1, max_length=200)
+    api_key: str | None = Field(default=None, max_length=1000)
 
 
 def _upload_error(status_code: int, code: str, message: str, **extra: Any) -> HTTPException:
@@ -589,6 +597,23 @@ def test_llm_connection():
 def current_llm():
     """Expose only the effective provider/model metadata needed by the top bar."""
     return {"ok": True, "data": llm_display_metadata()}
+
+
+@router.get("/llm/default-config")
+def get_default_llm_config(_: User = Depends(get_current_superadmin)):
+    """Return masked-safe default settings to the sole privileged UI."""
+    return {"ok": True, "data": server_default_metadata()}
+
+
+@router.put("/llm/default-config")
+def update_default_llm_config(
+    body: DefaultLlmConfigRequest,
+    _: User = Depends(get_current_superadmin),
+):
+    try:
+        return {"ok": True, "data": save_server_default_config(**body.model_dump())}
+    except UserCredentialError as exc:
+        raise HTTPException(status_code=400, detail={"code": exc.code, "message": str(exc)}) from exc
 
 
 def _history_dicts(messages: list[RagMessage]) -> list[dict[str, str]]:

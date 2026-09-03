@@ -35,6 +35,7 @@ class RagSettings(BaseSettings):
     llm_api_key: str = ""
     llm_base_url: str = ""
     llm_model: str = ""
+    llm_provider_name: str = ""
 
     openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"

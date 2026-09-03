@@ -21,6 +21,10 @@
 并映射认证失败、模型不存在、不可达和超时错误。
 `GET /api/rag/llm/current` 仅返回供应商显示名、模型名和来源（`server` / `browser`），供顶栏明确显示
 当前模型；响应不包含 Base URL、API key、请求头或密钥掩码。
+部署可用 `LLM_PROVIDER_NAME` 显式标注网关上游，例如当前默认配置为 `OpenAI · gpt-5.6-sol`；不再仅按
+Base URL 推断。超级管理员可在工作台更新默认供应商、Base URL、模型和密钥，配置原子写入 API 与
+Worker 共用的 `/data/runtime/default_llm.json`，后续调用立即生效。仅超级管理员可读取或修改该配置，
+密钥字段从不回显，空密钥表示保留既有值。
 
 ## 约束
 
