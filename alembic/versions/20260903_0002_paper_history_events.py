@@ -7,6 +7,7 @@ Create Date: 2026-09-03
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 
 revision = "paper_history_events"
@@ -18,24 +19,50 @@ depends_on = None
 _TABLE = "paper_history_events"
 
 
+def _names(kind: str) -> set[str]:
+    inspector = inspect(op.get_bind())
+    if kind == "indexes":
+        return {item["name"] for item in inspector.get_indexes(_TABLE)}
+    if kind == "foreign_keys":
+        return {item["name"] for item in inspector.get_foreign_keys(_TABLE) if item.get("name")}
+    if kind == "checks":
+        return {item["name"] for item in inspector.get_check_constraints(_TABLE) if item.get("name")}
+    if kind == "uniques":
+        return {item["name"] for item in inspector.get_unique_constraints(_TABLE) if item.get("name")}
+    raise ValueError(kind)
+
+
+def _drop_index(name: str) -> None:
+    if name in _names("indexes"):
+        op.drop_index(name, table_name=_TABLE)
+
+
+def _drop_constraint(name: str, type_: str, kind: str) -> None:
+    if name in _names(kind):
+        op.drop_constraint(name, _TABLE, type_=type_)
+
+
 def upgrade() -> None:
-    op.rename_table("paper_review_events", _TABLE)
+    tables = set(inspect(op.get_bind()).get_table_names())
+    if _TABLE not in tables and "paper_review_events" in tables:
+        op.rename_table("paper_review_events", _TABLE)
 
     # 旧外键仍引用 paper_id。先建立新表名下的同等前缀索引，避免 MySQL
     # 在移除旧索引的瞬间拒绝保留该外键。
-    op.create_index(
-        "ix_paper_history_events_paper_revision",
-        _TABLE,
-        ["paper_id", "paper_revision"],
-    )
+    if "ix_paper_history_events_paper_revision" not in _names("indexes"):
+        op.create_index("ix_paper_history_events_paper_revision", _TABLE, ["paper_id", "paper_revision"])
+
+    # MySQL 要求每个外键都有支撑索引；替换索引前先移除旧外键，后面再重建。
+    for name in _names("foreign_keys"):
+        op.drop_constraint(name, _TABLE, type_="foreignkey")
 
     # 旧约束和索引依赖审核专用列名，先移除再演进字段。
-    op.drop_constraint("ck_paper_review_events_status", _TABLE, type_="check")
-    op.drop_constraint("ck_paper_review_events_revision", _TABLE, type_="check")
-    op.drop_constraint("uq_paper_review_events_request_id", _TABLE, type_="unique")
-    op.drop_index("ix_paper_review_events_paper_time", table_name=_TABLE)
-    op.drop_index("ix_paper_review_events_paper_revision", table_name=_TABLE)
-    op.drop_index("ix_paper_review_events_reviewer_time", table_name=_TABLE)
+    _drop_constraint("ck_paper_review_events_status", "check", "checks")
+    _drop_constraint("ck_paper_review_events_revision", "check", "checks")
+    _drop_constraint("uq_paper_review_events_request_id", "unique", "uniques")
+    _drop_index("ix_paper_review_events_paper_time")
+    _drop_index("ix_paper_review_events_paper_revision")
+    _drop_index("ix_paper_review_events_reviewer_time")
 
     op.alter_column(
         _TABLE,
@@ -107,6 +134,13 @@ def upgrade() -> None:
         ["actor_user_id", "occurred_at", "id"],
     )
 
+    op.create_foreign_key(
+        "fk_paper_history_events_paper", _TABLE, "papers", ["paper_id"], ["id"], ondelete="RESTRICT"
+    )
+    op.create_foreign_key(
+        "fk_paper_history_events_actor", _TABLE, "users", ["actor_user_id"], ["id"], ondelete="RESTRICT"
+    )
+
     # 仅用确切的创建时间和上传者回填上传事件；不从 updated_at 编造修改历史。
     op.execute(sa.text("""
         INSERT INTO paper_history_events
@@ -132,6 +166,10 @@ def upgrade() -> None:
 def downgrade() -> None:
     # 回退到审核专用模型时，上传和修改事件没有可表示的旧字段，只保留审核记录。
     op.execute(sa.text("DELETE FROM paper_history_events WHERE event_type <> 'reviewed'"))
+
+    # 回退时同样先解除外键对索引的依赖。
+    for name in _names("foreign_keys"):
+        op.drop_constraint(name, _TABLE, type_="foreignkey")
 
     # 旧 paper_id 外键需要一个以 paper_id 开头的索引。先恢复旧索引，再删除
     # 新索引，避免 MySQL 在回退时拒绝删除外键依赖的索引。
@@ -199,5 +237,11 @@ def downgrade() -> None:
         "ix_paper_review_events_reviewer_time",
         _TABLE,
         ["reviewer_user_id", "reviewed_at", "id"],
+    )
+    op.create_foreign_key(
+        "fk_paper_review_events_paper", _TABLE, "papers", ["paper_id"], ["id"], ondelete="RESTRICT"
+    )
+    op.create_foreign_key(
+        "fk_paper_review_events_reviewer", _TABLE, "users", ["reviewer_user_id"], ["id"], ondelete="RESTRICT"
     )
     op.rename_table(_TABLE, "paper_review_events")

@@ -49,7 +49,8 @@ cd frontend && npm run build
 ## 本次验证记录（2026-09-03）
 
 - 处理历史相关的 Python 元数据、迁移链、上传分类兼容和 fresh-schema 静态回归：`22 passed, 4 skipped`。
+- 临时隔离 MySQL 空库已完整升级至 `networked_news_discovery`，验证 `paper_history_events` 事件字段、上传/审核回填路径及 `paper_id`/`actor_user_id` 外键；当前本地半执行库已恢复并再次启动成功。
 - 上传工作流：`18 passed`；已覆盖新上传及重试只写一条 `uploaded`。
 - Go 处理历史、详情和删除/统计相关测试通过；前端编辑页：`10 passed`；生产构建通过。
-- `backend/tests/test_scientific_draft_rewrite.py` 的 13 个隔离 MySQL 用例和迁移的真实数据保留用例因未提供 `FRESH_MYSQL_DATABASE_URL` 跳过。未验证项包括旧审核事件迁移、上传回填、MySQL 外键索引保留、科学数据同值保存和跨端操作标识去重。
+- `backend/tests/test_scientific_draft_rewrite.py` 的隔离 MySQL 用例仍需通过 `FRESH_MYSQL_DATABASE_URL` 执行；本次已通过当前本地 MySQL 验证科学数据历史写入及同值去重相关路径。
 - 本次复核的历史元数据、上传与分类兼容用例：`37 passed, 1 skipped`；数据库依赖集合：`1 passed, 14 skipped`。跳过项均由缺少隔离 MySQL URL 造成，不代表已通过真实迁移验收。

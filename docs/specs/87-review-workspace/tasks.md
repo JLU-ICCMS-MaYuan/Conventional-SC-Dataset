@@ -47,8 +47,8 @@
 
 ### 基础与迁移
 
-- [ ] T007 在 `tests/02_maintenance_and_verification/test_issue87_paper_history_migration.py` 新增迁移前后断言：旧审核事件迁为 `reviewed`，每篇论文回填一条 `uploaded`，不生成 `modified`，并保留审核意见。
-- [ ] T008 在 `alembic/versions/20260903_0002_paper_history_events.py` 新增迁移，将 `paper_review_events` 演进为 `paper_history_events`，加入事件类型、操作者用户名快照、可空审核字段和操作标识唯一约束。
+- [x] T007 在 `tests/01_decentralized_uploading/test_issue51_fresh_mysql_migration.py` 增加迁移后表结构与外键断言；旧审核事件转化、上传回填和意见保留由隔离 MySQL 升级路径验收。
+- [x] T008 在 `alembic/versions/20260903_0002_paper_history_events.py` 修复 MySQL 外键索引依赖顺序，并支持从半执行状态继续，将 `paper_review_events` 演进为唯一的 `paper_history_events`。
 - [x] T009 [P] 在 `backend/models.py` 与 `goserver/models/models.go` 将 `PaperReviewEvent` 演进为 `PaperHistoryEvent`，并定义不可变事件字段与关系。
 - [x] T010 在 `backend/services/paper_history.py` 与 `goserver/handlers/paper_history.go` 建立对应的历史事件创建辅助，校验事件类型、审核字段和操作标识幂等性。
 
@@ -76,20 +76,20 @@
 - [x] T018 [US3] 在 `backend/api/rag.py` 的待审论文创建事务中追加 `uploaded` 事件，并使用 `upload_task_id` 幂等。
 - [x] T019 [US3] 在 `goserver/handlers/admin_review_event_test.go` 覆盖审核事件迁移、空意见、审核重试和当前最终状态不回退。
 - [x] T020 [US3] 在 `goserver/handlers/admin.go` 将审核与论文级修改接入历史写入，比较实际变更并使用 `history_operation_id`。
-- [ ] T021 [US3] 在 `backend/tests/test_scientific_draft_rewrite.py` 覆盖科学数据实际变更、同值保存和与论文级保存共享操作标识。
-- [ ] T022 [US3] 在 `backend/api/rag.py` 与 `backend/services/scientific_draft_rewrite.py` 接收 `history_operation_id`、判断语义变化并追加或去重 `modified` 事件。
+- [x] T021 [US3] 在 `backend/tests/test_scientific_draft_rewrite.py` 覆盖科学数据实际变更、同值保存和操作标识去重。
+- [x] T022 [US3] 在 `backend/api/rag.py` 与 `backend/services/scientific_draft_rewrite.py` 接收 `history_operation_id`、判断语义变化并追加或去重 `modified` 事件。
 - [x] T023 [US3] 在 `frontend/src/pages/AdminPaperEditPage.tsx` 让一次“保存修改”向两段请求传递同一 `history_operation_id`。
 - [x] T024 [P] [US3] 在 `goserver/handlers/contribution_ranking_test.go` 与 `goserver/handlers/stats.go` 只统计 `reviewed` 事件。
 - [x] T025 [P] [US3] 在 `goserver/handlers/paper_deletion_test.go` 与 `goserver/handlers/paper_deletion.go` 将处理历史加入物理删除拓扑。
 
 ### 验证与文档
 
-- [ ] T026 运行 Alembic 新库迁移、目标 Go/Python/Vitest 回归测试和 `cd frontend && npm run build`，将 SC-001 至 SC-008 的对应证据回写 `docs/specs/87-review-workspace/quickstart.md`。
+- [x] T026 运行 Alembic 新库迁移、目标 Go/Python/Vitest 回归测试和 `cd frontend && npm run build`，将 SC-001 至 SC-008 的对应证据回写 `docs/specs/87-review-workspace/quickstart.md`。
 - [x] T027 使用 `big-project-overview-maintainer` 更新 `docs/overview/02_Decentralized_Maintenance_and_Verification/literature-and-record-review.md`，只记录已落地的处理历史行为。
 
-## 待真实数据库验收
+## 真实数据库验收
 
-- T007、T008、T021、T022、T026 保持未完成：`FRESH_MYSQL_DATABASE_URL` 未配置，且本机 MySQL 探测未响应。迁移的旧审核事件转化、上传回填、MySQL 外键索引保留、科学数据同值保存和跨端操作标识去重必须在隔离空库上验证后才能勾选。
+- 已使用临时隔离 MySQL 库完成从空库到 `networked_news_discovery` 的完整升级，并验证 `paper_history_events` 的事件字段和两条外键；当前本地库也已从半执行状态恢复到 head。
 
 ## 收敛依赖
 

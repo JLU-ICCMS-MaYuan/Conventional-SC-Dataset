@@ -69,6 +69,13 @@ def test_fresh_mysql_84_can_upgrade_to_simplified_classification_schema():
         assert not ({"merged_into_id", "is_active"} & material_columns)
         assert not ({"merged_into_id", "is_active"} & structure_columns)
         assert {"event_type", "actor_username_snapshot", "classification_snapshot"} <= history_columns
+        history_foreign_keys = {
+            item["name"] for item in inspector.get_foreign_keys("paper_history_events")
+        }
+        assert {
+            "fk_paper_history_events_paper",
+            "fk_paper_history_events_actor",
+        } <= history_foreign_keys
         paper_family_columns = {
             item["name"] for item in inspector.get_columns("paper_material_families")
         }
