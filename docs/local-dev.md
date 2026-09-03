@@ -1,6 +1,8 @@
 # 本地开发环境
 
-所有服务跑在宿主机上，改代码立即生效，不产生 Docker 镜像、容器或构建缓存。
+应用服务跑在宿主机，改代码立即生效。GROBID 是唯一例外：它以
+`lfoppiano/grobid:0.8.1` 容器运行，并且只绑定 `127.0.0.1:8070`，避免在本机
+维护 Java 模型与运行时。
 
 ## 快速开始
 
@@ -30,6 +32,7 @@ make stop           # 停止全部
 | redis | 127.0.0.1:6379 | conda `sc-wiki-infra` | — |
 | neo4j | bolt://127.0.0.1:7687 | `.local/neo4j` | — |
 | qdrant | 127.0.0.1:6333 | `.local/bin/qdrant` | — |
+| grobid | 127.0.0.1:8070 | `lfoppiano/grobid:0.8.1` 容器 | — |
 
 请求链路：浏览器 → vite（`/api` 代理）→ goserver →（未命中路由反代）→ uvicorn。
 
@@ -41,6 +44,18 @@ MySQL 用 3307 而非 3306：宿主机 3306 已被一个系统级 MySQL 8.0（`/
 ```bash
 bash scripts/dev.sh start news-worker news-scheduler
 ```
+
+引用解析需要在本地 `.env` 配置：
+
+```bash
+GROBID_URL=http://127.0.0.1:8070
+```
+
+`make start` 会在启动 Python/Worker 前启动 GROBID；单独维护时可使用
+`bash scripts/dev.sh start grobid`、`status` 或 `stop grobid`。首次拉取镜像会占用
+较多磁盘和内存，但端口不暴露给局域网。在当前 WSL cgroup 环境中，脚本会为该
+容器设置 `JAVA_TOOL_OPTIONS=-XX:-UseContainerSupport`，避免 Java 容器资源探测异常；
+该选项不影响生产 Compose。
 
 ## 两个 conda 环境
 

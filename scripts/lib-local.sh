@@ -36,6 +36,10 @@ QDRANT_GRPC_PORT=6334
 PYTHON_PORT=8000
 GOSERVER_PORT=8080
 VITE_PORT=5173
+GROBID_PORT=8070
+GROBID_CONTAINER=scwiki-grobid
+GROBID_IMAGE=lfoppiano/grobid:0.8.1
+GROBID_JAVA_TOOL_OPTIONS=-XX:-UseContainerSupport
 
 # MySQL socket 与配置：必须与系统 MySQL 完全隔离。
 # /etc/mysql/my.cnf 含 user=mysql 与 log_error=/var/log/mysql/error.log，

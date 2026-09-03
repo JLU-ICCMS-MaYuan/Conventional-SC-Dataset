@@ -16,7 +16,7 @@
 
 ### 本地开发：宿主机进程（[Issue #71](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/71)）
 
-- 本地开发不再使用 Docker。八个服务全部运行在宿主机，由 `scripts/dev.sh` 编排，入口为 `Makefile`（`make start` / `stop` / `status` / `logs`）。
+- 本地开发的应用服务运行在宿主机，由 `scripts/dev.sh` 编排，入口为 `Makefile`（`make start` / `stop` / `status` / `logs`）。GROBID 是唯一容器化例外，固定使用 `lfoppiano/grobid:0.8.1` 并仅绑定 `127.0.0.1:8070`，避免本地维护 Java 模型。
 - 请求链路为浏览器 → Vite 5173 →（`/api` 代理）→ goserver 8080 →（未匹配路由反代）→ uvicorn 8000。两段代理均为既有实现，本地化未修改 `backend/` 与 `goserver/` 源码。
 - 三个应用服务支持热重载：前端 Vite HMR、Python `uvicorn --reload`、goserver 由 `watchfiles` 触发重编译（增量约 1 秒）。Go 编译失败时保留旧进程继续服务。`rq worker` 无热重载，改队列任务代码须手动重启。
 - 四个基础服务来自本机安装而非容器：MySQL 8.4.2 与 Redis 8.10.1 来自 conda 环境 `sc-wiki-infra`，Neo4j 5.26.29 与 Qdrant 1.19.0 为 `.local/` 下的独立安装。应用 Python 依赖使用 conda 环境 `sc-wiki`。

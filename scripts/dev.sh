@@ -6,12 +6,12 @@
 #   scripts/dev.sh status            查看状态
 #   scripts/dev.sh logs <服务>       跟踪日志
 #
-# 服务名：mysql redis neo4j qdrant python worker goserver frontend
+# 服务名：mysql redis neo4j qdrant grobid python worker goserver frontend
 # news-worker / news-scheduler 需显式指定，日常开发用不上。
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib-local.sh"
 
-INFRA_SERVICES=(mysql redis neo4j qdrant)
+INFRA_SERVICES=(mysql redis neo4j qdrant grobid)
 APP_SERVICES=(python worker goserver frontend)
 ALL_SERVICES=("${INFRA_SERVICES[@]}" "${APP_SERVICES[@]}")
 
@@ -102,6 +102,26 @@ start_qdrant() {
   ok "qdrant 127.0.0.1:$QDRANT_PORT"
 }
 
+# GROBID 使用项目已固定版本的 Docker 镜像，但仅绑定本机回环地址。
+# 其余本地开发服务仍使用宿主机进程；该镜像避免额外维护 Java 模型安装。
+grobid_ready() { curl -sf --max-time 3 "http://127.0.0.1:$GROBID_PORT/api/isalive" >/dev/null 2>&1; }
+
+start_grobid() {
+  grobid_ready && { ok "grobid 已在运行"; return; }
+  command -v docker >/dev/null 2>&1 || die "缺少 Docker，无法启动 GROBID"
+  if docker container inspect "$GROBID_CONTAINER" >/dev/null 2>&1; then
+    # GROBID 不保存状态；删除已停止实例可确保 Java 运行参数变更立即生效。
+    docker rm --force "$GROBID_CONTAINER" >>"$LOG_DIR/grobid.log" 2>&1 || die "旧 GROBID 容器清理失败"
+  fi
+  port_busy "$GROBID_PORT" && die "端口 $GROBID_PORT 已被占用"
+  docker run --detach --name "$GROBID_CONTAINER" \
+    --env "JAVA_TOOL_OPTIONS=$GROBID_JAVA_TOOL_OPTIONS" \
+    --publish "127.0.0.1:$GROBID_PORT:8070" "$GROBID_IMAGE" \
+    >>"$LOG_DIR/grobid.log" 2>&1 || die "GROBID 容器创建失败"
+  wait_for 180 "grobid" grobid_ready || die "GROBID 启动失败，见 $LOG_DIR/grobid.log"
+  ok "grobid 127.0.0.1:$GROBID_PORT"
+}
+
 py_ready() { curl -sf --max-time 3 "http://127.0.0.1:$PYTHON_PORT/health" >/dev/null 2>&1; }
 
 start_python() {
@@ -174,6 +194,13 @@ stop_neo4j() {
   stop_pid "neo4j"; ok "neo4j 已停止"
 }
 
+stop_grobid() {
+  if command -v docker >/dev/null 2>&1 && docker container inspect "$GROBID_CONTAINER" >/dev/null 2>&1; then
+    docker stop "$GROBID_CONTAINER" >>"$LOG_DIR/grobid.log" 2>&1 || true
+  fi
+  ok "grobid 已停止"
+}
+
 stop_generic() { stop_pid "$1"; ok "$1 已停止"; }
 
 # ── status / logs ───────────────────────────────────────────
@@ -186,6 +213,7 @@ status() {
     "redis|redis_ready|127.0.0.1:$REDIS_PORT"
     "neo4j|neo4j_ready|bolt://127.0.0.1:$NEO4J_BOLT_PORT"
     "qdrant|qdrant_ready|127.0.0.1:$QDRANT_PORT"
+    "grobid|grobid_ready|127.0.0.1:$GROBID_PORT"
     "python|py_ready|127.0.0.1:$PYTHON_PORT"
     "goserver|curl -sf --max-time 3 http://127.0.0.1:$GOSERVER_PORT/health|127.0.0.1:$GOSERVER_PORT"
     "frontend|curl -sf --max-time 3 http://127.0.0.1:$VITE_PORT/|http://127.0.0.1:$VITE_PORT"
@@ -224,13 +252,14 @@ main() {
       local targets=("$@")
       if [[ ${#targets[@]} -eq 0 ]]; then
         # 逆序停止：先应用后基础设施
-        targets=(news-scheduler news-worker frontend goserver worker python qdrant neo4j redis mysql)
+        targets=(news-scheduler news-worker frontend goserver worker python grobid qdrant neo4j redis mysql)
       fi
       for s in "${targets[@]}"; do
         case "$s" in
           mysql) stop_mysql ;;
           redis) stop_redis ;;
           neo4j) stop_neo4j ;;
+          grobid) stop_grobid ;;
           *) stop_generic "$s" ;;
         esac
       done

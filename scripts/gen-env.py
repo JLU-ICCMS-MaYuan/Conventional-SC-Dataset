@@ -2,7 +2,7 @@
 """从 Docker 栈的 .env 生成本地开发用 .env。
 
 只改写连接地址（容器服务名 → 127.0.0.1、MySQL 端口 → 3307、数据目录 → .data），
-密钥原样透传，不经过 shell，不打印到日志。
+并补齐本地 GROBID 地址。密钥原样透传，不经过 shell，不打印到日志。
 """
 
 from __future__ import annotations
@@ -50,6 +50,7 @@ DEFAULTS = {
     "QDRANT_PORT": "6333",
     "SC_WIKI_DATA_DIR": str(DATA_DIR),
     "PYTHON_BACKEND_URL": "http://127.0.0.1:8000",
+    "GROBID_URL": "http://127.0.0.1:8070",
     "PORT": "8080",
     "AVATAR_DIR": str(DATA_DIR / "avatars"),
 }
@@ -67,7 +68,7 @@ def main() -> int:
     seen: set[str] = set()
     lines: list[str] = [
         "# SC-Wiki 本地开发环境变量（由 scripts/gen-env.py 生成）",
-        "# 全部服务跑在宿主机 127.0.0.1，不依赖 Docker。",
+        "# 应用服务运行在宿主机；GROBID 使用仅绑定 127.0.0.1 的容器。",
         f"# MySQL 用 {MYSQL_PORT}：宿主机 3306 已被系统级 MySQL 占用。",
         "",
     ]

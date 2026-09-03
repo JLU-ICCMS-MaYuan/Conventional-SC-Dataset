@@ -1,4 +1,4 @@
-# SC-Wiki 本地开发。所有服务跑在宿主机，不依赖 Docker。
+# SC-Wiki 本地开发。应用服务跑在宿主机；GROBID 使用仅绑定回环地址的容器。
 #
 #   make setup     一次性安装（conda 环境、Neo4j、Qdrant、Go、Python 依赖）
 #   make migrate   从 Docker 卷迁移数据到 .data/

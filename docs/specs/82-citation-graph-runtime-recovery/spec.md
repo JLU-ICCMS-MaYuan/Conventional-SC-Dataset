@@ -16,10 +16,12 @@
 - Vite 将全部 `/api` 请求代理到 Go `:8080`；Python `:8000` 不是公开 API 的直接入口。
 - Go 服务在路由注册阶段 panic：`/api/admin/papers/:id` 与
   `/api/admin/papers/:paperId/graph-marks` 的同位置通配参数名称不一致。
-- 开发库 `scwiki` 尚停在 `paper_superconductor_kind`，没有应用 #81 的
-  `paper_citation_graph` Alembic 迁移。
+- 运行诊断开始时，开发库 `scwiki` 停在 `paper_superconductor_kind`，没有应用 #81 的
+  `paper_citation_graph` Alembic 迁移；本 Issue 的受控上线已将其迁移至目标版本。
 - 历史论文只有 `paper_files`，没有 `paper_references`。#81 的上传、升版和审核
   流程会解析新版本，却没有可显式执行的历史回填入口。
+- 运行诊断开始时，本地开发环境没有 GROBID 服务管理或 `GROBID_URL`。Compose 内的
+  `grobid` 主机名无法被宿主机 Python/Worker 使用。
 
 因此，代码测试通过不等于开发环境已可用。本 Issue 负责修复运行故障、应用已验证
 的 schema，并为已收录论文建立可控的首次引用解析能力。
@@ -94,6 +96,12 @@
   `knowledge_graph_title`。匹配规则只能复用 #81 的 `citation_graph.py`。
 - **FR-008**：命令必须输出每篇论文的 ID、版本、结果状态、参考文献数量及失败/跳过
   原因；进程退出码在有失败论文时为非零，便于运维发现不完整回填。
+- **FR-009**：本地开发必须通过 `scripts/dev.sh` 管理名为 `grobid` 的
+  `lfoppiano/grobid:0.8.1` 容器；容器只能发布 `127.0.0.1:8070`，并等待
+  `/api/isalive` 成功后才报告启动完成。当前 WSL cgroup 环境中必须传入
+  `JAVA_TOOL_OPTIONS=-XX:-UseContainerSupport`，避免 Java 在启动阶段崩溃。
+- **FR-010**：本地 `.env` 必须将 `GROBID_URL` 指向 `http://127.0.0.1:8070`；
+  Python 和 Worker 重启后才可使用新环境变量。该配置不得写入版本库或生产密钥文档。
 
 ## 范围外事项
 
@@ -118,3 +126,18 @@
 - **SC-003**：`scwiki` 迁移版本为 `paper_citation_graph`，目标引用表均存在。
 - **SC-004**：指定历史论文的回填命令可重跑，不改论文 revision，不重复引用记录。
 - **SC-005**：GROBID 不可用时，命令不伪造引用边，并以非零退出码报告失败。
+- **SC-006**：`scripts/dev.sh start grobid`、`status`、`stop grobid` 可管理本地
+  GROBID；健康检查通过后，指定历史 PDF 的实际回填能保存提取状态。
+
+## 实际验收记录
+
+### 2026-09-03
+
+- 开发库已迁移到 `paper_citation_graph`，目标引用表均已创建。
+- 本地 GROBID 使用 `lfoppiano/grobid:0.8.1`，仅监听 `127.0.0.1:8070`；健康接口
+  返回 200。
+- Python、Worker、Go 和 Vite 均已运行。浏览器同路径的图谱概览返回 200。
+- 论文 `9` 的当前已审核版本 `3` 已连续回填两次；每次均为 `partial`、解析 1 条原始
+  引文。数据库最终保留 1 条提取记录和 1 条未匹配引文，没有产生重复记录或新 revision。
+- 图谱只有论文 `9` 一个节点且没有边是正确结果：当前库没有第二篇已审核论文可被该引文
+  匹配。
