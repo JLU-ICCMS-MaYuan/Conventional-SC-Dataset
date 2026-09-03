@@ -208,7 +208,7 @@ def llm_display_metadata(config: LlmConfig | None = None) -> dict[str, str]:
     }
 
 
-def request_llm_config(request: Request):
+async def request_llm_config(request: Request):
     """FastAPI dependency which scopes header-derived config to one request."""
     try:
         config = resolve_llm_config(

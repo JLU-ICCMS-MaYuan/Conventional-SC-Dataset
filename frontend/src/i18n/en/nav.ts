@@ -33,6 +33,8 @@ export default {
   llmModel: 'Model',
   llmKeyRequired: 'Model and API key are required',
   llmKeyStorage: 'The key stays in this browser and is not uploaded or stored in the server database.',
+  llmShowKey: 'Show API key',
+  llmHideKey: 'Hide API key',
   llmStoredKey: 'Stored key: {key}',
   llmClear: 'Clear configuration',
   llmTest: 'Test connection',

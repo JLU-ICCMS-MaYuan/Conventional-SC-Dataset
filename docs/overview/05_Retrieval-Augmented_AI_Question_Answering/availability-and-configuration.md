@@ -13,6 +13,7 @@
 - 顶栏可配置服务端默认、DeepSeek、Kimi、GLM、Qwen、OpenAI、Claude 或自定义的 OpenAI 兼容端点。
   用户配置通过 `X-LLM-Provider`、`X-LLM-Base-URL`、`X-LLM-Model`、`X-LLM-Api-Key` 传递，
   仅保存在浏览器 `localStorage`，服务端不把 API key 写入数据库或公开任务状态。
+- 个人 API Key 输入默认掩码；用户可在当前表单内显式显示或隐藏它，关闭面板后仍只以掩码摘要展示。
 
 ## 工作流程
 
@@ -24,7 +25,8 @@
 部署可用 `LLM_PROVIDER_NAME` 显式标注网关上游，例如当前默认配置为 `OpenAI · gpt-5.6-sol`；不再仅按
 Base URL 推断。超级管理员可在工作台更新默认供应商、Base URL、模型和密钥，配置原子写入 API 与
 Worker 共用的 `/data/runtime/default_llm.json`，后续调用立即生效。仅超级管理员可读取或修改该配置，
-密钥字段从不回显，空密钥表示保留既有值。
+密钥字段从不回显，空密钥表示保留既有值。工作台默认以摘要卡片展示当前模型；只有点击“编辑”才打开
+可修改表单，当前角色卡片使用普通文本布局并对溢出截断。
 
 ## 约束
 

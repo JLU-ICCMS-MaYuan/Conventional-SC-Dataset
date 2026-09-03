@@ -6,7 +6,7 @@
 
 **格式**：`- [ ] T### [P?] [US#?] 动作描述，包含准确文件路径`
 
-**当前状态**：核心代码已实现；供应商官方文档实测、完整回归与人工验收仍待执行。
+**当前状态**：核心代码、默认模型管理与定向自动化验证已完成；供应商官方文档实测、生产日志审计、完整回归与人工验收仍待执行。
 
 ## 阶段 0：阻塞依赖
 
@@ -22,8 +22,8 @@
 - [ ] T003 [P] 实测 Anthropic OpenAI 兼容层是否支持
       `response_format={"type":"json_object"}`；不支持则在 research.md D-006 记录结论并
       决定标注限制还是降级为提示词约束
-- [ ] T004 [P] 核查 nginx 配置：确认 `X-LLM-*` 自定义头被透传，且 `log_format` 不含
-      `$http_x_llm_api_key`；需要改动则记录待改配置项
+- [x] T004 [P] 核查 `docker/nginx.conf`：未覆写 `X-LLM-*`，默认代理透传；未定义
+      `log_format`，因此不含 `$http_x_llm_api_key`，无需配置改动
 
 ## 阶段 2：基础能力（阻断全部用户故事）
 
@@ -89,7 +89,7 @@
 - [x] T027 新建 `backend/tests/test_llm_client_coverage.py`：断言
       `backend/rag/` 与 `backend/ingest/extractor.py` 中生成式 LLM 调用点直读
       `settings.deepseek_api_key` 的处数为 0（SC-008）
-- [ ] T028 集成测试覆盖灵感探索链路跨线程池后配置仍生效——这是最易静默失败处，测试须断言
+- [x] T028 集成测试覆盖灵感探索链路跨线程池后配置仍生效——测试断言
       实际使用的 base_url，不能只断言调用成功
 
 ## 阶段 4：用户故事 2 延伸——RQ 上传解析凭据传递（P1）
@@ -108,7 +108,7 @@
 - [x] T032 在 `backend/ingest/upload_jobs.py` 与 `upload_tasks.py` 的全部终态分支（成功、
       失败、取消、`cleanup_transient_data`）中删除凭据键
 - [x] T033 在上传任务状态回显中加入 `provider` 字段（FR-021）
-- [ ] T034 新建 `tests/01_decentralized_uploading/test_upload_llm_credentials.py`：断言
+- [x] T034 新建 `tests/01_decentralized_uploading/test_upload_llm_credentials.py`：断言
       入队后键存在且带 TTL、worker 内配置生效、三种终态后键被删除（SC-007）
 - [x] T035 确认 `/upload-tasks/{task_id}` 等状态查询接口的响应体不含凭据键内容
 
@@ -128,10 +128,9 @@
 - [x] T039 改造 `frontend/src/lib/api.ts`：在 `request()` 与 `postStream()` 注入
       `X-LLM-*` 头，仅当本地已保存且非 `server-default` 时注入（FR-010）
 - [x] T040 核对 `frontend/src/lib/useStreamingChat.ts` 的流式请求确实携带凭据头
-- [ ] T041 新建 `tests/01_decentralized_uploading/LlmProviderSwitcher.test.tsx`：渲染位置、
+- [x] T041 新建 `tests/01_decentralized_uploading/llm-provider-switcher.test.tsx`：渲染入口、
       8 个选项、切换供应商后 placeholder 变化、清除配置回到默认态
-- [ ] T042 若 T041 的目录未列入 `vitest.config.ts` 的 `include` 白名单，同步添加——否则
-      用例被静默跳过，不报错不计数（plan 坑点 1）
+- [x] T042 T041 所在目录已列入 `vitest.config.ts` 的 `include` 白名单，测试不会被静默跳过
 
 ## 阶段 6：用户故事 5——凭据说明与掩码（P1）
 
@@ -144,7 +143,7 @@
 - [x] T044 [US5] 密钥输入默认掩码 + 可见性切换；已保存配置重新打开时以 `sk-****abcd`
       回显（FR-009）
 - [x] T045 [US5] 加入「清除配置」按钮，清除后回退服务端默认（FR-022）
-- [ ] T046 [US5] 组件测试断言说明文案存在、回显为掩码形式、清除后回到默认态
+- [x] T046 [US5] 组件测试断言说明文案存在、默认密码输入掩码、显式查看控制与清除后回到默认态
 
 ## 阶段 7：用户故事 3——自定义端点（P2）
 
@@ -170,11 +169,11 @@
       `LLM_MODEL_NOT_FOUND`、`LLM_TIMEOUT`（FR-023）
 - [x] T052 [US4] 在 `LlmProviderSwitcher.tsx` 加「测试连接」按钮，成功显示实测耗时，失败
       显示对应提示
-- [ ] T053 [US4] 后端测试覆盖四类失败的判定准确性（SC-006）
+- [x] T053 [US4] 后端测试覆盖四类失败的判定准确性（SC-006）
 
 ## 最终阶段：完善与跨故事事项
 
-- [ ] T054 执行 nginx 配置变更（若 T004 发现需要），确认头透传与日志脱敏
+- [x] T054 T004 未发现需要的 nginx 配置变更；已确认默认透传且配置未定义泄露密钥头的日志格式
 - [ ] T055 密钥零泄露审计：按 quickstart 场景 8 检索数据库、后端日志、nginx 日志、错误
       响应体，四处均须命中 0 次（SC-003）
 - [ ] T056 运行完整回归：`tests/05_rag_question_answering/`、

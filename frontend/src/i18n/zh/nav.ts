@@ -36,6 +36,8 @@ export default {
   llmModel: '模型名',
   llmKeyRequired: '模型名和 API Key 不能为空',
   llmKeyStorage: '密钥仅保存在你当前浏览器，不会上传或存入服务器数据库。',
+  llmShowKey: '显示 API Key',
+  llmHideKey: '隐藏 API Key',
   llmStoredKey: '已保存密钥：{key}',
   llmClear: '清除配置',
   llmTest: '测试连接',

@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
   Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle,
-  MenuItem, Select, Stack, TextField, Typography,
+  IconButton, InputAdornment, MenuItem, Select, Stack, TextField, Tooltip, Typography,
 } from '@mui/material'
-import { SmartToy as SmartToyIcon } from '@mui/icons-material'
+import {
+  SmartToy as SmartToyIcon, Visibility as VisibilityIcon, VisibilityOff as VisibilityOffIcon,
+} from '@mui/icons-material'
 import { useLanguage } from '../context/LanguageContext'
 import {
   clearLlmConfig, maskApiKey, PROVIDER_PRESETS, readStoredLlmConfig,
@@ -28,6 +30,7 @@ const LlmProviderSwitcher: React.FC = () => {
   const [baseUrl, setBaseUrl] = useState(saved?.baseUrl || '')
   const [model, setModel] = useState(saved?.model || '')
   const [apiKey, setApiKey] = useState(saved?.apiKey || '')
+  const [showApiKey, setShowApiKey] = useState(false)
   const [error, setError] = useState('')
   const [connection, setConnection] = useState('')
   const [testing, setTesting] = useState(false)
@@ -65,6 +68,7 @@ const LlmProviderSwitcher: React.FC = () => {
     setBaseUrl(config?.baseUrl || '')
     setModel(config?.model || '')
     setApiKey(config?.apiKey || '')
+    setShowApiKey(false)
     setError('')
     setConnection('')
     setOpen(true)
@@ -129,7 +133,17 @@ const LlmProviderSwitcher: React.FC = () => {
           {!isDefault && <>
             <TextField label="Base URL" value={baseUrl} onChange={event => setBaseUrl(event.target.value)} placeholder={selected.baseUrl || 'https://your-gateway.example.com/v1'} fullWidth />
             <TextField label={t('nav.llmModel')} value={model} onChange={event => setModel(event.target.value)} placeholder={selected.model || 'model-name'} fullWidth />
-            <TextField label="API Key" value={apiKey} onChange={event => setApiKey(event.target.value)} type="password" fullWidth />
+            <TextField
+              label="API Key" value={apiKey} onChange={event => setApiKey(event.target.value)}
+              type={showApiKey ? 'text' : 'password'} fullWidth
+              slotProps={{ input: { endAdornment: <InputAdornment position="end">
+                <Tooltip title={showApiKey ? t('nav.llmHideKey') : t('nav.llmShowKey')}>
+                  <IconButton aria-label={showApiKey ? t('nav.llmHideKey') : t('nav.llmShowKey')} edge="end" onClick={() => setShowApiKey(value => !value)}>
+                    {showApiKey ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                  </IconButton>
+                </Tooltip>
+              </InputAdornment> }}}
+            />
             {apiKey && <Typography variant="caption" color="text.secondary">{t('nav.llmStoredKey', { key: maskApiKey(apiKey) })}</Typography>}
             <Typography variant="caption" color="text.secondary">{t('nav.llmKeyStorage')}</Typography>
             <Box>{error && <Alert severity="error">{error}</Alert>}{connection && <Alert severity="success">{connection}</Alert>}</Box>

@@ -1,5 +1,7 @@
 """Issue #73 request-scoped provider configuration tests."""
 
+import asyncio
+
 import pytest
 from starlette.requests import Request
 
@@ -60,17 +62,20 @@ def test_request_dependency_sets_and_resets_context(monkeypatch):
     monkeypatch.setattr(llm_context.socket, "getaddrinfo", lambda *args, **kwargs: [
         (None, None, None, None, ("93.184.216.34", 443))
     ])
-    dependency = llm_context.request_llm_config(_request({
-        "X-LLM-Provider": "custom",
-        "X-LLM-Base-URL": "https://llm.example.com/v1",
-        "X-LLM-Model": "model",
-        "X-LLM-Api-Key": "user-key",
-    }))
-    config = next(dependency)
-    assert llm_context.get_llm_config() == config
-    with pytest.raises(StopIteration):
-        next(dependency)
-    assert llm_context.get_llm_config().provider == "server-default"
+    async def scenario():
+        dependency = llm_context.request_llm_config(_request({
+            "X-LLM-Provider": "custom",
+            "X-LLM-Base-URL": "https://llm.example.com/v1",
+            "X-LLM-Model": "model",
+            "X-LLM-Api-Key": "user-key",
+        }))
+        config = await anext(dependency)
+        assert llm_context.get_llm_config() == config
+        with pytest.raises(StopAsyncIteration):
+            await anext(dependency)
+        assert llm_context.get_llm_config().provider == "server-default"
+
+    asyncio.run(scenario())
 
 
 def test_mask_api_key():

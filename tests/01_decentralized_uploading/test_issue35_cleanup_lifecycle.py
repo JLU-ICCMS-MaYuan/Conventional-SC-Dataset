@@ -71,6 +71,7 @@ def test_transient_cleanup_preserves_review_snapshot_and_formal_files(tmp_path, 
     assert set(client.deleted) == {
         upload_tasks.task_key(task_id),
         upload_tasks.draft_key(task_id),
+        upload_tasks.llm_config_key(task_id),
     }
     assert client.removed == [(upload_tasks.user_tasks_key(7), task_id)]
 
