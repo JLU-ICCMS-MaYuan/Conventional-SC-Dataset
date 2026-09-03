@@ -126,7 +126,7 @@ type Paper struct {
 	Files               []PaperFile           `gorm:"foreignKey:PaperID,PaperRevision;references:ID,ContentRevision" json:"files,omitempty"`
 	Chunks              []PaperChunk          `gorm:"foreignKey:PaperID,PaperRevision;references:ID,ContentRevision" json:"chunks,omitempty"`
 	Evidences           []PaperEvidence       `gorm:"foreignKey:PaperID,PaperRevision;references:ID,ContentRevision" json:"evidences,omitempty"`
-	ReviewEvents        []PaperReviewEvent    `gorm:"foreignKey:PaperID;references:ID" json:"review_events,omitempty"`
+	HistoryEvents       []PaperHistoryEvent   `gorm:"foreignKey:PaperID;references:ID" json:"history_events,omitempty"`
 	MaterialFamilyLinks []PaperMaterialFamily `gorm:"foreignKey:PaperID,PaperRevision;references:ID,ContentRevision" json:"-"`
 	MaterialFamilies    []MaterialFamily      `gorm:"-" json:"material_families,omitempty"`
 	MaterialStates      []MaterialState       `gorm:"foreignKey:PaperID,PaperRevision;references:ID,ContentRevision" json:"material_states,omitempty"`
@@ -221,17 +221,18 @@ type PaperEvidence struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 
-// PaperReviewEvent 一次不可变、覆盖整篇论文 revision 的审核动作。
-type PaperReviewEvent struct {
+// PaperHistoryEvent 一次不可变的上传、修改或审核动作。
+type PaperHistoryEvent struct {
 	ID                     uint            `gorm:"primaryKey" json:"id"`
-	PaperID                uint            `gorm:"not null;index:ix_paper_review_events_paper_revision,priority:1" json:"paper_id"`
-	PaperRevision          uint            `gorm:"not null;default:1;index:ix_paper_review_events_paper_revision,priority:2" json:"paper_revision"`
-	ReviewerUserID         uint            `gorm:"index:ix_paper_review_events_reviewer_time,priority:1" json:"reviewer_user_id"`
-	Status                 string          `gorm:"size:50" json:"status"`
+	PaperID                uint            `gorm:"not null;index:ix_paper_history_events_paper_time,priority:1;index:ix_paper_history_events_paper_revision,priority:1" json:"paper_id"`
+	PaperRevision          uint            `gorm:"not null;default:1;index:ix_paper_history_events_paper_revision,priority:2" json:"paper_revision"`
+	EventType              string          `gorm:"size:20;not null" json:"event_type"`
+	ActorUserID            *uint           `gorm:"index:ix_paper_history_events_actor_time,priority:1" json:"actor_user_id"`
+	ActorUsernameSnapshot  *string         `gorm:"size:32" json:"actor_username_snapshot"`
+	ReviewStatus           *string         `gorm:"size:50" json:"review_status"`
 	ReviewComment          *string         `json:"review_comment"`
-	ReviewedAt             time.Time       `gorm:"index:ix_paper_review_events_reviewer_time,priority:2;index:ix_paper_review_events_paper_revision,priority:3" json:"reviewed_at"`
-	RequestID              *string         `gorm:"size:64;uniqueIndex" json:"request_id"`
-	Source                 string          `gorm:"size:20" json:"source"`
+	OccurredAt             time.Time       `gorm:"index:ix_paper_history_events_paper_time,priority:2;index:ix_paper_history_events_actor_time,priority:2" json:"occurred_at"`
+	OperationID            *string         `gorm:"size:64;uniqueIndex:uq_paper_history_events_operation_id" json:"operation_id"`
 	ClassificationSnapshot json.RawMessage `gorm:"type:json" json:"-"`
 }
 

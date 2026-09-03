@@ -14,11 +14,11 @@
 - 物性写入只接受 `superconductor_properties` 的真实列（`material_raw`、`name_raw`、`value_raw`、`value_number`、`unit_raw`、`canonical_unit`、`value_min`、`value_max`、`condition_note`）。压强、温度、主记录标记、结构文本与结构格式没有对应列，因此不再被接受，而不是接受后静默丢弃——后者会让管理员以为改动已保存。条件字段属材料状态，不经物性接口修改，以免绕过材料状态自身的校验与审核语义。（[Issue #57](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/57)）
 - 管理员可查看、编辑、单篇审核和批量审核论文；论文删除与批量删除只允许超级管理员，且为不可恢复的物理删除（详见下方“论文物理删除”）。
 - 管理员在独立编辑页确认论文级 Material family、论文级单选 Superconductor type、状态级结构家族和材料维度；可认可建议、改选数据库已有项或输入新名称。待审正式关联为空时，页面从审核产物回填上传者确认的多个 family、Superconductor type 与 `More type labels`。分类变更随同一次批准请求提交，不额外调用目录治理 API。旧 `key_properties.superconductor_type` 与状态级 `superconductor_kind` 都不再参与管理员写入。
-- 独立编辑页顶部有固定的审核区域，可一边修改字段和分类一边提交审核；元数据区显示上传者、关联记录数、论文 ID 与创建时间。审核结果统一提供「通过」「拒绝」「↩️ 退回待审核」三个状态。选择「通过」时，页面会把当前论文级 family、Superconductor type 和材料状态分类随审核请求提交，无需先单独保存，后端继续执行分类完整性校验。审核请求成功后立即返回当前角色工作台：管理员回 `/admin`，超级管理员回 `/superadmin`。（[Issue #87](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/87)）
+- 独立编辑页顶部有固定的审核区域，可一边修改字段和分类一边提交审核；元数据区显示上传者、当前版本物性记录数、论文 ID 与创建时间，并提供带历史图标的“处理记录”入口。只有管理员和超级管理员可在此读取按时间排序的上传、修改、审核记录；审核事件保留当时操作者和每次审核意见，历史导入论文显示“历史导入，上传者未知”。审核结果统一提供「通过」「拒绝」「↩️ 退回待审核」三个状态。选择「通过」时，页面会把当前论文级 family、Superconductor type 和材料状态分类随审核请求提交，无需先单独保存，后端继续执行分类完整性校验。审核请求成功后立即返回当前角色工作台：管理员回 `/admin`，超级管理员回 `/superadmin`。（[Issue #87](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/87)）
 - 论文列表的快速审核弹窗只提供「拒绝」与「退回待审核」，以及论文标题、DOI、年份、记录数和审核意见；批准必须进入独立编辑页完成论文级 family 与状态标签确认。AI 与用户提交值的三列对照、原文证据引文、同 DOI 候选附件列表已移除。（[Issue #62](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/62)、[Issue #78](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/78)、[Issue #79](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/79)）
 - 目录不提供独立建议队列、重命名、停用、合并或超级管理员二次治理。新名称只在论文批准事务中创建，拒绝或退回不会污染正式目录。
 - 批准论文前检查当前 revision 至少有一个论文级 Material family，并校验各材料状态的元素种类数与主结构唯一性；不完整时返回 `409 classification_incomplete`，论文状态及目录均不改变。批准事件保存 AI 上下文、全部论文 family 与状态级标签的最终目录 ID 快照。
-- 同一审核人每次实际提交单篇或批量论文审核都会写入一条不可变审核事件，即使论文状态和意见与上次相同；相同 `review_request_id` 的网络重试保持幂等，不重复计数。
+- `paper_history_events` 是上传、修改和审核的唯一追加式历史来源：新上传与论文创建同事务写入 `uploaded`；有实际业务变化的保存写入一条 `modified`；每次实际审核写入 `reviewed` 并保留审核意见。同一次编辑页保存的 Go/Python 两段请求共享 `history_operation_id`，同值保存和同一操作重试不产生重复事件；审核贡献统计仅计 `reviewed`。
 - 批量接口不允许批准论文，避免绕过逐篇材料分类确认；批量拒绝和退回仍可使用。
 - Go 统一承载 `/api/papers` 列表、`/api/papers/{id}` 详情和白名单 PATCH：匿名仅查看 approved；登录用户可查看 approved 与 pending；上传者额外可查看自己的 rejected 和 `review_comment`；管理员可查看全部及 `admin_internal_note`。
 - 无权查看的已存在 rejected 论文返回 403，不再伪装成 404。普通用户不能修改审核状态、文件路径、上传者、审核者或内部备注。
@@ -31,7 +31,7 @@
 
 超级管理员通过 `DELETE /api/admin/papers/:id`（单篇）和 `POST /api/admin/papers/batch-delete`（批量）执行删除。删除是物理删除：论文行从 MySQL 移除，不写软删除标记，无法恢复。（[Issue #60](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/60)）
 
-- 同一事务内级联清理 15 张关联表，顺序为：`tc_result_evidences`、`structure_model_evidences`、`superconductor_property_evidences`、`tc_results`、`superconductor_properties`、`calculation_contexts`、`experimental_contexts`、`structure_models`、`material_state_structure_families`、`material_states`、`paper_material_families`、`paper_evidences`、`paper_chunks`、`paper_files`、`paper_review_events`，最后删除 `papers`。
+- 同一事务内级联清理 15 张关联表，顺序为：`tc_result_evidences`、`structure_model_evidences`、`superconductor_property_evidences`、`tc_results`、`superconductor_properties`、`calculation_contexts`、`experimental_contexts`、`structure_models`、`material_state_structure_families`、`material_states`、`paper_material_families`、`paper_evidences`、`paper_chunks`、`paper_files`、`paper_history_events`，最后删除 `papers`。
 - 删除顺序按 `information_schema` 实测的外键依赖拓扑逆序，不可随意调整：例如 `superconductor_properties` 引用 `calculation_contexts`，必须先删前者，否则 MySQL 抛 `Error 1451` 并回滚整个事务，表现为“提示删除成功但数据仍在”。`structure_models` 自引用 `parent_structure_id`，删除前先置空。`material_state_structure_families` 没有 `paper_id` 列，按本论文的 `material_states` 子查询删除。
 - 跨论文共享的目录数据不删除：`superconductors`、`material_families`、`structure_families`、`property_definitions`。
 - MySQL 事务提交后，Go 调用 Python 内部端点 `DELETE /api/internal/papers/{id}/vectors` 与 `DELETE /api/internal/papers/{id}/graph` 清理 Qdrant 向量与 Neo4j 节点。该清理是 best-effort：失败只写日志，不回滚、不改变 HTTP 结果——MySQL 行此时已不可恢复，强制回滚只会制造更严重的不一致。Go 通过 `PYTHON_BACKEND_URL` 定位 Python 服务。

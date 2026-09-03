@@ -31,7 +31,7 @@ def test_paper_lineage_keeps_five_separate_tables():
         "paper_files",
         "paper_chunks",
         "paper_evidences",
-        "paper_review_events",
+        "paper_history_events",
     }.issubset(Base.metadata.tables)
 
 
@@ -92,12 +92,12 @@ def test_evidence_has_one_direct_same_revision_chunk_anchor():
     ) in shapes
 
 
-def test_review_event_records_revision_and_restricts_paper_deletion():
-    events = Base.metadata.tables["paper_review_events"]
+def test_history_event_records_revision_and_restricts_paper_deletion():
+    events = Base.metadata.tables["paper_history_events"]
     shapes = _foreign_key_shapes(events)
 
     assert events.c.paper_revision.nullable is False
-    assert "ck_paper_review_events_revision" in _constraint_names(
+    assert "ck_paper_history_events_revision" in _constraint_names(
         events, CheckConstraint
     )
     assert (

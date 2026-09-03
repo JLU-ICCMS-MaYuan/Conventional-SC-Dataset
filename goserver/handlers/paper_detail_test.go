@@ -66,7 +66,7 @@ func seedPaperFour(t *testing.T, db *gorm.DB, reviewStatus string) {
 	if err := db.Create(&models.MaterialState{
 		ID: 1, PaperID: 4, PaperRevision: 1, SuperconductorID: 1,
 		MaterialDimensionality: "bulk",
-		CrystalSystem: "cubic", StateKind: "theoretical",
+		CrystalSystem:          "cubic", StateKind: "theoretical",
 		PressureValueGPa: f64Ptr(250), PressureMinGPa: f64Ptr(200), PressureMaxGPa: nil,
 		PressureRaw:              strPtr("above 200 GPa"),
 		ReportedSpaceGroupSymbol: strPtr("Fm-3m"), ReportedSpaceGroupNumber: i16Ptr(225),
@@ -315,7 +315,7 @@ func TestPaperDetailUsesEmptyArraysWhenNoScientificData(t *testing.T) {
 	if err := db.Create(&models.MaterialState{
 		ID: 9, PaperID: 7, PaperRevision: 1, SuperconductorID: 2,
 		MaterialDimensionality: "bulk",
-		CrystalSystem: "unknown", StateKind: "unknown",
+		CrystalSystem:          "unknown", StateKind: "unknown",
 	}).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -577,4 +577,66 @@ func TestPaperDetailReturnsFamilyNameEn(t *testing.T) {
 		t.Fatalf("管理端详情响应不是 JSON：%s", response.Body.String())
 	}
 	assertFamilyNameEn(t, "管理端详情", adminBody)
+}
+
+// #87：管理端详情必须基于真实关联返回上传者和当前版本物性数，不能依赖前端夹具。
+func TestAdminPaperDetailReturnsUploaderAndCurrentRevisionRecordCount(t *testing.T) {
+	db := paperDetailTestDB(t)
+	seedPaperFour(t, db, reviewStatusPending)
+	if err := db.Create(&models.User{ID: 9, Email: "author@example.test", Username: "author"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&models.Paper{}).Where("id = ?", 4).Update("uploaded_by_user_id", 9).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&models.SuperconductorProperty{
+		PaperID: 4, PaperRevision: 2, MaterialStateID: 1, PropertyDefinitionID: 1,
+		Material: "LaH10", NameRaw: "legacy", ValueRaw: strPtr("1"), SourceFingerprint: "legacy-property",
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.GET("/admin/papers/:id", GetPaperDetail)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/admin/papers/4", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("状态码 = %d，响应 = %s", response.Code, response.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["uploader_name"] != "author" {
+		t.Fatalf("uploader_name = %#v，期望 author", body["uploader_name"])
+	}
+	if body["record_count"] != float64(1) {
+		t.Fatalf("record_count = %#v，期望当前版本的 1 条物性", body["record_count"])
+	}
+}
+
+func TestAdminPaperDetailReturnsNullUploaderAndZeroRecords(t *testing.T) {
+	db := paperDetailTestDB(t)
+	if err := db.Create(&models.Paper{ID: 8, Title: strPtr("历史导入"), ReviewStatus: reviewStatusPending, ContentRevision: 1}).Error; err != nil {
+		t.Fatal(err)
+	}
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.GET("/admin/papers/:id", GetPaperDetail)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/admin/papers/8", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("状态码 = %d，响应 = %s", response.Code, response.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if value, exists := body["uploader_name"]; !exists || value != nil {
+		t.Fatalf("uploader_name = %#v，期望 null", value)
+	}
+	if body["record_count"] != float64(0) {
+		t.Fatalf("record_count = %#v，期望 0", body["record_count"])
+	}
 }

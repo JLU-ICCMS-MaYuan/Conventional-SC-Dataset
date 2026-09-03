@@ -38,7 +38,7 @@ func newDeletionTestDB(t *testing.T) *gorm.DB {
 		&models.StructureModel{},
 		&models.PaperChunk{},
 		&models.PaperEvidence{},
-		&models.PaperReviewEvent{},
+		&models.PaperHistoryEvent{},
 		&models.Superconductor{},
 		&models.PropertyDefinition{},
 		// 以下 5 张表曾被 spec 漏掉，导致真实库删除失败
@@ -152,7 +152,7 @@ func seedPaperGraph(t *testing.T, db *gorm.DB, doi string) (uint, uint) {
 
 	rows := []any{
 		&models.ExperimentalContext{PaperID: paper.ID, PaperRevision: 1, MaterialStateID: state.ID, TcCriterion: "onset"},
-		&models.PaperReviewEvent{PaperID: paper.ID, PaperRevision: 1, Status: "pending"},
+		&models.PaperHistoryEvent{PaperID: paper.ID, PaperRevision: 1, EventType: paperHistoryUploaded},
 		// 证据连接表：引用 tc_results / structure_models / paper_evidences
 		&models.TcResultEvidence{TcResultID: tcResult.ID, PaperEvidenceID: evidence.ID, PaperID: paper.ID, PaperRevision: 1},
 		&models.StructureModelEvidence{StructureID: structure.ID, PaperEvidenceID: evidence.ID, PaperID: paper.ID, PaperRevision: 1},
@@ -216,7 +216,7 @@ func TestCascadeDeleteInDBRemovesEveryRelation(t *testing.T) {
 		{"structure_models", &models.StructureModel{}},
 		{"paper_chunks", &models.PaperChunk{}},
 		{"paper_evidences", &models.PaperEvidence{}},
-		{"paper_review_events", &models.PaperReviewEvent{}},
+		{"paper_history_events", &models.PaperHistoryEvent{}},
 		{"paper_files", &models.PaperFile{}},
 		{"tc_result_evidences", &models.TcResultEvidence{}},
 		{"structure_model_evidences", &models.StructureModelEvidence{}},

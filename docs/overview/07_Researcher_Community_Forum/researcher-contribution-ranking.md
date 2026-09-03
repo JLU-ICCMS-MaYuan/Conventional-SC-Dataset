@@ -8,7 +8,7 @@
 
 - Go API `GET /api/community/contributions` 对匿名访问者返回贡献参与人数、上传贡献 Top 20 和审核贡献 Top 20；有效登录请求额外返回当前用户的两项全量排名。
 - 参与人数是至少有一篇当前审核通过上传或至少有一条有效审核历史的注册用户去重数。
-- 上传榜只统计当前 `review_status = approved` 的论文；审核榜按 `paper_review_events` 中的有效审核动作累计。
+- 上传榜只统计当前 `review_status = approved` 的论文；审核榜只累计 `paper_history_events.event_type = 'reviewed'` 的有效审核动作，不把上传或修改计入审核贡献。
 - 同一论文的每次实际审核提交分别计数，即使状态和意见与上次相同；相同请求幂等键的网络重试不重复计数。
 - 社区 `/share` 页面展示两个榜单、个人排名、最后更新时间、加载/空数据/失败状态，并支持按钮立即刷新。
 - 两个榜单的公开身份直接来自大小写敏感且全站唯一的 `users.username`；兼容字段 `display_name` 与 `username` 同值，角色、实名和邮箱不参与展示名生成。可用用户名可点击进入 `/users/:username` 公开研究身份页。
@@ -19,7 +19,7 @@
 
 ## 工作流程
 
-管理员提交单篇或批量审核时，Go 服务在更新论文当前审核状态的同一数据库事务中逐篇写入审核事件。排行榜分别聚合审核通过论文和审核事件，按贡献数降序、达到当前累计数的时间升序、用户 ID 升序形成稳定全量排名，再裁剪公开 Top 20 并按登录身份附加本人排名。普通请求读取一小时 Redis 快照，`refresh=true` 绕过缓存并重建快照。
+管理员提交单篇或批量审核时，Go 服务在更新论文当前审核状态的同一数据库事务中逐篇写入 `reviewed` 历史事件。排行榜分别聚合审核通过论文和该类事件，按贡献数降序、达到当前累计数的时间升序、用户 ID 升序形成稳定全量排名，再裁剪公开 Top 20 并按登录身份附加本人排名。普通请求读取一小时 Redis 快照，`refresh=true` 绕过缓存并重建快照。
 
 ## 约束
 
@@ -38,7 +38,7 @@
 - `goserver/models/models.go`
 - `frontend/src/pages/AdminPage.tsx`
 - `frontend/src/pages/share.tsx`
-- `alembic/versions/20260820_0004_add_paper_review_events.py`
+- `alembic/versions/20260903_0002_paper_history_events.py`
 - `alembic/versions/20260821_0006_add_public_usernames.py`
 - `tests/07_researcher_community_forum/test_issue29_contribution_ranking.py`
 - `tests/07_researcher_community_forum/test_issue31_ranking_visuals.py`

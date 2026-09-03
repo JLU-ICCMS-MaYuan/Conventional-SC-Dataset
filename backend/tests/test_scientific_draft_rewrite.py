@@ -13,7 +13,7 @@ FastAPI 路由（TestClient + 依赖覆盖）调用 PUT /api/rag/papers/{id}/sci
 - T026：跨论文共享目录表行数不变。
 - T035：approved 升版（版本递增、已批准标记清空、退回待审核），ck 约束成立。
 - T036：升版后血缘表 paper_revision 全部为新版本、行数不变。
-- T037：升版写入 paper_review_events。
+- T037：实际重写写入 paper_history_events。
 - T038：重建失败整体回滚，论文保持原状。
 - T039：rejected 论文 409。
 """
@@ -576,21 +576,45 @@ def test_approved_rewrite_reextracts_references_for_new_revision(migrated_engine
         assert [tuple(row) for row in references] == [(2, "new citation")]
 
 
-def test_bump_writes_review_event(migrated_engine):
-    """T037：升版写入 paper_review_events 记录。"""
+def test_bump_writes_modified_history_event(migrated_engine):
+    """T037：升版写入一条 modified 处理历史。"""
     engine = migrated_engine
     _seed_paper(engine, review_status="approved")
-    assert _count(engine, "paper_review_events") == 0
+    assert _count(engine, "paper_history_events") == 0
 
     data, error = _call_endpoint(_rewrite_payload())
     assert error is None, error
 
-    assert _count(engine, "paper_review_events") == 1
+    assert _count(engine, "paper_history_events") == 1
     with engine.connect() as connection:
         event = connection.execute(
-            text("SELECT paper_revision, status, source FROM paper_review_events WHERE paper_id = 10")
+            text(
+                "SELECT paper_revision, event_type, review_status, review_comment "
+                "FROM paper_history_events WHERE paper_id = 10"
+            )
         ).one()
-        assert tuple(event) == (2, "pending", "rewrite")
+        assert tuple(event) == (2, "modified", None, None)
+
+
+def test_replaying_saved_scientific_draft_does_not_write_history(migrated_engine):
+    """#87：语义相同的科学数据保存不重建，也不追加 modified 事件。"""
+    engine = migrated_engine
+    _seed_paper(engine, review_status="pending")
+    payload = _rewrite_payload()
+    payload["history_operation_id"] = "scientific-first-save"
+
+    first, error = _call_endpoint(payload)
+    assert error is None, error
+    assert first["data"]["unchanged"] is False
+    assert _count(engine, "paper_history_events") == 1
+
+    payload["history_operation_id"] = "scientific-same-save"
+    second, error = _call_endpoint(payload)
+    assert error is None, error
+    assert second["data"]["unchanged"] is True
+    assert second["data"]["content_revision"] == 1
+    assert second["data"]["review_status"] == "pending"
+    assert _count(engine, "paper_history_events") == 1
 
 
 def test_failed_rewrite_rolls_back_everything(migrated_engine):
@@ -621,7 +645,7 @@ def test_failed_rewrite_rolls_back_everything(migrated_engine):
         assert _revisions(engine, table) == revisions, f"{table} 版本应回滚"
     assert _count(engine, "material_states") == 1
     assert _count(engine, "tc_results") == 1
-    assert _count(engine, "paper_review_events") == 0
+    assert _count(engine, "paper_history_events") == 0
 
 
 def test_rejected_paper_returns_409(migrated_engine):

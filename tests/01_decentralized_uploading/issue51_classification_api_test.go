@@ -34,7 +34,7 @@ func newAPIFixture(t *testing.T) *apiFixture {
 		t.Fatal(err)
 	}
 	if err := db.AutoMigrate(
-		&models.User{}, &models.Paper{}, &models.PaperReviewEvent{},
+		&models.User{}, &models.Paper{}, &models.PaperHistoryEvent{},
 		&models.MaterialFamily{}, &models.MaterialFamilyAlias{},
 		&models.PaperMaterialFamily{},
 		&models.StructureFamily{}, &models.StructureFamilyAlias{},
@@ -221,7 +221,7 @@ func TestApprovalMapsAliasesCreatesNewTermsAndStoresVerifiedSnapshot(t *testing.
 		t.Fatalf("unexpected structure links: %#v", links)
 	}
 
-	var event models.PaperReviewEvent
+	var event models.PaperHistoryEvent
 	if err := fixture.db.Where("paper_id = ?", 41).First(&event).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -272,7 +272,7 @@ func TestApprovalRollsBackCreatedTermsAndStateChangesOnLaterInvalidSelection(t *
 		t.Fatalf("rollback left %d paper family links", linkCount)
 	}
 	var events int64
-	fixture.db.Model(&models.PaperReviewEvent{}).Where("paper_id = ?", 42).Count(&events)
+	fixture.db.Model(&models.PaperHistoryEvent{}).Where("paper_id = ?", 42).Count(&events)
 	if events != 0 {
 		t.Fatal("rollback left review event")
 	}
@@ -317,7 +317,7 @@ func TestReviewRequestIDIsIdempotentBeforeCatalogCreation(t *testing.T) {
 	}
 	var terms, events int64
 	fixture.db.Model(&models.MaterialFamily{}).Where("name_zh = ?", "幂等新家族").Count(&terms)
-	fixture.db.Model(&models.PaperReviewEvent{}).Where("request_id = ?", "issue51-idempotent").Count(&events)
+	fixture.db.Model(&models.PaperHistoryEvent{}).Where("operation_id = ?", "issue51-idempotent").Count(&events)
 	if terms != 1 || events != 1 {
 		t.Fatalf("terms=%d events=%d want 1/1", terms, events)
 	}

@@ -169,7 +169,7 @@ describe('Issue #78：管理端论文编辑独立页', () => {
     renderPage()
 
     expect(await screen.findByText('上传者: author')).toBeVisible()
-    expect(screen.getByText('记录: 0')).toBeVisible()
+    expect(screen.getByText('物性记录: 0')).toBeVisible()
 
     cleanup()
     mockedApi.get.mockImplementation(async (path: string) => {
@@ -182,7 +182,49 @@ describe('Issue #78：管理端论文编辑独立页', () => {
     renderPage()
 
     expect(await screen.findByText('上传者: -')).toBeVisible()
-    expect(screen.getByText('记录: 2')).toBeVisible()
+    expect(screen.getByText('物性记录: 2')).toBeVisible()
+  })
+
+  it('按需打开处理记录并显示未知上传者与每次审核意见，失败时可重试', async () => {
+    const user = userEvent.setup()
+    mockedApi.get.mockImplementation(async (path: string) => {
+      if (path === '/api/admin/papers/88') return detailWithStructures
+      if (path === '/api/admin/papers/88/history') {
+        return {
+          paper_id: 88,
+          events: [
+            {
+              id: 1, event_type: 'uploaded', paper_revision: 1,
+              actor: { username: null, unknown: true }, occurred_at: '2026-09-03T09:00:00Z', review: null,
+            },
+            {
+              id: 2, event_type: 'reviewed', paper_revision: 1,
+              actor: { username: 'reviewer', unknown: false }, occurred_at: '2026-09-03T10:00:00Z',
+              review: { status: 'approved', comment: '证据充分' },
+            },
+          ],
+        }
+      }
+      if (path === '/api/rag/papers/88/structures/1/representations') return representationsResponse
+      if (path === '/api/rag/space-groups') return { space_groups: [] }
+      if (path === '/api/classification-catalogs') return { material_families: [], structure_families: [], material_dimensionalities: [] }
+      return {}
+    })
+    renderPage()
+
+    await user.click(await screen.findByRole('button', { name: '处理记录' }))
+    await waitFor(() => expect(mockedApi.get).toHaveBeenCalledWith('/api/admin/papers/88/history'))
+    const historyDialog = await screen.findByRole('dialog')
+    await waitFor(() => expect(historyDialog).toHaveTextContent('历史导入，上传者未知'))
+    expect(historyDialog).toHaveTextContent('审核')
+    expect(historyDialog).toHaveTextContent('已通过 · 证据充分')
+
+    await user.click(screen.getByRole('button', { name: '关闭' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    mockedApi.get.mockRejectedValueOnce(new Error('网络错误'))
+    await user.click(screen.getByRole('button', { name: '处理记录' }))
+    expect(await screen.findByText('处理记录加载失败: 网络错误')).toBeVisible()
+    expect(screen.getByRole('button', { name: '重试' })).toBeVisible()
   })
 
   it('审核成功后按当前角色返回工作台，失败时留在编辑页', async () => {
@@ -261,6 +303,8 @@ describe('Issue #78：管理端论文编辑独立页', () => {
     await waitFor(() => expect(mockedApi.put).toHaveBeenCalledTimes(2))
     expect(mockedApi.put.mock.calls[0][0]).toBe('/api/admin/papers/88')
     expect(mockedApi.put.mock.calls[1][0]).toBe('/api/rag/papers/88/scientific-draft')
+    expect(mockedApi.put.mock.calls[0][1]).toHaveProperty('history_operation_id')
+    expect(mockedApi.put.mock.calls[1][1]).toHaveProperty('history_operation_id', mockedApi.put.mock.calls[0][1].history_operation_id)
   })
 
   it('两段保存：先论文级后科学数据，科学数据 body 含修改后的值（FR-008）', async () => {

@@ -38,22 +38,22 @@ func reviewEventTestDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock) {
 func TestApplyPaperReviewWritesOneImmutableEvent(t *testing.T) {
 	db, mock := reviewEventTestDB(t)
 	paper := models.Paper{ID: 11, ContentRevision: 3, ReviewStatus: reviewStatusPending}
+	reviewer := &models.User{ID: 7, Username: "reviewer"}
 	reviewedAt := time.Date(2026, 8, 20, 10, 0, 0, 0, time.UTC)
 
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT count(*) FROM `paper_review_events` WHERE request_id = ?")).
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT count(*) FROM `paper_history_events` WHERE operation_id = ?")).
 		WithArgs("request-1").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectBegin()
+	mock.ExpectExec("INSERT INTO `paper_history_events`").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
 	mock.ExpectBegin()
 	mock.ExpectExec("UPDATE `papers` SET .* WHERE `id` = \\?").
 		WithArgs(uint(3), "证据充分", "approved", reviewedAt, uint(7), sqlmock.AnyArg(), uint(11)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
-	mock.ExpectBegin()
-	mock.ExpectExec("INSERT INTO `paper_review_events`").
-		WithArgs(uint(11), uint(3), uint(7), "approved", "证据充分", reviewedAt, "request-1", "single").
-		WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectCommit()
 
-	written, err := applyPaperReview(db, &paper, 7, "approved", "证据充分", "request-1", "single", reviewedAt, nil)
+	written, err := applyPaperReview(db, &paper, reviewer, "approved", "证据充分", "request-1", reviewedAt, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,10 +71,11 @@ func TestApplyPaperReviewWritesOneImmutableEvent(t *testing.T) {
 func TestApplyPaperReviewIgnoresRetriedRequest(t *testing.T) {
 	db, mock := reviewEventTestDB(t)
 	paper := models.Paper{ID: 11, ReviewStatus: reviewStatusPending}
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT count(*) FROM `paper_review_events` WHERE request_id = ?")).
+	reviewer := &models.User{ID: 7, Username: "reviewer"}
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT count(*) FROM `paper_history_events` WHERE operation_id = ?")).
 		WithArgs("request-1").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
 
-	written, err := applyPaperReview(db, &paper, 7, "approved", "证据充分", "request-1", "single", time.Now(), nil)
+	written, err := applyPaperReview(db, &paper, reviewer, "approved", "证据充分", "request-1", time.Now(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,20 +91,20 @@ func TestApplyPaperReviewCountsUnchangedReviewAsNewParticipation(t *testing.T) {
 	db, mock := reviewEventTestDB(t)
 	comment := "证据充分"
 	paper := models.Paper{ID: 11, ContentRevision: 3, ReviewStatus: "approved", ReviewComment: &comment}
+	reviewer := &models.User{ID: 7, Username: "reviewer"}
 	reviewedAt := time.Date(2026, 8, 20, 11, 0, 0, 0, time.UTC)
 
+	mock.ExpectBegin()
+	mock.ExpectExec("INSERT INTO `paper_history_events`").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
 	mock.ExpectBegin()
 	mock.ExpectExec("UPDATE `papers` SET .* WHERE `id` = \\?").
 		WithArgs(uint(3), comment, "approved", reviewedAt, uint(7), sqlmock.AnyArg(), uint(11)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
-	mock.ExpectBegin()
-	mock.ExpectExec("INSERT INTO `paper_review_events`").
-		WithArgs(uint(11), uint(3), uint(7), "approved", comment, reviewedAt, nil, "single").
-		WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectCommit()
 
-	written, err := applyPaperReview(db, &paper, 7, "approved", comment, "", "single", reviewedAt, nil)
+	written, err := applyPaperReview(db, &paper, reviewer, "approved", comment, "", reviewedAt, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,10 +148,10 @@ func TestReviewPaperCommitsBeforeReviewArtifactCleanupFailure(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectQuery("SELECT \\* FROM `papers`").
 		WillReturnRows(paperRows(reviewStatusPending))
+	mock.ExpectExec("INSERT INTO `paper_history_events`").
+		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec("UPDATE `papers` SET").
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec("INSERT INTO `paper_review_events`").
-		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 	mock.ExpectQuery("SELECT \\* FROM `papers`").
 		WillReturnRows(paperRows(reviewStatusRejected))

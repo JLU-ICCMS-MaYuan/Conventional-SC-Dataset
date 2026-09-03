@@ -208,6 +208,7 @@ func main() {
 func registerAdminRoutes(admin *gin.RouterGroup) {
 	admin.GET("/papers/all", handlers.GetPapers)
 	admin.GET("/papers/:id", handlers.GetPaperDetail)
+	admin.GET("/papers/:id/history", handlers.GetPaperHistory)
 	admin.PUT("/papers/:id", handlers.UpdatePaper)
 	admin.POST("/papers/:id/review", handlers.ReviewPaper)
 	admin.PUT("/papers/:id/graph-marks", handlers.ReplacePaperGraphMarks)

@@ -36,7 +36,7 @@ func TestPaperLineageModelTablesAndRevisionFields(t *testing.T) {
 		{&PaperFile{}, "paper_files"},
 		{&PaperChunk{}, "paper_chunks"},
 		{&PaperEvidence{}, "paper_evidences"},
-		{&PaperReviewEvent{}, "paper_review_events"},
+		{&PaperHistoryEvent{}, "paper_history_events"},
 	}
 	for _, test := range tests {
 		parsed := parseModel(t, test.model)

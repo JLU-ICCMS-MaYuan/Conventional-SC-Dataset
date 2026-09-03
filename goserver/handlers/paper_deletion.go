@@ -34,7 +34,7 @@ var ErrPaperNotFound = errors.New("论文不存在")
 //	material_states           → papers, superconductors
 //	paper_evidences           → paper_chunks, papers
 //	paper_chunks              → paper_files, papers
-//	paper_files / paper_review_events → papers
+//	paper_files / paper_history_events → papers
 //
 // superconductors 与 material_families 是跨论文共享的目录数据，不在此删除。
 func cascadeDeleteInDB(tx *gorm.DB, paperID uint) error {
@@ -109,7 +109,7 @@ func cascadeDeleteInDB(tx *gorm.DB, paperID uint) error {
 		{"paper_evidences", &models.PaperEvidence{}},
 		{"paper_chunks", &models.PaperChunk{}},
 		{"paper_files", &models.PaperFile{}},
-		{"paper_review_events", &models.PaperReviewEvent{}},
+		{"paper_history_events", &models.PaperHistoryEvent{}},
 	}
 	for _, step := range rest {
 		if err := tx.Where("paper_id = ?", paperID).Delete(step.model).Error; err != nil {

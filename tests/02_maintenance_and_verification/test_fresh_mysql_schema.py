@@ -142,7 +142,7 @@ def test_fresh_mysql_upgrade_downgrade_guard_and_constraints():
         _assert_cross_paper_evidence_is_rejected(engine)
         _assert_tc_contexts_are_exclusive(engine)
         _assert_same_pressure_states_and_structures_are_independent(engine)
-        _assert_review_event_survives_revision_change(engine)
+        _assert_history_event_survives_revision_change(engine)
     finally:
         engine.dispose()
 
@@ -525,14 +525,15 @@ def _assert_same_pressure_states_and_structures_are_independent(engine):
         )
 
 
-def _assert_review_event_survives_revision_change(engine):
+def _assert_history_event_survives_revision_change(engine):
     with engine.begin() as connection:
         connection.execute(
             text(
                 """
-                INSERT INTO paper_review_events
-                    (id, paper_id, paper_revision, reviewer_user_id, status, source)
-                VALUES (1, 1, 1, 1, 'approved', 'single')
+                INSERT INTO paper_history_events
+                    (id, paper_id, paper_revision, event_type, actor_user_id,
+                     actor_username_snapshot, review_status)
+                VALUES (1, 1, 1, 'reviewed', 1, 'reviewer', 'approved')
                 """
             )
         )
@@ -558,7 +559,7 @@ def _assert_review_event_survives_revision_change(engine):
             text("SELECT content_revision FROM papers WHERE id = 1")
         ).scalar_one()
         event_revision = connection.execute(
-            text("SELECT paper_revision FROM paper_review_events WHERE id = 1")
+            text("SELECT paper_revision FROM paper_history_events WHERE id = 1")
         ).scalar_one()
 
         assert paper_revision == 2

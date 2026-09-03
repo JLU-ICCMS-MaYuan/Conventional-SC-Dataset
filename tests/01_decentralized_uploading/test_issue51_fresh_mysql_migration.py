@@ -10,7 +10,7 @@ from sqlalchemy.engine import make_url
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-HEAD = "paper_citation_graph"
+HEAD = "networked_news_discovery"
 REMOVED_TABLES = {
     "classification_proposals",
     "classification_evidences",
@@ -30,7 +30,7 @@ def test_issue51_migrations_have_one_ordered_head():
     script = ScriptDirectory.from_config(_config())
 
     assert script.get_heads() == [HEAD]
-    assert script.get_revision(HEAD).down_revision == "paper_superconductor_kind"
+    assert script.get_revision(HEAD).down_revision == "paper_history_events"
 
 
 def test_fresh_mysql_84_can_upgrade_to_simplified_classification_schema():
@@ -55,7 +55,7 @@ def test_fresh_mysql_84_can_upgrade_to_simplified_classification_schema():
             "structure_families",
             "material_state_structure_families",
             "paper_material_families",
-            "paper_review_events",
+            "paper_history_events",
             "paper_reference_extractions",
             "paper_references",
             "paper_graph_marks",
@@ -63,12 +63,12 @@ def test_fresh_mysql_84_can_upgrade_to_simplified_classification_schema():
 
         material_columns = {item["name"] for item in inspector.get_columns("material_families")}
         structure_columns = {item["name"] for item in inspector.get_columns("structure_families")}
-        review_columns = {item["name"] for item in inspector.get_columns("paper_review_events")}
+        history_columns = {item["name"] for item in inspector.get_columns("paper_history_events")}
         state_columns = {item["name"] for item in inspector.get_columns("material_states")}
 
         assert not ({"merged_into_id", "is_active"} & material_columns)
         assert not ({"merged_into_id", "is_active"} & structure_columns)
-        assert "classification_snapshot" in review_columns
+        assert {"event_type", "actor_username_snapshot", "classification_snapshot"} <= history_columns
         paper_family_columns = {
             item["name"] for item in inspector.get_columns("paper_material_families")
         }

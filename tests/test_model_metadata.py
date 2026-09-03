@@ -12,7 +12,7 @@ EXPECTED_TABLES = {
     "paper_chunks",
     "paper_evidences",
     "paper_files",
-    "paper_review_events",
+    "paper_history_events",
     "papers",
     "periodic_table_elements",
     "property_definitions",

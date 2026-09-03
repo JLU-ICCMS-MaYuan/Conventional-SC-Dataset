@@ -11,7 +11,7 @@ from fastapi import HTTPException
 
 from backend.api import rag
 from backend.ingest import upload_tasks
-from backend.models import Paper
+from backend.models import Paper, PaperHistoryEvent
 from backend.rag.config import RagSettings
 from backend.rag.search import sql_search, vector_search
 
@@ -215,6 +215,10 @@ class FakeBegin:
         return False
 
 
+class FakeNestedBegin(FakeBegin):
+    pass
+
+
 class FakePaperSession:
     def __init__(self):
         self.added = []
@@ -228,10 +232,21 @@ class FakePaperSession:
     def begin(self):
         return FakeBegin()
 
+    def begin_nested(self):
+        return FakeNestedBegin()
+
     def add(self, obj):
         self.added.append(obj)
 
     async def flush(self):
+        return None
+
+    async def scalar(self, _statement):
+        return None
+
+    async def get(self, model, _identity):
+        if model.__name__ == "User":
+            return SimpleNamespace(id=1, username="author")
         return None
 
     async def execute(self, statement):
@@ -302,6 +317,11 @@ def test_create_pending_paper_derives_research_materials(tmp_path, monkeypatch):
 
     paper = next(obj for obj in session.added if isinstance(obj, Paper))
     assert paper.research_materials == ["LaH10", "CeCu2Si2"]
+    history = next(obj for obj in session.added if isinstance(obj, PaperHistoryEvent))
+    assert history.event_type == "uploaded"
+    assert history.actor_user_id == 1
+    assert history.actor_username_snapshot == "author"
+    assert history.operation_id == "c" * 32
 
 
 def test_space_groups_endpoint_returns_full_table():

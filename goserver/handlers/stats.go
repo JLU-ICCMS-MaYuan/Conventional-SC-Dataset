@@ -90,8 +90,9 @@ func loadContributionSnapshot() (contributionSnapshot, error) {
 	}
 	if err := database.DB.Raw(`
 		SELECT u.id AS user_id, u.username AS username, u.account_status AS account_status,
-		       COUNT(e.id) AS contribution_count, MAX(e.reviewed_at) AS reached_at
-		FROM users u JOIN paper_review_events e ON e.reviewer_user_id = u.id
+		       COUNT(e.id) AS contribution_count, MAX(e.occurred_at) AS reached_at
+		FROM users u JOIN paper_history_events e ON e.actor_user_id = u.id
+		WHERE e.event_type = 'reviewed'
 		GROUP BY u.id, u.username, u.account_status
 		ORDER BY contribution_count DESC, reached_at ASC, user_id ASC
 	`).Scan(&reviewRows).Error; err != nil {
@@ -268,14 +269,14 @@ func TcPressureChart(c *gin.Context) {
 	}
 
 	type row struct {
-		Material   string  `gorm:"column:material"`
-		Tc         float64 `gorm:"column:y"`
-		Pressure   float64 `gorm:"column:x"`
-		FamilyIDs  *string `gorm:"column:family_ids"`
-		Type       string  `gorm:"column:type"`
-		PaperID    uint    `gorm:"column:paper_id"`
-		DOI        string  `gorm:"column:doi"`
-		Year       int     `gorm:"column:year"`
+		Material  string  `gorm:"column:material"`
+		Tc        float64 `gorm:"column:y"`
+		Pressure  float64 `gorm:"column:x"`
+		FamilyIDs *string `gorm:"column:family_ids"`
+		Type      string  `gorm:"column:type"`
+		PaperID   uint    `gorm:"column:paper_id"`
+		DOI       string  `gorm:"column:doi"`
+		Year      int     `gorm:"column:year"`
 	}
 	var rows []row
 	query := fmt.Sprintf(`
@@ -304,7 +305,7 @@ func TcPressureChart(c *gin.Context) {
 			"formula": r.Material,
 			"y":       r.Tc, "x": r.Pressure,
 			"family_ids": familyIDs,
-			"type": chartResultType(r.Type), "tc_field": tcField,
+			"type":       chartResultType(r.Type), "tc_field": tcField,
 			"doi": r.DOI, "year": r.Year,
 		}
 		if r.PaperID > 0 {
@@ -341,14 +342,14 @@ func TcYearChart(c *gin.Context) {
 	}
 
 	type row struct {
-		Year       int      `gorm:"column:x"`
-		Tc         float64  `gorm:"column:y"`
-		Type       string   `gorm:"column:type"`
-		FamilyIDs  *string  `gorm:"column:family_ids"`
-		Material   string   `gorm:"column:formula"`
-		DOI        string   `gorm:"column:doi"`
-		PaperID    uint     `gorm:"column:paper_id"`
-		Pressure   *float64 `gorm:"column:pressure_gpa"`
+		Year      int      `gorm:"column:x"`
+		Tc        float64  `gorm:"column:y"`
+		Type      string   `gorm:"column:type"`
+		FamilyIDs *string  `gorm:"column:family_ids"`
+		Material  string   `gorm:"column:formula"`
+		DOI       string   `gorm:"column:doi"`
+		PaperID   uint     `gorm:"column:paper_id"`
+		Pressure  *float64 `gorm:"column:pressure_gpa"`
 	}
 	var rows []row
 	query := fmt.Sprintf(`
@@ -374,7 +375,7 @@ func TcYearChart(c *gin.Context) {
 		item := gin.H{
 			"x": r.Year, "y": r.Tc, "type": chartResultType(r.Type),
 			"family_ids": familyIDs,
-			"formula": r.Material, "doi": r.DOI,
+			"formula":    r.Material, "doi": r.DOI,
 			"year": r.Year, "tc_field": tcField,
 		}
 		if r.Pressure != nil {
@@ -473,7 +474,7 @@ func BatchReview(c *gin.Context) {
 			if requestID != "" {
 				requestID = fmt.Sprintf("%s:%d", requestID, papers[i].ID)
 			}
-			if _, err := applyPaperReview(tx, &papers[i], user.ID, body.Status, "", requestID, "batch", now, nil); err != nil {
+			if _, err := applyPaperReview(tx, &papers[i], &user, body.Status, "", requestID, now, nil); err != nil {
 				return err
 			}
 		}

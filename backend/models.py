@@ -180,7 +180,7 @@ class User(Base):
         back_populates="reviewed_by_user",
         foreign_keys="Paper.reviewed_by_user_id",
     )
-    review_events = relationship("PaperReviewEvent", back_populates="reviewer")
+    history_events = relationship("PaperHistoryEvent", back_populates="actor")
     username_changes_received = relationship(
         "UsernameChangeAuditEvent",
         foreign_keys="UsernameChangeAuditEvent.target_user_id",
@@ -407,7 +407,7 @@ class Paper(Base):
         back_populates="paper",
         overlaps="evidences,paper_chunk",
     )
-    review_events = relationship("PaperReviewEvent", back_populates="paper")
+    history_events = relationship("PaperHistoryEvent", back_populates="paper")
     material_family_links = relationship(
         "PaperMaterialFamily",
         back_populates="paper",
@@ -651,36 +651,41 @@ class PaperEvidence(Base):
     )
 
 
-class PaperReviewEvent(Base):
-    """Append-only review decision for one whole paper revision."""
+class PaperHistoryEvent(Base):
+    """Append-only upload, modification, or review action for one paper revision."""
 
-    __tablename__ = "paper_review_events"
+    __tablename__ = "paper_history_events"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('approved', 'rejected', 'pending')",
-            name="ck_paper_review_events_status",
+            """
+            (event_type = 'reviewed' AND review_status IN ('approved', 'rejected', 'pending'))
+            OR
+            (event_type IN ('uploaded', 'modified') AND review_status IS NULL AND review_comment IS NULL)
+            """,
+            name="ck_paper_history_events_shape",
         ),
         CheckConstraint(
             "paper_revision >= 1",
-            name="ck_paper_review_events_revision",
+            name="ck_paper_history_events_revision",
         ),
         Index(
-            "ix_paper_review_events_paper_revision",
+            "ix_paper_history_events_paper_time",
             "paper_id",
-            "paper_revision",
-            "reviewed_at",
-        ),
-        Index(
-            "ix_paper_review_events_paper_time",
-            "paper_id",
-            "reviewed_at",
-        ),
-        Index(
-            "ix_paper_review_events_reviewer_time",
-            "reviewer_user_id",
-            "reviewed_at",
+            "occurred_at",
             "id",
         ),
+        Index(
+            "ix_paper_history_events_actor_time",
+            "actor_user_id",
+            "occurred_at",
+            "id",
+        ),
+        Index(
+            "ix_paper_history_events_paper_revision",
+            "paper_id",
+            "paper_revision",
+        ),
+        UniqueConstraint("operation_id", name="uq_paper_history_events_operation_id"),
     )
 
     id = Column(Integer, primary_key=True)
@@ -690,24 +695,25 @@ class PaperReviewEvent(Base):
         nullable=False,
     )
     paper_revision = Column(Integer, nullable=False, default=1, server_default="1")
-    reviewer_user_id = Column(
+    event_type = Column(String(20), nullable=False)
+    actor_user_id = Column(
         Integer,
         ForeignKey("users.id", ondelete="RESTRICT"),
-        nullable=False,
+        nullable=True,
     )
-    status = Column(String(50), nullable=False)
+    actor_username_snapshot = Column(String(32))
+    review_status = Column(String(50))
     review_comment = Column(Text)
-    reviewed_at = Column(
+    occurred_at = Column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
     )
-    request_id = Column(String(64), unique=True, nullable=True)
-    source = Column(String(20), nullable=False, default="single")
+    operation_id = Column(String(64), nullable=True)
     classification_snapshot = Column(JSON)
 
-    paper = relationship("Paper", back_populates="review_events")
-    reviewer = relationship("User", back_populates="review_events")
+    paper = relationship("Paper", back_populates="history_events")
+    actor = relationship("User", back_populates="history_events")
 
 
 class MaterialFamily(Base):

@@ -27,7 +27,7 @@ func TestLoadContributionSnapshotUsesUniqueUsername(t *testing.T) {
 	mock.ExpectQuery(`(?s)SELECT u\.id AS user_id, u\.username AS username,.*FROM users u JOIN papers`).
 		WillReturnRows(sqlmock.NewRows([]string{"user_id", "username", "account_status", "contribution_count", "reached_at"}).
 			AddRow(7, "张三", "active", 3, time.Now()))
-	mock.ExpectQuery(`(?s)SELECT u\.id AS user_id, u\.username AS username,.*FROM users u JOIN paper_review_events`).
+	mock.ExpectQuery(`(?s)SELECT u\.id AS user_id, u\.username AS username,.*FROM users u JOIN paper_history_events.*event_type = 'reviewed'`).
 		WillReturnRows(sqlmock.NewRows([]string{"user_id", "username", "account_status", "contribution_count", "reached_at"}).
 			AddRow(7, "张三", "active", 1, time.Now()))
 

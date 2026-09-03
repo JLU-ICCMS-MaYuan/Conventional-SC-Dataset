@@ -179,7 +179,7 @@ def test_models_exclude_the_superseded_classification_governance_schema():
     assert "classification_proposals" not in Base.metadata.tables
     assert "classification_evidences" not in Base.metadata.tables
     assert "classification_audit_events" not in Base.metadata.tables
-    assert "classification_snapshot" in Base.metadata.tables["paper_review_events"].c
+    assert "classification_snapshot" in Base.metadata.tables["paper_history_events"].c
 
 
 def test_admin_snapshot_preserves_reference_scope_without_formal_material_state(tmp_path, monkeypatch):

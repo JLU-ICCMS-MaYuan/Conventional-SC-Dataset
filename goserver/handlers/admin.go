@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -116,7 +117,13 @@ func GetPapers(c *gin.Context) {
 	})
 }
 
-// GetPaperDetail 论文详情 + key_properties
+type adminPaperDetailResponse struct {
+	models.Paper
+	UploaderName *string `json:"uploader_name"`
+	RecordCount  int64   `json:"record_count"`
+}
+
+// GetPaperDetail 论文详情、当前版本科学数据与审核元数据。
 // GET /api/admin/papers/:id
 func GetPaperDetail(c *gin.Context) {
 	id := c.Param("id")
@@ -125,6 +132,7 @@ func GetPaperDetail(c *gin.Context) {
 	// 材料状态下的 Tc、物性与结构必须预加载，否则编辑页只能看到空数组
 	// （GORM 未预加载的关联序列化为空，且接口返回 200 无错误信号）。
 	if err := database.DB.
+		Preload("Uploader").
 		Preload("KeyProperties").
 		Preload("MaterialFamilyLinks.MaterialFamily").
 		Preload("MaterialStates.Superconductor").
@@ -138,7 +146,25 @@ func GetPaperDetail(c *gin.Context) {
 		return
 	}
 	paper.MaterialFamilies = materialFamiliesFromLinks(paper.MaterialFamilyLinks)
-	c.JSON(http.StatusOK, paper)
+	revision := paper.ContentRevision
+	if revision == 0 {
+		revision = 1
+	}
+	var recordCount int64
+	if err := database.DB.Model(&models.KeyProperty{}).
+		Where("paper_id = ? AND paper_revision = ?", paper.ID, revision).
+		Count(&recordCount).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "论文物性统计失败"})
+		return
+	}
+	var uploaderName *string
+	if paper.Uploader != nil && strings.TrimSpace(paper.Uploader.Username) != "" {
+		name := paper.Uploader.Username
+		uploaderName = &name
+	}
+	c.JSON(http.StatusOK, adminPaperDetailResponse{
+		Paper: paper, UploaderName: uploaderName, RecordCount: recordCount,
+	})
 }
 
 // paperUpdatesFromBody 从请求体提取白名单字段，供 UpdatePaper 使用。
@@ -171,6 +197,21 @@ func UpdatePaper(c *gin.Context) {
 
 	// 审核状态只能通过 ReviewPaper 修改，避免普通编辑绕过审核动作。
 	updates := paperUpdatesFromBody(body)
+	historyOperationID, historyOperationProvided := body["history_operation_id"]
+	historyOperation := ""
+	if historyOperationProvided {
+		var ok bool
+		historyOperation, ok = historyOperationID.(string)
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "history_operation_id 必须是字符串"})
+			return
+		}
+		historyOperation = strings.TrimSpace(historyOperation)
+		if len(historyOperation) > 64 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "history_operation_id 过长"})
+			return
+		}
+	}
 	if value, exists := updates["year"]; exists && !validPaperYear(value) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "year 必须是有效年份", "code": "year_required"})
 		return
@@ -182,18 +223,48 @@ func UpdatePaper(c *gin.Context) {
 			return
 		}
 	}
+	email, authenticated := c.Get("user_email")
+	if !authenticated {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+		return
+	}
+	var actor models.User
+	if err := database.DB.Where("email = ?", email).First(&actor).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "用户不存在"})
+		return
+	}
 
 	var paper models.Paper
 	err = database.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.First(&paper, id).Error; err != nil {
 			return err
 		}
+		paperChanged := paperUpdatesChanged(paper, updates)
 		if len(updates) > 0 {
 			if err := tx.Model(&paper).Updates(updates).Error; err != nil {
 				return err
 			}
 		}
-		return updateKeyProperties(tx, paper.ID, kps)
+		keyPropertiesChanged, err := updateKeyPropertiesWithChange(tx, paper.ID, kps)
+		if err != nil {
+			return err
+		}
+		if !paperChanged && !keyPropertiesChanged {
+			return nil
+		}
+		var operationID *string
+		if historyOperation != "" {
+			operationID = &historyOperation
+		}
+		revision := paper.ContentRevision
+		if revision == 0 {
+			revision = 1
+		}
+		_, err = appendPaperHistoryEvent(tx, paperHistoryInput{
+			PaperID: paper.ID, PaperRevision: revision, EventType: paperHistoryModified,
+			Actor: &actor, OperationID: operationID, OccurredAt: time.Now(),
+		})
+		return err
 	})
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "论文不存在"})
@@ -214,6 +285,26 @@ func UpdatePaper(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "已更新", "paper": paper})
+}
+
+func paperUpdatesChanged(paper models.Paper, updates map[string]interface{}) bool {
+	if len(updates) == 0 {
+		return false
+	}
+	encoded, err := json.Marshal(paper)
+	if err != nil {
+		return true
+	}
+	current := make(map[string]interface{})
+	if err := json.Unmarshal(encoded, &current); err != nil {
+		return true
+	}
+	for field, value := range updates {
+		if !reflect.DeepEqual(current[field], value) {
+			return true
+		}
+	}
+	return false
 }
 
 func parseAndValidateKeyProperties(body map[string]interface{}) ([]map[string]interface{}, error) {
@@ -263,25 +354,32 @@ func parseAndValidateKeyProperties(body map[string]interface{}) ([]map[string]in
 }
 
 func updateKeyProperties(tx *gorm.DB, paperID uint, kps []map[string]interface{}) error {
+	_, err := updateKeyPropertiesWithChange(tx, paperID, kps)
+	return err
+}
+
+func updateKeyPropertiesWithChange(tx *gorm.DB, paperID uint, kps []map[string]interface{}) (bool, error) {
+	changed := false
 	for _, values := range kps {
 		kpID, hasID := getFloatAsUint(values["id"])
 		if deleted, _ := values["_deleted"].(bool); deleted {
 			result := tx.Where("id = ? AND paper_id = ?", kpID, paperID).Delete(&models.KeyProperty{})
 			if result.Error != nil {
-				return result.Error
+				return false, result.Error
 			}
 			if result.RowsAffected != 1 {
-				return errKeyPropertyNotFound
+				return false, errKeyPropertyNotFound
 			}
+			changed = true
 			continue
 		}
 		if hasID && kpID > 0 {
 			var kp models.KeyProperty
 			if err := tx.Where("id = ? AND paper_id = ?", kpID, paperID).First(&kp).Error; err != nil {
 				if errors.Is(err, gorm.ErrRecordNotFound) {
-					return errKeyPropertyNotFound
+					return false, errKeyPropertyNotFound
 				}
-				return err
+				return false, err
 			}
 			kpUpdates := make(map[string]interface{})
 			for field, column := range keyPropertyUpdateFields {
@@ -291,18 +389,37 @@ func updateKeyProperties(tx *gorm.DB, paperID uint, kps []map[string]interface{}
 			}
 			if len(kpUpdates) > 0 {
 				if err := tx.Model(&kp).Updates(kpUpdates).Error; err != nil {
-					return err
+					return false, err
 				}
+				changed = changed || keyPropertyUpdatesChanged(kp, values)
 			}
 			continue
 		}
 
 		newKP := newKeyProperty(paperID, values)
 		if err := tx.Create(&newKP).Error; err != nil {
-			return err
+			return false, err
+		}
+		changed = true
+	}
+	return changed, nil
+}
+
+func keyPropertyUpdatesChanged(property models.KeyProperty, values map[string]interface{}) bool {
+	encoded, err := json.Marshal(property)
+	if err != nil {
+		return true
+	}
+	current := make(map[string]interface{})
+	if err := json.Unmarshal(encoded, &current); err != nil {
+		return true
+	}
+	for field := range keyPropertyUpdateFields {
+		if value, exists := values[field]; exists && !reflect.DeepEqual(current[field], value) {
+			return true
 		}
 	}
-	return nil
+	return false
 }
 
 // newKeyProperty 只接受 superconductor_properties 的真实列。
@@ -358,19 +475,28 @@ func getFloatAsUint(v interface{}) (uint, bool) {
 
 // ReviewPaper 审核论文
 // POST /api/admin/papers/:id/review
-func applyPaperReview(tx *gorm.DB, paper *models.Paper, reviewerID uint, status, comment, requestID, source string, reviewedAt time.Time, classificationSnapshot json.RawMessage) (bool, error) {
-	if requestID != "" {
-		var count int64
-		if err := tx.Model(&models.PaperReviewEvent{}).Where("request_id = ?", requestID).Count(&count).Error; err != nil {
-			return false, err
-		}
-		if count > 0 {
-			return false, nil
-		}
+func applyPaperReview(tx *gorm.DB, paper *models.Paper, reviewer *models.User, status, comment, requestID string, reviewedAt time.Time, classificationSnapshot json.RawMessage) (bool, error) {
+	if reviewer == nil {
+		return false, errors.New("审核人不存在")
 	}
 	revision := paper.ContentRevision
 	if revision == 0 {
 		revision = 1
+	}
+	var requestIDPtr *string
+	if requestID != "" {
+		requestIDPtr = &requestID
+	}
+	statusCopy := status
+	commentCopy := comment
+	written, err := appendPaperHistoryEvent(tx, paperHistoryInput{
+		PaperID: paper.ID, PaperRevision: revision, EventType: paperHistoryReviewed,
+		Actor: reviewer, ReviewStatus: &statusCopy, ReviewComment: &commentCopy,
+		OperationID: requestIDPtr, OccurredAt: reviewedAt,
+		ClassificationSnapshot: classificationSnapshot,
+	})
+	if err != nil || !written {
+		return written, err
 	}
 	var approvedRevision interface{}
 	if status == reviewStatusApproved {
@@ -379,28 +505,13 @@ func applyPaperReview(tx *gorm.DB, paper *models.Paper, reviewerID uint, status,
 	if err := tx.Model(paper).Updates(map[string]interface{}{
 		"approved_revision": approvedRevision,
 		"review_status":     status, "review_comment": comment,
-		"reviewed_by_user_id": reviewerID, "reviewed_at": reviewedAt,
+		"reviewed_by_user_id": reviewer.ID, "reviewed_at": reviewedAt,
 	}).Error; err != nil {
-		return false, err
-	}
-	var requestIDPtr *string
-	if requestID != "" {
-		requestIDPtr = &requestID
-	}
-	commentCopy := comment
-	event := models.PaperReviewEvent{
-		PaperID: paper.ID, PaperRevision: revision,
-		ReviewerUserID: reviewerID, Status: status,
-		ReviewComment: &commentCopy, ReviewedAt: reviewedAt,
-		RequestID: requestIDPtr, Source: source,
-		ClassificationSnapshot: classificationSnapshot,
-	}
-	if err := tx.Create(&event).Error; err != nil {
 		return false, err
 	}
 	paper.ReviewStatus = status
 	paper.ReviewComment = &commentCopy
-	paper.ReviewedBy = &reviewerID
+	paper.ReviewedBy = &reviewer.ID
 	paper.ReviewedAt = &reviewedAt
 	if status == reviewStatusApproved {
 		paper.ApprovedRevision = &revision
@@ -476,12 +587,11 @@ func ReviewPaper(c *gin.Context) {
 			return err
 		}
 		if body.ReviewRequestID != "" {
-			var count int64
-			if err := tx.Model(&models.PaperReviewEvent{}).
-				Where("request_id = ?", body.ReviewRequestID).Count(&count).Error; err != nil {
+			exists, err := paperHistoryOperationExists(tx, body.ReviewRequestID)
+			if err != nil {
 				return err
 			}
-			if count > 0 {
+			if exists {
 				return nil
 			}
 		}
@@ -515,7 +625,7 @@ func ReviewPaper(c *gin.Context) {
 				return err
 			}
 		}
-		_, err := applyPaperReview(tx, &paper, user.ID, body.Status, body.Comment, body.ReviewRequestID, "single", now, classificationSnapshot)
+		_, err := applyPaperReview(tx, &paper, &user, body.Status, body.Comment, body.ReviewRequestID, now, classificationSnapshot)
 		if err != nil {
 			return err
 		}

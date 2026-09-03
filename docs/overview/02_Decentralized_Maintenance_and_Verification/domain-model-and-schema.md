@@ -60,14 +60,14 @@
 | `paper_files` | 当前 revision 的正文、补充材料或附件元数据 | 当前代文件清单 |
 | `paper_chunks` | 当前 revision 中由文件派生的文本块 | 可重建当前代数据 |
 | `paper_evidences` | 直接锚定当前 Chunk 的原文证据与定位快照 | 当前代审核证据 |
-| `paper_review_events` | 一次整篇论文 revision 审核的不可变历史事件 | 审计历史 |
+| `paper_history_events` | 一次论文 revision 的上传、修改或审核不可变历史事件 | 管理端处理记录、审核意见审计与审核贡献统计 |
 
 ```mermaid
 flowchart LR
     P[papers] --> PF[paper_files]
     PF --> PC[paper_chunks]
     PC --> PE[paper_evidences]
-    P --> PRE[paper_review_events]
+    P --> PRE[paper_history_events]
 ```
 
 fresh 目标 Schema 已落实以下边界：
@@ -77,7 +77,7 @@ fresh 目标 Schema 已落实以下边界：
   同 revision 的 Chunk。
 - 每篇论文只保留一代 File/Chunk/Evidence。重新分块的目标契约是在同一 MySQL 事务中先按
   依赖删除旧当前代，再递增 revision 并写入完整新当前代；Qdrant 只保存可重建投影。
-- `paper_review_events.paper_id` 单列外键指向论文并使用 `ON DELETE RESTRICT`。
+- `paper_history_events.paper_id` 单列外键指向论文并使用 `ON DELETE RESTRICT`；其 `paper_id, paper_revision` 索引在表名演进时持续保留，以满足 MySQL 外键索引要求。
   `paper_revision` 是历史快照，不与论文当前 revision 建组合外键，因此旧审核事件不阻止升版。
 
 这些约束已经在隔离 fresh MySQL 验证，但上传、重分块、Qdrant 和公开查询业务流程尚未切换。
@@ -104,7 +104,7 @@ Material family 属于论文当前 revision，通过 `paper_material_families(pa
 `material_families`、`structure_families` 及各自 seed 别名表提供确定性目录。普通接口只返回目录 ID 和规范中文名，
 不暴露内部 `code`。AI 建议仅作为论文审核上下文，不进入独立建议表；审核者可认可、改选已有目录项或输入新名称。
 批准事务在同一事务内解析并去重论文级 family、创建必要的目录项、整体替换正式关联，并把 AI 上下文与最终选择保存到
-`paper_review_events.classification_snapshot`。拒绝或退回不创建分类。`papers.referenced_materials` 已从目标 Schema 删除。
+`paper_history_events.classification_snapshot`。拒绝或退回不创建分类。`papers.referenced_materials` 已从目标 Schema 删除。
 
 ## 代码与测试
 

@@ -1198,6 +1198,18 @@ async def _create_pending_paper(
                 )
                 session.add(paper)
                 await session.flush()
+                uploader = await session.get(User, int(state["user_id"]))
+                from backend.services.paper_history import append_paper_history_event
+
+                await append_paper_history_event(
+                    session,
+                    paper_id=paper.id,
+                    paper_revision=paper.content_revision or 1,
+                    event_type="uploaded",
+                    actor_user_id=int(state["user_id"]),
+                    actor_username_snapshot=(uploader.username if uploader else None),
+                    operation_id=task_id,
+                )
 
                 paper_files: dict[str, PaperFile] = {}
                 source_files = state.get("files") or []
@@ -1775,7 +1787,7 @@ async def _rewrite_paper_scientific_draft_in_tx(
     from backend.services.scientific_draft_rewrite import (
         bump_paper_revision,
         delete_scientific_entities,
-        record_revision_event,
+        scientific_draft_matches_current_revision,
     )
 
     paper_type = str(draft.get("paper_type") or "").strip()
@@ -1784,6 +1796,12 @@ async def _rewrite_paper_scientific_draft_in_tx(
     material_states = draft.get("material_states")
     if not isinstance(material_states, list):
         raise _upload_error(400, "invalid_draft", "草稿结构不完整")
+    history_operation_id = draft.get("history_operation_id")
+    if history_operation_id is not None and not isinstance(history_operation_id, str):
+        raise _upload_error(400, "invalid_history_operation_id", "history_operation_id 必须是字符串")
+    history_operation_id = (history_operation_id or "").strip() or None
+    if history_operation_id and len(history_operation_id) > 64:
+        raise _upload_error(400, "invalid_history_operation_id", "history_operation_id 过长")
     _reject_legacy_classification_contract({"material_states": material_states})
 
     paper = await session.get(models.Paper, paper_id)
@@ -1807,6 +1825,23 @@ async def _rewrite_paper_scientific_draft_in_tx(
     }
     _validate_draft(full_draft)
     await _resolve_draft_classifications(session, full_draft)
+
+    # 同值保存不能重建实体图、更改 approved 状态或追加“修改”历史。比较采用与
+    # persist_scientific_draft 相同的持久化语义，而不是浏览器请求的字面 JSON，避免
+    # 数值格式、默认字段和候选来源元数据造成误判。
+    if await scientific_draft_matches_current_revision(session, paper, full_draft):
+        return {
+            "ok": True,
+            "data": {
+                "paper_id": paper.id,
+                "content_revision": paper.content_revision,
+                "review_status": paper.review_status,
+                "revision_bumped": False,
+                "material_state_count": len(full_draft["material_states"]),
+                "unchanged": True,
+            },
+        }
+
     paper.superconductor_kind = full_draft["paper"]["superconductor_kind"]
 
     bumped = paper.review_status == "approved"
@@ -1819,8 +1854,17 @@ async def _rewrite_paper_scientific_draft_in_tx(
         from backend.services.citation_graph import persist_reference_extraction
 
         await persist_reference_extraction(session, paper, citation_extraction)
-    if bumped:
-        await record_revision_event(session, paper, current_user.id)
+    from backend.services.paper_history import append_paper_history_event
+
+    await append_paper_history_event(
+        session,
+        paper_id=paper.id,
+        paper_revision=paper.content_revision,
+        event_type="modified",
+        actor_user_id=current_user.id,
+        actor_username_snapshot=current_user.username,
+        operation_id=history_operation_id,
+    )
 
     return {
         "ok": True,
@@ -1830,6 +1874,7 @@ async def _rewrite_paper_scientific_draft_in_tx(
             "review_status": paper.review_status,
             "revision_bumped": bumped,
             "material_state_count": len(full_draft["material_states"]),
+            "unchanged": False,
         },
     }
 

@@ -70,5 +70,5 @@ def test_final_paper_schema_does_not_store_referenced_materials():
     assert "referenced_materials" not in Base.metadata.tables["papers"].c
 
 
-def test_review_event_stores_internal_classification_snapshot():
-    assert "classification_snapshot" in Base.metadata.tables["paper_review_events"].c
+def test_history_event_stores_internal_classification_snapshot():
+    assert "classification_snapshot" in Base.metadata.tables["paper_history_events"].c

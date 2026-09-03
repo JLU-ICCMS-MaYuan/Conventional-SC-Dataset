@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react'
 import {
-  Alert, Autocomplete, Box, Button, Checkbox, Chip, CircularProgress, Container, FormControl,
-  FormControlLabel, IconButton, InputLabel, MenuItem, Select, Snackbar, TextField, Typography,
+  Alert, Autocomplete, Box, Button, Checkbox, Chip, CircularProgress, Container, Dialog,
+  DialogActions, DialogContent, DialogTitle, Divider, FormControl, FormControlLabel, IconButton,
+  InputLabel, MenuItem, Select, Snackbar, TextField, Typography,
 } from '@mui/material'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
+import HistoryIcon from '@mui/icons-material/History'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
@@ -84,6 +86,15 @@ const candidateFromStructureModel = (model: Record<string, any>, ref: string): S
   }],
 })
 
+type PaperHistoryEvent = {
+  id: number
+  event_type: 'uploaded' | 'modified' | 'reviewed'
+  paper_revision: number
+  actor: { username: string | null; unknown: boolean }
+  occurred_at: string
+  review: { status: 'approved' | 'rejected' | 'pending'; comment: string | null } | null
+}
+
 /**
  * 管理端论文编辑独立页（Issue #78，路由 /admin/papers/:id/edit）。
  * 由原 AdminPage 编辑弹窗迁移而来：论文级字段、科学数据（MaterialStatesEditor）、
@@ -108,6 +119,11 @@ const AdminPaperEditPage: React.FC = () => {
   const [editReviewStatus, setEditReviewStatus] = useState('')
   const [editReviewComment, setEditReviewComment] = useState('')
   const [editReviewSaving, setEditReviewSaving] = useState(false)
+
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState('')
+  const [historyEvents, setHistoryEvents] = useState<PaperHistoryEvent[]>([])
 
   /* ── 科学数据（Issue #76）：材料状态与结构候选受控于共享编辑器，保存时随 C1 提交 ─ */
   const [editMaterialStates, setEditMaterialStates] = useState<DraftMaterialState[]>([])
@@ -268,12 +284,31 @@ const AdminPaperEditPage: React.FC = () => {
     } finally { setEditReviewSaving(false) }
   }
 
+  const loadPaperHistory = async () => {
+    setHistoryLoading(true)
+    setHistoryError('')
+    try {
+      const response = await api.get<{ events?: PaperHistoryEvent[] }>(`/api/admin/papers/${paperId}/history`)
+      setHistoryEvents(Array.isArray(response.events) ? response.events : [])
+    } catch (e: unknown) {
+      setHistoryError(t('admin.historyLoadFailed', { reason: (e as Error).message }))
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  const openPaperHistory = () => {
+    setHistoryOpen(true)
+    void loadPaperHistory()
+  }
+
   // 两段保存（契约 C4）：先论文级（Go，低风险），后科学数据（Python，整体替换）。
   // 科学数据段仅当论文原本有科学数据或当前编辑区有内容时执行——纯论文级编辑
   // （如无材料状态的综述）不需要触发整体替换。
   const handleEditSave = async () => {
     try {
-      const payload: Record<string, any> = { ...editForm }
+      const historyOperationId = crypto.randomUUID()
+      const payload: Record<string, any> = { ...editForm, history_operation_id: historyOperationId }
       // 只提交 superconductor_properties 的真实列。压强、温度等条件字段属材料状态，
       // 不经物性接口修改；后端也不再接受这些无对应列的字段。
       if (payload.key_properties) {
@@ -300,6 +335,7 @@ const AdminPaperEditPage: React.FC = () => {
               material_families: editMaterialFamilies,
               material_states: editMaterialStates,
               structure_candidates: editStructureCandidates.filter(candidate => candidate.confirmation === 'confirmed'),
+              history_operation_id: historyOperationId,
             },
           )
           // 升版成功（T045）：论文已退回待审核，明确提示审核通过前不对外公开
@@ -475,7 +511,10 @@ const AdminPaperEditPage: React.FC = () => {
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 0.5 }}>
             <Chip size="small" label={t('admin.idChip', { value: editForm.id || '-' })} variant="outlined" />
             <Chip size="small" label={`${t('admin.thUploader')}: ${editForm.uploader_name || '-'}`} variant="outlined" />
-            <Chip size="small" label={t('admin.recordsChip', { value: editForm.record_count || 0 })} variant="outlined" />
+            <Chip size="small" label={t('admin.propertyCountChip', { value: editForm.record_count || 0 })} variant="outlined" />
+            <Button size="small" variant="outlined" startIcon={<HistoryIcon />} onClick={openPaperHistory}>
+              {t('admin.processingHistory')}
+            </Button>
             <Chip size="small" label={t('admin.createdChip', { value: editForm.created_at ? new Date(editForm.created_at).toLocaleString(locale) : '-' })} />
             {(editForm.materials || []).map((m: string) => (
               <Chip key={m} size="small" label={m} color="primary" variant="outlined" />
@@ -608,6 +647,40 @@ const AdminPaperEditPage: React.FC = () => {
           </Box>
         )
       )}
+
+      <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>{t('admin.processingHistoryTitle')}</DialogTitle>
+        <DialogContent dividers>
+          {historyLoading && <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress size={24} /></Box>}
+          {!historyLoading && historyError && <Alert severity="error">{historyError}</Alert>}
+          {!historyLoading && !historyError && historyEvents.length === 0 && (
+            <Typography color="text.secondary">{t('admin.historyEmpty')}</Typography>
+          )}
+          {!historyLoading && !historyError && historyEvents.map((event, index) => {
+            const actor = event.actor.unknown ? t('admin.historyUnknownUploader') : event.actor.username || '-'
+            const eventLabel = t(`admin.historyEvent${event.event_type[0].toUpperCase()}${event.event_type.slice(1)}`)
+            const reviewStatus = event.review ? t(`admin.reviewStatus.${event.review.status}`) : ''
+            return (
+              <Box key={event.id} sx={{ py: 1.25 }}>
+                {index > 0 && <Divider sx={{ mb: 1.25 }} />}
+                <Typography variant="subtitle2">{eventLabel}</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {actor} · {new Date(event.occurred_at).toLocaleString(locale)} · {t('admin.historyRevision', { value: event.paper_revision })}
+                </Typography>
+                {event.review && (
+                  <Typography variant="body2" sx={{ mt: 0.5 }}>
+                    {reviewStatus} · {event.review.comment?.trim() || t('admin.historyNoReviewComment')}
+                  </Typography>
+                )}
+              </Box>
+            )
+          })}
+        </DialogContent>
+        <DialogActions>
+          {historyError && <Button onClick={() => void loadPaperHistory()}>{t('admin.historyRetry')}</Button>}
+          <Button onClick={() => setHistoryOpen(false)}>{t('common.close')}</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Snackbar */}
       <Snackbar open={!!snackbar} autoHideDuration={3000} onClose={() => setSnackbar('')}

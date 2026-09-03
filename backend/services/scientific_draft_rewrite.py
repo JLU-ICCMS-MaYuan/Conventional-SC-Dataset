@@ -9,10 +9,401 @@ Issue #76：管理员在审核编辑页修改材料状态、Tc、普通物性与
 """
 from __future__ import annotations
 
-from sqlalchemy import text, update
+import json
+from decimal import Decimal
+from typing import Any
+
+from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.models import Paper, PaperReviewEvent
+from backend import models
+from backend.ingest.scientific_drafts import _number, count_formula_elements
+from backend.services.space_groups import CRYSTAL_SYSTEMS
+from backend.models import Paper
+
+
+def _canonical_value(value: Any) -> Any:
+    """把数值与 JSON 值规整为可跨 MySQL/Python 比较的形态。"""
+    if isinstance(value, Decimal):
+        return format(value.normalize(), "f")
+    if isinstance(value, float):
+        return format(Decimal(str(value)).normalize(), "f")
+    if isinstance(value, dict):
+        return {str(key): _canonical_value(item) for key, item in sorted(value.items())}
+    if isinstance(value, list):
+        return [_canonical_value(item) for item in value]
+    if isinstance(value, str):
+        try:
+            return _canonical_value(json.loads(value))
+        except (TypeError, ValueError):
+            return value
+    return value
+
+
+def _sorted_snapshot(items: list[dict[str, Any]]) -> list[str]:
+    return sorted(
+        json.dumps(_canonical_value(item), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        for item in items
+    )
+
+
+def _calculation_snapshot(values: Any, *, has_structure: bool) -> dict[str, Any]:
+    get = values.get if isinstance(values, dict) else lambda name, default=None: getattr(values, name, default)
+    return {
+        "has_structure": has_structure,
+        "missing_structure_reason": (
+            None if has_structure
+            else get("missing_structure_reason") or "论文未提供或未提取完整结构文本"
+        ),
+        "phonon_nuclear_treatment": get("phonon_nuclear_treatment") or "unknown",
+        "lambda_ep": _number(get("lambda_ep")),
+        "omega_log_k": _number(get("omega_log_k")),
+        "mu_star": _number(get("mu_star")),
+        "epc_method": get("epc_method"),
+        "calculation_code": get("calculation_code"),
+        "parameters_json": _canonical_value(get("parameters_json")),
+    }
+
+
+def _experimental_snapshot(values: Any, *, has_structure: bool) -> dict[str, Any]:
+    get = values.get if isinstance(values, dict) else lambda name, default=None: getattr(values, name, default)
+    return {
+        "has_structure": has_structure,
+        "sample_label": get("sample_label"),
+        "measurement_method": get("measurement_method"),
+        "tc_criterion": get("tc_criterion") or "unknown",
+        "applied_field_t": _number(get("applied_field_t")),
+        "pressure_uncertainty_gpa": _number(get("pressure_uncertainty_gpa")),
+        "parameters_json": _canonical_value(get("parameters_json")),
+    }
+
+
+def _tc_snapshot(
+    values: Any,
+    *,
+    has_calculation_context: bool,
+    has_experimental_context: bool,
+) -> dict[str, Any]:
+    get = values.get if isinstance(values, dict) else lambda name, default=None: getattr(values, name, default)
+    requested_kind = get("result_kind") or "theoretical"
+    method = get("tc_method") or ("experimental" if requested_kind == "experimental" else "unknown")
+    result_kind = "experimental" if method == "experimental" else "theoretical"
+    return {
+        "result_kind": result_kind,
+        "tc_method": method,
+        "tc_method_custom": (get("tc_method_custom") or None) if method == "other" else None,
+        "tc_value_k": _number(get("tc_value_k")),
+        "tc_min_k": _number(get("tc_min_k")),
+        "tc_max_k": _number(get("tc_max_k")),
+        "uncertainty_k": _number(get("uncertainty_k")),
+        "value_raw": str(get("value_raw") or get("tc_value_k") or "").strip(),
+        "unit_raw": str(get("unit_raw") or "K"),
+        "has_calculation_context": has_calculation_context,
+        "has_experimental_context": has_experimental_context,
+    }
+
+
+def _property_snapshot(
+    values: Any,
+    *,
+    material: str,
+    has_structure: bool,
+    has_calculation_context: bool,
+) -> dict[str, Any]:
+    get = values.get if isinstance(values, dict) else lambda name, default=None: getattr(values, name, default)
+    value_min = _number(get("value_min"))
+    value_max = _number(get("value_max"))
+    value_number = _number(get("value") if isinstance(values, dict) else get("value_number"))
+    value_kind = "range" if value_min is not None and value_max is not None else "number" if value_number is not None else "text"
+    return {
+        "material": material,
+        "name_raw": str(get("name_raw") or get("name") or "").strip(),
+        "value_raw": str(get("value_raw") or (get("value") if isinstance(values, dict) else get("value_number")) or "").strip(),
+        "unit": get("unit") if isinstance(values, dict) else get("unit_raw"),
+        "value_number": value_number if value_kind == "number" else None,
+        "value_min": value_min,
+        "value_max": value_max,
+        "canonical_unit": get("unit") if isinstance(values, dict) else get("canonical_unit"),
+        "condition_note": get("condition_note"),
+        "has_structure": has_structure,
+        "has_calculation_context": has_calculation_context,
+    }
+
+
+def _structure_snapshot(
+    *,
+    space_group_symbol: Any,
+    space_group_number: Any,
+    structure_format: Any,
+    structure_text: Any,
+    nuclear_treatment: Any,
+) -> dict[str, Any]:
+    return {
+        "space_group_symbol": space_group_symbol,
+        "space_group_number": space_group_number,
+        "structure_format": structure_format or "unknown",
+        "structure_text": str(structure_text or ""),
+        "nuclear_treatment": nuclear_treatment or "unknown",
+    }
+
+
+def _requested_scientific_snapshot(paper: Paper, draft: dict[str, Any]) -> dict[str, Any]:
+    """按 persist_scientific_draft 的真实写入规则生成请求快照。
+
+    只纳入会保存到科学实体图的字段。证据、候选来源文件名、主键与创建时间都不是
+    编辑页可修改的科学内容，不能令一次同值保存被误判为修改。
+    """
+    states: list[dict[str, Any]] = []
+    confirmed_candidates: dict[int, list[dict[str, Any]]] = {}
+    for candidate in draft.get("structure_candidates") or []:
+        if not isinstance(candidate, dict):
+            continue
+        if candidate.get("confirmation") != "confirmed" or candidate.get("status") != "confirmed":
+            continue
+        reference = str(candidate.get("material_state_ref") or "")
+        if reference.startswith("material_states[") and reference.endswith("]"):
+            try:
+                index = int(reference[len("material_states["):-1])
+            except ValueError:
+                continue
+            confirmed_candidates.setdefault(index, []).append(candidate)
+
+    for state_index, state_data in enumerate(draft.get("material_states") or []):
+        if not isinstance(state_data, dict):
+            continue
+        material = str(state_data.get("material") or "").strip()
+        dimensionality = str(state_data.get("material_dimensionality") or "unknown")
+        crystal_system = state_data.get("crystal_system") or "unknown"
+        if crystal_system not in CRYSTAL_SYSTEMS:
+            crystal_system = "unknown"
+        element_count = state_data.get("element_count")
+        if not isinstance(element_count, int) or isinstance(element_count, bool):
+            element_count = count_formula_elements(material)
+
+        structures: list[dict[str, Any]] = []
+        structure_data = state_data.get("structure")
+        if isinstance(structure_data, dict) and str(structure_data.get("structure_text") or "").strip():
+            structures.append(_structure_snapshot(
+                space_group_symbol=structure_data.get("space_group_symbol") or state_data.get("reported_space_group_symbol"),
+                space_group_number=structure_data.get("space_group_number") or state_data.get("reported_space_group_number"),
+                structure_format=structure_data.get("structure_format"),
+                structure_text=structure_data.get("structure_text"),
+                nuclear_treatment=structure_data.get("nuclear_treatment"),
+            ))
+        for candidate in confirmed_candidates.get(state_index, []):
+            representations = candidate.get("representations")
+            conventional = representations.get("conventional") if isinstance(representations, dict) else None
+            cif = conventional.get("cif") if isinstance(conventional, dict) else None
+            structure_text = cif.get("text") if isinstance(cif, dict) else None
+            if not str(structure_text or "").strip():
+                continue
+            calculation_data = state_data.get("calculation_context")
+            structures.append(_structure_snapshot(
+                space_group_symbol=state_data.get("reported_space_group_symbol"),
+                space_group_number=state_data.get("reported_space_group_number"),
+                structure_format="cif",
+                structure_text=structure_text,
+                nuclear_treatment=(calculation_data or {}).get("phonon_nuclear_treatment")
+                if isinstance(calculation_data, dict) else "unknown",
+            ))
+
+        tc_items = [item for item in state_data.get("tc_results") or [] if isinstance(item, dict)]
+        calculation_data = state_data.get("calculation_context")
+        has_shared_calculation = isinstance(calculation_data, dict) or any(
+            (item.get("tc_method") or "unknown") != "experimental" for item in tc_items
+        )
+        calculation_values = calculation_data if isinstance(calculation_data, dict) else {}
+        calculations: list[dict[str, Any]] = []
+        if has_shared_calculation:
+            calculations.append(_calculation_snapshot(calculation_values, has_structure=bool(structures)))
+
+        experiments: list[dict[str, Any]] = []
+        experimental_data = state_data.get("experimental_context")
+        has_experiment = isinstance(experimental_data, dict) or any(
+            item.get("tc_method") == "experimental" for item in tc_items
+        )
+        if has_experiment:
+            experiments.append(_experimental_snapshot(
+                experimental_data if isinstance(experimental_data, dict) else {},
+                has_structure=bool(structures),
+            ))
+
+        tc_results: list[dict[str, Any]] = []
+        for item in tc_items:
+            method = item.get("tc_method") or (
+                "experimental" if item.get("result_kind") == "experimental" else "unknown"
+            )
+            item_calculation = item.get("calculation_context")
+            has_item_calculation = method != "experimental" and isinstance(item_calculation, dict) and any(
+                _number(item_calculation.get(key)) is not None
+                for key in ("lambda_ep", "omega_log_k", "mu_star")
+            )
+            if has_item_calculation:
+                calculations.append(_calculation_snapshot(item_calculation, has_structure=bool(structures)))
+            tc_results.append(_tc_snapshot(
+                item,
+                has_calculation_context=method != "experimental" and (has_shared_calculation or has_item_calculation),
+                has_experimental_context=method == "experimental" and has_experiment,
+            ))
+
+        properties = [
+            _property_snapshot(
+                item,
+                material=material,
+                has_structure=bool(structures),
+                has_calculation_context=has_shared_calculation,
+            )
+            for item in state_data.get("properties") or []
+            if isinstance(item, dict)
+        ]
+        states.append({
+            "material": material,
+            "element_count": element_count,
+            "material_dimensionality": dimensionality,
+            "pressure_value_gpa": _number(state_data.get("pressure_value_gpa")),
+            "pressure_min_gpa": _number(state_data.get("pressure_min_gpa")),
+            "pressure_max_gpa": _number(state_data.get("pressure_max_gpa")),
+            "pressure_raw": state_data.get("pressure_raw"),
+            "pressure_unit_raw": state_data.get("pressure_unit_raw"),
+            "reported_space_group_symbol": state_data.get("reported_space_group_symbol"),
+            "reported_space_group_number": state_data.get("reported_space_group_number"),
+            "temperature_value_k": _number(state_data.get("temperature_value_k")),
+            "temperature_raw": state_data.get("temperature_raw"),
+            "temperature_unit_raw": state_data.get("temperature_unit_raw"),
+            "magnetic_field_t": _number(state_data.get("magnetic_field_t")),
+            "state_kind": state_data.get("state_kind") or "unknown",
+            "crystal_system": crystal_system,
+            "note": state_data.get("note"),
+            "structures": _sorted_snapshot(structures),
+            "calculations": _sorted_snapshot(calculations),
+            "experiments": _sorted_snapshot(experiments),
+            "tc_results": _sorted_snapshot(tc_results),
+            "properties": _sorted_snapshot(properties),
+        })
+    return {
+        "superconductor_kind": draft.get("paper", {}).get("superconductor_kind") or "unknown",
+        "states": _sorted_snapshot(states),
+    }
+
+
+async def _stored_scientific_snapshot(session: AsyncSession, paper: Paper) -> dict[str, Any]:
+    """读取当前 revision 的科学实体图，字段集与请求快照保持一一对应。"""
+    revision = paper.content_revision or 1
+    state_rows = (await session.execute(
+        select(models.MaterialState, models.Superconductor.chemical_formula)
+        .join(models.Superconductor, models.Superconductor.id == models.MaterialState.superconductor_id)
+        .where(
+            models.MaterialState.paper_id == paper.id,
+            models.MaterialState.paper_revision == revision,
+        )
+    )).all()
+    states: dict[int, dict[str, Any]] = {}
+    for state, formula in state_rows:
+        states[state.id] = {
+            "material": str(formula or "").strip(),
+            "element_count": state.element_count,
+            "material_dimensionality": state.material_dimensionality,
+            "pressure_value_gpa": state.pressure_value_gpa,
+            "pressure_min_gpa": state.pressure_min_gpa,
+            "pressure_max_gpa": state.pressure_max_gpa,
+            "pressure_raw": state.pressure_raw,
+            "pressure_unit_raw": state.pressure_unit_raw,
+            "reported_space_group_symbol": state.reported_space_group_symbol,
+            "reported_space_group_number": state.reported_space_group_number,
+            "temperature_value_k": state.temperature_value_k,
+            "temperature_raw": state.temperature_raw,
+            "temperature_unit_raw": state.temperature_unit_raw,
+            "magnetic_field_t": state.magnetic_field_t,
+            "state_kind": state.state_kind,
+            "crystal_system": state.crystal_system,
+            "note": state.note,
+            "structures": [],
+            "calculations": [],
+            "experiments": [],
+            "tc_results": [],
+            "properties": [],
+        }
+    if not states:
+        return {"superconductor_kind": paper.superconductor_kind or "unknown", "states": []}
+
+    for structure in (await session.execute(select(models.StructureModel).where(
+        models.StructureModel.paper_id == paper.id,
+        models.StructureModel.paper_revision == revision,
+    ))).scalars():
+        if structure.material_state_id in states:
+            states[structure.material_state_id]["structures"].append(_structure_snapshot(
+                space_group_symbol=structure.space_group_symbol,
+                space_group_number=structure.space_group_number,
+                structure_format=structure.structure_format,
+                structure_text=structure.structure_text,
+                nuclear_treatment=structure.nuclear_treatment,
+            ))
+
+    for calculation in (await session.execute(select(models.CalculationContext).where(
+        models.CalculationContext.paper_id == paper.id,
+        models.CalculationContext.paper_revision == revision,
+    ))).scalars():
+        if calculation.material_state_id in states:
+            states[calculation.material_state_id]["calculations"].append(_calculation_snapshot(
+                calculation, has_structure=calculation.structure_id is not None,
+            ))
+    for experiment in (await session.execute(select(models.ExperimentalContext).where(
+        models.ExperimentalContext.paper_id == paper.id,
+        models.ExperimentalContext.paper_revision == revision,
+    ))).scalars():
+        if experiment.material_state_id in states:
+            states[experiment.material_state_id]["experiments"].append(_experimental_snapshot(
+                experiment, has_structure=experiment.structure_id is not None,
+            ))
+    for result in (await session.execute(select(models.TcResult).where(
+        models.TcResult.paper_id == paper.id,
+        models.TcResult.paper_revision == revision,
+    ))).scalars():
+        if result.material_state_id in states:
+            states[result.material_state_id]["tc_results"].append(_tc_snapshot(
+                result,
+                has_calculation_context=result.calculation_context_id is not None,
+                has_experimental_context=result.experimental_context_id is not None,
+            ))
+    for prop in (await session.execute(select(models.SuperconductorProperty).where(
+        models.SuperconductorProperty.paper_id == paper.id,
+        models.SuperconductorProperty.paper_revision == revision,
+    ))).scalars():
+        if prop.material_state_id in states:
+            states[prop.material_state_id]["properties"].append(_property_snapshot(
+                prop,
+                material=prop.material_raw,
+                has_structure=prop.structure_id is not None,
+                has_calculation_context=prop.calculation_context_id is not None,
+            ))
+
+    snapshots = []
+    for state in states.values():
+        snapshots.append({
+            **{key: value for key, value in state.items() if key not in {
+                "structures", "calculations", "experiments", "tc_results", "properties",
+            }},
+            "structures": _sorted_snapshot(state["structures"]),
+            "calculations": _sorted_snapshot(state["calculations"]),
+            "experiments": _sorted_snapshot(state["experiments"]),
+            "tc_results": _sorted_snapshot(state["tc_results"]),
+            "properties": _sorted_snapshot(state["properties"]),
+        })
+    return {
+        "superconductor_kind": paper.superconductor_kind or "unknown",
+        "states": _sorted_snapshot(snapshots),
+    }
+
+
+async def scientific_draft_matches_current_revision(
+    session: AsyncSession,
+    paper: Paper,
+    draft: dict[str, Any],
+) -> bool:
+    """返回请求是否与当前科学数据语义相同，不做任何写入。"""
+    return _requested_scientific_snapshot(paper, draft) == await _stored_scientific_snapshot(
+        session, paper,
+    )
 
 
 async def delete_scientific_entities(session: AsyncSession, paper_id: int) -> None:
@@ -91,22 +482,3 @@ async def bump_paper_revision(session: AsyncSession, paper: Paper) -> None:
     paper.content_revision += 1
     paper.approved_revision = None
     paper.review_status = "pending"
-
-
-async def record_revision_event(
-    session: AsyncSession,
-    paper: Paper,
-    reviewer_user_id: int,
-    comment: str = "科学数据升版重审：内容版本号递增并退回待审核",
-) -> None:
-    """升版写入一条审核事件（R8），使「已公开 → 待审核」可溯源。"""
-    session.add(
-        PaperReviewEvent(
-            paper_id=paper.id,
-            paper_revision=paper.content_revision,
-            reviewer_user_id=reviewer_user_id,
-            status="pending",
-            review_comment=comment,
-            source="rewrite",
-        )
-    )
