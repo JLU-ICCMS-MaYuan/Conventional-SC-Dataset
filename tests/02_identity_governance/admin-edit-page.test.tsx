@@ -21,6 +21,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AdminPaperEditPage from '../../frontend/src/pages/AdminPaperEditPage'
 import { api } from '../../frontend/src/lib/api'
 
+let currentUser = {
+  id: 7,
+  username: 'reviewer',
+  role: 'admin' as const,
+  is_admin: true,
+  is_superadmin: false,
+}
+
+vi.mock('../../frontend/src/context/AuthContext', () => ({
+  useAuth: () => ({ user: currentUser, replaceUser: vi.fn() }),
+}))
+
 vi.mock('../../frontend/src/lib/api', () => ({
   api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), del: vi.fn(), download: vi.fn() },
 }))
@@ -107,12 +119,18 @@ beforeEach(() => {
   mockedApi.post.mockResolvedValue({ message: '已审核' })
 })
 
-afterEach(() => { cleanup(); vi.clearAllMocks() })
+afterEach(() => {
+  cleanup()
+  vi.clearAllMocks()
+  currentUser = { id: 7, username: 'reviewer', role: 'admin', is_admin: true, is_superadmin: false }
+})
 
 const renderPage = () => render(
   <MemoryRouter initialEntries={['/admin/papers/88/edit']}>
     <Routes>
       <Route path="/admin/papers/:id/edit" element={<AdminPaperEditPage />} />
+      <Route path="/admin" element={<div>管理员工作台</div>} />
+      <Route path="/superadmin" element={<div>超级管理员工作台</div>} />
     </Routes>
   </MemoryRouter>,
 )
@@ -145,6 +163,50 @@ describe('Issue #78：管理端论文编辑独立页', () => {
     await user.click(screen.getByRole('option', { name: /退回待审核/ }))
     expect(screen.getByRole('textbox', { name: '审核意见' })).toBeVisible()
     expect(screen.getByRole('button', { name: '提交审核' })).toBeVisible()
+  })
+
+  it('显示上传者与关联记录数，并为缺失上传者提供稳定占位', async () => {
+    renderPage()
+
+    expect(await screen.findByText('上传者: author')).toBeVisible()
+    expect(screen.getByText('记录: 0')).toBeVisible()
+
+    cleanup()
+    mockedApi.get.mockImplementation(async (path: string) => {
+      if (path === '/api/admin/papers/88') return { ...detailWithStructures, uploader_name: null, record_count: 2 }
+      if (path === '/api/rag/papers/88/structures/1/representations') return representationsResponse
+      if (path === '/api/rag/space-groups') return { space_groups: [] }
+      if (path === '/api/classification-catalogs') return { material_families: [], structure_families: [], material_dimensionalities: [] }
+      return {}
+    })
+    renderPage()
+
+    expect(await screen.findByText('上传者: -')).toBeVisible()
+    expect(screen.getByText('记录: 2')).toBeVisible()
+  })
+
+  it('审核成功后按当前角色返回工作台，失败时留在编辑页', async () => {
+    const user = userEvent.setup()
+    currentUser = { ...currentUser, role: 'superadmin', is_superadmin: true }
+    renderPage()
+
+    await user.click(await screen.findByRole('button', { name: '提交审核' }))
+    expect(await screen.findByText('超级管理员工作台')).toBeVisible()
+
+    cleanup()
+    currentUser = { ...currentUser, role: 'admin', is_superadmin: false }
+    renderPage()
+
+    await user.click(await screen.findByRole('button', { name: '提交审核' }))
+    expect(await screen.findByText('管理员工作台')).toBeVisible()
+
+    cleanup()
+    mockedApi.post.mockRejectedValueOnce(new Error('网络错误'))
+    renderPage()
+
+    await user.click(await screen.findByRole('button', { name: '提交审核' }))
+    expect(await screen.findByText('审核失败: 网络错误')).toBeVisible()
+    expect(screen.queryByText('管理员工作台')).not.toBeInTheDocument()
   })
 
   it('已落库结构获得完整表示：切换晶胞/格式后预览有内容（FR-005）', async () => {

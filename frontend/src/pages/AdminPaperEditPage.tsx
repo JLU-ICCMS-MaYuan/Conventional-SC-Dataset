@@ -254,7 +254,7 @@ const AdminPaperEditPage: React.FC = () => {
           material_states: materialStates,
         } : {}),
       })
-      setSnackbar(t('admin.reviewSubmitted'))
+      navigate(workspacePath)
     } catch (e: unknown) {
       setSnackbar(t('admin.reviewFailed', { reason: (e as Error).message }))
     } finally { setEditReviewSaving(false) }
@@ -466,7 +466,8 @@ const AdminPaperEditPage: React.FC = () => {
           {/* Non-editable metadata */}
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 0.5 }}>
             <Chip size="small" label={t('admin.idChip', { value: editForm.id || '-' })} variant="outlined" />
-            <Chip size="small" label={t('admin.propertyCountChip', { value: editForm.record_count || 0 })} variant="outlined" />
+            <Chip size="small" label={`${t('admin.thUploader')}: ${editForm.uploader_name || '-'}`} variant="outlined" />
+            <Chip size="small" label={t('admin.recordsChip', { value: editForm.record_count || 0 })} variant="outlined" />
             <Chip size="small" label={t('admin.createdChip', { value: editForm.created_at ? new Date(editForm.created_at).toLocaleString(locale) : '-' })} />
             {(editForm.materials || []).map((m: string) => (
               <Chip key={m} size="small" label={m} color="primary" variant="outlined" />
