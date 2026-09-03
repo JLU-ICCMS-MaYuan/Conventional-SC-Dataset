@@ -114,20 +114,21 @@ function FeedColumn({ kind, label, onSelect, onSources }: FeedColumnProps) {
   }, [kind, onSources, page, revision])
 
   const pages = data ? Math.min(10000, Math.max(1, Math.ceil(data.total / PAGE_SIZE))) : 1
-  return <Paper component="section" aria-label={label} variant="outlined" sx={{ minWidth: 0, px: { xs: 2, md: 2.5 }, borderRadius: 2, boxShadow: 'none' }}>
-    <Typography component="h3" variant="h3" sx={{ pt: 2, pb: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>{label}</Typography>
-    <Box sx={{ minHeight: 450 }}>
+  return <Paper component="section" aria-label={label} variant="outlined" sx={{ minWidth: 0, height: '100%', display: 'flex', flexDirection: 'column', px: { xs: 2, md: 2.5 }, borderRadius: 2, boxShadow: 'none' }}>
+    <Typography component="h3" variant="h3" sx={{ flexShrink: 0, pt: 2, pb: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>{label}</Typography>
+    <Box sx={{ height: 430, display: 'flex', flexDirection: 'column' }}>
       {loading ? <FeedLoading label={t('news.loadingFeed')} /> : error ? <Alert severity="error" sx={{ my: 2 }} action={<Button color="inherit" onClick={() => setRevision(v => v + 1)}>{t('common.retry')}</Button>}>
         {t('news.feedLoadFailed')}
       </Alert> : data?.items.length === 0 ? <Box sx={{ py: 5 }} role="status">
         <Typography fontWeight={600}>{t('news.feedEmpty')}</Typography>
         <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>{t('news.feedEmptyHint')}</Typography>
-      </Box> : <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
+      </Box> : <Box component="ul" sx={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateRows: 'repeat(5, minmax(0, 1fr))', listStyle: 'none', m: 0, p: 0 }}>
         {data?.items.map(item => <Box
           component="li"
           key={item.id}
           onClick={() => onSelect(item)}
           sx={{
+            minHeight: 0,
             py: 1.25,
             borderBottom: '1px solid',
             borderColor: 'divider',
@@ -138,7 +139,7 @@ function FeedColumn({ kind, label, onSelect, onSources }: FeedColumnProps) {
             px: 1,
             mx: -1,
             borderRadius: 1,
-            minHeight: 74,
+            overflow: 'hidden',
           }}>
           <Stack direction="row" useFlexGap flexWrap="wrap" alignItems="center" gap={0.75} sx={{ mb: 0.5 }}>
             <Chip
@@ -164,7 +165,7 @@ function FeedColumn({ kind, label, onSelect, onSources }: FeedColumnProps) {
         </Box>)}
       </Box>}
     </Box>
-    {!loading && !error && data && data.total > 0 && <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1} sx={{ mt: 2 }}>
+    {!loading && !error && data && data.total > 0 && <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1} sx={{ flexShrink: 0, minHeight: 72, py: 1.5 }}>
       <Typography variant="body2" aria-live="polite">{t('news.pageInfo', { total: data.total, page, pages })}</Typography>
       <Stack direction="row" gap={1}>
         <Button variant="outlined" disabled={page <= 1} onClick={() => setPage(value => value - 1)}>{t('news.prevPage')}</Button>
