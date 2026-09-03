@@ -369,19 +369,20 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
             </CardActionArea>
           </Card>
         ))}
+        {isSuper && <DefaultLlmConfigPanel />}
         {/* 当前角色是身份展示，没有目标页面，因此不做成可点击卡片。 */}
         <Card sx={{ borderLeft: '4px solid', borderColor: 'info.main' }}>
           <CardContent>
             <Typography variant="caption" color="text.secondary">{t('admin.currentRole')}</Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-              <Chip size="small" color={isSuper ? 'error' : 'primary'} label={isSuper ? roleLabel('superadmin') : roleLabel('admin')} />
-              <Typography variant="h6" fontWeight={700}>{user?.username}</Typography>
-            </Box>
+            <Typography variant="h6" fontWeight={700} noWrap title={roleLabel(isSuper ? 'superadmin' : 'admin')}>
+              {roleLabel(isSuper ? 'superadmin' : 'admin')}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }} title={user?.username}>
+              {user?.username}
+            </Typography>
           </CardContent>
         </Card>
       </Box>
-
-      {isSuper && <DefaultLlmConfigPanel />}
 
       {/* ═══════════════════════════════════════════ */}
       {/* TAB 1: Paper Review */}

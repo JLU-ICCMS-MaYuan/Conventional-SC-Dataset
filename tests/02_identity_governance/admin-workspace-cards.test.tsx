@@ -76,7 +76,8 @@ describe('工作台卡片式导航', () => {
     // 当前角色是身份展示，不做成可点击入口
     expect(screen.queryByRole('button', { name: '当前角色' })).not.toBeInTheDocument()
     expect(await screen.findByText('默认 AI 模型')).toBeVisible()
-    expect(screen.getByDisplayValue('OpenAI')).toBeVisible()
+    expect(screen.getByText('OpenAI · gpt-5.6-sol')).toBeVisible()
+    expect(screen.queryByDisplayValue('OpenAI')).not.toBeInTheDocument()
   })
 
   it('默认模型配置只对超级管理员展示并经专用接口保存', async () => {
@@ -84,6 +85,7 @@ describe('工作台卡片式导航', () => {
     const user = userEvent.setup()
     render(<MemoryRouter><AdminPage mode="superadmin" /></MemoryRouter>)
 
+    await user.click(await screen.findByRole('button', { name: '编辑' }))
     const provider = await screen.findByDisplayValue('OpenAI')
     await user.clear(provider)
     await user.type(provider, 'OpenAI Gateway')
