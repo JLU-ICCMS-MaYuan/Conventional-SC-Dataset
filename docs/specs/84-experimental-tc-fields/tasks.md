@@ -23,7 +23,7 @@
 
 ## 最终阶段：收敛与文档
 
-- [ ] T011 运行相关 Vitest、pytest、隔离 MySQL 测试，并执行上传和管理员手工 quickstart。前端 38 项、上传/持久化 pytest 以及 #84 隔离 MySQL 迁移测试已通过；管理员真实事务测试暂被未完成的 #87 `paper_history_events` 迁移阻断，不能标记完成。
+- [x] T011 运行相关 Vitest、pytest、隔离 MySQL 测试，并执行上传和管理员手工 quickstart。前端 38 项、上传/持久化 pytest 27 项、管理员真实 MySQL 事务拒绝测试和 #84 隔离 MySQL 迁移约束测试均通过。完整 fresh-schema 的 `alembic check` 仍报告 #88 新闻/图表模型与既有元数据的独立差异，不属于本 Feature 的验收条件。
 - [x] T012 使用 `big-project-overview-maintainer` 更新 `docs/overview/01_Decentralized_Uploading_of_Superconductivity_Data/upload-review-and-default-selection.md` 与 `docs/overview/02_Decentralized_Maintenance_and_Verification/domain-model-and-schema.md`。
 
 ## 依赖与执行顺序
