@@ -36,7 +36,7 @@ CROSSREF = {"message": {"items": [{"DOI": "10.1234/TEST", "type": "journal-artic
  "next-cursor": "next"}}
 OPENALEX = {"results": [{
  "id": "https://openalex.org/W123", "doi": "https://doi.org/10.1021/test", "title": "Superconductivity in an ACS test material",
- "publication_date": "2026-08-30", "updated_date": "2026-08-31T10:00:00Z",
+ "publication_date": "2026-08-30", "updated_date": "2026-08-31T10:00:00.000000",
  "authorships": [{"author": {"display_name": "Test Author"}}],
  "primary_location": {"landing_page_url": "https://pubs.acs.org/doi/10.1021/test", "source": {"display_name": "Journal of the ACS"}},
  "abstract_inverted_index": {"Superconductivity": [0], "test": [1]},
@@ -105,6 +105,7 @@ def test_three_sources_and_rights():
     assert physorg.title == "Original superconductivity headline"
     assert physorg.summary == "Test excerpt"
     assert openalex.doi == "10.1021/test"
+    assert openalex.source_updated_at == "2026-08-31T10:00:00Z"
     assert openalex.original_source == "acs"
     assert openalex.discovery_source == "openalex"
     assert openalex.relevance_evidence == "title: superconductivity"

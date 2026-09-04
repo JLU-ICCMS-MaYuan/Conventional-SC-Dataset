@@ -4,22 +4,19 @@ import logging
 import os
 import time
 
-from redis.exceptions import RedisError
-
+from backend.rq_runtime import run_worker_forever
 from .domain import SOURCES
 from .scheduler import QUEUE_NAME, redis_connection, run_job, schedule_forever
 
 
 def run_worker(worker_cls, connection_factory=redis_connection, sleep=time.sleep):
-    """Redis 短暂故障后重建 RQ Worker 连接，避免资讯采集永久退出。"""
-    while True:
-        try:
-            worker_cls([QUEUE_NAME], connection=connection_factory()).work()
-        except RedisError:
-            logging.getLogger(__name__).warning("news worker redis disconnected; reconnecting")
-            sleep(5)
-            continue
-        return
+    """RQ 空闲超时或 Redis 短暂故障后重建资讯 Worker。"""
+    run_worker_forever(
+        lambda: worker_cls([QUEUE_NAME], connection=connection_factory()),
+        lambda worker: worker.work(),
+        label="news worker",
+        sleep=sleep,
+    )
 
 
 def main():

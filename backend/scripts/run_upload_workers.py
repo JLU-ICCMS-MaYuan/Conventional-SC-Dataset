@@ -11,11 +11,15 @@ from rq import Worker
 
 from backend.ingest.upload_tasks import QUEUE_NAME
 from backend.rag.config import settings
+from backend.rq_runtime import run_worker_forever
 
 
 def _run_worker(with_scheduler: bool) -> None:
-    connection = Redis.from_url(settings.redis_url)
-    Worker([QUEUE_NAME], connection=connection).work(with_scheduler=with_scheduler)
+    run_worker_forever(
+        lambda: Worker([QUEUE_NAME], connection=Redis.from_url(settings.redis_url)),
+        lambda worker: worker.work(with_scheduler=with_scheduler),
+        label="upload worker",
+    )
 
 
 def main() -> NoReturn:

@@ -43,5 +43,7 @@ def test_local_dev_starts_news_processes_by_default():
     dev_script = DEV_SCRIPT_PATH.read_text()
 
     assert "APP_SERVICES=(python worker news-worker news-scheduler goserver frontend)" in dev_script
+    assert 'spawn worker env UPLOAD_LLM_CONCURRENCY=1' in dev_script
+    assert '"$PY_BIN/python" -m backend.scripts.run_upload_workers' in dev_script
     assert 'spawn news-worker "$PY_BIN/python" -m backend.news worker' in dev_script
     assert 'spawn news-scheduler "$PY_BIN/python" -m backend.news schedule' in dev_script

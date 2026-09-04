@@ -66,7 +66,7 @@ start_redis() {
   ok "redis  127.0.0.1:$REDIS_PORT"
 }
 
-neo4j_ready() { curl -sf --max-time 3 "http://127.0.0.1:$NEO4J_HTTP_PORT/" >/dev/null 2>&1; }
+neo4j_ready() { local_curl -sf --max-time 3 "http://127.0.0.1:$NEO4J_HTTP_PORT/" >/dev/null 2>&1; }
 
 start_neo4j() {
   neo4j_ready && { ok "neo4j 已在运行"; return; }
@@ -83,7 +83,7 @@ start_neo4j() {
   ok "neo4j  bolt://127.0.0.1:$NEO4J_BOLT_PORT"
 }
 
-qdrant_ready() { curl -sf --max-time 3 "http://127.0.0.1:$QDRANT_PORT/readyz" >/dev/null 2>&1; }
+qdrant_ready() { local_curl -sf --max-time 3 "http://127.0.0.1:$QDRANT_PORT/readyz" >/dev/null 2>&1; }
 
 start_qdrant() {
   qdrant_ready && { ok "qdrant 已在运行"; return; }
@@ -103,7 +103,7 @@ start_qdrant() {
 
 # GROBID 使用项目已固定版本的 Docker 镜像，但仅绑定本机回环地址。
 # 其余本地开发服务仍使用宿主机进程；该镜像避免额外维护 Java 模型安装。
-grobid_ready() { curl -sf --max-time 3 "http://127.0.0.1:$GROBID_PORT/api/isalive" >/dev/null 2>&1; }
+grobid_ready() { local_curl -sf --max-time 3 "http://127.0.0.1:$GROBID_PORT/api/isalive" >/dev/null 2>&1; }
 
 start_grobid() {
   grobid_ready && { ok "grobid 已在运行"; return; }
@@ -121,7 +121,7 @@ start_grobid() {
   ok "grobid 127.0.0.1:$GROBID_PORT"
 }
 
-py_ready() { curl -sf --max-time 3 "http://127.0.0.1:$PYTHON_PORT/health" >/dev/null 2>&1; }
+py_ready() { local_curl -sf --max-time 3 "http://127.0.0.1:$PYTHON_PORT/health" >/dev/null 2>&1; }
 
 start_python() {
   py_ready && { ok "python 已在运行"; return; }
@@ -139,8 +139,8 @@ start_python() {
 
 start_worker() {
   pid_alive worker && { ok "worker 已在运行"; return; }
-  ( cd "$REPO_ROOT" && spawn worker "$PY_BIN/rq" worker \
-      --url "$REDIS_URL" --with-scheduler scwiki-upload )
+  ( cd "$REPO_ROOT" && spawn worker env UPLOAD_LLM_CONCURRENCY=1 \
+      "$PY_BIN/python" -m backend.scripts.run_upload_workers )
   sleep 2
   pid_alive worker || die "worker 启动失败，见 $LOG_DIR/worker.log"
   ok "worker (rq scwiki-upload)"
@@ -150,7 +150,7 @@ start_goserver() {
   pid_alive goserver && { ok "goserver 已在运行"; return; }
   port_busy "$GOSERVER_PORT" && die "端口 $GOSERVER_PORT 已被占用"
   spawn goserver "$REPO_ROOT/scripts/goserver-watch.sh"
-  wait_for 120 "goserver" curl -sf --max-time 3 "http://127.0.0.1:$GOSERVER_PORT/health" \
+  wait_for 120 "goserver" local_curl -sf --max-time 3 "http://127.0.0.1:$GOSERVER_PORT/health" \
     || die "goserver 启动失败，见 $LOG_DIR/goserver.log"
   ok "goserver 127.0.0.1:$GOSERVER_PORT (热重载)"
 }
@@ -160,13 +160,16 @@ start_frontend() {
   port_busy "$VITE_PORT" && die "端口 $VITE_PORT 已被占用"
   [[ -d "$REPO_ROOT/frontend/node_modules" ]] || die "缺少 frontend/node_modules，先执行 npm ci"
   ( cd "$REPO_ROOT/frontend" && spawn frontend npm run dev )
-  wait_for 60 "frontend" curl -sf --max-time 3 "http://127.0.0.1:$VITE_PORT/" \
+  wait_for 60 "frontend" local_curl -sf --max-time 3 "http://127.0.0.1:$VITE_PORT/" \
     || die "frontend 启动失败，见 $LOG_DIR/frontend.log"
   ok "frontend http://127.0.0.1:$VITE_PORT  ← 浏览器入口"
 }
 
 start_news_worker()    { pid_alive news-worker && return
-  ( cd "$REPO_ROOT" && spawn news-worker "$PY_BIN/python" -m backend.news worker ); ok "news-worker"; }
+  ( cd "$REPO_ROOT" && spawn news-worker "$PY_BIN/python" -m backend.news worker )
+  sleep 2
+  pid_alive news-worker || die "news-worker 启动失败，见 $LOG_DIR/news-worker.log"
+  ok "news-worker"; }
 start_news_scheduler() { pid_alive news-scheduler && return
   ( cd "$REPO_ROOT" && spawn news-scheduler "$PY_BIN/python" -m backend.news schedule ); ok "news-scheduler"; }
 
@@ -214,8 +217,8 @@ status() {
     "qdrant|qdrant_ready|127.0.0.1:$QDRANT_PORT"
     "grobid|grobid_ready|127.0.0.1:$GROBID_PORT"
     "python|py_ready|127.0.0.1:$PYTHON_PORT"
-    "goserver|curl -sf --max-time 3 http://127.0.0.1:$GOSERVER_PORT/health|127.0.0.1:$GOSERVER_PORT"
-    "frontend|curl -sf --max-time 3 http://127.0.0.1:$VITE_PORT/|http://127.0.0.1:$VITE_PORT"
+    "goserver|local_curl -sf --max-time 3 http://127.0.0.1:$GOSERVER_PORT/health|127.0.0.1:$GOSERVER_PORT"
+    "frontend|local_curl -sf --max-time 3 http://127.0.0.1:$VITE_PORT/|http://127.0.0.1:$VITE_PORT"
   )
   for entry in "${checks[@]}"; do
     IFS='|' read -r name cmd addr <<< "$entry"

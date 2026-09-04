@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from backend.news.scheduler import due, redis_connection, scheduled_at
 from backend.news.models import NewsFeedSource
+from backend.news.__main__ import run_worker
 
 
 def test_daily_cutoff_and_recovery():
@@ -27,3 +28,21 @@ def test_worker_redis_connection_has_no_read_timeout(monkeypatch):
     monkeypatch.setenv("REDIS_URL", "redis://127.0.0.1:6379/0")
     connection = redis_connection()
     assert connection.connection_pool.connection_kwargs["socket_timeout"] is None
+
+
+def test_worker_restarts_after_rq_returns_from_idle_timeout():
+    calls = []
+    sleeps = []
+
+    class FakeWorker:
+        def __init__(self, queues, connection):
+            calls.append((queues, connection))
+            self._stop_requested = len(calls) > 1
+
+        def work(self):
+            return False
+
+    run_worker(FakeWorker, connection_factory=lambda: object(), sleep=sleeps.append)
+
+    assert len(calls) == 2
+    assert sleeps == [5]

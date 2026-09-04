@@ -87,6 +87,9 @@ wait_for() {
   return 1
 }
 
+# 本地健康检查必须绕过代理；代理可能保持连接不关闭，导致 curl 虽收到 200 仍超时。
+local_curl() { curl --noproxy '*' "$@"; }
+
 # 读取 pid 文件并判断进程是否存活
 pid_alive() {
   local f="$RUN_DIR/$1.pid"

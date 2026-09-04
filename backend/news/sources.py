@@ -252,7 +252,7 @@ class Sources:
                     raise CollectionError("invalid_record")
                 updated = item.get("updated_date", "")
                 if updated:
-                    updated = iso(parse_time(updated))
+                    updated = iso(parse_time(_openalex_timestamp(updated)))
                 authors = [plain((row.get("author") or {}).get("display_name", ""), 120)
                            for row in item.get("authorships", [])][:100]
                 journal = plain(((location.get("source") or {}).get("display_name", "")), 1000)
@@ -328,3 +328,11 @@ def openalex_abstract(index):
             return ""
         words.extend((position, word) for position in positions if isinstance(position, int) and position >= 0)
     return " ".join(word for _, word in sorted(words))
+
+
+def _openalex_timestamp(value):
+    """OpenAlex 的 updated_date 文档语义为 UTC，但有时省略时区后缀。"""
+    value = str(value or "").strip()
+    if value and not re.search(r"(?:Z|[+-]\d{2}:\d{2})$", value, re.I):
+        value += "Z"
+    return value
