@@ -56,8 +56,8 @@ sudo systemctl disable --now ufw
 | goserver | 127.0.0.1:8080 | `~/.local/go` 编译 | 有（约 1s） |
 | python (uvicorn) | 127.0.0.1:8000 | conda `sc-wiki` | 有 |
 | worker (rq) | — | conda `sc-wiki` | 无（改队列任务需 `make restart`） |
-| mysql | 127.0.0.1:**3307** | conda `sc-wiki-infra` | — |
-| redis | 127.0.0.1:6379 | conda `sc-wiki-infra` | — |
+| mysql | 127.0.0.1:**3307** | conda `sc-wiki` | — |
+| redis | 127.0.0.1:6379 | conda `sc-wiki` | — |
 | neo4j | bolt://127.0.0.1:7687 | `.local/neo4j` | — |
 | qdrant | 127.0.0.1:6333 | `.local/bin/qdrant` | — |
 | grobid | 127.0.0.1:8070 | `lfoppiano/grobid:0.8.1` 容器 | — |
@@ -85,13 +85,11 @@ GROBID_URL=http://127.0.0.1:8070
 容器设置 `JAVA_TOOL_OPTIONS=-XX:-UseContainerSupport`，避免 Java 容器资源探测异常；
 该选项不影响生产 Compose。
 
-## 两个 conda 环境
+## Conda 环境
 
-- **`sc-wiki`** — 应用 Python 依赖（FastAPI、pymatgen、rq 等）
-- **`sc-wiki-infra`** — mysqld / redis-server / openjdk 21 / mysql 客户端
-
-分开是必要的：把 `mysql-server` 装进 `sc-wiki` 会迫使 conda 将 `python` 从
-`pkgs/main` 换成 `conda-forge` 版本，进而重装并可能破坏已有的科学计算包。
+**`sc-wiki`** 同时提供应用 Python 依赖（FastAPI、pymatgen、rq 等）和本地基础服务
+（mysqld、redis-server、openjdk 21、mysql 客户端）。运行 `make setup` 时会在该环境内
+安装缺失的基础服务依赖。
 
 ## 目录
 

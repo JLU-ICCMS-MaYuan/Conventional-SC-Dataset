@@ -19,7 +19,7 @@
 - 本地开发的应用服务运行在宿主机，由 `scripts/dev.sh` 编排，入口为 `Makefile`（`make start` / `stop` / `status` / `logs`）。GROBID 是唯一容器化例外，固定使用 `lfoppiano/grobid:0.8.1` 并仅绑定 `127.0.0.1:8070`，避免本地维护 Java 模型。
 - 请求链路为浏览器 → Vite 5173 →（`/api` 代理）→ goserver 8080 →（未匹配路由反代）→ uvicorn 8000。两段代理均为既有实现，本地化未修改 `backend/` 与 `goserver/` 源码。
 - 三个应用服务支持热重载：前端 Vite HMR、Python `uvicorn --reload`、goserver 由 `watchfiles` 触发重编译（增量约 1 秒）。Go 编译失败时保留旧进程继续服务。`rq worker` 无热重载，改队列任务代码须手动重启。
-- 四个基础服务来自本机安装而非容器：MySQL 8.4.2 与 Redis 8.10.1 来自 conda 环境 `sc-wiki-infra`，Neo4j 5.26.29 与 Qdrant 1.19.0 为 `.local/` 下的独立安装。应用 Python 依赖使用 conda 环境 `sc-wiki`。
+- 四个基础服务来自本机安装而非容器：MySQL 8.4.2、Redis 8.10.1 与 Neo4j 所需的 OpenJDK 21 均来自 conda 环境 `sc-wiki`；Neo4j 5.26.29 与 Qdrant 1.19.0 为 `.local/` 下的独立安装。应用 Python 依赖也使用该环境。
 - MySQL 监听 3307 而非 3306：宿主机 3306 已被与本项目无关的系统级 MySQL 占用。
 - 全部数据存放于仓库内 `.data/`（四个数据库的数据目录、上传文件、解析产物、头像），运行时产物在 `.local/`（二进制、MySQL 配置、pid、日志）。两者均已 gitignore。
 - `news-worker` 与 `news-scheduler` 默认不启动，需显式指定服务名。
@@ -37,7 +37,7 @@
 
 ### 本地开发
 
-1. `make setup` 一次性安装：创建 conda 环境 `sc-wiki-infra`、安装 Neo4j 与 Qdrant 到 `.local/`、下载 Go 工具链到 `~/.local/go`、安装 Python 依赖到 `sc-wiki`、建立 `.data/` 目录骨架与 MySQL 配置。
+1. `make setup` 一次性安装：在既有 conda 环境 `sc-wiki` 安装 MySQL、Redis、OpenJDK 与 Python 依赖，安装 Neo4j 与 Qdrant 到 `.local/`，下载 Go 工具链到 `~/.local/go`，并建立 `.data/` 目录骨架与 MySQL 配置。
 2. `make migrate` 从既有 Docker 卷迁移数据（仅首次）。原卷保持只读，不删除不修改。
 3. `make start` 启动全部服务，按依赖顺序逐个等待健康检查通过。命令幂等，已运行的服务会跳过。
 4. 浏览器访问 `http://127.0.0.1:5173`。`make status` 查看各服务状态，`make logs S=<服务>` 跟踪日志。
@@ -69,7 +69,7 @@
 - 密钥只能通过环境变量注入，文档不记录实际凭据。Go 邮件配置支持 `SMTP_HOST`、`SMTP_PORT`、`SMTP_USER`/`SMTP_USERNAME`、`SMTP_PASSWORD`、`SMTP_FROM` 和 `SMTP_TLS_MODE`。
 - `AVATAR_DIR` 默认为数据目录下 `avatars`，Compose 固定为 `/data/avatars` 并挂载宿主 `docker/data/avatars`；部署备份需包含该目录。
 - `docker/deploy/README.md` 中的镜像标签、归档文件和导入命令属于交付包说明，发布前需要按实际归档核验。
-- 本地开发环境的两个 conda 环境必须分开：把 `mysql-server` 装进 `sc-wiki` 会迫使 conda 将 `python` 从 `pkgs/main` 换成 `conda-forge` 版本，危及该环境已有的科学计算包。
+- 本地开发环境只使用 conda 环境 `sc-wiki`；其 Python、MySQL、Redis 和 OpenJDK 包均由 conda 统一管理。
 - 本地 MySQL 客户端命令必须带 `--defaults-file`：系统 `/etc/mysql/my.cnf` 含 `user = mysql` 与指向 `/var/log/mysql/` 的错误日志路径，以普通用户启动会失败。
 - 本地开发链路不含 nginx，`docker/nginx.conf` 中的 `client_max_body_size`、`proxy_request_buffering off` 与 `Accept-Encoding` 清空均不生效；`vite build` 期生效的 `removeHeavyPreloads` 与 `manualChunks` 在 dev 模式下同样不走。这不影响改动进入镜像（镜像内会重新构建源码），但同一份代码在两条链路下的上传与首屏行为可能不同，详见「本地改动如何进入 Docker 部署」。
 - 当前 WSL `networkingMode=mirrored` 本地开发环境中，UFW 必须保持停止且禁止开机启动。宝塔安装器启用 UFW 并设置默认拒绝策略后，`loopback0` 上的 localhost TCP 流量会被拦截，导致 VS Code Remote WSL 和 Windows 访问本地服务失败。该约束只适用于当前 WSL 本地开发环境，不改变生产服务器的防火墙策略（[Issue #89](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/89)）。

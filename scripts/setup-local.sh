@@ -2,7 +2,7 @@
 # 一次性安装本地开发环境。幂等：已完成的步骤会跳过。
 #
 # 安装内容：
-#   1. conda sc-wiki-infra 环境（mysqld / redis-server / openjdk21 / mysql-client）
+#   1. 为既有 conda sc-wiki 环境安装 mysqld / redis-server / openjdk21 / mysql-client
 #   2. Neo4j 5.26.29（从 neo4j:5 镜像提取，官方源被 CDN 地域封锁）
 #   3. Qdrant 静态二进制（GitHub release 经 gh-proxy.com）
 #   4. Go 工具链 → ~/.local/go
@@ -11,19 +11,18 @@
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib-local.sh"
 
-# ── 1. conda infra 环境 ─────────────────────────────────────
+# ── 1. sc-wiki 环境的基础服务依赖 ───────────────────────────
 setup_infra_env() {
   if [[ -x "$INFRA_BIN/mysqld" && -x "$INFRA_BIN/redis-server" && -x "$INFRA_BIN/java" ]]; then
-    ok "conda 环境 sc-wiki-infra 已就绪"
+    ok "conda 环境 sc-wiki 的基础服务依赖已就绪"
     return
   fi
-  info "创建 conda 环境 sc-wiki-infra（mysql-server 8.4 / redis-server / openjdk 21）"
-  # 独立于 sc-wiki：混装会迫使 conda 将 python 从 pkgs/main 换成 conda-forge 版本，
-  # 危及 sc-wiki 中已有的 161 个科学计算包。
-  conda create -n sc-wiki-infra -c conda-forge --override-channels -y \
+  [[ -x "$PY_BIN/python" ]] || die "conda 环境 sc-wiki 不存在，请先 conda create -n sc-wiki python=3.12"
+  info "为 conda 环境 sc-wiki 安装基础服务（mysql-server 8.4 / redis-server / openjdk 21）"
+  conda install -n sc-wiki -c conda-forge --override-channels -y \
     'mysql-server=8.4' 'mysql-client=8.4' 'redis-server' 'openjdk=21' \
-    || die "conda 环境创建失败"
-  ok "sc-wiki-infra 创建完成"
+    || die "sc-wiki 基础服务依赖安装失败"
+  ok "sc-wiki 基础服务依赖安装完成"
 }
 
 # ── 2. Neo4j ────────────────────────────────────────────────
