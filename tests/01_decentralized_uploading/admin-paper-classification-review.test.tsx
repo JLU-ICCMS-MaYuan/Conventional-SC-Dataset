@@ -145,7 +145,9 @@ describe('论文快速审核弹窗仅处理拒绝与退回', () => {
     expect(await screen.findByText('Hydride paper')).toBeVisible()
     expect(screen.queryByRole('columnheader', { name: '上传者' })).not.toBeInTheDocument()
     expect(screen.queryByRole('columnheader', { name: '记录' })).not.toBeInTheDocument()
-    expect(screen.getByText('上传者: author')).toBeVisible()
+    const uploaderLink = screen.getByRole('link', { name: 'author' })
+    expect(uploaderLink).toBeVisible()
+    expect(uploaderLink).toHaveAttribute('href', '/users/author')
 
     await user.click(screen.getByRole('button', { name: '历史' }))
     await waitFor(() => expect(mockedApi.get).toHaveBeenCalledWith('/api/admin/papers/51/history'))

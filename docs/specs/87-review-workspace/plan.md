@@ -26,7 +26,7 @@
 
 | 约束来源 | 强制要求 | 设计如何满足 | 状态 |
 | --- | --- | --- | --- |
-| Spec FR-001/FR-002 | 真实上传者与明确入口 | 管理端列表 DTO 返回用户名；论文列表操作区域显示上传者并提供“历史”入口，详情和页面不统计物性数量 | 已实现；Go 全量与目标 Vitest 回归通过 |
+| Spec FR-001/FR-002 | 真实上传者与明确入口 | 管理端列表 DTO 返回用户名；论文列表操作区域显示可跳转的上传者链接和图标化“历史”入口，详情和页面不统计物性数量 | 已实现；Go 全量与目标 Vitest 回归通过 |
 | Spec FR-003/FR-004 | 仅管理员读取时间线 | 新增管理端专用 GET 路由与权限测试 | 已实现，Go/Vitest 定向回归通过 |
 | Spec FR-005 至 FR-009 | 单一、可信、可回填历史 | 表迁移、操作标识唯一约束、写入事务与不伪造修改规则 | 已实现；隔离 MySQL 迁移与回填已验 |
 | Spec FR-010/FR-011 | 统计与删除一致 | 审核榜筛选 `reviewed`；删除拓扑加入新表 | 已实现，Go 定向回归通过 |
@@ -43,6 +43,7 @@ goserver/models/models.go
 goserver/handlers/admin.go
 goserver/handlers/stats.go
 goserver/handlers/paper_deletion.go
+frontend/src/pages/AdminPage.tsx
 frontend/src/pages/AdminPaperEditPage.tsx
 frontend/src/i18n/{zh,en}/admin.ts
 backend/tests/test_upload_workflow.py
@@ -68,8 +69,8 @@ tests/02_identity_governance/admin-edit-page.test.tsx
 `GetPapers` 加载上传者并组装明确的管理端列表响应；`GetPaperDetail` 保持科学数据详情且不重复返回上传者或物性数量。新增 `GetPaperHistory` 使用同一角色
 权限，关联操作者用户名快照并按事件时间升序返回最小 DTO。
 
-前端在论文列表每行操作区域显示上传者并新增“历史”按钮。点击后按需请求历史并在页面内 `Dialog` 展示
-紧凑时间线；加载或接口失败不影响编辑和审核。
+前端在论文列表每行操作区域显示上传者链接，并以仅含 `HistoryIcon` 的 `IconButton` 提供“历史”入口；
+点击用户名进入 `/users/:username`，点击历史后按需请求历史并在页面内 `Dialog` 展示紧凑时间线。加载或接口失败不影响编辑和审核。
 
 ### 3. 写入与去重
 

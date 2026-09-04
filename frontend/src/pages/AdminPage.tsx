@@ -3,7 +3,7 @@ import {
   Box, Typography, Card, CardActionArea, CardContent, Button, Chip,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Paper, IconButton, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, Select, MenuItem, FormControl, InputLabel, Alert, Divider,
+  TextField, Select, MenuItem, FormControl, InputLabel, Alert, Divider, Link,
   Snackbar, CircularProgress, LinearProgress, Avatar, Tooltip,
   Pagination,
 } from '@mui/material'
@@ -16,7 +16,7 @@ import {
 } from '@mui/icons-material'
 import { type User, useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
-import { useNavigate } from 'react-router-dom'
+import { Link as RouterLink, useNavigate } from 'react-router-dom'
 import ChartGroupEditor from '../components/ChartGroupEditor'
 import NewsManager from '../components/NewsManager'
 import SuperAdminGovernance from '../components/SuperAdminGovernance'
@@ -495,12 +495,23 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
                     </TableCell>
                     <TableCell align="right">
                       <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end', alignItems: 'center' }}>
-                        <Typography variant="body2" noWrap sx={{ maxWidth: 120 }}>
-                          {t('admin.thUploader')}: {p.uploader_name || '-'}
+                        <Typography component="span" variant="body2" noWrap sx={{ maxWidth: 120 }}>
+                          {t('admin.thUploader')}: {p.uploader_name ? (
+                            <Link
+                              component={RouterLink}
+                              to={`/users/${encodeURIComponent(p.uploader_name)}`}
+                              underline="hover"
+                            >
+                              {p.uploader_name}
+                            </Link>
+                          ) : '-'}
                         </Typography>
-                        <Button size="small" variant="outlined" startIcon={<HistoryIcon />} onClick={() => openPaperHistory(p)}>
-                          {t('admin.historyButton')}
-                        </Button>
+                        <Tooltip title={t('admin.historyButton')}>
+                          <IconButton size="small" color="primary" aria-label={t('admin.historyButton')}
+                            onClick={() => openPaperHistory(p)}>
+                            <HistoryIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
                         <Tooltip title={t('common.edit')}><IconButton size="small" color="info"
                           onClick={()=>navigate(`/admin/papers/${p.id}/edit`)}>
                           <EditIcon fontSize="small" /></IconButton></Tooltip>
