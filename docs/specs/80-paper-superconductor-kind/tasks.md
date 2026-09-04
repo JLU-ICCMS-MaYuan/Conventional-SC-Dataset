@@ -8,7 +8,10 @@
 - [x] T006 更新 Python、Go 和 Vitest 回归测试。
 - [x] T007 回写 Overview、Issue 验收状态并完成验证。
 
-## 验证边界
+## 最终验证（2026-09-04）
 
-- Python 相关模型、归一化、旧契约和持久化专项测试已通过；前端构建与相关 Vitest 已通过。
-- 当前环境未安装 Go 工具链，未执行 `gofmt` 或 `go test`；也未对运行中的 MySQL 执行迁移。Issue #80 保持开放，待具备上述环境后完成最终验收。
+- Python 分类专项 20 项、Go 全量测试和 #79/#80 相关前端测试 49 项通过；前端生产构建通过。
+- 本地真实 MySQL 已升级到最新 Alembic revision；`papers.superconductor_kind` 存在，
+  `material_states.superconductor_kind` 已移除，且现有论文级值全部满足三值约束。
+- 前端测试中的唯一失败是 #85 已改变空态文案后遗留的旧断言，与论文级
+  `superconductor_kind` 所有权及 Tc 编辑规则无关。

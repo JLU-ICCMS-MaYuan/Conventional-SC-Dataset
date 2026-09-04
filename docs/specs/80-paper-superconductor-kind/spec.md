@@ -2,6 +2,8 @@
 
 **GitHub Issue**：[ #80](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/80)
 
+**状态**：已完成（2026-09-04 完成 Go、MySQL 与前端最终验收）
+
 ## 目标
 
 将 `superconductor_kind` 从材料状态移动到论文当前 revision。每篇论文只选择一个 Superconductor type：`conventional`、`unconventional` 或 `unknown`。

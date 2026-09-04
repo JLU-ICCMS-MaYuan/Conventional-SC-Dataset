@@ -8,8 +8,8 @@
 
 ## 阶段 2：基础能力
 
-- [ ] T002 [P] 新增迁移和迁移测试，在 `alembic/versions/`、`tests/02_maintenance_and_verification/` 建立论文级多对多关系并无损汇总旧数据（迁移源码与契约测试已完成；待真实 MySQL 执行）
-- [ ] T003 [P] 更新 Python/Go ORM，在 `backend/models.py`、`goserver/models/models.go` 改变 family 所有权（代码完成；待 Go 工具链编译验证）
+- [x] T002 [P] 新增迁移和迁移测试，在 `alembic/versions/`、`tests/02_maintenance_and_verification/` 建立论文级多对多关系并无损汇总旧数据；本地真实 MySQL 已升级到包含该迁移的最新 revision
+- [x] T003 [P] 更新 Python/Go ORM，在 `backend/models.py`、`goserver/models/models.go` 改变 family 所有权；Go 全量测试通过
 - [x] T004 更新共享草稿类型和契约归一化，在 `frontend/src/lib/paperProcessing.ts`、`backend/api/rag.py` 拒绝状态级新写入
 
 ## 阶段 3：用户故事 1——论文级多选编辑（P1，MVP）
@@ -36,14 +36,14 @@
 
 ### 测试
 
-- [ ] T009 [P] [US2] 更新 Python 提交、Go 审核和详情测试，路径 `tests/01_decentralized_uploading/`、`tests/02_identity_governance/`（测试代码已更新；待 Go 工具链执行）
+- [x] T009 [P] [US2] 更新 Python 提交、Go 审核和详情测试，路径 `tests/01_decentralized_uploading/`、`tests/02_identity_governance/`，Python 与 Go 测试通过
 
 ### 实施
 
 - [x] T010 [US2] 修改 `backend/ingest/scientific_drafts.py`、`backend/api/rag.py`，校验、解析并持久化论文级列表
-- [ ] T011 [US2] 修改 `goserver/handlers/classifications.go`、`admin.go`、`papers.go`，整体替换关联、快照和详情序列化（代码完成；待 Go 工具链执行）
+- [x] T011 [US2] 修改 `goserver/handlers/classifications.go`、`admin.go`、`papers.go`，整体替换关联、快照和详情序列化
 - [x] T012 [US2] 修改 `frontend/src/components/PaperEditView.tsx` 及相关消费方，在论文级展示/读取 family
-- [ ] T013 [US2] 修改 `goserver/handlers/stats.go` 及社区统计测试，以论文级 `EXISTS` 标签筛选并保证未筛选总计不重复（代码与前端契约测试完成；待 Go 工具链执行）
+- [x] T013 [US2] 修改 `goserver/handlers/stats.go` 及社区统计测试，以论文级 `EXISTS` 标签筛选并保证未筛选总计不重复
 
 ## 阶段 5：用户故事 3——历史数据无损迁移（P1）
 
@@ -51,13 +51,21 @@
 
 **独立验收**：迁移 fixture 的相同项去重、不同项全保留，多 family downgrade 被拒绝。
 
-- [ ] T014 [US3] 执行并验证 Alembic upgrade/downgrade 测试，确认迁移数据和审核状态
+- [x] T014 [US3] 验证 Alembic upgrade 与 downgrade 契约：真实 MySQL 已处于升级后的最新 revision，旧状态列已移除且论文级关联有数据；自动化测试锁定去重升级和多 family 时拒绝有损降级
 
 ## 最终阶段：完善与跨故事事项
 
 - [x] T015 更新 `docs/overview/` 中领域模型、上传、审核编辑和论文详情当前事实
-- [ ] T016 运行 pytest、Go test、Vitest 和前端 build，逐项核对 FR/SC 与 quickstart（Python、前端专项测试和 build 已通过；缺 Go/MySQL 环境）
-- [ ] T017 更新 Issue #79 Documentation Impact、验收清单并关闭 Issue（Issue 已更新验收进度；待 T002、T003、T009、T011、T013、T014、T016 完成后关闭）
+- [x] T016 运行 pytest、Go test、Vitest 和前端 build，逐项核对 FR/SC 与 quickstart；Python 分类专项 20 项、Go 全量、前端相关 49 项及生产构建通过，另有 1 项与本 Issue 无关的 #85 空态旧文案断言失败
+- [x] T017 更新 Issue #79 Documentation Impact、验收清单并关闭 Issue
+
+## 最终验证（2026-09-04）
+
+- 本地真实 MySQL 的 Alembic revision 为最新 `head`；存在 `paper_material_families`，且
+  `material_states.material_family_id` 已移除。
+- `bash scripts/run-tests.sh go` 全量通过；分类相关 Python 测试 20 项通过。
+- #79/#80 相关前端测试 49 项通过，前端生产构建通过。唯一未通过用例是 #85 已改变空态文案后
+  遗留的旧断言，不涉及 Material family 数据所有权或交互。
 
 ## 依赖与执行顺序
 
