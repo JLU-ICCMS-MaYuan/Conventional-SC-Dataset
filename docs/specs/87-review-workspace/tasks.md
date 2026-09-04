@@ -4,12 +4,12 @@
 
 ## 阶段 1：用户故事 1——核对审核元数据（P1）
 
-**目标**：审核编辑页可见上传者和记录数。
+**目标**：审核入口可见上传者并提供历史入口。
 
-**独立验收**：详情夹具中的上传者与记录数显示在页面中，空上传者与零记录有稳定回退。
+**独立验收**：列表夹具中的上传者和历史入口显示在红框操作区域，空上传者有稳定回退。
 
-- [x] T001 [US1] 在 `tests/02_identity_governance/admin-edit-page.test.tsx` 增加上传者、记录数和空值回退的失败回归测试。
-- [x] T002 [US1] 在 `frontend/src/pages/AdminPaperEditPage.tsx` 的非编辑元数据区渲染上传者并复用 `admin.recordsChip` 显示记录数。
+- [x] T001 [US1] 在 `tests/01_decentralized_uploading/admin-paper-classification-review.test.tsx` 增加列表上传者、历史入口和无记录列的回归测试。
+- [x] T002 [US1] 在 `frontend/src/pages/AdminPage.tsx` 的论文列表操作区域渲染上传者和“历史”按钮，不显示物性记录数量。
 
 ## 阶段 2：用户故事 2——成功后返回工作台（P1）
 
@@ -41,9 +41,9 @@
 
 ## Phase 3: Convergence - 真实接口与文献处理历史
 
-**差距来源**：T001-T006 仅对前端伪造的 `uploader_name` 和 `record_count` 夹具做了断言；
-真实 `GET /api/admin/papers/:id` 没有返回这两个字段，且没有上传/修改/审核统一历史。因此旧
-任务不能作为本 Feature 已完成的证据。
+**差距来源**：T001-T006 仅对前端夹具做了元数据断言；真实 `GET /api/admin/papers/:id`
+此前没有返回 `uploader_name`，且没有上传/修改/审核统一历史。因此旧任务不能作为本 Feature
+已完成的证据。T028 进一步收敛掉未被需求使用的记录数展示。
 
 ### 基础与迁移
 
@@ -54,19 +54,19 @@
 
 ### 用户故事 1：真实元数据（P1）
 
-**独立验收**：真实管理端详情对有/无上传者和不同物性数返回正确字段，编辑页显示正确。
+**独立验收**：真实管理端列表对有/无上传者返回正确字段，详情不重复返回上传者且不返回 `record_count`；列表显示正确。
 
-- [x] T011 [US1] 在 `goserver/handlers/paper_detail_test.go` 为 `GET /api/admin/papers/:id` 增加真实上传者与当前版本 `superconductor_properties` 计数的失败测试。
-- [x] T012 [US1] 在 `goserver/handlers/admin.go` 组装管理端详情 DTO，加载上传者并按当前 revision 聚合物性数；在 `frontend/src/pages/AdminPaperEditPage.tsx` 显示“物性记录”。
+- [x] T011 [US1] 在 `goserver/handlers/paper_detail_test.go` 为管理端列表和详情接口增加真实上传者、空值回退、不重复返回上传者和不返回 `record_count` 的回归测试。
+- [x] T012 [US1] 在 `goserver/handlers/admin.go` 组装管理端列表/详情 DTO 并加载上传者，不计算物性数量。
 
-### 用户故事 2：处理记录时间线（P1）
+### 用户故事 2：历史时间线（P1）
 
 **独立验收**：管理员可查看时间线，普通用户不能读取；审核事件显示每位审核人的意见。
 
 - [x] T013 [US2] 在 `goserver/handlers/paper_history_test.go` 新增历史 API 的管理员授权、排序、未知上传者和审核意见测试。
 - [x] T014 [US2] 在 `goserver/main.go` 与 `goserver/handlers/admin.go` 注册并实现 `GET /api/admin/papers/:id/history`。
-- [x] T015 [US2] 在 `tests/02_identity_governance/admin-edit-page.test.tsx` 先增加“处理记录”入口、加载态、时间线和失败重试的失败测试。
-- [x] T016 [US2] 在 `frontend/src/pages/AdminPaperEditPage.tsx`、`frontend/src/i18n/zh/admin.ts` 与 `frontend/src/i18n/en/admin.ts` 实现历史入口和时间线 Dialog。
+- [x] T015 [US2] 在 `tests/01_decentralized_uploading/admin-paper-classification-review.test.tsx` 覆盖列表历史入口、按需加载和时间线展示；入口文案由 T028 修订为“历史”。
+- [x] T016 [US2] 在 `frontend/src/pages/AdminPage.tsx`、`frontend/src/i18n/zh/admin.ts` 与 `frontend/src/i18n/en/admin.ts` 实现列表历史入口和时间线 Dialog。
 
 ### 用户故事 3：可信写入、统计与删除（P1）
 
@@ -98,6 +98,16 @@
 - T017-T025 在历史模型和辅助写入可用后按上传、审核、编辑、统计、删除顺序执行。
 - T026 依赖全部实现任务；T027 只能在真实实现与验证后执行。
 
+## Phase 4: Convergence - 元数据区收敛为上传者与历史
+
+**差距来源**：用户确认红框位于管理工作台论文列表每行的操作区域；原有 `record_count` 统计和
+“物性记录”展示不是所需功能，且容易被误认为处理历史。历史入口应从列表直接打开。
+
+- [x] T028 在 `goserver/handlers/admin.go`、`frontend/src/pages/{AdminPage,AdminPaperEditPage}.tsx`、中英文文案与目标测试中移除列表/详情 `record_count`、所有物性记录数量展示和“处理记录”文案；将“历史”入口放到论文列表每行操作区域，保留历史 API 和时间线，并验证新契约。
+
+**T028 验证记录（2026-09-04）**：Go 全量测试通过；目标 Vitest `12 passed`；前端生产构建通过。
+全量 Vitest 为 `211 passed, 3 failed`，失败位于既有科学数据空态和新闻采集用例，不属于本 Feature。
+
 ## 收敛需求覆盖
 
 | 来源 | 任务 | 说明 |
@@ -109,3 +119,4 @@
 | FR-011 | T025 | 物理删除无孤儿历史 |
 | FR-012 | T003-T004、T026 | 既有审核成功角色导航回归 |
 | SC-001 至 SC-008 | T026-T027 | 全量验证与当前事实回写 |
+| 修订 FR-001/FR-002、SC-001 | T028 | 移除无需求的物性记录数量，将上传者与“历史”入口放入论文列表操作区域 |

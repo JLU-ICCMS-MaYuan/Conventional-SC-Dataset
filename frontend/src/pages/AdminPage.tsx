@@ -3,7 +3,7 @@ import {
   Box, Typography, Card, CardActionArea, CardContent, Button, Chip,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Paper, IconButton, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, Select, MenuItem, FormControl, InputLabel, Alert,
+  TextField, Select, MenuItem, FormControl, InputLabel, Alert, Divider,
   Snackbar, CircularProgress, LinearProgress, Avatar, Tooltip,
   Pagination,
 } from '@mui/material'
@@ -43,9 +43,18 @@ interface PaperRecord {
   journal: string | null; year: number | null; review_status: string
   review_comment: string | null; reviewer_name: string | null
   uploader_name: string | null; created_at: string | null
-  record_count: number; show_in_chart: boolean
+  show_in_chart: boolean
   compound_symbols: string | null; article_types: string[]
   key_properties?: Array<Record<string, unknown>>
+}
+
+type PaperHistoryEvent = {
+  id: number
+  event_type: 'uploaded' | 'modified' | 'reviewed'
+  paper_revision: number
+  actor: { username: string | null; unknown: boolean }
+  occurred_at: string
+  review: { status: 'approved' | 'rejected' | 'pending'; comment: string | null } | null
 }
 
 /* ── Helpers ──────────────────────────────────── */
@@ -72,9 +81,6 @@ const WORKSPACE_CARDS: Array<{
   { key: 'chartGroups', labelKey: 'admin.cardChartGroups', hintKey: 'admin.cardHintManage', accent: 'secondary.main', tab: 3, metric: 'chartGroups', superOnly: true },
   { key: 'news', labelKey: 'admin.newsTitle', hintKey: 'admin.cardHintManage', accent: 'error.main', tab: 4, metric: 'none', superOnly: true },
 ]
-const paperRecordCount = (paper?: PaperRecord | null) =>
-  paper?.record_count ?? paper?.key_properties?.length ?? 0
-
 /* ═══════════════════════════════════════════════ */
 interface AdminPageProps { mode?: 'admin' | 'superadmin' }
 
@@ -115,6 +121,10 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
   const [reviewDlg, setReviewDlg] = useState<{paper:PaperRecord,open:boolean}>({paper:null!,open:false})
   const [reviewStatus, setReviewStatus] = useState('')
   const [reviewComment, setReviewComment] = useState('')
+  const [historyPaper, setHistoryPaper] = useState<PaperRecord | null>(null)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState('')
+  const [historyEvents, setHistoryEvents] = useState<PaperHistoryEvent[]>([])
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
 
   /* ── Users ───────────────────────────────────── */
@@ -205,6 +215,25 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
       setReviewDlg({paper:null!,open:false})
       loadPapers()
     } catch (e: unknown) { setSnackbar(t('admin.failed', { reason: (e as Error).message })) }
+  }
+
+  const loadPaperHistory = async (paperID: number) => {
+    setHistoryLoading(true)
+    setHistoryError('')
+    try {
+      const response = await api.get<{ events?: PaperHistoryEvent[] }>(`/api/admin/papers/${paperID}/history`)
+      setHistoryEvents(Array.isArray(response.events) ? response.events : [])
+    } catch (e: unknown) {
+      setHistoryError(t('admin.historyLoadFailed', { reason: (e as Error).message }))
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  const openPaperHistory = (paper: PaperRecord) => {
+    setHistoryPaper(paper)
+    setHistoryEvents([])
+    void loadPaperHistory(paper.id)
   }
 
   const handleBatchReview = async (status: string) => {
@@ -440,10 +469,8 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
                   <TableCell padding="checkbox" sx={{ width: 40 }}>#</TableCell>
                   <TableCell sx={{ minWidth: 260 }}>{t('admin.thTitle')}</TableCell>
                   <TableCell sx={{ width: 80 }}>{t('admin.thYear')}</TableCell>
-                  <TableCell sx={{ width: 100 }}>{t('admin.thUploader')}</TableCell>
                   <TableCell sx={{ width: 80 }}>{t('admin.thStatus')}</TableCell>
-                  <TableCell sx={{ width: 100 }}>{t('admin.thRecords')}</TableCell>
-                  <TableCell sx={{ width: 120 }} align="right">{t('common.operations')}</TableCell>
+                  <TableCell sx={{ width: 330 }} align="right">{t('common.operations')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -463,17 +490,17 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
                     </TableCell>
                     <TableCell>{p.year || '-'}</TableCell>
                     <TableCell>
-                      <Typography variant="body2" noWrap sx={{ maxWidth: 100 }}>{p.uploader_name || '-'}</Typography>
-                    </TableCell>
-                    <TableCell>
                       <Chip size="small" label={reviewStatusLabel(p.review_status)}
                         color={STATUS_COLORS[p.review_status] || 'default'} />
                     </TableCell>
-                    <TableCell>
-                      {paperRecordCount(p)}
-                    </TableCell>
                     <TableCell align="right">
-                      <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
+                      <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end', alignItems: 'center' }}>
+                        <Typography variant="body2" noWrap sx={{ maxWidth: 120 }}>
+                          {t('admin.thUploader')}: {p.uploader_name || '-'}
+                        </Typography>
+                        <Button size="small" variant="outlined" startIcon={<HistoryIcon />} onClick={() => openPaperHistory(p)}>
+                          {t('admin.historyButton')}
+                        </Button>
                         <Tooltip title={t('common.edit')}><IconButton size="small" color="info"
                           onClick={()=>navigate(`/admin/papers/${p.id}/edit`)}>
                           <EditIcon fontSize="small" /></IconButton></Tooltip>
@@ -489,7 +516,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
                   </TableRow>
                 ))}
                 {papers.length === 0 && !papersLoading && (
-                  <TableRow><TableCell colSpan={7} align="center" sx={{ py: 4, color: 'text.secondary' }}>{t('common.empty')}</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={5} align="center" sx={{ py: 4, color: 'text.secondary' }}>{t('common.empty')}</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
@@ -683,7 +710,6 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
           <Box sx={{ display:'flex',gap:1,flexWrap:'wrap' }}>
             <Chip size="small" label={t('admin.doiChip', { value: reviewDlg.paper?.doi || '-' })} variant="outlined" />
             <Chip size="small" label={t('admin.yearChip', { value: reviewDlg.paper?.year || '-' })} variant="outlined" />
-            <Chip size="small" label={t('admin.recordsChip', { value: paperRecordCount(reviewDlg.paper) })} variant="outlined" />
           </Box>
           <FormControl fullWidth size="small">
             <InputLabel id="paper-review-status-label">{t('admin.reviewResult')}</InputLabel>
@@ -704,6 +730,40 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
         <DialogActions>
           <Button onClick={()=>setReviewDlg({paper:null!,open:false})}>{t('common.cancel')}</Button>
           <Button variant="contained" onClick={handleReview}>{t('admin.confirmReview')}</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={historyPaper !== null} onClose={() => setHistoryPaper(null)} fullWidth maxWidth="sm">
+        <DialogTitle>{t('admin.historyTitle')}</DialogTitle>
+        <DialogContent dividers>
+          {historyLoading && <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress size={24} /></Box>}
+          {!historyLoading && historyError && <Alert severity="error">{historyError}</Alert>}
+          {!historyLoading && !historyError && historyEvents.length === 0 && (
+            <Typography color="text.secondary">{t('admin.historyEmpty')}</Typography>
+          )}
+          {!historyLoading && !historyError && historyEvents.map((event, index) => {
+            const actor = event.actor.unknown ? t('admin.historyUnknownUploader') : event.actor.username || '-'
+            const eventLabel = t(`admin.historyEvent${event.event_type[0].toUpperCase()}${event.event_type.slice(1)}`)
+            const reviewStatus = event.review ? t(`admin.reviewStatus.${event.review.status}`) : ''
+            return (
+              <Box key={event.id} sx={{ py: 1.25 }}>
+                {index > 0 && <Divider sx={{ mb: 1.25 }} />}
+                <Typography variant="subtitle2">{eventLabel}</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {actor} · {new Date(event.occurred_at).toLocaleString(locale)} · {t('admin.historyRevision', { value: event.paper_revision })}
+                </Typography>
+                {event.review && (
+                  <Typography variant="body2" sx={{ mt: 0.5 }}>
+                    {reviewStatus} · {event.review.comment?.trim() || t('admin.historyNoReviewComment')}
+                  </Typography>
+                )}
+              </Box>
+            )
+          })}
+        </DialogContent>
+        <DialogActions>
+          {historyError && historyPaper && <Button onClick={() => void loadPaperHistory(historyPaper.id)}>{t('admin.historyRetry')}</Button>}
+          <Button onClick={() => setHistoryPaper(null)}>{t('common.close')}</Button>
         </DialogActions>
       </Dialog>
 

@@ -6,12 +6,11 @@
 
 **决策**：修复 Go 管理端详情响应，不以继续扩充前端夹具代替。
 
-**理由**：`AdminPaperEditPage` 已读取 `uploader_name` 与 `record_count`，但
-`GetPaperDetail` 直接序列化 `Paper`；模型没有这两个 JSON 字段。前端只能显示回退值，
-测试的手工字段掩盖了问题。
+**理由**：上传者是审核上下文所需的真实元数据；物性数量并非本 Feature 需求，且会与历史
+入口混淆，因此列表接口只保留 `uploader_name`，详情接口不重复返回该字段，也不计算或返回 `record_count`。
 
-**证据**：`goserver/handlers/admin.go` 的 `GetPaperDetail`；
-`frontend/src/pages/AdminPaperEditPage.tsx` 的元数据 Chip。
+**证据**：`goserver/handlers/admin.go` 的 `GetPapers`/`GetPaperDetail`；
+`frontend/src/pages/AdminPage.tsx` 的论文列表操作区域。
 
 ## R2：事件表应演进，而非并行复制
 

@@ -2,19 +2,18 @@
 
 **Feature**：[spec.md](../spec.md)
 
-## 管理端详情扩展
+## 管理端列表与详情
 
-`GET /api/admin/papers/{paper_id}` 保持现有管理员鉴权，并在现有详情字段上新增：
+`GET /api/admin/papers/all` 保持现有管理员鉴权，并在每条列表项上返回：
 
 ```json
 {
-  "uploader_name": "author",
-  "record_count": 2
+  "uploader_name": "author"
 }
 ```
 
-- `uploader_name`：上传者的公开用户名；没有归属时为 `null`。
-- `record_count`：当前 `content_revision` 的 `superconductor_properties` 数量，始终为非负整数。
+- `uploader_name`：上传者的公开用户名；没有归属时为 `null`，供论文列表每行操作区域展示。
+- `GET /api/admin/papers/{paper_id}` 不重复返回 `uploader_name`，也不返回 `record_count`；物性数据仍由现有物性编辑区按原契约读取和保存。
 
 ## 读取处理历史
 

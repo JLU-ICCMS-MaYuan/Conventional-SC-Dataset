@@ -47,7 +47,7 @@ func GetPaperHistory(c *gin.Context) {
 	var events []models.PaperHistoryEvent
 	if err := database.DB.Where("paper_id = ?", paper.ID).
 		Order("occurred_at ASC").Order("id ASC").Find(&events).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "处理记录加载失败"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "历史加载失败"})
 		return
 	}
 	response := make([]paperHistoryEventResponse, 0, len(events))

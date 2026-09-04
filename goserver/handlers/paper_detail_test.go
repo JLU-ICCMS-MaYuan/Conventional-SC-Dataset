@@ -579,8 +579,8 @@ func TestPaperDetailReturnsFamilyNameEn(t *testing.T) {
 	assertFamilyNameEn(t, "管理端详情", adminBody)
 }
 
-// #87：管理端详情必须基于真实关联返回上传者和当前版本物性数，不能依赖前端夹具。
-func TestAdminPaperDetailReturnsUploaderAndCurrentRevisionRecordCount(t *testing.T) {
+// #87：上传者只在管理端论文列表展示；详情接口不得重复返回该字段或物性记录统计。
+func TestAdminPaperDetailOmitsUploaderAndRecordCount(t *testing.T) {
 	db := paperDetailTestDB(t)
 	seedPaperFour(t, db, reviewStatusPending)
 	if err := db.Create(&models.User{ID: 9, Email: "author@example.test", Username: "author"}).Error; err != nil {
@@ -608,15 +608,15 @@ func TestAdminPaperDetailReturnsUploaderAndCurrentRevisionRecordCount(t *testing
 	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if body["uploader_name"] != "author" {
-		t.Fatalf("uploader_name = %#v，期望 author", body["uploader_name"])
+	if _, exists := body["uploader_name"]; exists {
+		t.Fatalf("详情响应不应包含 uploader_name：%#v", body["uploader_name"])
 	}
-	if body["record_count"] != float64(1) {
-		t.Fatalf("record_count = %#v，期望当前版本的 1 条物性", body["record_count"])
+	if _, exists := body["record_count"]; exists {
+		t.Fatalf("响应不应包含 record_count：%#v", body["record_count"])
 	}
 }
 
-func TestAdminPaperDetailReturnsNullUploaderAndZeroRecords(t *testing.T) {
+func TestAdminPaperDetailOmitsUploaderAndRecordCountForImportedPaper(t *testing.T) {
 	db := paperDetailTestDB(t)
 	if err := db.Create(&models.Paper{ID: 8, Title: strPtr("历史导入"), ReviewStatus: reviewStatusPending, ContentRevision: 1}).Error; err != nil {
 		t.Fatal(err)
@@ -633,10 +633,45 @@ func TestAdminPaperDetailReturnsNullUploaderAndZeroRecords(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if value, exists := body["uploader_name"]; !exists || value != nil {
-		t.Fatalf("uploader_name = %#v，期望 null", value)
+	if _, exists := body["uploader_name"]; exists {
+		t.Fatalf("详情响应不应包含 uploader_name：%#v", body["uploader_name"])
 	}
-	if body["record_count"] != float64(0) {
-		t.Fatalf("record_count = %#v，期望 0", body["record_count"])
+	if _, exists := body["record_count"]; exists {
+		t.Fatalf("响应不应包含 record_count：%#v", body["record_count"])
+	}
+}
+
+func TestAdminPaperListReturnsUploaderWithoutRecordCount(t *testing.T) {
+	db := paperDetailTestDB(t)
+	seedPaperFour(t, db, reviewStatusPending)
+	if err := db.Create(&models.User{ID: 9, Email: "author@example.test", Username: "author"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&models.Paper{}).Where("id = ?", 4).Update("uploaded_by_user_id", 9).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.GET("/admin/papers/all", GetPapers)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/admin/papers/all", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("状态码 = %d，响应 = %s", response.Code, response.Body.String())
+	}
+	var body struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Items) != 1 {
+		t.Fatalf("items = %#v，期望 1 条", body.Items)
+	}
+	if body.Items[0]["uploader_name"] != "author" {
+		t.Fatalf("uploader_name = %#v，期望 author", body.Items[0]["uploader_name"])
+	}
+	if _, exists := body.Items[0]["record_count"]; exists {
+		t.Fatalf("列表响应不应包含 record_count：%#v", body.Items[0]["record_count"])
 	}
 }

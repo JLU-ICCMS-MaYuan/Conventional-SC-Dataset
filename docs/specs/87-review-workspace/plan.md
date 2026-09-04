@@ -8,7 +8,7 @@
 
 ## 摘要
 
-本 Feature 将现有审核专用事件演进为文献处理历史，并在管理端编辑页增加真实元数据和
+本 Feature 将现有审核专用事件演进为文献处理历史，并在管理端论文列表增加真实上传者和
 时间线入口。上传、审核和修改各在其真实写入事务中追加历史；编辑页两段保存通过统一 UUID
 去重。实现不记录字段差异，也不向普通用户公开内部审核过程。
 
@@ -19,16 +19,16 @@
 - **数据存储**：MySQL；`papers`、`superconductor_properties`、`paper_history_events`。
 - **测试体系**：Go handler/迁移测试、Python 上传与科学数据重写测试、Vitest 页面测试。
 - **目标平台**：Docker Compose 和宿主机本地开发。
-- **性能目标**：编辑页首次详情只增加常数次聚合；打开处理记录时按需加载单篇时间线。
+- **性能目标**：编辑页首次详情不增加物性计数查询；打开历史时按需加载单篇时间线。
 - **约束**：历史接口仅管理员；事件不可变；不删除既有审核意见；不创建字段级快照。
 
 ## 质量门
 
 | 约束来源 | 强制要求 | 设计如何满足 | 状态 |
 | --- | --- | --- | --- |
-| Spec FR-001/FR-002 | 真实元数据与明确入口 | 管理端详情 DTO 计算用户名和当前版本物性数；页面分离物性记录与处理记录 | 已实现，Go/Vitest 定向回归通过 |
+| Spec FR-001/FR-002 | 真实上传者与明确入口 | 管理端列表 DTO 返回用户名；论文列表操作区域显示上传者并提供“历史”入口，详情和页面不统计物性数量 | 已实现；Go 全量与目标 Vitest 回归通过 |
 | Spec FR-003/FR-004 | 仅管理员读取时间线 | 新增管理端专用 GET 路由与权限测试 | 已实现，Go/Vitest 定向回归通过 |
-| Spec FR-005 至 FR-009 | 单一、可信、可回填历史 | 表迁移、操作标识唯一约束、写入事务与不伪造修改规则 | 已实现；真实 MySQL 迁移与回填待验 |
+| Spec FR-005 至 FR-009 | 单一、可信、可回填历史 | 表迁移、操作标识唯一约束、写入事务与不伪造修改规则 | 已实现；隔离 MySQL 迁移与回填已验 |
 | Spec FR-010/FR-011 | 统计与删除一致 | 审核榜筛选 `reviewed`；删除拓扑加入新表 | 已实现，Go 定向回归通过 |
 | AGENTS.md | 中文文档与独立变更 | 文档已中文；实现后仅暂存 #87 文件 | 通过 |
 
@@ -65,12 +65,11 @@ tests/02_identity_governance/admin-edit-page.test.tsx
 
 ### 2. 元数据与时间线读模型
 
-`GetPaperDetail` 预加载上传者并按当前 `content_revision` 聚合
-`superconductor_properties`，组装明确的管理端详情响应。新增 `GetPaperHistory` 使用同一角色
+`GetPapers` 加载上传者并组装明确的管理端列表响应；`GetPaperDetail` 保持科学数据详情且不重复返回上传者或物性数量。新增 `GetPaperHistory` 使用同一角色
 权限，关联操作者用户名快照并按事件时间升序返回最小 DTO。
 
-前端将物性数量 Chip 更名为“物性记录”，新增“处理记录”按钮。点击后按需请求历史并在
-页面内 `Dialog` 展示紧凑时间线；加载或接口失败不影响编辑和审核。
+前端在论文列表每行操作区域显示上传者并新增“历史”按钮。点击后按需请求历史并在页面内 `Dialog` 展示
+紧凑时间线；加载或接口失败不影响编辑和审核。
 
 ### 3. 写入与去重
 
@@ -92,7 +91,7 @@ tests/02_identity_governance/admin-edit-page.test.tsx
 
 | 来源 | 设计组件/接口 | 验证方式 |
 | --- | --- | --- |
-| FR-001/FR-002 | `GetPaperDetail`、`AdminPaperEditPage` | Go API 测试、Vitest |
+| FR-001/FR-002 | `GetPapers`、`GetPaperDetail`、`AdminPage` | Go API 测试、Vitest |
 | FR-003/FR-004 | `GET /api/admin/papers/:id/history`、历史 Dialog | 权限/API/页面测试 |
 | FR-005/FR-006 | 上传创建、`applyPaperReview` | Python 上传测试、Go 审核测试 |
 | FR-007 | `history_operation_id`、语义差异判断 | 跨端保存与重复保存测试 |

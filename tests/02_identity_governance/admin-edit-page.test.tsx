@@ -48,7 +48,7 @@ const mockedApi = vi.mocked(api)
 const paper = {
   id: 88, doi: '10.1000/edit-page', title: 'Edit page paper', authors: [], journal: 'Test',
   year: 2026, review_status: 'pending', review_comment: null, reviewer_name: null,
-  uploader_name: 'author', created_at: '2026-08-31', record_count: 0,
+  created_at: '2026-08-31',
   show_in_chart: true, compound_symbols: null, article_types: [],
   knowledge_graph_title: 'Discovery of Superconductivity in Mercury',
 }
@@ -165,66 +165,13 @@ describe('Issue #78：管理端论文编辑独立页', () => {
     expect(screen.getByRole('button', { name: '提交审核' })).toBeVisible()
   })
 
-  it('显示上传者与关联记录数，并为缺失上传者提供稳定占位', async () => {
+  it('不显示上传者、物性记录或历史入口', async () => {
     renderPage()
 
-    expect(await screen.findByText('上传者: author')).toBeVisible()
-    expect(screen.getByText('物性记录: 0')).toBeVisible()
-
-    cleanup()
-    mockedApi.get.mockImplementation(async (path: string) => {
-      if (path === '/api/admin/papers/88') return { ...detailWithStructures, uploader_name: null, record_count: 2 }
-      if (path === '/api/rag/papers/88/structures/1/representations') return representationsResponse
-      if (path === '/api/rag/space-groups') return { space_groups: [] }
-      if (path === '/api/classification-catalogs') return { material_families: [], structure_families: [], material_dimensionalities: [] }
-      return {}
-    })
-    renderPage()
-
-    expect(await screen.findByText('上传者: -')).toBeVisible()
-    expect(screen.getByText('物性记录: 2')).toBeVisible()
-  })
-
-  it('按需打开处理记录并显示未知上传者与每次审核意见，失败时可重试', async () => {
-    const user = userEvent.setup()
-    mockedApi.get.mockImplementation(async (path: string) => {
-      if (path === '/api/admin/papers/88') return detailWithStructures
-      if (path === '/api/admin/papers/88/history') {
-        return {
-          paper_id: 88,
-          events: [
-            {
-              id: 1, event_type: 'uploaded', paper_revision: 1,
-              actor: { username: null, unknown: true }, occurred_at: '2026-09-03T09:00:00Z', review: null,
-            },
-            {
-              id: 2, event_type: 'reviewed', paper_revision: 1,
-              actor: { username: 'reviewer', unknown: false }, occurred_at: '2026-09-03T10:00:00Z',
-              review: { status: 'approved', comment: '证据充分' },
-            },
-          ],
-        }
-      }
-      if (path === '/api/rag/papers/88/structures/1/representations') return representationsResponse
-      if (path === '/api/rag/space-groups') return { space_groups: [] }
-      if (path === '/api/classification-catalogs') return { material_families: [], structure_families: [], material_dimensionalities: [] }
-      return {}
-    })
-    renderPage()
-
-    await user.click(await screen.findByRole('button', { name: '处理记录' }))
-    await waitFor(() => expect(mockedApi.get).toHaveBeenCalledWith('/api/admin/papers/88/history'))
-    const historyDialog = await screen.findByRole('dialog')
-    await waitFor(() => expect(historyDialog).toHaveTextContent('历史导入，上传者未知'))
-    expect(historyDialog).toHaveTextContent('审核')
-    expect(historyDialog).toHaveTextContent('已通过 · 证据充分')
-
-    await user.click(screen.getByRole('button', { name: '关闭' }))
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-    mockedApi.get.mockRejectedValueOnce(new Error('网络错误'))
-    await user.click(screen.getByRole('button', { name: '处理记录' }))
-    expect(await screen.findByText('处理记录加载失败: 网络错误')).toBeVisible()
-    expect(screen.getByRole('button', { name: '重试' })).toBeVisible()
+    await screen.findByText('编辑论文')
+    expect(screen.queryByText(/上传者:/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '历史' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/物性记录:/)).not.toBeInTheDocument()
   })
 
   it('审核成功后按当前角色返回工作台，失败时留在编辑页', async () => {

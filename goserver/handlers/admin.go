@@ -105,22 +105,37 @@ func GetPapers(c *gin.Context) {
 	query.Count(&total)
 
 	var papers []models.Paper
-	query.Preload("KeyProperties"). // 预加载关联，类似 joinedload
-					Order("created_at DESC").
-					Limit(limit).Offset(offset).
-					Find(&papers) // &papers = 传指针，GORM 往里面填数据
+	query.Preload("Uploader").
+		Order("created_at DESC").
+		Limit(limit).Offset(offset).
+		Find(&papers)
+
+	items := make([]adminPaperListItemResponse, 0, len(papers))
+	for _, paper := range papers {
+		items = append(items, adminPaperListItemResponse{
+			Paper:        paper,
+			UploaderName: uploaderNameForPaper(paper),
+		})
+	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"items":     papers,
+		"items":     items,
 		"total":     total,
 		"page_size": limit,
 	})
 }
 
-type adminPaperDetailResponse struct {
+type adminPaperListItemResponse struct {
 	models.Paper
 	UploaderName *string `json:"uploader_name"`
-	RecordCount  int64   `json:"record_count"`
+}
+
+func uploaderNameForPaper(paper models.Paper) *string {
+	if paper.Uploader == nil || strings.TrimSpace(paper.Uploader.Username) == "" {
+		return nil
+	}
+	name := paper.Uploader.Username
+	return &name
 }
 
 // GetPaperDetail 论文详情、当前版本科学数据与审核元数据。
@@ -132,7 +147,6 @@ func GetPaperDetail(c *gin.Context) {
 	// 材料状态下的 Tc、物性与结构必须预加载，否则编辑页只能看到空数组
 	// （GORM 未预加载的关联序列化为空，且接口返回 200 无错误信号）。
 	if err := database.DB.
-		Preload("Uploader").
 		Preload("KeyProperties").
 		Preload("MaterialFamilyLinks.MaterialFamily").
 		Preload("MaterialStates.Superconductor").
@@ -146,25 +160,7 @@ func GetPaperDetail(c *gin.Context) {
 		return
 	}
 	paper.MaterialFamilies = materialFamiliesFromLinks(paper.MaterialFamilyLinks)
-	revision := paper.ContentRevision
-	if revision == 0 {
-		revision = 1
-	}
-	var recordCount int64
-	if err := database.DB.Model(&models.KeyProperty{}).
-		Where("paper_id = ? AND paper_revision = ?", paper.ID, revision).
-		Count(&recordCount).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "论文物性统计失败"})
-		return
-	}
-	var uploaderName *string
-	if paper.Uploader != nil && strings.TrimSpace(paper.Uploader.Username) != "" {
-		name := paper.Uploader.Username
-		uploaderName = &name
-	}
-	c.JSON(http.StatusOK, adminPaperDetailResponse{
-		Paper: paper, UploaderName: uploaderName, RecordCount: recordCount,
-	})
+	c.JSON(http.StatusOK, paper)
 }
 
 // paperUpdatesFromBody 从请求体提取白名单字段，供 UpdatePaper 使用。

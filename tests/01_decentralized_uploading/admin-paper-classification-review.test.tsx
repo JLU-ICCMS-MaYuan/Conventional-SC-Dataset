@@ -56,7 +56,7 @@ beforeEach(() => {
         items: [{
           id: 51, doi: '10.1000/issue51', title: 'Hydride paper', authors: [], journal: 'Test',
           year: 2026, review_status: 'pending', review_comment: null, reviewer_name: null,
-          uploader_name: 'author', created_at: '2026-08-25', record_count: 1,
+          uploader_name: 'author', created_at: '2026-08-25',
           show_in_chart: true, compound_symbols: 'LaH10', article_types: [],
         }],
         total: 1,
@@ -73,6 +73,22 @@ beforeEach(() => {
           material_dimensionality: 'three_dimensional',
           structure_families: [],
         }],
+      } as never
+    }
+    if (path === '/api/admin/papers/51/history') {
+      return {
+        paper_id: 51,
+        events: [
+          {
+            id: 1, event_type: 'uploaded', paper_revision: 1,
+            actor: { username: 'author', unknown: false }, occurred_at: '2026-09-04T09:00:00Z', review: null,
+          },
+          {
+            id: 2, event_type: 'reviewed', paper_revision: 1,
+            actor: { username: 'reviewer', unknown: false }, occurred_at: '2026-09-04T10:00:00Z',
+            review: { status: 'approved', comment: '证据充分' },
+          },
+        ],
       } as never
     }
     if (path === '/api/rag/papers/51/review-artifact') {
@@ -121,6 +137,24 @@ afterEach(() => {
 })
 
 describe('论文快速审核弹窗仅处理拒绝与退回', () => {
+  it('在操作区域显示上传者和历史入口，不显示物性记录列', async () => {
+    const user = userEvent.setup()
+    render(<MemoryRouter><AdminPage /></MemoryRouter>)
+
+    await user.click(screen.getByRole('button', { name: '论文审核' }))
+    expect(await screen.findByText('Hydride paper')).toBeVisible()
+    expect(screen.queryByRole('columnheader', { name: '上传者' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: '记录' })).not.toBeInTheDocument()
+    expect(screen.getByText('上传者: author')).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: '历史' }))
+    await waitFor(() => expect(mockedApi.get).toHaveBeenCalledWith('/api/admin/papers/51/history'))
+    const historyDialog = await screen.findByRole('dialog')
+    expect(historyDialog).toHaveTextContent('上传')
+    expect(historyDialog).toHaveTextContent('审核')
+    expect(historyDialog).toHaveTextContent('已通过 · 证据充分')
+  })
+
   it('不显示分类或批准入口，只提交退回结果和审核意见', async () => {
     const user = userEvent.setup()
     render(<MemoryRouter><AdminPage /></MemoryRouter>)
