@@ -13,6 +13,7 @@
 | `property_code!=tc` | `superconductor_properties` | 使用 `property_definitions` 规范代码和值类型；保存结果级方法/判据；关联零或一种 Context |
 | `context.kind=calculation` | `calculation_contexts` | 按请求内 `context_key` 去重；只保存方法和条件 |
 | `context.kind=experimental` | `experimental_contexts` | 按请求内 `context_key` 去重；保存样品和测量条件 |
+| `structure_ref` | `canonical_structures` + `structure_models` | 全局身份供跨论文引用，来源模型保留论文 Evidence |
 | 记录 Evidence | 对应 Tc 或通用物性 Evidence 连接表 | 必须与记录属于同一论文 revision |
 
 λ、ωlog、μ* 新写入只进入 `superconductor_properties`，不得再写
@@ -39,6 +40,9 @@
 - `tc_results` 保留 #84 的理论/实验 Context 互斥约束。
 - `tc_results` 增加结果级 `criterion`，`result_kind` 继续由 `tc_method` 推导并受数据库约束。
 - `superconductor_properties` 增加结果级 `method_raw`、`criterion`，以及计算/实验 Context 最多一个的 CHECK 和同 revision 复合外键。
+- 新增独立 `canonical_structures`，保存不透明 `structure_ref`、标准化化学式、规范压强、空间群和结构
+  计算方法组合；`structure_models` 增加到规范身份的映射。物性和两类 Context 增加可空的规范结构
+  外键，API 仍只暴露 `structure_ref`。
 - `experimental_contexts` 只保存共享实验条件，不再保存结果级 `tc_criterion`。
 - `property_definitions` 继续禁止 `tc` 进入通用定义，但必须允许并预置
   `lambda_ep`、`omega_log`、`mu_star`。
@@ -85,3 +89,14 @@ Tc/通用物性 Evidence 连接
 ```
 
 只删除最后一个关联记录后形成的孤立 Context；仍被其他物性引用的 Context 必须保留。
+
+## 结构身份与候选查询
+
+- 正式 `StructureModel` 被接受时创建或绑定一个 `CanonicalStructureIdentity`；同一身份可被不同论文的
+  来源模型映射，但来源模型的 revision、Evidence 和删除权限保持独立。
+- 候选服务只查询已批准论文的当前 revision，按标准化化学式、`<=0.01 GPa` 压强差、空间群和已填写
+  的方法组合过滤，并按压强差升序返回。
+- 查询不创建、不修改规范身份，也不自动写入物性。只有用户确认候选后，统一持久化层才解析
+  `structure_ref` 并写入各自的规范结构外键。
+- 保存时必须检查规范身份至少存在一个已公开来源；来源全部失效时禁止删除仍被引用的身份，或将其
+  标记为不可用并返回影响记录。

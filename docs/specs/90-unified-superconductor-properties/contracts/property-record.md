@@ -25,6 +25,9 @@
 新响应不得同时输出 `tc_results`、`calculation_contexts`、`experimental_contexts`、
 `properties` 或顶层 `key_properties` 作为第二份科学事实。
 
+`StructureModels[]` 与 `SuperconductorProperties[]` 是平行集合。记录中的 `structure_ref` 是
+系统生成的不透明全局规范结构引用，可为空；它不是 `StructureModel.id` 或其他数据库主键。
+
 ## 完整记录结构
 
 ```json
@@ -43,11 +46,11 @@
   "method_raw": "Allen-Dynes equation",
   "criterion": null,
   "condition_note": null,
-  "structure_ref": "structure-1",
+  "structure_ref": "structure-opaque-1",
   "context": {
     "context_key": "calc-a",
     "kind": "calculation",
-    "structure_ref": "structure-1",
+    "structure_ref": "structure-opaque-1",
     "missing_structure_reason": null,
     "calculation_details": {
       "electronic_method": "DFT",
@@ -150,6 +153,17 @@
 - `tc_method=unknown` 只允许兼容读取或未提交草稿，正式提交必须先选定方法。
 - `method_raw` 与 `criterion` 描述当前结果本身；Context 中只保留可由多条结果共享的方法环境和实验条件。
 
+## 结构引用规则
+
+- `structure_ref` 为空时，物性记录和 Context 仍然合法；没有结构文件不构成提交错误。
+- 非空 `structure_ref` 必须指向已存在的全局规范结构身份。多个物性、多个 Context 以及不同论文的
+  物性可以共享该引用，但不共享论文 Evidence。
+- 前端不得要求用户输入或编辑数据库结构 ID；候选确认后由后端写入不透明引用。
+- 记录与 Context 同时提供结构时，两者的 `structure_ref` 必须完全一致。
+- 候选查询只返回已批准论文当前 revision 的来源结构，按标准化化学式、`<=0.01 GPa` 压强差、
+  空间群和已填写的方法字段筛选，并按压强差升序排序。
+- 查询结果不会自动修改 `structure_ref`。无候选、平局、多候选未选择或用户跳过时保持 `null`。
+
 ## 校验错误
 
 校验错误继续返回可定位字段路径，例如：
@@ -178,6 +192,10 @@
 | `invalid_tc_method_context` | Tc 方法与计算/实验 Context 不一致 |
 | `duplicate_representative_tc` | 同状态同方法出现多条代表 Tc |
 | `cross_revision_evidence` | Evidence 不属于当前论文 revision |
+
+结构候选接口的错误使用独立错误码返回，例如 `invalid_structure_query`（必需条件缺失或格式错误）、
+`structure_candidate_forbidden`（调用方无权访问当前草稿/论文）和 `structure_ref_unavailable`（确认
+的全局身份已无公开来源）。
 
 ## 兼容边界
 

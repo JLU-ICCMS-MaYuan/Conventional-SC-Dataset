@@ -2,7 +2,7 @@
 
 **GitHub Issue**：[#90](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/90)
 
-**日期**：2026-09-04
+**日期**：2026-09-05
 
 **Spec**：[spec.md](spec.md)
 
@@ -12,7 +12,9 @@
 下的平级记录。新增共享规范化与持久化映射：Tc 继续使用专用表，非 Tc 记录使用通用物性
 表，计算/实验 Context 只保存方法和条件并可被多条记录共享。上传、管理、详情和展示一次性
 切换到统一契约，旧结构只在边界兼容。通过 Alembic 将 Context 中已有 λ、ωlog、μ* 回填为
-通用物性行，并为通用物性增加实验 Context 关系。
+通用物性行，并为通用物性增加实验 Context 关系。新增全局规范结构身份，使平行的
+`StructureModels[]` 与 `SuperconductorProperties[]` 可以通过可空、不透明 `structure_ref`
+跨论文共享；录入条件满足时只查询已公开候选，由用户确认后关联。
 
 ## 技术上下文
 
@@ -22,7 +24,8 @@
 - **测试体系**：pytest、Go test、Vitest、TypeScript/前端生产构建、隔离 MySQL Alembic upgrade/downgrade。
 - **目标平台**：本地开发与 Docker 部署使用的 Linux/WSL + MySQL 环境。
 - **性能目标**：单篇详情用批量预加载完成映射，不因每条物性引入 N+1 查询；Tc 图表继续走专用 SQL。
-- **约束**：保留 revision/Evidence 血缘、#84 Tc Context 互斥、代表 Tc 唯一、共享编辑器和升版重审事务。
+- **约束**：保留 revision/Evidence 血缘、#84 Tc Context 互斥、代表 Tc 唯一、共享编辑器和升版重审事务；
+  结构候选只读已批准当前 revision，引用不复制来源 Evidence。
 - **规模范围**：单篇论文若干材料状态、每状态通常数十条物性；历史运行库存在少量条件化科学数据，需要可核对迁移。
 
 ## 质量门
@@ -36,6 +39,7 @@
 | #57/#59/#65 | 详情完整，编辑和只读展示一致 | Go 统一映射 + 前端直接消费，不再三来源拼装 | 通过 |
 | #72 | Tc 图表数据不可回退 | 保留 `tc_results` 专用查询并做投影一致性测试 | 通过 |
 | Issue #90 | 物性平级且保留 Context 关联 | `SuperconductorProperties[]` + 共享 `context_key` | 通过 |
+| Issue #90 新增结构关联 | 结构可空、跨论文候选、用户确认后复用 | `canonical_structures` + `structure_ref` + 候选查询契约 | 通过 |
 | Overview 维护规则 | 未实现设计不得写入当前事实 | 实施前只新增 Spec；Overview 任务位于最终阶段 | 通过 |
 
 ## Feature 文档结构
@@ -50,7 +54,8 @@ docs/specs/90-unified-superconductor-properties/
 ├── contracts/
 │   ├── property-record.md
 │   ├── persistence-mapping.md
-│   └── database-invariants.md
+│   ├── database-invariants.md
+│   └── structure-reference.md
 ├── tasks.md
 └── checklists/
     └── requirements.md
@@ -75,7 +80,8 @@ backend/
     ├── test_superconductor_properties.py   # 新增
     ├── test_upload_jobs.py
     ├── test_scientific_drafts.py
-    └── test_scientific_draft_rewrite.py
+    ├── test_scientific_draft_rewrite.py
+    └── test_structure_reference.py          # 新增
 
 goserver/
 ├── models/models.go
@@ -86,7 +92,8 @@ goserver/
     ├── stats.go
     ├── stats_test.go
     ├── paper_deletion.go
-    └── paper_deletion_test.go
+    ├── paper_deletion_test.go
+    └── structure_reference_test.go          # 新增
 
 frontend/src/
 ├── lib/
@@ -94,6 +101,7 @@ frontend/src/
 │   ├── superconductorProperties.ts         # 新增：统一类型与兼容转换
 │   └── paperDetailView.ts
 ├── components/MaterialStatesEditor.tsx
+├── components/StructureReferencePrompt.tsx  # 新增：候选提示与确认
 └── pages/
     ├── AdminPaperEditPage.tsx
     ├── SearchPage.tsx
@@ -128,6 +136,7 @@ tests/
 | FR-021–FR-025 / US4 | 旧输入适配、schema version、Alembic 回填 | 旧 fixture 转换、upgrade/downgrade、迁移报告 |
 | FR-026–FR-030 / US4 | 专用 Tc 查询回归、删除/审核、Overview 回写 | Go/Python/Vitest 全量专项和 quickstart |
 | FR-031 / US1–US3 | 结果级方法/判据与共享 Context 职责分离 | 迁移、统一记录和 Tc/实验回归测试 |
+| FR-032–FR-039 / US5 | 平行结构集合、可空结构引用、跨论文候选检索、确认写入和来源生命周期 | 结构身份迁移、候选 API、编辑器与跨论文回归测试 |
 
 ## 阶段与依赖
 
@@ -137,6 +146,8 @@ tests/
 4. 切换管理员科学数据读取/重写和 Go 详情统一投影。
 5. 删除内部旧契约依赖，保留单向边界兼容并回归搜索、图表、审核和删除。
 6. 完成隔离 MySQL、前后端测试、quickstart 和 Overview 回写。
+7. 完成全局结构身份、候选检索提示、跨论文引用和来源回归；该阶段的 Schema 与查询契约需在
+   统一编辑器切换前完成。
 
 ## 复杂度说明
 
@@ -146,3 +157,5 @@ tests/
 | `context_key` | 平级记录仍需表达同一次计算/实验 | 完全扁平且无关联会丢失 μ*—Tc 对应关系 |
 | Alembic 参数回填 | λ、ωlog、μ* 必须成为真实记录和 Evidence 目标 | 只做前端虚拟行不能满足写入和证据要求 |
 | 边界兼容 | Redis 旧草稿和当前详情结构已经存在 | 直接拒绝旧数据会让进行中的上传任务不可恢复 |
+| 全局结构身份 | 论文 StructureModel 带有各自 Evidence，不能直接跨论文引用其主键 | 直接复用本地主键会破坏 revision 血缘和删除边界 |
+| 候选两步确认 | 用户可能不知道结构或不愿采用近似条件候选 | 自动关联会把错误结构写入物性；只提示并确认可保留空引用 |

@@ -200,3 +200,55 @@ Context 回答“在什么结构、软件、方法和网格下计算”，物性
 | `frontend/src/components/MaterialStatesEditor.tsx` | 上传与管理共享编辑器 |
 | `frontend/src/lib/paperDetailView.ts` | 当前三来源展示聚合 |
 | `frontend/src/pages/AdminPaperEditPage.tsx` | 管理端详情到草稿映射 |
+
+## 9. 结构引用与跨论文检索决策
+
+### 9.1 当前结构事实
+
+正式 `StructureModel` 绑定论文、revision 和 `MaterialState`，并通过
+`structure_model_evidences` 保存论文证据。其结构元数据包含空间群、`geometry_method`、
+`exchange_correlation`、`calculation_code` 和 `nuclear_treatment`；压强和化学式分别来自所属
+`MaterialState` 与 `Superconductor`。现有 `/api/structures/representative` 面向旧的
+`superconductors_structures`，不能直接作为 #90 的跨论文结构引用接口。
+
+### 9.2 决策：全局身份与本地来源分离
+
+**决策**：新增独立的 `canonical_structures`（领域名 `CanonicalStructureIdentity`）。物性和
+Context 的 `structure_ref` 指向该身份；每篇论文的 `StructureModel` 通过映射保留本地文本、
+来源、revision 和 Evidence。
+
+**理由**：直接引用另一论文的 `StructureModel.id` 会越过 revision/Evidence 边界，来源论文删除或
+升版时也会影响无关论文。全局身份只共享结构条件的引用，不共享物性、Context 或 Evidence。
+
+**备选方案**：确认后复制结构到当前论文。拒绝，因为会产生结构副本，无法满足多个物性/论文共享
+同一个 `structure_ref` 的目标；也不能解决重复上传和身份漂移。
+
+### 9.3 决策：四项条件匹配与确认流程
+
+**决策**：候选按标准化化学式、压强绝对差 `<=0.01 GPa`、空间群和已填写的方法组合匹配。方法
+组合由 `geometry_method`、`calculation_code`、`exchange_correlation`、`nuclear_treatment`
+组成，未填写字段不作为过滤条件。候选只来自已批准论文当前 revision，并按压强差排序。
+
+查询是非阻断提示；多候选或压强距离相同不自动选择，只有用户确认后才写入不透明
+`structure_ref`。没有候选、用户跳过或不知道结构时保存 `null`。
+
+**理由**：四项条件是用户明确要求的录入信息；标准化和容差可处理公式/小数表示差异。人工确认
+可阻止系统把近似候选静默写入物性，同时保留无结构输入路径。
+
+**已知风险**：四项条件不包含几何指纹，可能把同条件下不同多形归入同一身份。当前业务选择不
+自动比较几何；候选列表必须展示来源和匹配条件，后续若需要区分多形结构应另立 Feature。
+
+### 9.4 决策：身份生命周期
+
+规范身份只有在存在至少一个已公开来源 `StructureModel` 时可被候选或写入引用。来源论文升版或
+删除前，服务必须检查仍被引用的身份；不得静默留下无公开来源的有效关联。查询服务不创建或修改
+身份，身份创建/绑定属于正式结构模型接受事务。
+
+## 10. 新增关键文件
+
+| 文件 | 作用 |
+| --- | --- |
+| `backend/services/structure_reference.py` | 全局结构身份解析、条件标准化和候选排序 |
+| `backend/api/rag.py` | 结构候选查询接口与当前草稿/论文权限校验 |
+| `frontend/src/components/StructureReferencePrompt.tsx` | 候选提示、确认、跳过和清空交互 |
+| `docs/specs/90-unified-superconductor-properties/contracts/structure-reference.md` | 查询和确认写入契约 |

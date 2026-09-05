@@ -108,6 +108,30 @@
 - [ ] T039 使用 `big-project-overview-maintainer` 按实际实现更新 `docs/overview/01_Decentralized_Uploading_of_Superconductivity_Data/data-structure-and-form-mapping.md`、`upload-review-and-default-selection.md`、`docs/overview/02_Decentralized_Maintenance_and_Verification/domain-model-and-schema.md`、`mysql-schema-catalog.md`、`literature-and-record-review.md`、`docs/overview/03_Superconductivity_Data_Search_and_Database_Discovery/paper-and-property-results.md`、`local-material-search.md` 和 `tc-history-and-pressure-charts.md`。
 - [ ] T040 更新 GitHub Issue #90 的验收与 Documentation Impact；只有全部关闭门槛满足后才关闭 Issue。
 
+## 阶段 8：结构引用与跨论文候选（P1）
+
+**目的**：保持 `StructureModels[]` 与 `SuperconductorProperties[]` 平行，允许空结构引用，并在
+录入条件满足时通过已公开结构候选复用不透明 `structure_ref`。
+
+### 测试
+
+- [ ] T041 [P] 在 `backend/tests/test_structure_reference.py` 覆盖化学式标准化、`0.01 GPa` 压强容差、空间群/方法匹配、最近排序、距离平局和空引用保存。
+- [ ] T042 [P] 在 `tests/02_maintenance_and_verification/test_structure_reference_migration.py` 覆盖 `canonical_structures`、来源模型映射、跨论文引用、已批准当前 revision 可见性和来源失效保护。
+- [ ] T043 [P] 在 `backend/api/rag_structure_reference_test.py` 与 `tests/02_identity_governance/structure-reference-prompt.test.tsx` 覆盖候选接口权限、候选响应、确认/跳过、不自动写入和多物性复用。
+
+### 实施
+
+- [ ] T044 在 `alembic/versions/20260904_0001_unified_superconductor_properties.py` 增加 `canonical_structures`、`structure_models` 映射及物性/Context 的规范结构外键和索引，提供 upgrade/downgrade 与来源引用保护。
+- [ ] T045 在 `backend/models.py`、`goserver/models/models.go` 和 `backend/services/structure_reference.py` 实现全局身份、方法组合标准化、候选过滤/排序和不透明引用解析；查询只读已批准当前 revision。
+- [ ] T046 在 `backend/api/rag.py` 增加 `GET /api/rag/structure-references/search`，校验当前草稿/论文权限，返回来源摘要和压强差，不在查询时创建或修改身份。
+- [ ] T047 在 `backend/ingest/superconductor_properties.py`、`backend/ingest/scientific_drafts.py` 与 `backend/services/scientific_draft_rewrite.py` 接入 `structure_ref` 确认写入、记录/Context 一致性、空引用和来源可用性校验。
+- [ ] T048 在 `frontend/src/lib/paperProcessing.ts`、`frontend/src/lib/superconductorProperties.ts`、`frontend/src/components/MaterialStatesEditor.tsx` 和新增 `frontend/src/components/StructureReferencePrompt.tsx` 实现候选提示、明确确认、跳过/清空和多条物性共享引用，不暴露数据库 ID。
+- [ ] T049 在 `goserver/handlers/superconductor_properties.go`、`goserver/handlers/papers.go` 与 `frontend/src/lib/paperDetailView.ts` 输出统一 `structure_ref` 和可选来源摘要；在删除/升版流程中阻止或标记无来源规范身份，并完成 quickstart 场景八的集成回归。
+
+### 独立验收
+
+- [ ] T050 [P] 按 `quickstart.md` 场景八执行跨论文候选、确认、跳过、平局、来源失效和三条物性复用验收，并将证据记录到 Issue #90。
+
 ## 依赖与执行顺序
 
 - T001–T004 可并行，先固定各层失败契约。
@@ -129,6 +153,7 @@
 | FR-026–FR-029 / US4 | T029、T033、T036–T038 | 图表、删除、MySQL 和全栈回归 |
 | FR-030 | T039–T040 | Overview 与 Issue 关闭门槛 |
 | FR-031 / US1–US3 | T005–T010、T013–T026 | 结果级方法/判据与共享 Context 职责分离 |
+| FR-032–FR-039 / US5 | T041–T049 | 平行结构集合、可空引用、全局身份、候选查询、确认写入和来源生命周期 |
 
 ## MVP 与增量策略
 
@@ -136,3 +161,5 @@
 2. T011–T026 完成上传/管理平级编辑、Context 对应和 Tc 约束，形成 MVP。
 3. T027–T033 切换公开详情和下游展示。
 4. T034–T040 完成旧数据迁移、全量验证、Overview 和 Issue 收尾。
+5. T041–T049 虽在文档末尾追加，但实施时必须在 T013/T015/T030 前执行；T041–T043 通过后才能进入
+   T044–T047，T048/T049 依赖 API 和持久化契约稳定，T050 是最终结构验收。

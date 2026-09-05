@@ -18,6 +18,11 @@
 “平级”表示物性之间没有容器关系，不表示它们彼此没有科学关联。同一次计算或实验产生的多条
 记录通过共享 Context 建立关系。
 
+`StructureModels[]` 与 `SuperconductorProperties[]` 是两个平行集合。物性记录通过可选的
+`structure_ref` 引用 `CanonicalStructureIdentity`，而不是直接跨论文引用某个
+`StructureModel` 的数据库主键。没有结构、候选不唯一或用户跳过确认时，`structure_ref` 为 `null`
+仍然合法。
+
 ## 2. 完整领域结构
 
 ```text
@@ -60,12 +65,28 @@ PaperRevision
                 └── evidences[]
 ```
 
+全局结构身份独立于论文 revision：
+
+```text
+CanonicalStructureIdentity
+├── structure_ref（系统生成的不透明引用）
+├── formula_normalized
+├── pressure_gpa（规范压强）
+├── space_group_symbol / space_group_number
+├── geometry_method
+├── calculation_code
+├── exchange_correlation
+├── nuclear_treatment
+└── source StructureModels[]（每条保留自己的论文、revision 与 Evidence）
+```
+
 ## 3. 关系图
 
 ```mermaid
 flowchart TD
     P[Paper revision] --> MS[MaterialState]
     MS --> SM[StructureModel]
+    SM --> CSI[CanonicalStructureIdentity]
     MS --> PR1[PropertyRecord: Tc]
     MS --> PR2[PropertyRecord: λ]
     MS --> PR3[PropertyRecord: ωlog]
@@ -80,6 +101,9 @@ flowchart TD
 
     C1 -. 可选 .-> SM
     C2 -. 可选 .-> SM
+    PR1 -. structure_ref .-> CSI
+    PR2 -. structure_ref .-> CSI
+    PR3 -. structure_ref .-> CSI
     PR1 --> E1[Evidence]
     PR2 --> E2[Evidence]
     PR3 --> E3[Evidence]
@@ -109,7 +133,7 @@ flowchart TD
 | `method_raw` | 否 | 论文对这条结果使用的方法原文；只属于当前记录，不代替共享 Context 的方法条件 |
 | `criterion` | 否 | 这条结果的判据；实验 Tc 使用既有规范判据，Hc2、能隙等可保留原文判据 |
 | `condition_note` | 否 | 无法结构化但必须保留的条件说明 |
-| `structure_ref` | 否 | 直接适用的结构；存在 Context 且 Context 也引用结构时必须一致 |
+| `structure_ref` | 否 | 全局规范结构身份的不透明引用；存在 Context 且 Context 也引用结构时必须一致；无结构时为 `null` |
 | `context` | 否 | 产生该记录的计算或实验条件；未知时为空 |
 | `evidences` | 是 | Evidence 集合；草稿阶段可为空，新批准数据遵守证据门槛 |
 
@@ -135,7 +159,7 @@ Tc 不是子集合，而是 `property_code=tc` 的普通集合成员。只有该
 | --- | --- | --- |
 | `context_key` | 是 | 同一草稿或响应内的稳定关联键，由系统管理，不是数据库 ID |
 | `kind` | 是 | `calculation` 或 `experimental` |
-| `structure_ref` | 否 | 本次计算或实验使用的结构 |
+| `structure_ref` | 否 | 本次计算或实验使用的全局规范结构身份 |
 | `missing_structure_reason` | 条件必填 | 计算 Context 没有结构时必填；实验 Context 不强制 |
 
 同一 `context_key` 可出现在多条物性记录中。所有出现位置的 `kind` 和详情必须一致；不一致时
@@ -176,6 +200,29 @@ Tc 不是子集合，而是 `property_code=tc` 的普通集合成员。只有该
 实验 Context 只保存可共享的样品和测量条件。Tc、Hc2、超导能隙等各自的结果判据位于对应
 `SuperconductorPropertyRecord.criterion`；仅在 `property_code=tc` 时进一步执行 #84 的
 Tc 方法互斥和判据枚举规则。
+
+### 5.4 结构候选检索与身份
+
+录入物性时，前端从当前材料状态的化学式、压强、报告空间群，以及关联计算 Context 中已填写的
+结构计算方法字段发起候选查询。查询只读取已批准论文当前 revision 中至少有一个来源模型的
+`CanonicalStructureIdentity`，不读取待审核、拒绝或草稿结构。
+
+候选匹配规则固定为：
+
+1. 化学式按现有公式归一化规则比较。
+2. 压强绝对差不超过 `0.01 GPa`，按差值从近到远排序。
+3. 已填写的空间群符号/编号按规范值精确匹配；未填写时不增加该过滤条件。
+4. `geometry_method`、`calculation_code`、`exchange_correlation`、`nuclear_treatment` 先做
+   大小写、空白和分隔符归一化，再按已填写字段精确匹配；未填写字段不增加过滤条件。
+
+查询只返回候选，不修改草稿。候选至少包含 `structure_ref`、规范条件、压强差、代表来源论文
+和来源 `StructureModel` 的摘要。单一候选、多候选、最近距离相同和无候选都必须由用户决定是否
+关联；只有用户明确确认后，记录和 Context 才能写入该 `structure_ref`。跳过、清空或没有候选时
+保持 `null`。
+
+全局身份不自动比较结构几何，只由标准化化学式、规范压强、空间群和方法组合定位。新身份在正式
+结构模型被接受时创建或绑定；每个身份必须保留至少一个已公开来源模型。来源模型的 Evidence
+仍归属原论文，跨论文共享只共享引用，不复制或转移 Evidence。
 
 ## 6. 平级记录示例
 
@@ -227,7 +274,7 @@ SuperconductorProperties[]
 2. `value_raw` 不得为空；规范值可以为空。
 3. `number` 需要 `value_number`，`range` 需要完整上下界，`text/boolean` 使用规范 `value_raw` 表达。
 4. Context 最多一种；不得同时声明计算和实验详情。
-5. 记录和 Context 的结构引用如果同时存在，必须相同。
+5. 记录和 Context 的结构引用如果同时存在，必须相同；该引用可以跨论文指向同一个全局规范身份。
 6. 同名、同值记录只有在来源指纹也相同时才视为重复；不同 Context 下的同值记录必须保留。
 7. Evidence 只能指向同一论文 revision 的有效 Chunk。
 
@@ -248,6 +295,16 @@ SuperconductorProperties[]
 3. 同一 `context_key` 的所有详情必须一致。
 4. 删除最后一个关联记录时可删除孤立 Context；仍被其他记录引用时不得删除。
 
+### 7.4 结构引用规则
+
+1. `structure_ref` 是系统生成的不透明引用，前端不得要求用户输入数据库主键。
+2. `structure_ref` 为空时物性和 Context 仍可保存；只有用户确认候选后才建立非空引用。
+3. 全局规范身份按标准化化学式、规范压强、空间群和方法组合定位，不执行几何等价性自动合并。
+4. 候选查询只使用已批准论文的当前 revision；待审核、拒绝和草稿结构不得作为候选。
+5. 压强候选使用 `<=0.01 GPa` 绝对差并按最近排序；距离相同不得自动归并或覆盖已有引用。
+6. 多个物性和 Context 可以共享同一 `structure_ref`，但不得因此共享或移动论文 Evidence。
+7. 来源模型全部失效时不得静默删除仍被引用的规范身份；必须阻止删除或将身份标记为不可用并报告受影响引用。
+
 ## 8. 领域模型与物理存储的映射
 
 统一领域记录不要求一张数据库宽表。确定的持久化映射如下：
@@ -258,7 +315,7 @@ SuperconductorProperties[]
 | 其他全部代码，包括 λ、ωlog、μ* | `superconductor_properties` + `property_definitions` | `superconductor_property_evidences` | 统一使用原始值和规范值模型 |
 | `context.kind=calculation` | `calculation_contexts` | 由各物性自己的 Evidence 表达 | Context 只保存方法和条件，不再拥有 λ、ωlog、μ* 权威值 |
 | `context.kind=experimental` | `experimental_contexts` | 由各物性自己的 Evidence 表达 | 允许 Tc 以外物性关联实验 Context |
-| `structure_ref` | `structure_models` | `structure_model_evidences` | 结构与物性保持独立实体 |
+| `structure_ref` | `canonical_structures` + `structure_models` | `structure_model_evidences` | 全局身份供跨论文引用，来源模型保留论文 Evidence |
 
 由单一映射层完成读写：上层只处理 `SuperconductorPropertyRecord`，不得根据数据库表名重新
 建立业务分组。
@@ -273,7 +330,10 @@ SuperconductorProperties[]
 4. 为 `tc_results` 增加结果级 `criterion`，把旧 `experimental_contexts.tc_criterion` 复制到关联实验 Tc 后移除 Context 的 Tc 专属列。
 5. 同一迁移在回填和计数核验成功后移除三个计算参数列和实验 Context 的 Tc 判据列；任一步失败则整个迁移回滚，禁止留下双重权威来源。
 6. 保留 `tc_results` 与两类 Context 的复合外键及 #84 的 `ck_tc_results_context_kind` 等价约束。
-7. 更新删除拓扑，使通用物性在 Context 之前删除，Evidence 在物性之前删除。
+7. 新增 `canonical_structures` 及 `structure_models` 到全局身份的映射；物性和 Context 保存全局结构引用，
+   本地来源模型仍受论文 revision 外键约束。
+8. 更新删除拓扑，使通用物性在 Context 之前删除，Evidence 在物性之前删除；删除来源模型前检查仍被引用的
+   全局身份，禁止产生无来源的有效身份。
 
 ### 历史 Evidence 边界
 
