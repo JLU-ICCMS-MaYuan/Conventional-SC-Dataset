@@ -1,161 +1,145 @@
-# 实施计划：统一材料状态的超导物性记录
+# 实施计划：MaterialState 模块化物性与动态表单
 
 **GitHub Issue**：[#90](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/90)
 
-**日期**：2026-09-05
+**日期**：2026-09-07
 
 **Spec**：[spec.md](spec.md)
 
 ## 摘要
 
-建立统一 `SuperconductorPropertyRecord` 契约，将 Tc、λ、ωlog、μ* 和其余物性作为材料状态
-下的平级记录。新增共享规范化与持久化映射：Tc 继续使用专用表，非 Tc 记录使用通用物性
-表，计算/实验 Context 只保存方法和条件并可被多条记录共享。上传、管理、详情和展示一次性
-切换到统一契约，旧结构只在边界兼容。通过 Alembic 将 Context 中已有 λ、ωlog、μ* 回填为
-通用物性行，并为通用物性增加实验 Context 关系。新增全局规范结构身份，使平行的
-`StructureModels[]` 与 `SuperconductorProperties[]` 可以通过可空、不透明 `structure_ref`
-跨论文共享；录入条件满足时只查询已公开候选，由用户确认后关联。
+以 `MaterialState` 为科研数据主体，建立 `property_modules`、统一 `property_records` 和版本化
+`form_definitions`。Tc 使用 `predicted_tc`、`measured_tc` 记录类型，固定核心列支持约束、搜索和图表，
+方法扩展字段由 JSON Schema 驱动。计算和实验 Context 改名为 Conditions，并继续作为一次确定运行或
+测量的关联节点。材料按论文 revision 独立保存，旧共享材料和分裂物性模型通过分阶段迁移收敛。
 
 ## 技术上下文
 
-- **语言与版本**：Python 3、Go 1.25、TypeScript 5.6、React 19。
-- **主要依赖**：FastAPI、SQLAlchemy、Alembic、GORM、Gin、Vite 5、Vitest 2。
-- **数据存储**：MySQL 保存权威科学实体；Redis 保存上传任务草稿；Qdrant/Neo4j 不属于本次权威物性存储改造。
-- **测试体系**：pytest、Go test、Vitest、TypeScript/前端生产构建、隔离 MySQL Alembic upgrade/downgrade。
-- **目标平台**：本地开发与 Docker 部署使用的 Linux/WSL + MySQL 环境。
-- **性能目标**：单篇详情用批量预加载完成映射，不因每条物性引入 N+1 查询；Tc 图表继续走专用 SQL。
-- **约束**：保留 revision/Evidence 血缘、#84 Tc Context 互斥、代表 Tc 唯一、共享编辑器和升版重审事务；
-  结构候选只读已批准当前 revision，引用不复制来源 Evidence。
-- **规模范围**：单篇论文若干材料状态、每状态通常数十条物性；历史运行库存在少量条件化科学数据，需要可核对迁移。
+- **后端**：Python 3、FastAPI、SQLAlchemy、Pydantic、Alembic；Go 1.25、Gin、GORM。
+- **前端**：React 19、TypeScript 5.6、Vite、Vitest。
+- **数据库**：MySQL；Redis 只保存上传草稿，Qdrant/Neo4j 不作为物性权威存储。
+- **Schema 校验**：Python 使用支持 JSON Schema 2020-12 所需子集的验证器；前端使用兼容验证器和
+  项目组件生成控件。新增依赖前先确认现有依赖是否满足，避免引入两套校验器。
+- **性能**：论文详情批量加载定义、模块、记录和 Conditions；Tc 图表走固定列与组合索引。
+- **安全**：定义只允许超级管理员发布；Schema 不执行脚本；后端始终重新校验。
 
 ## 质量门
 
-| 约束来源 | 强制要求 | 设计如何满足 | 状态 |
-| --- | --- | --- | --- |
-| AGENTS.md | KISS/YAGNI，不建立无需求的分类树 | 一个平级记录契约；只保留 Tc 已存在的专用校验 | 通过 |
-| AGENTS.md | DRY，共享上传与管理编辑能力 | 改造现有 `MaterialStatesEditor` 和统一后端规范化入口 | 通过 |
-| #33 / Overview | 所有科学实体与 Evidence 同 revision | Context、Structure、记录和 Evidence 在映射前统一校验 | 通过 |
-| #84 | `tc_method` 是理论/实验规则唯一权威 | Tc 映射保留现有应用层与数据库约束 | 通过 |
-| #57/#59/#65 | 详情完整，编辑和只读展示一致 | Go 统一映射 + 前端直接消费，不再三来源拼装 | 通过 |
-| #72 | Tc 图表数据不可回退 | 保留 `tc_results` 专用查询并做投影一致性测试 | 通过 |
-| Issue #90 | 物性平级且保留 Context 关联 | `SuperconductorProperties[]` + 共享 `context_key` | 通过 |
-| Issue #90 新增结构关联 | 结构可空、跨论文候选、用户确认后复用 | `canonical_structures` + `structure_ref` + 候选查询契约 | 通过 |
-| Overview 维护规则 | 未实现设计不得写入当前事实 | 实施前只新增 Spec；Overview 任务位于最终阶段 | 通过 |
+| 约束 | 设计响应 |
+| --- | --- |
+| MaterialState 是主体 | 全部模块、记录、Conditions、结构均使用同论文 revision 复合外键 |
+| 论文内材料独立 | 材料唯一键限定在论文 revision，迁移拆分旧共享材料 |
+| Tc 与相关物性不误配 | Conditions 表示一次确定执行，组级规则校验决定性输入 |
+| 动态扩展不破坏历史 | 已发布定义不可变，记录绑定具体版本，升级显式执行 |
+| 核心查询可靠 | 核心字段固定列；JSON 只保存扩展字段 |
+| Evidence 完整 | 使用统一证据连接，迁移缺口报告且不伪造 |
+| MySQL 可恢复迁移 | 分阶段迁移，Contract 阶段独立执行 |
+| 未实现设计不进入 Overview | Overview 只在实现、测试和迁移验证后更新 |
 
-## Feature 文档结构
-
-```text
-docs/specs/90-unified-superconductor-properties/
-├── spec.md
-├── plan.md
-├── research.md
-├── data-model.md
-├── quickstart.md
-├── contracts/
-│   ├── property-record.md
-│   ├── persistence-mapping.md
-│   ├── database-invariants.md
-│   └── structure-reference.md
-├── tasks.md
-└── checklists/
-    └── requirements.md
-```
-
-## 源代码结构
+## 目标组件
 
 ```text
 alembic/versions/
-└── 20260904_0001_unified_superconductor_properties.py
+├── <expand>_modular_property_schema.py
+├── <copy>_migrate_property_records.py
+└── <contract>_retire_legacy_property_schema.py
 
 backend/
 ├── models.py
-├── api/rag.py
 ├── ingest/
-│   ├── upload_contracts.py
-│   ├── upload_jobs.py
-│   ├── scientific_drafts.py
-│   └── superconductor_properties.py        # 新增：统一记录规范化与兼容转换
-├── services/scientific_draft_rewrite.py
-└── tests/
-    ├── test_superconductor_properties.py   # 新增
-    ├── test_upload_jobs.py
-    ├── test_scientific_drafts.py
-    ├── test_scientific_draft_rewrite.py
-    └── test_structure_reference.py          # 新增
+│   ├── property_modules.py
+│   ├── form_definitions.py
+│   └── scientific_drafts.py
+├── services/
+│   ├── form_definition_service.py
+│   └── scientific_draft_rewrite.py
+└── api/
+    ├── form_definitions.py
+    └── rag.py
 
 goserver/
 ├── models/models.go
 └── handlers/
-    ├── superconductor_properties.go        # 新增：统一详情投影
     ├── papers.go
-    ├── paper_detail_test.go
-    ├── stats.go
-    ├── stats_test.go
-    ├── paper_deletion.go
-    ├── paper_deletion_test.go
-    └── structure_reference_test.go          # 新增
+    └── stats.go
 
 frontend/src/
 ├── lib/
-│   ├── paperProcessing.ts
-│   ├── superconductorProperties.ts         # 新增：统一类型与兼容转换
-│   └── paperDetailView.ts
-├── components/MaterialStatesEditor.tsx
-├── components/StructureReferencePrompt.tsx  # 新增：候选提示与确认
-└── pages/
-    ├── AdminPaperEditPage.tsx
-    ├── SearchPage.tsx
-    └── share.tsx
-
-tests/
-├── 01_decentralized_uploading/
-│   ├── material-states-editor.test.tsx
-│   ├── upload-task-editor-classification.test.tsx
-│   └── paper-detail-form-parity.test.tsx
-├── 02_identity_governance/
-│   ├── admin-scientific-data-edit.test.tsx
-│   └── admin-scientific-data-view.test.tsx
-├── 02_maintenance_and_verification/
-│   └── test_issue90_property_migration.py  # 新增
-└── 03_data_search_and_database_discovery/
-    └── paper-detail-view-sources.test.tsx
+│   ├── propertyModules.ts
+│   └── formDefinitions.ts
+├── components/
+│   ├── MaterialStatesEditor.tsx
+│   ├── PropertyModuleEditor.tsx
+│   └── SchemaDrivenRecordForm.tsx
+└── pages/AdminPaperEditPage.tsx
 ```
 
-**结构选择**：Python 负责草稿规范化和权威写入，Go 负责公开详情和专用查询，前端共享一个
-类型/兼容模块和一个编辑组件。三层都以 `contracts/property-record.md` 为准，各自只实现一次
-映射；不引入新的跨服务协议框架，也不复制第二套材料状态编辑器。
+实际迁移文件名在实现时按当前 Alembic head 生成，不能复用过期的固定 revision 名。
 
-## 需求到设计的映射
+## 数据与接口策略
 
-| 来源 | 设计组件/接口 | 验证方式 |
+1. `property_modules` 只保存模块实例和顺序，不保存物性值。
+2. `property_records` 保存所有记录核心字段、定义版本和 `payload_json`。
+3. `form_definitions` 保存定义；发布操作做权限、版本递增、校验和和审计检查。
+4. `calculation_conditions`、`experimental_conditions` 保留各自固定条件字段和扩展 JSON。
+5. API 输出 MaterialState 顶层 Conditions 和模块数组，记录用 `condition_key` 关联。
+6. 前端读取定义生成控件；Python 使用同一版本校验；Go 只读取已验证数据并执行专用查询。
+
+## 实施阶段
+
+### 阶段 1：固定契约与失败测试
+
+建立四模块、三类记录、Conditions 归组、定义 v1/v2、论文内两份 LaH10 和旧数据迁移 fixture。
+
+### 阶段 2：Expand
+
+新增目标表、固定列、外键、Tc CHECK/唯一键/索引和初始定义种子；旧表继续服务生产读取。
+
+### 阶段 3：定义服务与校验器
+
+实现定义读取、发布、停用、校验和、JSON Schema 校验和组级规则。前后端共享 fixture 验证一致性。
+
+### 阶段 4：Copy 与 Reconcile
+
+拆分论文内材料，复制 Conditions、Tc、普通物性和 Evidence。生成逐项对账及异常报告，不删除旧数据。
+
+### 阶段 5：写入和编辑切换
+
+上传与管理员编辑切换到模块化契约；动态表单支持预测/测量 Tc 和首批四模块。
+
+### 阶段 6：读取和下游切换
+
+详情、探索、社区、搜索和图表读取目标表，比较新旧结果并验证查询计划。
+
+### 阶段 7：Observe 与 Contract
+
+在验证窗口内完成升版、审核、删除和旧缓存兼容；确认无旧写入后，用独立迁移退役旧表和旧列。
+
+### 阶段 8：文档与 Issue 收尾
+
+按实际落地行为更新 Overview，记录迁移证据并完成 Issue Documentation Impact。
+
+## 需求映射
+
+| 需求 | 设计组件 | 验证 |
 | --- | --- | --- |
-| FR-001–FR-005 / US1 | 统一 TypeScript/Python 记录、平级编辑器、参数迁移 | 规范化测试、编辑器 Vitest、MySQL 行数对账 |
-| FR-006–FR-011 / US2 | 嵌入 Context、`context_key` 去重和一致性校验 | 两组 μ*—Tc 往返与冲突测试 |
-| FR-012–FR-016 / US3 | Tc 专用映射、#84 约束、Evidence 连接 | Python/MySQL 非法组合与代表唯一测试 |
-| FR-017–FR-20 / US1/US4 | 原文/规范值保留、共享编辑器、Go 统一详情 | 上传—管理—详情契约对账 |
-| FR-021–FR-025 / US4 | 旧输入适配、schema version、Alembic 回填 | 旧 fixture 转换、upgrade/downgrade、迁移报告 |
-| FR-026–FR-030 / US4 | 专用 Tc 查询回归、删除/审核、Overview 回写 | Go/Python/Vitest 全量专项和 quickstart |
-| FR-031 / US1–US3 | 结果级方法/判据与共享 Context 职责分离 | 迁移、统一记录和 Tc/实验回归测试 |
-| FR-032–FR-039 / US5 | 平行结构集合、可空结构引用、跨论文候选检索、确认写入和来源生命周期 | 结构身份迁移、候选 API、编辑器与跨论文回归测试 |
+| FR-001–FR-006 | 模块和统一记录 | 模块增删及四种值类型往返测试 |
+| FR-007–FR-012 | Conditions 与 Tc 固定约束 | 两组 Tc 配对、错配和代表唯一测试 |
+| FR-013–FR-019 | FormDefinition 与动态表单 | v1/v2、发布不可变、前后端一致性测试 |
+| FR-020–FR-022 | 论文内材料 | 双论文 LaH10 隔离与搜索测试 |
+| FR-023–FR-030 | 目标 Schema 与分阶段迁移 | 隔离 MySQL 对账、切换、恢复和图表回归 |
+| FR-031–FR-033 | 本地结构、权限和错误 | 跨 revision 拒绝、发布权限和错误路径测试 |
+| FR-034–FR-035 | 全栈验证与文档 | 测试套件、构建、Quickstart 和 Overview |
 
-## 阶段与依赖
+## 必要复杂度
 
-1. 固化统一契约和失败测试，建立共享测试 fixture。
-2. 增加 Schema 关系、参数和实验判据回填、旧 Context 结果列移除迁移，以及 Python 规范化/持久化基础能力。
-3. 切换上传草稿和共享编辑器，实现平级新增、编辑和 Context 关联。
-4. 切换管理员科学数据读取/重写和 Go 详情统一投影。
-5. 删除内部旧契约依赖，保留单向边界兼容并回归搜索、图表、审核和删除。
-6. 完成隔离 MySQL、前后端测试、quickstart 和 Overview 回写。
-7. 完成全局结构身份、候选检索提示、跨论文引用和来源回归；该阶段的 Schema 与查询契约需在
-   统一编辑器切换前完成。
+| 设计 | 必要原因 |
+| --- | --- |
+| 模块容器 | 新模块不需要修改 MaterialState 顶层字段集合 |
+| 固定核心列 + JSON | 同时满足统计查询和方法字段扩展 |
+| 不可变定义版本 | 新字段发布不改变历史记录语义 |
+| Conditions 组级规则 | 防止同一材料状态下多组 Tc 与参数错配 |
+| 分阶段迁移 | MySQL DDL 和历史数据切换需要可恢复稳定点 |
 
-## 复杂度说明
-
-| 必要复杂度 | 为什么需要 | 已拒绝的简单方案及原因 |
-| --- | --- | --- |
-| 统一映射层 | 领域集合与 Tc/通用物性专用表不是一一对应 | 让每个调用方分别拼装会继续造成契约漂移 |
-| `context_key` | 平级记录仍需表达同一次计算/实验 | 完全扁平且无关联会丢失 μ*—Tc 对应关系 |
-| Alembic 参数回填 | λ、ωlog、μ* 必须成为真实记录和 Evidence 目标 | 只做前端虚拟行不能满足写入和证据要求 |
-| 边界兼容 | Redis 旧草稿和当前详情结构已经存在 | 直接拒绝旧数据会让进行中的上传任务不可恢复 |
-| 全局结构身份 | 论文 StructureModel 带有各自 Evidence，不能直接跨论文引用其主键 | 直接复用本地主键会破坏 revision 血缘和删除边界 |
-| 候选两步确认 | 用户可能不知道结构或不愿采用近似条件候选 | 自动关联会把错误结构写入物性；只提示并确认可保留空引用 |
+不引入可执行插件系统、完整物性本体或通用规则语言。首批规则只覆盖当前明确的四模块、Tc 方法和
+Conditions 组合。

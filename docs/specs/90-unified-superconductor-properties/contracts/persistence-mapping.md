@@ -1,102 +1,93 @@
-# 契约：统一物性记录的持久化映射
+# 契约：模块化物性的持久化映射
 
-## 原则
+## 目标表
 
-领域上的单一集合不等于数据库中的单一宽表。持久化层必须隐藏表差异，同时保留各表已有的
-强约束和查询能力。
-
-## 写入映射
-
-| 条件 | 目标实体 | 关键映射 |
+| 领域实体 | 目标表 | 说明 |
 | --- | --- | --- |
-| `property_code=tc` | `tc_results` | 公共值字段映射为 Tc K 值/区间；保存结果级判据；Tc 专用字段按 `tc_method` 校验；关联一种 Context |
-| `property_code!=tc` | `superconductor_properties` | 使用 `property_definitions` 规范代码和值类型；保存结果级方法/判据；关联零或一种 Context |
-| `context.kind=calculation` | `calculation_contexts` | 按请求内 `context_key` 去重；只保存方法和条件 |
-| `context.kind=experimental` | `experimental_contexts` | 按请求内 `context_key` 去重；保存样品和测量条件 |
-| `structure_ref` | `canonical_structures` + `structure_models` | 全局身份供跨论文引用，来源模型保留论文 Evidence |
-| 记录 Evidence | 对应 Tc 或通用物性 Evidence 连接表 | 必须与记录属于同一论文 revision |
+| 论文内化学体系 | `chemical_systems` | 增加论文 revision 归属，唯一键限定在论文 revision 内 |
+| 论文内材料 | `superconductors` | 增加论文 revision 归属，不跨论文复用主键 |
+| 模块实例 | `property_modules` | 每行是一个材料状态挂载的模块 |
+| 物性记录 | `property_records` | 统一保存 Tc 和其他模块记录的核心字段与扩展 JSON |
+| 表单定义 | `form_definitions` | 保存不可变版本化 JSON Schema、UI Schema 和组级规则 |
+| 计算 Conditions | `calculation_conditions` | 由旧 `calculation_contexts` 迁移并改名 |
+| 实验 Conditions | `experimental_conditions` | 由旧 `experimental_contexts` 迁移并改名 |
+| 证据连接 | `property_record_evidences` | 统一连接 PropertyRecord 与 PaperEvidence |
 
-λ、ωlog、μ* 新写入只进入 `superconductor_properties`，不得再写
-`calculation_contexts.lambda_ep/omega_log_k/mu_star`。
+## 旧数据映射
 
-## 读取映射
+| 旧来源 | 目标 |
+| --- | --- |
+| `tc_results` 理论行 | 超导模块中的 `predicted_tc` |
+| `tc_results` 实验行 | 超导模块中的 `measured_tc` |
+| `superconductor_properties` | 依据定义种子映射到目标模块的普通记录 |
+| Conditions 中的 `lambda_ep`、`omega_log_k`、`mu_star` | 独立 PropertyRecord，并保留原 Conditions 关联 |
+| `tc_result_evidences` | `property_record_evidences` |
+| `superconductor_property_evidences` | `property_record_evidences` |
 
-1. 读取材料状态下的 `tc_results`，映射为 `property_code=tc`。
-2. 读取材料状态下的 `superconductor_properties`，按定义代码映射为其余记录。
-3. 批量读取并嵌入关联 Context、Structure 和 Evidence。
+迁移保存旧表名、旧 ID 与新 ID 的映射，供对账和可恢复切换使用。无法确定模块或定义版本的行进入
+异常清单，不能自动归入一个含义模糊的兜底模块。
 
-旧 Context 参数列由 Alembic 在升级时完成回填和移除，不是升级后运行时读取的第二来源。
-旧 Redis 草稿和旧 API fixture 由边界兼容器转换。
+## 核心字段与 JSON
 
-## 事务边界
+`property_modules`、两类 Conditions 和 `property_records` 都绑定各自目标类型的定义键与版本。
+`property_records` 的固定列至少包括归属、模块、记录类型、物性代码、定义键/版本、原始与规范值、
+单位、不确定度、方法、判据、代表标记、Conditions 外键、结构外键、来源指纹和时间字段。
 
-- 上传提交和管理员科学数据重写继续在单一数据库事务内完成。
-- Context 必须在关联物性前建立；Evidence 必须在目标物性建立后连接。
-- 任一记录、Context、Structure、revision 或 Evidence 校验失败时，整份科学数据写入回滚。
-- 已批准论文的管理员重写继续使用 #76 的升版重审流程。
+`payload_json` 只保存 `FormDefinition.json_schema` 声明的扩展字段。核心列与 JSON 同名或表达同一
+事实时拒绝写入。需要数据库筛选、排序、唯一约束或跨记录关联的扩展字段，必须先通过后续迁移提升
+为固定列。
 
-## 数据库约束
+## Tc 数据库约束
 
-- `tc_results` 保留 #84 的理论/实验 Context 互斥约束。
-- `tc_results` 增加结果级 `criterion`，`result_kind` 继续由 `tc_method` 推导并受数据库约束。
-- `superconductor_properties` 增加结果级 `method_raw`、`criterion`，以及计算/实验 Context 最多一个的 CHECK 和同 revision 复合外键。
-- 新增独立 `canonical_structures`，保存不透明 `structure_ref`、标准化化学式、规范压强、空间群和结构
-  计算方法组合；`structure_models` 增加到规范身份的映射。物性和两类 Context 增加可空的规范结构
-  外键，API 仍只暴露 `structure_ref`。
-- `experimental_contexts` 只保存共享实验条件，不再保存结果级 `tc_criterion`。
-- `property_definitions` 继续禁止 `tc` 进入通用定义，但必须允许并预置
-  `lambda_ep`、`omega_log`、`mu_star`。
-- 代表 Tc 唯一约束保持不变。
-- 范围完整性、非负约束和来源指纹唯一约束保持不变或在统一值映射中提供等价保护。
+- `record_type=predicted_tc` 时必须为 `property_code=tc` 并关联计算 Conditions。
+- `record_type=measured_tc` 时必须为 `property_code=tc` 并关联实验 Conditions。
+- 其他记录不得填写 Tc 专用代表标记。
+- Tc 规范值、范围和不确定度必须非负；规范单位必须为 `K`。
+- 代表 Tc 唯一范围为论文、revision、材料状态、记录类型和方法。
+- 为 Tc 图表建立 `record_type + method_code + value_number` 等实际查询需要的索引。
 
-## λ、ωlog、μ* 迁移
+## 分阶段迁移
 
-迁移对每个非空旧值建立一条通用物性记录：
+1. **Expand**：创建目标表、索引、定义种子和迁移映射表。
+2. **Copy**：分批复制材料、Conditions、Tc、其他物性和 Evidence；每批记录进度。
+3. **Reconcile**：按记录数、核心值、关联和来源指纹对账；异常必须可定位。
+4. **Read switch**：详情和校验读取新模型，对比旧查询结果。
+5. **Write switch**：上传和管理端只写新模型；旧写入关闭。
+6. **Observe**：验证搜索、图表、审核、升版和删除，无差异后进入退役。
+7. **Contract**：删除旧表或旧列；该步骤使用独立迁移，不与复制步骤假定为同一事务。
 
-| 旧列 | 新 `property_code` | 规范单位 |
-| --- | --- | --- |
-| `calculation_contexts.lambda_ep` | `lambda_ep` | 无量纲 |
-| `calculation_contexts.omega_log_k` | `omega_log` | `K` |
-| `calculation_contexts.mu_star` | `mu_star` | 无量纲 |
+任一步失败时从最近完成且已记录的阶段恢复。DDL 的可恢复性必须使用隔离 MySQL 实测，不能用
+“事务整体回滚”作为唯一方案。
 
-迁移必须满足：
+## 论文内材料迁移
 
-- 来源指纹由论文、revision、材料状态、Context 和旧列名确定，可重复执行而不产生重复行；
-- 新行保留原 Context 关系；
-- 不把关联 Tc 的 Evidence 自动复制为参数 Evidence；
-- 对缺少独立 Evidence 的历史值输出明细报告；
-- 回填计数与迁移前各列非空计数逐项一致；
-- upgrade 在计数核验成功后移除三个旧 Context 参数列，失败时整体回滚；
-- downgrade 只恢复迁移生成行对应的旧列值并移除这些迁移生成行，不会删除迁移前或新版本创建的通用物性行。
+旧模型可能由多篇论文共享同一个 `superconductors.id`。迁移为每个实际引用该材料的论文 revision
+建立一条目标材料记录，并重连相应 `MaterialState`。删除或修改任一论文拥有的材料不会级联影响
+另一论文。
 
-## 实验判据迁移
+`ChemicalSystem` 同样按论文 revision 复制。旧 ID 到新 ID 映射必须包含论文和 revision，避免把
+两篇论文的 LaH10 再次合并。
 
-- upgrade 将 `experimental_contexts.tc_criterion` 复制到每条关联实验 Tc 的
-  `tc_results.criterion`；同一 Context 关联多条 Tc 时逐条复制。
-- 计数和非空值核验成功后移除 Context 的 `tc_criterion` 列。
-- downgrade 恢复该列；同一 Context 下判据不一致时必须停止并报告，不能任意选择一个值。
+## 定义版本
+
+- 初始迁移为每类旧记录绑定确定的定义键和 v1。
+- 已发布定义内容由校验和保护，不允许 UPDATE 改写语义。
+- 新建记录解析当前发布版本后，将具体版本写入记录；后续读取不重新解析为最新版。
+- 停用定义不影响历史读取。
+- 显式升级记录时，在同一业务事务内写入新版本、转换后的 `payload` 和审计事件。
 
 ## 删除顺序
 
-删除论文或重建当前 revision 时，至少遵守：
-
 ```text
-Tc/通用物性 Evidence 连接
-→ tc_results / superconductor_properties
-→ calculation_contexts / experimental_contexts
-→ structure_models
-→ material_states
+property_record_evidences
+-> property_records
+-> property_modules
+-> calculation_conditions / experimental_conditions
+-> structure_models
+-> material_states
+-> superconductors
+-> chemical_systems
 ```
 
-只删除最后一个关联记录后形成的孤立 Context；仍被其他物性引用的 Context 必须保留。
-
-## 结构身份与候选查询
-
-- 正式 `StructureModel` 被接受时创建或绑定一个 `CanonicalStructureIdentity`；同一身份可被不同论文的
-  来源模型映射，但来源模型的 revision、Evidence 和删除权限保持独立。
-- 候选服务只查询已批准论文的当前 revision，按标准化化学式、`<=0.01 GPa` 压强差、空间群和已填写
-  的方法组合过滤，并按压强差升序返回。
-- 查询不创建、不修改规范身份，也不自动写入物性。只有用户确认候选后，统一持久化层才解析
-  `structure_ref` 并写入各自的规范结构外键。
-- 保存时必须检查规范身份至少存在一个已公开来源；来源全部失效时禁止删除仍被引用的身份，或将其
-  标记为不可用并返回影响记录。
+只删除当前论文 revision 拥有的记录。Conditions 仍被记录引用时不得删除；同名材料属于另一论文时
+不受影响。

@@ -1,180 +1,94 @@
-# 快速验收：统一材料状态的超导物性记录
-
-## 目的
-
-本 Quickstart 用一组固定数据验证三件事：
-
-1. 所有物性在一个平级列表中出现；
-2. 平级记录仍保留计算/实验 Context 对应关系；
-3. Tc 专用约束、Evidence、详情和图表行为不回退；
-4. 结构引用可空，已有结构候选需要用户确认后才能复用。
+# 快速验收：MaterialState 模块化物性与动态表单
 
 ## 前置条件
 
-- Alembic 已升级到包含 #90 的目标 revision。
-- Python、Go、前端和 MySQL 使用同一测试数据库契约。
-- 使用具备上传和管理权限的测试账号。
-- 测试论文尚未批准，或允许按 #76 进入升版重审。
-- 测试库准备一条已批准论文当前 revision 的 `CanonicalStructureIdentity`，并保留至少一个公开来源
-  `StructureModel`；另准备一条待审核来源用于验证不可见。
+- 使用包含 #90 Expand 与 Copy 阶段的隔离 MySQL。
+- Python、Go 和前端读取同一套已发布定义。
+- 准备上传用户、管理员和超级管理员测试账号。
 
-## 场景一：一个列表表达全部物性
+## 场景一：按需挂载模块
 
-准备 `LaH10 @ 170 GPa` 材料状态，输入以下平级记录：
+为论文 A 的 `LaH10 @ 170 GPa` 添加 `superconductive_properties` 和 `electronic_properties`，
+分别录入 Tc 与 DOS，不添加另外两个模块。
 
-| property_code | 值 | Context |
-| --- | --- | --- |
-| `tc` | 250 K | `calc-a` |
-| `lambda_ep` | 2.2 | `calc-a` |
-| `omega_log` | 1100 K | `calc-a` |
-| `mu_star` | 0.10 | `calc-a` |
-| `dos_fermi` | 0.8 states/eV | 无 |
-| `hc2` | 120 T | `exp-a` |
-| `superconducting_gap` | 40 meV | `exp-a` |
-| `energy_above_hull` | 0 eV/atom | 无 |
+预期：保存、刷新和详情只出现两个模块；新增动力学模块后原记录键、定义版本和值不变；删除空模块
+不删除其他模块记录。
 
-预期：
-
-- 页面只有一个物性列表，共 8 条记录；
-- 页面和响应中不存在 `TcRelated`、`OtherProperties`、`UncontextualizedProperties`；
-- λ、ωlog、μ* 不是 Tc 的子字段；
-- 无 Context 的 DOS 和 energy above hull 正常保存。
-
-## 场景二：验证两组 μ*—Tc 不错配
-
-再增加：
+## 场景二：两组预测 Tc 不错配
 
 ```text
-calc-a: μ*=0.10, Tc=250 K
-calc-b: μ*=0.15, Tc=220 K
+calc-a: mu_star=0.10, lambda=2.2, omega_log=1100 K, predicted Tc=250 K
+calc-b: mu_star=0.15, lambda=2.2, omega_log=1100 K, predicted Tc=220 K
 ```
 
-保存草稿、刷新、提交、从管理端读取并再次保存。
+两组可以使用相同软件和网格，但必须具有不同 `condition_key`。保存草稿、提交、管理端读取并再次
+保存。
 
-预期：
+预期：两组关系始终不交换或合并；尝试把两个互斥 mu_star 放入同一 Conditions 时返回
+`condition_group_rule_failed`。
 
-- `calc-a` 始终关联 0.10 和 250 K；
-- `calc-b` 始终关联 0.15 和 220 K；
-- 后端没有按物性名称或数值把两个 Context 合并；
-- 用户没有输入或编辑数据库 `calculation_context_id`。
+## 场景三：预测与测量 Tc 动态字段
 
-将 `calc-b` 的一条记录改成与其他 `calc-b` 记录不同的 Context 详情后再次提交。
+1. 添加 `predicted_tc + allen_dynes`，确认显示计算 Conditions 和该方法允许字段。
+2. 添加 `measured_tc + resistivity`，确认显示实验 Conditions、样品及电阻判据字段。
+3. 让预测 Tc 引用实验 Conditions，让测量 Tc 引用计算 Conditions。
+4. 把已填写方法扩展字段的记录切换到另一方法。
 
-预期：返回 `conflicting_context`，错误路径指向具体物性记录。
+预期：1、2 成功；3 被前后端拒绝；4 要求明确清理、转换或取消，隐藏字段不会继续进入提交数据。
 
-## 场景三：验证实验/理论 Tc
+## 场景四：定义 v1/v2 并存
 
-分别尝试：
+超级管理员发布 `superconductive_properties.predicted_tc` v1，创建记录 A；再发布增加可选字段的 v2，
+创建记录 B。
 
-1. `tc_method=experimental` + `context.kind=experimental`；
-2. `tc_method=experimental` + `context.kind=calculation`；
-3. `tc_method=allen_dynes` + `context.kind=calculation`；
-4. `tc_method=allen_dynes` + `context.kind=experimental`。
+预期：A 继续绑定 v1，B 默认绑定 v2；直接修改 v1 失败；停用 v1 后 A 仍可读取但不能用 v1 新建；
+未知版本和校验和错误被拒绝。显式升级 A 时先预览，验证通过后才写入 v2 和转换后的 `payload`。
 
-预期：1、3 成功，2、4 在应用层被拒绝；绕过 API 的非法数据库写入也被约束拒绝。
+## 场景五：论文内材料隔离
 
-同一材料状态和 `tc_method=allen_dynes` 提交两条 `is_representative=true`。
+论文 A、B 分别创建 LaH10 和 170 GPa 状态。两份 `Superconductor` 主键必须不同。修改论文 A 的
+展示名称并删除其草稿。
 
-预期：保存失败，不产生部分数据。
+预期：论文 B 的材料、状态、物性和 Conditions 不变；搜索 LaH10 仍能按规范化字段找到两篇论文。
 
-## 场景四：验证旧契约转换
+## 场景六：Evidence 与跨模块单一事实
 
-加载同时包含以下字段的旧 fixture：
+为 Tc、mu_star 和 DOS 分别关联各自原文 Evidence。尝试将同一 DOS 复制到两个模块后独立修改。
 
-```text
-material_states[].tc_results[]
-material_states[].calculation_contexts[]
-material_states[].experimental_contexts[]
-material_states[].properties[]
-paper.key_properties[]
-```
+预期：新批准记录都能追溯到同 revision Evidence；跨 revision Evidence 被拒绝；同一事实只保留一个
+权威记录，其他模块只能引用或展示它。
 
-预期：
+## 场景七：分阶段迁移
 
-- 读取后只得到 `material_states[].superconductor_properties[]`；
-- Context 中非空 λ、ωlog、μ* 被转换为平级记录；
-- 已经存在对应通用物性行时不生成重复参数；
-- 再次保存只输出新契约。
+在旧 Schema fixture 上依次执行 Expand、Copy、Reconcile、Read switch、Write switch、Observe 和
+Contract。
 
-## 场景五：验证持久化与 Evidence
+逐项检查：
 
-提交场景一的数据，并核对：
+- 共享材料按论文 revision 拆分且关系正确；
+- 理论/实验 Tc 映射到正确记录类型；
+- 普通物性映射到正确模块和定义 v1；
+- lambda、omega_log、mu_star 成为独立记录并保持 Conditions；
+- Evidence 不丢失、不伪造；
+- 重复执行 Copy 不产生重复记录；
+- 每个阶段失败后可从最近稳定阶段恢复；
+- Contract 前旧读取可用，Contract 后无旧写入依赖。
 
-- Tc 进入专用 Tc 实体；
-- 其余 7 条进入通用物性实体；
-- `calc-a` 只建立一个计算 Context，`exp-a` 只建立一个实验 Context；
-- λ、ωlog、μ* 不再写入 Context 参数列；
-- 每条带 Evidence 的记录建立对应 Evidence 连接；
-- 所有实体的论文、revision 和材料状态一致。
+## 场景八：详情、搜索和图表
 
-故意让最后一条 Evidence 跨 revision，预期整个事务回滚，残留新科学记录数为 0。
+批准测试论文，依次检查上传只读态、管理员编辑、论文详情、材料搜索和 Tc 图表。
 
-## 场景六：验证详情和下游
+预期：各入口的模块、记录数、定义版本、值和 Conditions 一致；搜索同时返回论文 A、B 的 LaH10；
+预测/测量 Tc、方法和代表点与迁移前一致；查询计划使用目标索引。
 
-批准测试论文后依次检查上传只读态、管理员编辑页、论文详情、探索页和社区页。
-
-预期：
-
-- 五个入口对场景一均识别 8 条记录；
-- 名称、值、单位和 Context 对应关系一致；
-- Tc、Hc2 和超导能隙都被称为超导物性，不显示“其他普通物性”分组；
-- Tc 搜索结果和社区图表中的代表 Tc 仍为 250 K。
-
-## 场景七：验证迁移与回滚
-
-在隔离 MySQL 中准备两个旧计算 Context，分别填充部分 λ、ωlog、μ*，然后执行：
-
-1. upgrade 到 #90 revision；
-2. 核对三个旧列的非空计数与新物性代码计数；
-3. 检查缺失 Evidence 报告；
-4. downgrade；
-5. 再次 upgrade。
-
-预期：
-
-- 各参数计数逐项相等；
-- 重复 upgrade 不生成重复记录；
-- downgrade 恢复旧参数值，不删除迁移前已有的通用物性；
-- 没有 Evidence 被自动伪造。
-
-## 场景八：验证结构候选、确认与空引用
-
-准备一个 `LaH10` 物性录入状态，填写压强 `170.000 GPa`、空间群 `Fm-3m/225`，并在计算 Context
-填写 `geometry_method=relax`、`calculation_code=Quantum ESPRESSO`、`exchange_correlation=PBE`、
-`nuclear_treatment=harmonic`。调用结构候选接口。
-
-预期：
-
-- 只返回已批准论文当前 revision 的候选；待审核来源不出现；
-- 候选化学式标准化相等、压强差不超过 `0.01 GPa`，且已填写方法字段匹配；
-- 结果包含 `structure_ref`、压强差、空间群、方法摘要和来源论文，并按压强差升序排列；
-- 查询本身不修改物性草稿。
-
-执行以下四种操作：
-
-1. 只有一个候选时点击“关联此结构”；
-2. 存在多个候选时不选择任何候选；
-3. 候选压强距离相同；
-4. 点击“跳过”或清空已有结构引用。
-
-预期：
-
-- 操作 1 后，Tc、λ、μ* 三条记录可以保存相同的不透明 `structure_ref`，Context 结构引用与记录一致；
-- 操作 2、3、4 均保存 `structure_ref=null`，不会自动选择、创建或复制结构；
-- 已有非空引用不会因再次查询而被覆盖；
-- 来源 `StructureModel` 的 Evidence 仍只属于来源论文，不会复制到当前物性。
-
-将候选结构所属论文升版或删除前，尝试删除其最后一个公开来源。
-
-预期：系统阻止产生无来源的有效规范身份，或明确标记身份不可用并报告受影响的物性引用。
-
-## 自动化验证命令
+## 自动验证
 
 ```bash
 bash scripts/run-tests.sh backend
 bash scripts/run-tests.sh go
 bash scripts/run-tests.sh frontend
 cd frontend && npm run build
+git diff --check
 ```
 
-另需执行 #90 的隔离 MySQL `upgrade → downgrade → upgrade` 验证和 `git diff --check`。
+另需运行 #90 的隔离 MySQL 分阶段迁移与恢复专项测试。

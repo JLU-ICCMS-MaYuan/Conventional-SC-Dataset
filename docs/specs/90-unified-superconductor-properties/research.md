@@ -1,254 +1,109 @@
-# 研究记录：统一材料状态的超导物性记录
+# 研究记录：MaterialState 模块化物性与动态表单
 
-## 1. 调研范围
+## 1. 当前事实
 
-本研究在创建 #90 前后只读核对了：
+- 当前材料按规范组成在全库复用；`superconductors.composition_key` 和 `formula_normalized` 是全局唯一。
+- 当前 Tc 位于 `tc_results`，其他物性位于 `superconductor_properties`，lambda、omega_log、mu_star
+  仍可位于计算 Context 字段。
+- 前端表单固定编码 Tc 方法与字段，Schema version 只用于上传缓存兼容，不是表单定义版本。
+- Tc 图表直接查询 `tc_results`，迁移后必须保留等价固定字段和索引。
+- Conditions 改名和本文全部目标均未实现，不能写入 Overview 作为当前事实。
 
-- GitHub Issue #11、#12、#30、#32、#33、#46、#52、#53、#57、#59、#60、#65、#72、#76、#78、#80、#84；
-- 对应 `docs/specs/` 规格、契约和任务状态；
-- 上传、领域模型、审核、详情、检索和图表 Overview；
-- SQLAlchemy、GORM、上传草稿、持久化、详情 API、共享编辑器和展示投影代码；
-- Python、Go、Vitest 和 MySQL 迁移测试入口。
+## 2. 决策：MaterialState 挂载模块
 
-检索没有发现开放 Issue 完整提出“所有物性使用平级 `SuperconductorPropertyRecord`”的目标。
-#46、#52 与写入和编辑面高度重叠，但仍以 Tc、Context 参数和普通物性分组为前提，因此 #90
-不是重复 Issue。
+**决策**：API 使用 `property_modules[]`，模块由稳定 `module_code` 区分。首批注册四个模块。
 
-## 2. 已确认的当前事实
+**理由**：若把每个模块做成 `MaterialState` 的固定顶层字段，每增加模块都要修改 API 类型和所有调用方；
+统一模块容器更符合“按需插拔”，同时仍能让 UI 按模块展示。
 
-### 2.1 当前数据被三种来源分开
+**边界**：这里的“插件”是数据定义和组件注册，不是下载并执行第三方代码。新增模块需要受控注册和
+发布定义，不能绕过后端校验。
 
-| 科学量 | 当前权威位置 | 当前上层字段 |
-| --- | --- | --- |
-| Tc | `tc_results` | `material_states[].tc_results[]` |
-| λ、ωlog、μ* | `calculation_contexts` 的三个数值列 | 状态级或 Tc 条目内 `calculation_context`，详情另返回 `calculation_contexts[]` |
-| 其他物性 | `superconductor_properties` | 草稿 `properties[]`、详情顶层 `key_properties[]` |
+## 3. 决策：统一 PropertyRecord 物理存储
 
-当前前端 `collectPropertyRows()` 已将三类来源拼成一张展示表，但这只是只读投影，写入 DTO、
-Evidence、API 和领域语义仍然分离。
+**决策**：新建 `property_records` 统一保存 Tc 和其他物性。固定列保存核心查询字段，`payload_json`
+保存受版本化 Schema 约束的扩展字段。
 
-### 2.2 当前数据库存在硬约束
+**理由**：模块和记录类型都需要动态扩展。如果上层统一、底层仍为每种记录分表，则每个新增记录类型
+仍要开发专用映射、证据表和查询。统一记录表能让扩展主要落在定义层，同时 Tc 的值、方法、代表标记
+继续使用固定列和数据库索引。
 
-- `property_definitions` 的 `ck_property_definitions_non_tc` 禁止把 Tc 方法代码注册为普通物性。
-- `tc_results.ck_tc_results_context_kind` 强制实验 Tc 关联实验 Context、其他 Tc 方法关联计算 Context。
-- 代表 Tc 唯一约束按论文、材料状态、方法和代表标记生效。
-- `superconductor_properties` 目前只能关联计算 Context，不能关联实验 Context。
-- Tc 和通用物性分别使用 `tc_result_evidences` 与 `superconductor_property_evidences`。
+**备选方案**：保留 `tc_results` 专用表，只统一 API。该方案迁移风险较低，但长期保留两套结果存储、
+证据连接和映射分支，与本次 Schema 驱动扩展目标不一致，因此不采用。
 
-这些约束说明“领域统一”不能被实现为简单改名，也不能直接把所有字段塞进当前通用物性表。
+**拒绝方案**：把计算、实验和所有方法字段都塞进一张宽表。Conditions 继续独立，方法特有字段进入
+受校验 JSON，避免大量固定空列。
 
-### 2.3 当前实现存在的具体缺口
+## 4. 决策：Conditions 是一次确定执行
 
-1. 上传提示和 #46 明文要求 Tc、λ/ωlog/μ*、普通物性分流。
-2. 共享编辑器分别维护 `state.tc_results` 与 `state.properties`，并把 λ/ωlog/μ* 嵌套在 Tc 的计算 Context 中。
-3. Go 详情响应分别返回 `tc_results` 和 `calculation_contexts`，通用物性则位于论文级 `key_properties`。
-4. 管理端依赖 `calculation_context_id` 重组 Tc 草稿，而详情序列化没有稳定输出该关联，已存在契约漂移风险。
-5. 计算 Context Evidence 当前没有对应持久化连接；把 λ/ωlog/μ* 视为独立记录后，必须让每个参数拥有自己的 Evidence 关系。
-6. `ExperimentalContext.tc_criterion` 把结果判据放在共享环境里；一旦同一实验 Context 同时关联 Tc、Hc2 和能隙，这个字段无法表达每条结果各自的判据。
+**决策**：`calculation_conditions` 与 `experimental_conditions` 分别表示一次计算运行和一次实验测量。
+来自同一次过程的多条记录共享 `condition_key`。
 
-## 3. Issue / Spec 关系与冲突
+**理由**：仅按软件、网格或实验方法判断“同一条件”会错误合并不同输入参数的结果。mu_star=0.10 与
+0.15 即使其他设置一致，也必须是两次不同的 Conditions。
 
-| 来源 | 状态 | 已有结论 | #90 的处理 |
-| --- | --- | --- | --- |
-| #11 | OPEN Epic | 统一超导样本上传与治理 | #90 已建立为原生子 Issue |
-| #12 | OPEN Idea | 恢复 `superconductor_records` 单一主表 | 不继承；其技术前提已被 #32 取代 |
-| #32 | CLOSED Feature | Tc 专用表、Context、普通物性和 Evidence；Tc 不进入普通物性字典 | 保留物理约束，部分替代上层领域解释 |
-| #33 | CLOSED Feature | 论文 revision、Evidence 和审核血缘 | 完整继承 |
-| #46 | OPEN Feature | 上传分流写入 Tc、Context 和普通物性 | 复用事务链路，替代草稿/API 分组；本地任务完成不等于 Issue 已关闭 |
-| #52 | OPEN Feature | 每条 Tc 嵌套 λ/ωlog/μ* 计算 Context | 保留 Context 对应关系，替代物性嵌套和页面分组 |
-| #53 | OPEN Feature | 从论文研究方法推导 Tc 方法 | 只能建议/预填，最终权威仍为每条 `tc_method` |
-| #57 | CLOSED Bug | 详情读取三类真实来源 | 保留完整可见目标，替换分裂响应契约 |
-| #59 | CLOSED Bug | 详情与校对字段一致 | 作为回归门 |
-| #60 | CLOSED Bug | 论文物理删除按 FK 拓扑执行 | Schema 演进后必须回归删除顺序 |
-| #65 | CLOSED Bug | 三来源共享展示投影 | 作为统一映射原型，不视为完整目标 |
-| #72 | CLOSED Feature | Tc 图表直接查询 `tc_results` | 保留专用查询并验证结果一致 |
-| #76/#78 | CLOSED Feature | 共享材料状态编辑器和管理独立编辑页 | 复用，不建立第二套编辑器 |
-| #80 | CLOSED Feature | `superconductor_kind` 提升到论文 revision | 保留分类所有权；“控制 Tc 字段”职责由 #84 修正 |
-| #84 | CLOSED Bug | 每条 `tc_method` 是理论/实验 Context 的唯一开关 | 完整保留 |
+**组级校验**：定义的 `group_rules` 可声明同组唯一输入、互斥记录和必要配套关系。后端在完整材料状态
+上校验，前端只负责提前提示。
 
-### 3.1 Overview 冲突
+## 5. 决策：Tc 记录类型与具体方法分离
 
-当前 Overview 把以下内容写成已实现事实：
+**决策**：`record_type` 使用 `predicted_tc` 或 `measured_tc`，`method_code` 保存具体预测或测量方法。
 
-- Tc 只进入 `tc_results`，不属于普通物性；
-- λ、ωlog、μ* 位于 `calculation_contexts`；
-- 页面分别展示 Tc 列表和普通物性列表；
-- 详情和检索从三类来源读取。
+**理由**：预测/测量决定 Conditions 大类，具体方法决定动态字段。常规/非常规超导分类不参与单条 Tc
+的字段选择。
 
-#90 尚未实施，因此本阶段不修改 Overview。实现和验证完成后，必须更新：
+例如：
 
-- `docs/overview/01_Decentralized_Uploading_of_Superconductivity_Data/data-structure-and-form-mapping.md`
-- `docs/overview/01_Decentralized_Uploading_of_Superconductivity_Data/upload-review-and-default-selection.md`
-- `docs/overview/02_Decentralized_Maintenance_and_Verification/domain-model-and-schema.md`
-- `docs/overview/02_Decentralized_Maintenance_and_Verification/mysql-schema-catalog.md`
-- `docs/overview/02_Decentralized_Maintenance_and_Verification/literature-and-record-review.md`
-- `docs/overview/03_Superconductivity_Data_Search_and_Database_Discovery/paper-and-property-results.md`
-- `docs/overview/03_Superconductivity_Data_Search_and_Database_Discovery/local-material-search.md`
-- `docs/overview/03_Superconductivity_Data_Search_and_Database_Discovery/tc-history-and-pressure-charts.md`
+```text
+predicted_tc + allen_dynes -> 计算 Conditions + Allen-Dynes 扩展字段
+measured_tc + resistivity  -> 实验 Conditions + 电阻测量判据字段
+```
 
-## 4. 方案比较
+## 6. 决策：不可变版本化 FormDefinition
 
-### 方案 A：把所有物性物理合并进一张宽表
+**决策**：`FormDefinition` 使用 `definition_key + version` 标识，发布后不可变，并用 `target_kind`
+区分模块、物性记录和两类 Conditions。JSON Schema 管数据规则，UI Schema 管控件和顺序，组级规则
+管同一 Conditions 下多条记录的组合。
 
-**做法**：Tc、通用物性、方法、计算和实验字段全部放进一个物理表。
+**理由**：若直接修改现有定义，历史记录会在没有数据变化时突然变成非法。记录绑定具体版本后，新旧
+定义可以并存，升级也能成为明确、可审计的动作。
 
-**优点**：数据库表名与领域概念表面一致。
+**安全边界**：只支持声明式 Schema 子集，不执行表达式代码或远程脚本。超级管理员发布定义，后端是
+最终校验权威。
 
-**缺点**：
+**备选方案**：所有方法字段继续硬编码。它的约束简单，但每次扩展都需要发版，无法满足用户目标。
 
-- 大量只对 Tc、计算或实验有效的可空列；
-- 需要重建 #32/#84 的 CHECK、唯一键和统计索引；
-- Tc 图表、搜索、Evidence、删除和历史数据需要整体迁移；
-- 每新增一种需要专门结构的物性都会继续扩宽表。
+## 7. 决策：论文内材料所有权
 
-**结论**：拒绝。它用存储整齐换取约束退化和高迁移风险。
+**决策**：`ChemicalSystem` 和 `Superconductor` 归属于论文 revision，唯一约束缩小到论文 revision。
 
-### 方案 B：只在页面做统一展示
+**理由**：业务希望每篇论文保留自己研究的 LaH10 记录和解释，修改论文 A 不影响论文 B。跨论文搜索
+使用规范化化学式和组成聚合，不使用共享主键。
 
-**做法**：保留当前全部草稿和 API，仅继续增强 `collectPropertyRows()`。
+**迁移影响**：旧共享材料需按实际引用它的论文 revision 复制，并重连 MaterialState。只给表增加
+`paper_id` 而不拆旧共享行不能满足隔离要求。
 
-**优点**：改动最小。
+## 8. 决策：结构限定为论文内引用
 
-**缺点**：
+**决策**：本 Feature 只要求记录可选引用同论文 revision、同 MaterialState 的 `StructureModel`。
 
-- 上传和管理端仍然按 Tc/参数/普通物性分组；
-- λ、ωlog、μ* 仍没有独立记录和 Evidence；
-- API 调用方继续感知表结构；
-- 不能满足“解除分组”的目标。
+**理由**：此前 #90 增加的跨论文规范结构身份与动态物性表单不是同一个交付目标，也与“不自动跨论文
+共享材料”的新边界不一致。跨论文结构查重或推荐需要独立 Feature 重新定义科学等价和生命周期。
 
-**结论**：拒绝。#65 已经证明展示聚合不等于领域统一。
+## 9. 决策：分阶段迁移
 
-### 方案 C：平级领域记录 + 专用持久化适配（采用）
+**决策**：采用 Expand、Copy、Reconcile、Read switch、Write switch、Observe、Contract 七阶段。
 
-**做法**：上层只有 `SuperconductorProperties[]`。Tc 和其他物性统一为记录；Context 是可共享
-关联。Tc 继续写 `tc_results`，其他物性写 `superconductor_properties`；λ、ωlog、μ* 从
-Context 数值列迁为通用物性行。
+**理由**：MySQL DDL 不能可靠地与所有数据回填一起整体事务回滚。先复制和对账、后切换、最后删旧表，
+可以在每个稳定点恢复，也能先比较新旧查询结果。
 
-**优点**：
-
-- 满足完整平级领域结构；
-- 保留 Tc 强约束、索引和图表查询；
-- 每条参数可拥有独立 Evidence；
-- Context 只承担“怎么计算/测量”，职责更单一；
-- 新物性只扩展定义目录，不修改上层结构。
-
-**代价**：
-
-- 需要统一适配器和一次定点 Schema/数据迁移；
-- 数据库中 `superconductor_properties` 表仍不包含 Tc，留下领域名与物理表名不完全一致的命名债务；
-- 兼容期必须谨慎去重旧 Context 参数列。
-
-**结论**：采用。该方案以最小必要迁移换取真实的单一领域契约。
-
-## 5. Context 表达决策
-
-### 决策
-
-每条记录携带可选 Context 对象；同一 Context 使用系统管理的 `context_key` 关联。该键是草稿
-和响应范围内的关联键，不是数据库 ID，也不由用户填写。
-
-### 原因
-
-- 完全删除关联会让不同 μ* 下的多个 Tc 无法配对。
-- 将 Context 重新放到材料状态顶层会让表单和 API 再次要求调用方手工组装。
-- 把 Context 完整嵌入每条记录可以保持记录自描述；后端按 `context_key` 去重持久化。
-
-### 一致性要求
-
-相同 `context_key` 的内容必须一致。前端共享编辑器应以一个 Context 草稿对象同步更新所有
-关联记录，避免用户看到重复输入框；API 即使收到重复对象，也必须在持久化前验证一致性。
-
-## 6. λ、ωlog、μ* 所有权决策
-
-### 决策
-
-λ、ωlog、μ* 是物性/物理参量记录，不再属于 `CalculationContext` 的值字段。结果专属的方法
-原文和判据同样归单条物性；Context 只保存可共享的计算或实验条件。
-
-### 原因
-
-Context 回答“在什么结构、软件、方法和网格下计算”，物性记录回答“得到了什么结果”。把
-结果放进 Context 会造成：
-
-- 参数没有独立 Evidence；
-- 无法用统一值/单位模型查询；
-- 页面解除分组而持久化仍旧分组；
-- 同一 Context 下未来扩展 DOS、声子频率或能隙时继续增加专用列。
-
-## 7. 兼容与迁移决策
-
-- 旧输入在边界转换一次；内部逻辑只认统一结构。
-- 新写入不双写 Context 参数列。
-- 数据库迁移将旧非空参数回填为通用物性行并核对数量。
-- 迁移不复制不确定的 Tc Evidence，缺失证据进入显式报告。
-- Tc 专用表和 Evidence 表保留，不进行物理合表。
-- 详情响应完成切换后不继续输出旧科学字段。
-
-## 8. 关键文件
-
-| 文件 | 作用 |
-| --- | --- |
-| `backend/models.py` | Context、Tc、通用物性和 Evidence ORM |
-| `backend/ingest/upload_jobs.py` | AI 输出和旧草稿归一化 |
-| `backend/ingest/scientific_drafts.py` | 上传正式持久化 |
-| `backend/services/scientific_draft_rewrite.py` | 管理端读取与整体重写 |
-| `backend/api/rag.py` | 上传草稿校验和接口边界 |
-| `goserver/models/models.go` | GORM 科学模型 |
-| `goserver/handlers/papers.go` | 论文详情和搜索读取 |
-| `goserver/handlers/stats.go` | Tc 图表专用查询 |
-| `frontend/src/lib/paperProcessing.ts` | 上传草稿 TypeScript 契约 |
-| `frontend/src/components/MaterialStatesEditor.tsx` | 上传与管理共享编辑器 |
-| `frontend/src/lib/paperDetailView.ts` | 当前三来源展示聚合 |
-| `frontend/src/pages/AdminPaperEditPage.tsx` | 管理端详情到草稿映射 |
-
-## 9. 结构引用与跨论文检索决策
-
-### 9.1 当前结构事实
-
-正式 `StructureModel` 绑定论文、revision 和 `MaterialState`，并通过
-`structure_model_evidences` 保存论文证据。其结构元数据包含空间群、`geometry_method`、
-`exchange_correlation`、`calculation_code` 和 `nuclear_treatment`；压强和化学式分别来自所属
-`MaterialState` 与 `Superconductor`。现有 `/api/structures/representative` 面向旧的
-`superconductors_structures`，不能直接作为 #90 的跨论文结构引用接口。
-
-### 9.2 决策：全局身份与本地来源分离
-
-**决策**：新增独立的 `canonical_structures`（领域名 `CanonicalStructureIdentity`）。物性和
-Context 的 `structure_ref` 指向该身份；每篇论文的 `StructureModel` 通过映射保留本地文本、
-来源、revision 和 Evidence。
-
-**理由**：直接引用另一论文的 `StructureModel.id` 会越过 revision/Evidence 边界，来源论文删除或
-升版时也会影响无关论文。全局身份只共享结构条件的引用，不共享物性、Context 或 Evidence。
-
-**备选方案**：确认后复制结构到当前论文。拒绝，因为会产生结构副本，无法满足多个物性/论文共享
-同一个 `structure_ref` 的目标；也不能解决重复上传和身份漂移。
-
-### 9.3 决策：四项条件匹配与确认流程
-
-**决策**：候选按标准化化学式、压强绝对差 `<=0.01 GPa`、空间群和已填写的方法组合匹配。方法
-组合由 `geometry_method`、`calculation_code`、`exchange_correlation`、`nuclear_treatment`
-组成，未填写字段不作为过滤条件。候选只来自已批准论文当前 revision，并按压强差排序。
-
-查询是非阻断提示；多候选或压强距离相同不自动选择，只有用户确认后才写入不透明
-`structure_ref`。没有候选、用户跳过或不知道结构时保存 `null`。
-
-**理由**：四项条件是用户明确要求的录入信息；标准化和容差可处理公式/小数表示差异。人工确认
-可阻止系统把近似候选静默写入物性，同时保留无结构输入路径。
-
-**已知风险**：四项条件不包含几何指纹，可能把同条件下不同多形归入同一身份。当前业务选择不
-自动比较几何；候选列表必须展示来源和匹配条件，后续若需要区分多形结构应另立 Feature。
-
-### 9.4 决策：身份生命周期
-
-规范身份只有在存在至少一个已公开来源 `StructureModel` 时可被候选或写入引用。来源论文升版或
-删除前，服务必须检查仍被引用的身份；不得静默留下无公开来源的有效关联。查询服务不创建或修改
-身份，身份创建/绑定属于正式结构模型接受事务。
-
-## 10. 新增关键文件
-
-| 文件 | 作用 |
-| --- | --- |
-| `backend/services/structure_reference.py` | 全局结构身份解析、条件标准化和候选排序 |
-| `backend/api/rag.py` | 结构候选查询接口与当前草稿/论文权限校验 |
-| `frontend/src/components/StructureReferencePrompt.tsx` | 候选提示、确认、跳过和清空交互 |
-| `docs/specs/90-unified-superconductor-properties/contracts/structure-reference.md` | 查询和确认写入契约 |
+对账不能只比较总行数，还要比较论文 revision、材料状态、记录类型、数值、单位、Conditions、Evidence
+和代表 Tc。缺失 Evidence 进入报告，不伪造。
+
+## 10. 已知风险
+
+- 动态 Schema 过强会成为另一种编程语言，因此必须限制关键字和规则表达能力。
+- JSON 扩展字段不适合频繁统计；字段成为核心查询条件时必须迁移为固定列。
+- 论文内复制材料会增加记录数，但换来清晰的数据所有权；跨论文搜索需要依赖规范化索引。
+- 模块分类可能存在交叉语义；同一事实只能存一条，UI 通过关联展示，不能复制权威值。
+- 当前 #90 涉及模型、迁移、表单、详情和图表，实施必须按阶段完成，不能一次删掉旧表。

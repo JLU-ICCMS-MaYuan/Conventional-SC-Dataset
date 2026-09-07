@@ -1,382 +1,252 @@
-# 数据模型：平级超导物性记录
+# 数据模型：MaterialState 模块化物性
 
-## 1. 权威结论
-
-`MaterialState` 下只有一个物性集合：`SuperconductorProperties[]`。集合中的每一项都是平级
-`SuperconductorPropertyRecord`。Tc、λ、ωlog、μ*、DOS、Hc1/Hc2、超导能隙、临界电流、
-穿透深度、相干长度和 energy above hull 等都使用这一个记录概念。
-
-本模型不使用以下分组：
-
-- `TcRelated`
-- `TheoreticalTcRecords`
-- `ExperimentalTcRecords`
-- `OtherProperties`
-- `NonTcProperties`
-- `UncontextualizedProperties`
-
-“平级”表示物性之间没有容器关系，不表示它们彼此没有科学关联。同一次计算或实验产生的多条
-记录通过共享 Context 建立关系。
-
-`StructureModels[]` 与 `SuperconductorProperties[]` 是两个平行集合。物性记录通过可选的
-`structure_ref` 引用 `CanonicalStructureIdentity`，而不是直接跨论文引用某个
-`StructureModel` 的数据库主键。没有结构、候选不唯一或用户跳过确认时，`structure_ref` 为 `null`
-仍然合法。
-
-## 2. 完整领域结构
+## 1. 领域结构
 
 ```text
 PaperRevision
-└── MaterialStates[]
-    └── MaterialState
-        ├── MaterialIdentity
-        │   ├── chemical_formula
-        │   └── material_state_id
-        ├── StateConditions
-        │   ├── pressure
-        │   ├── temperature
-        │   └── reported_space_group
-        ├── StructureModels[]
-        └── SuperconductorProperties[]
-            └── SuperconductorPropertyRecord
-                ├── record_key
-                ├── property_code
-                ├── name_raw
-                ├── value_kind
-                ├── value_raw
-                ├── value_number
-                ├── value_min / value_max
-                ├── uncertainty
-                ├── unit_raw / canonical_unit
-                ├── method_raw（可选，结果专属）
-                ├── criterion（可选，结果专属）
-                ├── condition_note
-                ├── structure_ref（可选）
-                ├── context（可选）
-                │   ├── context_key
-                │   ├── kind = calculation | experimental
-                │   ├── structure_ref（可选）
-                │   ├── calculation_details（kind=calculation）
-                │   └── experimental_details（kind=experimental）
-                ├── tc_method（仅 property_code=tc）
-                ├── tc_method_custom（仅 property_code=tc 且方法为 other）
-                ├── result_kind（仅 property_code=tc，只读推导）
-                ├── is_representative（仅 property_code=tc）
-                └── evidences[]
+└── ChemicalSystems[]
+    └── ChemicalSystem
+        └── Superconductors[]
+            └── Superconductor
+                └── MaterialStates[]
+                    └── MaterialState
+                        ├── StructureModels[]
+                        ├── CalculationConditions[]
+                        ├── ExperimentalConditions[]
+                        └── PropertyModules[]
+                            └── PropertyModule
+                                └── PropertyRecords[]
+                                    └── PropertyRecord
 ```
 
-全局结构身份独立于论文 revision：
+这棵树表示论文科研数据的所有权。同名材料不跨论文共享：论文 A 与论文 B 的 LaH10 是两条
+`Superconductor` 记录。规范化学式用于检索，不作为全库共享身份。
 
-```text
-CanonicalStructureIdentity
-├── structure_ref（系统生成的不透明引用）
-├── formula_normalized
-├── pressure_gpa（规范压强）
-├── space_group_symbol / space_group_number
-├── geometry_method
-├── calculation_code
-├── exchange_correlation
-├── nuclear_treatment
-└── source StructureModels[]（每条保留自己的论文、revision 与 Evidence）
-```
+## 2. PropertyModule
 
-## 3. 关系图
+| 字段 | 必填 | 含义 |
+| --- | --- | --- |
+| `module_key` | 是 | 当前材料状态中的稳定键，由系统生成 |
+| `module_code` | 是 | 模块代码 |
+| `definition_key` / `definition_version` | 是 | 模块自身使用的不可变定义版本 |
+| `display_order` | 是 | 当前状态中的展示顺序 |
+| `records[]` | 是 | 模块内平级记录，允许空数组 |
 
-```mermaid
-flowchart TD
-    P[Paper revision] --> MS[MaterialState]
-    MS --> SM[StructureModel]
-    SM --> CSI[CanonicalStructureIdentity]
-    MS --> PR1[PropertyRecord: Tc]
-    MS --> PR2[PropertyRecord: λ]
-    MS --> PR3[PropertyRecord: ωlog]
-    MS --> PR4[PropertyRecord: μ*]
-    MS --> PR5[PropertyRecord: DOS / Hc2 / gap / ...]
+首批 `module_code`：
 
-    PR1 --> C1[CalculationContext A]
-    PR2 --> C1
-    PR3 --> C1
-    PR4 --> C1
-    PR5 -. 可选 .-> C2[CalculationContext 或 ExperimentalContext]
+| 代码 | 中文含义 | 首批典型记录 |
+| --- | --- | --- |
+| `superconductive_properties` | 超导性质 | `predicted_tc`、`measured_tc`、Hc1/Hc2、能隙、临界电流、穿透深度、相干长度 |
+| `dynamical_properties` | 动力学性质 | 声子稳定性、虚频、声子相关结果 |
+| `thermodynamical_properties` | 热力学性质 | energy above hull、形成能、热容等 |
+| `electronic_properties` | 电子性质 | DOS、费米能级附近电子结构等 |
 
-    C1 -. 可选 .-> SM
-    C2 -. 可选 .-> SM
-    PR1 -. structure_ref .-> CSI
-    PR2 -. structure_ref .-> CSI
-    PR3 -. structure_ref .-> CSI
-    PR1 --> E1[Evidence]
-    PR2 --> E2[Evidence]
-    PR3 --> E3[Evidence]
-    PR4 --> E4[Evidence]
-    PR5 --> E5[Evidence]
-```
+模块是页面组织和扩展边界，不改变记录的唯一权威。一个性质若与多个领域有关，只保存一条
+`PropertyRecord`；其他模块通过记录引用或筛选展示，不能复制一份独立可编辑值。
 
-图中的 Context 是关联节点，不是物性分组。页面可以按录入顺序显示所有记录，也可以为帮助
-理解而显示“来自同一次计算”的提示，但不得把记录重新移动到互斥类别中。
+## 3. PropertyRecord
 
-## 4. `SuperconductorPropertyRecord`
-
-### 4.1 公共字段
+### 3.1 固定核心字段
 
 | 字段 | 必填 | 含义与约束 |
 | --- | --- | --- |
-| `record_key` | 是 | 草稿/API 内稳定标识；由系统产生，不要求用户输入，不等同于数据库主键 |
-| `property_code` | 是 | 规范物性代码，例如 `tc`、`lambda_ep`、`omega_log`、`mu_star`、`dos_fermi`、`hc2`、`superconducting_gap`、`energy_above_hull`；自定义项由系统生成稳定的 `custom:<slug>` |
-| `name_raw` | 是 | 论文原文物性名称，不被规范代码覆盖 |
-| `value_kind` | 是 | `number`、`range`、`text` 或 `boolean`；布尔值在当前范围内以 `value_raw=true/false` 规范表达，不新增专用列 |
-| `value_raw` | 是 | 论文中的原始值文本 |
-| `value_number` | 条件必填 | 单值的规范数值；不适用于纯文本或范围 |
-| `value_min`、`value_max` | 条件必填 | 范围必须成对，且 `value_min <= value_max` |
-| `uncertainty` | 否 | 非负不确定度；Tc 使用 K，其他物性与规范单位一致 |
-| `unit_raw` | 否 | 论文原始单位 |
-| `canonical_unit` | 否 | 规范单位；缺少可靠换算时为空 |
-| `method_raw` | 否 | 论文对这条结果使用的方法原文；只属于当前记录，不代替共享 Context 的方法条件 |
-| `criterion` | 否 | 这条结果的判据；实验 Tc 使用既有规范判据，Hc2、能隙等可保留原文判据 |
-| `condition_note` | 否 | 无法结构化但必须保留的条件说明 |
-| `structure_ref` | 否 | 全局规范结构身份的不透明引用；存在 Context 且 Context 也引用结构时必须一致；无结构时为 `null` |
-| `context` | 否 | 产生该记录的计算或实验条件；未知时为空 |
-| `evidences` | 是 | Evidence 集合；草稿阶段可为空，新批准数据遵守证据门槛 |
+| `record_key` | 是 | 请求和响应内稳定键；不暴露数据库主键 |
+| `module_code` | 是 | 所属模块，必须与模块实例一致 |
+| `record_type` | 是 | 例如 `predicted_tc`、`measured_tc`、`property` |
+| `property_code` | 是 | 规范科学量代码，例如 `tc`、`lambda_ep`、`omega_log`、`mu_star`、`hc2` |
+| `definition_key` | 是 | 使用的表单定义键 |
+| `definition_version` | 是 | 使用的不可变定义版本 |
+| `name_raw` | 是 | 论文原文名称 |
+| `value_kind` | 是 | `number`、`range`、`text` 或 `boolean` |
+| `value_raw` | 是 | 论文原始值文本 |
+| `value_number` | 条件必填 | 单一规范数值 |
+| `value_min` / `value_max` | 条件必填 | 完整规范范围 |
+| `uncertainty` | 否 | 非负不确定度，与规范单位一致 |
+| `unit_raw` / `canonical_unit` | 否 | 原文单位和规范单位 |
+| `method_code` | 否 | 规范方法代码；Tc 必填 |
+| `method_raw` | 否 | 论文中的原始方法文本 |
+| `criterion_code` / `criterion_raw` | 否 | 规范判据及原文判据 |
+| `is_representative` | 条件必填 | Tc 必填，其他记录默认空 |
+| `condition_key` | 否 | 关联一次确定的计算或实验 Conditions |
+| `structure_key` | 否 | 关联本论文 revision 当前材料状态中的结构 |
+| `payload` | 是 | 符合定义版本的扩展 JSON；默认 `{}` |
+| `evidences[]` | 是 | 当前论文 revision 的 Evidence；草稿可为空 |
 
-### 4.2 Tc 专用字段
+固定列负责搜索、统计、关联、唯一约束和审计。`payload` 不得再次保存 Tc 数值、方法、Conditions
+引用等核心事实。若某扩展字段后来成为核心查询条件，需要用迁移提升为固定列，不能同时保留两个
+可写来源。
 
-Tc 不是子集合，而是 `property_code=tc` 的普通集合成员。只有该代码启用以下字段：
+### 3.2 Tc 记录
 
-| 字段 | 必填 | 约束 |
+Tc 使用 `property_code=tc`，并按 `record_type` 分为：
+
+| 记录类型 | Conditions | 方法示例 |
 | --- | --- | --- |
-| `tc_method` | 是 | `experimental`、`anisotropic_eliashberg`、`isotropic_eliashberg`、`allen_dynes`、`mcmillan`、`scdft`、`other`；`unknown` 仅允许旧数据读取或草稿暂存，正式提交前必须明确 |
-| `tc_method_custom` | 条件必填 | `tc_method=other` 时填写；其他方法必须为空 |
-| `result_kind` | 只读 | 由 `tc_method` 推导为 `theoretical` 或 `experimental`；新写入不得让它成为第二个权威 |
-| `is_representative` | 是 | 默认 `false`；同论文 revision、材料状态和方法最多一条为 `true` |
+| `predicted_tc` | 必须关联 `CalculationCondition` | Allen-Dynes、McMillan、Eliashberg、SCDFT、自定义理论方法 |
+| `measured_tc` | 必须关联 `ExperimentalCondition` | 电阻、磁化率、比热或自定义实验方法 |
 
-`property_code != tc` 时，上述字段必须为空。Tc 值仍使用公共的 `PropertyValue` 字段，不再另建
-一套嵌套值对象。
+`method_code` 是具体方法权威，`record_type` 是预测/测量性质权威。二者必须匹配。`result_kind`
+不再作为独立可写字段；兼容读取时由旧值映射到 `record_type`。
 
-## 5. `PropertyContext`
-
-### 5.1 公共字段
-
-| 字段 | 必填 | 含义与约束 |
-| --- | --- | --- |
-| `context_key` | 是 | 同一草稿或响应内的稳定关联键，由系统管理，不是数据库 ID |
-| `kind` | 是 | `calculation` 或 `experimental` |
-| `structure_ref` | 否 | 本次计算或实验使用的全局规范结构身份 |
-| `missing_structure_reason` | 条件必填 | 计算 Context 没有结构时必填；实验 Context 不强制 |
-
-同一 `context_key` 可出现在多条物性记录中。所有出现位置的 `kind` 和详情必须一致；不一致时
-整个请求失败，并返回冲突记录的字段路径。
-
-### 5.2 计算详情
-
-`kind=calculation` 时可包含：
-
-- `electronic_method`
-- `exchange_correlation`
-- `pseudopotential_type`
-- `pseudopotential_name`
-- `spin_orbit_coupling`
-- `phonon_method`
-- `phonon_nuclear_treatment`
-- `epc_method`
-- `k_grid`
-- `q_grid`
-- `energy_cutoff_value`
-- `energy_cutoff_unit`
-- `calculation_code`
-- `parameters`
-
-λ、ωlog、μ* 不在计算详情中。它们是与 Context 关联的平级物性记录。
-
-### 5.3 实验详情
-
-`kind=experimental` 时可包含：
-
-- `sample_label`
-- `sample_preparation`
-- `measurement_method`
-- `applied_field_t`
-- `pressure_uncertainty_gpa`
-- `parameters`
-
-实验 Context 只保存可共享的样品和测量条件。Tc、Hc2、超导能隙等各自的结果判据位于对应
-`SuperconductorPropertyRecord.criterion`；仅在 `property_code=tc` 时进一步执行 #84 的
-Tc 方法互斥和判据枚举规则。
-
-### 5.4 结构候选检索与身份
-
-录入物性时，前端从当前材料状态的化学式、压强、报告空间群，以及关联计算 Context 中已填写的
-结构计算方法字段发起候选查询。查询只读取已批准论文当前 revision 中至少有一个来源模型的
-`CanonicalStructureIdentity`，不读取待审核、拒绝或草稿结构。
-
-候选匹配规则固定为：
-
-1. 化学式按现有公式归一化规则比较。
-2. 压强绝对差不超过 `0.01 GPa`，按差值从近到远排序。
-3. 已填写的空间群符号/编号按规范值精确匹配；未填写时不增加该过滤条件。
-4. `geometry_method`、`calculation_code`、`exchange_correlation`、`nuclear_treatment` 先做
-   大小写、空白和分隔符归一化，再按已填写字段精确匹配；未填写字段不增加过滤条件。
-
-查询只返回候选，不修改草稿。候选至少包含 `structure_ref`、规范条件、压强差、代表来源论文
-和来源 `StructureModel` 的摘要。单一候选、多候选、最近距离相同和无候选都必须由用户决定是否
-关联；只有用户明确确认后，记录和 Context 才能写入该 `structure_ref`。跳过、清空或没有候选时
-保持 `null`。
-
-全局身份不自动比较结构几何，只由标准化化学式、规范压强、空间群和方法组合定位。新身份在正式
-结构模型被接受时创建或绑定；每个身份必须保留至少一个已公开来源模型。来源模型的 Evidence
-仍归属原论文，跨论文共享只共享引用，不复制或转移 Evidence。
-
-## 6. 平级记录示例
-
-同一 LaH10 材料状态包含两组理论计算和一组实验：
+代表 Tc 唯一范围为：
 
 ```text
-CalculationContext calc-a
-├── μ* = 0.10
-├── λ = 2.20
-├── ωlog = 1100 K
-└── Tc = 250 K（Allen-Dynes，代表结果）
-
-CalculationContext calc-b
-├── μ* = 0.15
-└── Tc = 220 K（Allen-Dynes）
-
-ExperimentalContext exp-a
-├── Tc = 245 K（zero resistance）
-├── Hc2 = 120 T
-└── superconducting gap = 40 meV
-
-无明确 Context
-├── DOS at EF = 0.8 states/eV
-└── energy above hull = 0 eV/atom
+paper_id + paper_revision + material_state_id + record_type + method_code
 ```
 
-上述文本仅用于展示关联。规范结构仍是一组平级记录：
+同一范围最多一条 `is_representative=true`。
+
+## 4. Conditions
+
+Conditions 表示一次确定的运行或测量，不是物性模块，也不保存物性结果。
+
+### 4.1 CalculationCondition
+
+固定字段保存常用配置，例如电子方法、交换关联泛函、赝势、SOC、声子方法、EPC 方法、k/q 网格、
+截断能和计算软件。方法特有配置可以使用同样版本化定义管理扩展 JSON。
+
+### 4.2 ExperimentalCondition
+
+固定字段保存样品标识、制备方式、测量方法、外场、压力不确定度等共享实验条件。单条结果自己的
+判据仍属于 `PropertyRecord`。
+
+### 4.3 归组规则
+
+一个 `condition_key` 表示一次确定执行。以下例子必须建立两组 Conditions：
 
 ```text
-SuperconductorProperties[]
-├── { property_code: mu_star, context_key: calc-a }
-├── { property_code: lambda_ep, context_key: calc-a }
-├── { property_code: omega_log, context_key: calc-a }
-├── { property_code: tc, context_key: calc-a }
-├── { property_code: mu_star, context_key: calc-b }
-├── { property_code: tc, context_key: calc-b }
-├── { property_code: tc, context_key: exp-a }
-├── { property_code: hc2, context_key: exp-a }
-├── { property_code: superconducting_gap, context_key: exp-a }
-├── { property_code: dos_fermi, context: null }
-└── { property_code: energy_above_hull, context: null }
+calc-a: mu_star=0.10, Tc=250 K
+calc-b: mu_star=0.15, Tc=220 K
 ```
 
-## 7. 验证规则
+即使两次计算的软件、结构、网格相同，只要决定性输入不同，就不是同一次执行。`mu_star` 仍作为
+独立 PropertyRecord 保存，并与对应 Tc 共享 `condition_key`。定义可以声明“同一 Conditions 下某
+输入 `property_code` 最多一条”等组级规则，后端必须在整组记录上校验。
 
-### 7.1 通用规则
+## 5. FormDefinition
 
-1. 所有记录属于一个明确 `MaterialState` 和论文 revision。
-2. `value_raw` 不得为空；规范值可以为空。
-3. `number` 需要 `value_number`，`range` 需要完整上下界，`text/boolean` 使用规范 `value_raw` 表达。
-4. Context 最多一种；不得同时声明计算和实验详情。
-5. 记录和 Context 的结构引用如果同时存在，必须相同；该引用可以跨论文指向同一个全局规范身份。
-6. 同名、同值记录只有在来源指纹也相同时才视为重复；不同 Context 下的同值记录必须保留。
-7. Evidence 只能指向同一论文 revision 的有效 Chunk。
-
-### 7.2 Tc 规则
-
-1. `tc_method=experimental` 时：`result_kind=experimental` 且 Context 必须为 `experimental`。
-2. 其他已知 `tc_method`：`result_kind=theoretical` 且 Context 必须为 `calculation`。
-3. `tc_method=unknown` 只允许兼容读取或草稿暂存，正式提交和批准前必须选择明确方法。
-4. 实验 Tc 的 `criterion` 必须属于既有规范判据之一，可使用 `unknown` 表示论文未明确报告。
-5. 实验 Tc 不得通过任何兼容字段携带 λ、ωlog、μ*。
-6. 每个论文 revision、材料状态和 Tc 方法最多一条代表记录。
-7. `superconductor_kind` 不参与上述判断。
-
-### 7.3 Context 规则
-
-1. Context 不得跨材料状态或 revision 共享。
-2. 计算 Context 无结构时必须保存 `missing_structure_reason`。
-3. 同一 `context_key` 的所有详情必须一致。
-4. 删除最后一个关联记录时可删除孤立 Context；仍被其他记录引用时不得删除。
-
-### 7.4 结构引用规则
-
-1. `structure_ref` 是系统生成的不透明引用，前端不得要求用户输入数据库主键。
-2. `structure_ref` 为空时物性和 Context 仍可保存；只有用户确认候选后才建立非空引用。
-3. 全局规范身份按标准化化学式、规范压强、空间群和方法组合定位，不执行几何等价性自动合并。
-4. 候选查询只使用已批准论文的当前 revision；待审核、拒绝和草稿结构不得作为候选。
-5. 压强候选使用 `<=0.01 GPa` 绝对差并按最近排序；距离相同不得自动归并或覆盖已有引用。
-6. 多个物性和 Context 可以共享同一 `structure_ref`，但不得因此共享或移动论文 Evidence。
-7. 来源模型全部失效时不得静默删除仍被引用的规范身份；必须阻止删除或将身份标记为不可用并报告受影响引用。
-
-## 8. 领域模型与物理存储的映射
-
-统一领域记录不要求一张数据库宽表。确定的持久化映射如下：
-
-| 领域记录 | 物理存储 | Evidence 存储 | 说明 |
-| --- | --- | --- | --- |
-| `property_code=tc` | `tc_results` | `tc_result_evidences` | 保留 Tc 方法、代表结果和专用索引/约束 |
-| 其他全部代码，包括 λ、ωlog、μ* | `superconductor_properties` + `property_definitions` | `superconductor_property_evidences` | 统一使用原始值和规范值模型 |
-| `context.kind=calculation` | `calculation_contexts` | 由各物性自己的 Evidence 表达 | Context 只保存方法和条件，不再拥有 λ、ωlog、μ* 权威值 |
-| `context.kind=experimental` | `experimental_contexts` | 由各物性自己的 Evidence 表达 | 允许 Tc 以外物性关联实验 Context |
-| `structure_ref` | `canonical_structures` + `structure_models` | `structure_model_evidences` | 全局身份供跨论文引用，来源模型保留论文 Evidence |
-
-由单一映射层完成读写：上层只处理 `SuperconductorPropertyRecord`，不得根据数据库表名重新
-建立业务分组。
-
-## 9. 必要的 Schema 演进
-
-本 Feature 不合并数据库表，但为了让平级模型成为真实单一来源，需要以下定点调整：
-
-1. 为 `superconductor_properties` 增加可空 `experimental_context_id`、`method_raw` 和 `criterion`，并约束计算/实验 Context 最多一个。
-2. 为 λ、ωlog、μ* 建立规范 `property_definitions`。
-3. 将 `calculation_contexts.lambda_ep`、`omega_log_k`、`mu_star` 的现有非空值回填成通用物性记录，并保留其 Context 关系。
-4. 为 `tc_results` 增加结果级 `criterion`，把旧 `experimental_contexts.tc_criterion` 复制到关联实验 Tc 后移除 Context 的 Tc 专属列。
-5. 同一迁移在回填和计数核验成功后移除三个计算参数列和实验 Context 的 Tc 判据列；任一步失败则整个迁移回滚，禁止留下双重权威来源。
-6. 保留 `tc_results` 与两类 Context 的复合外键及 #84 的 `ck_tc_results_context_kind` 等价约束。
-7. 新增 `canonical_structures` 及 `structure_models` 到全局身份的映射；物性和 Context 保存全局结构引用，
-   本地来源模型仍受论文 revision 外键约束。
-8. 更新删除拓扑，使通用物性在 Context 之前删除，Evidence 在物性之前删除；删除来源模型前检查仍被引用的
-   全局身份，禁止产生无来源的有效身份。
-
-### 历史 Evidence 边界
-
-旧 `CalculationContext` 的 λ、ωlog、μ* 不一定有独立 Evidence 连接。迁移只能迁移已存在的
-事实和可验证关联，不能把 Tc 的 Evidence 自动冒充成参数 Evidence。迁移必须：
-
-- 为每个回填值生成确定性来源指纹，并保留原 Context 与论文 revision；
-- 只迁移实际非空值，不补造数值；
-- 有明确参数 Evidence 时建立对应连接；
-- 无法恢复 Evidence 时保留空 Evidence 集合并输出逐条迁移报告，不静默声称证据完整；
-- 不因历史证据缺口自动改变已批准论文状态，后续编辑和重新批准时按当前证据规则处理。
-
-downgrade 只根据迁移生成的确定性来源指纹恢复原有 Context 参数列并删除对应迁移生成行；
-迁移前已经存在以及新版本后来创建的通用物性行不得被 downgrade 删除。
-
-## 10. 兼容转换
-
-读取边界接受以下旧来源：
-
-```text
-material_states[].tc_results[]
-material_states[].calculation_contexts[]
-material_states[].experimental_contexts[]
-material_states[].properties[]
-paper.key_properties[]
-```
-
-转换规则：
-
-1. 每条旧 Tc 转成 `property_code=tc`。
-2. 每个旧计算 Context 的非空 λ、ωlog、μ* 各转成一条平级记录，并共享该 Context。
-3. 每条旧 `properties` / `key_properties` 转成相应 `property_code` 记录。
-4. 同一物理行已由新通用物性记录表达时，不再从旧 Context 字段生成第二条记录。
-5. 新草稿保存和详情响应只输出 `superconductor_properties[]`。
-
-## 11. 被替代与保留的既有约束
-
-| 来源 | 处理 |
+| 字段 | 含义 |
 | --- | --- |
-| #32 “Tc 不进入普通物性字典” | 物理存储层继续保留；领域层不再把 Tc 排除在 `SuperconductorProperties` 外 |
-| #46 Tc/Context/普通物性分流草稿 | 被统一平级草稿替代；持久化适配仍可分流到专用表 |
-| #52 每条 Tc 的计算参数嵌套 | 物性嵌套被替代；逐条结果的 Context 关系保留 |
-| #57/#65 三来源读取和展示拼装 | 被正式统一投影替代；完整可见的验收结果保留 |
-| #76 共享材料状态编辑器 | 保留并改造，不建立第二套编辑器 |
-| #80 论文级超导类型控制字段 | 该控制职责被 #84 取代；只保留论文分类所有权 |
-| #84 `tc_method` 上下文互斥 | 完整保留 |
+| `definition_key` | 稳定键，例如 `superconductive_properties.predicted_tc` |
+| `version` | 从 1 开始单调递增；与键组成唯一标识 |
+| `target_kind` | `property_module`、`property_record`、`calculation_condition` 或 `experimental_condition` |
+| `module_code` | 模块或记录定义的适用模块；Conditions 定义为空 |
+| `record_type` | 记录定义的适用记录类型；其他目标类型为空 |
+| `method_code` | 可选；为空表示通用定义，非空表示方法扩展 |
+| `json_schema` | 扩展字段的数据结构、类型、枚举和条件必填规则 |
+| `ui_schema` | 控件、顺序、分组、标签键和单位提示；不拥有数据校验权威 |
+| `group_rules` | 需要观察同一 Conditions 多条记录的规则 |
+| `status` | `draft`、`published`、`retired` |
+| `checksum` | 定义内容校验和 |
+| `created_by` / `created_at` | 创建审计信息 |
+| `published_by` / `published_at` | 发布审计信息 |
+
+状态规则：
+
+```text
+draft -> published -> retired
+```
+
+- `draft` 可修改，但不能用于正式记录。
+- `published` 不可修改；修订必须创建下一版本。
+- `retired` 可继续解释历史记录，但不用于新建记录。
+- 新建模块、记录或 Conditions 选择对应定义键最新的 `published` 版本。
+- 记录升级版本是显式操作，必须预览转换、重新验证并保留审计记录。
+
+JSON Schema 只允许声明式、安全的受限关键字；定义不能包含或执行脚本。后端校验是最终权威，
+前端显示规则不能替代后端校验。
+
+## 6. 物理表设计
+
+目标核心表：
+
+| 表 | 每行含义 |
+| --- | --- |
+| `chemical_systems` | 一篇论文 revision 中的一个元素体系 |
+| `superconductors` | 一篇论文 revision 中的一种材料 |
+| `material_states` | 该论文材料的一种研究状态 |
+| `property_modules` | 状态中挂载的一个物性模块 |
+| `property_records` | 模块中的一条科学事实 |
+| `form_definitions` | 一份不可变版本化表单定义 |
+| `calculation_conditions` | 一次计算运行 |
+| `experimental_conditions` | 一次实验测量 |
+| `property_record_evidences` | 记录与 Evidence 的多对多连接 |
+
+`property_records` 统一接收旧 `tc_results` 与 `superconductor_properties`。Tc 核心列保持专用 CHECK、
+生成列、唯一索引和统计索引；不同记录类型不适用的专用列必须为空。旧表完成对账和观察期后退役。
+
+`chemical_systems` 和 `superconductors` 增加 `paper_id + paper_revision` 归属，唯一键从全库唯一调整为：
+
+```text
+chemical_systems: paper_id + paper_revision + system_key
+superconductors:   paper_id + paper_revision + composition_key
+```
+
+所有从 `Superconductor` 到 `MaterialState` 的关系使用同论文 revision 复合外键，禁止跨论文引用。
+
+## 7. API 结构示例
+
+```json
+{
+  "material_states": [
+    {
+      "state_key": "state-1",
+      "calculation_conditions": [
+        {"condition_key": "calc-a", "calculation_code": "Quantum ESPRESSO"}
+      ],
+      "experimental_conditions": [],
+      "property_modules": [
+        {
+          "module_code": "superconductive_properties",
+          "records": [
+            {
+              "record_key": "tc-a",
+              "record_type": "predicted_tc",
+              "property_code": "tc",
+              "definition_key": "superconductive_properties.predicted_tc",
+              "definition_version": 2,
+              "value_kind": "number",
+              "value_raw": "250 K",
+              "value_number": 250,
+              "canonical_unit": "K",
+              "method_code": "allen_dynes",
+              "condition_key": "calc-a",
+              "payload": {"solver_tolerance": "1e-8"},
+              "evidences": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+数组不存在时返回 `[]`，可空引用返回 `null`。API 不重复嵌入 Conditions 详情到每条记录；记录使用
+`condition_key` 引用同一材料状态顶层的 Conditions，避免同一内容被重复编辑。
+
+## 8. 迁移与生命周期
+
+迁移按阶段执行：
+
+1. 创建新表、定义种子和目标索引，不改旧读取。
+2. 复制旧材料、Tc、普通物性、Conditions 和 Evidence，保存旧 ID 到新 ID 的迁移映射。
+3. 按论文、revision、状态、记录类型、方法、值、单位和关联逐项对账。
+4. 应用先切换读取并观察差异，再切换写入。
+5. 停止旧写入，保留可回退读取窗口。
+6. 验证图表、搜索、审核、升版和删除后再退役旧表及旧字段。
+
+迁移不能假定 MySQL DDL 可以和数据回填一起事务回滚。每一步必须可重复、记录进度，并提供从最近
+稳定阶段恢复的办法。缺失 Evidence 的历史记录保留事实并生成报告，不伪造来源；这些记录后续编辑并
+重新批准时执行当前证据规则。
+
+## 9. 数据库不变量
+
+1. 模块、记录、Conditions、结构和 Evidence 必须与 `MaterialState` 属于同一论文 revision。
+2. 预测 Tc 只关联计算 Conditions；测量 Tc 只关联实验 Conditions。
+3. 核心字段与 `payload` 不得出现两个可写权威。
+4. 定义键和版本必须指向已存在且内容校验和一致的定义。
+5. 已发布定义不可修改；历史记录不得在读取时自动升级。
+6. 同一科学事实不得因跨模块展示而复制。
+7. 论文拥有的材料不得被另一论文 revision 引用。
+8. 新批准记录必须满足对应定义版本、组级规则和 Evidence 门槛。
