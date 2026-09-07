@@ -3,97 +3,138 @@
 **输入**：[spec.md](spec.md)、[plan.md](plan.md)、[research.md](research.md)、
 [data-model.md](data-model.md)、[contracts/](contracts/)
 
-## 阶段 1：契约与测试基线
+## 阶段 1：准备与失败契约
 
-- [ ] T001 [P] 在 `backend/tests/test_form_definitions.py` 建立定义 v1/v2、发布不可变、停用和 Schema 校验失败测试。
-- [ ] T002 [P] 在 `backend/tests/test_property_modules.py` 建立四模块、记录核心字段、Tc 类型和 Conditions 组级规则测试。
-- [ ] T003 [P] 在 `tests/01_decentralized_uploading/material-states-editor.test.tsx` 建立模块增删和动态字段失败测试。
-- [ ] T004 [P] 在 `tests/02_maintenance_and_verification/test_issue90_migration.py` 建立旧材料、Tc、物性、Conditions 和 Evidence 迁移 fixture。
-- [ ] T005 [P] 在 `goserver/handlers/paper_detail_test.go` 与 `goserver/handlers/stats_test.go` 建立目标详情和 Tc 图表回归测试。
+- [ ] T001 [P] 在 `tests/fixtures/issue90/form-definition-matrix.json` 建立定义版本、方法字段、Conditions 身份规则和错误结果共享 fixture。
+- [ ] T002 [P] 在 `backend/tests/test_form_definitions.py` 建立发布不可变、停用、Schema 校验、升级与回滚失败测试。
+- [ ] T003 [P] 在 `backend/tests/test_property_modules.py` 建立模块增删、四种值类型、Tc 类型和 Conditions 组级失败测试。
+- [ ] T004 [P] 在 `tests/01_decentralized_uploading/material-states-editor.test.tsx` 建立模块增删、动态字段、重复运行和字段错误定位测试。
+- [ ] T005 [P] 在 `tests/02_maintenance_and_verification/test_issue90_migration.py` 建立旧材料、Tc、物性、Conditions、Evidence 和增量写入 fixture。
+- [ ] T006 [P] 在 `goserver/handlers/paper_detail_test.go` 与 `goserver/handlers/stats_test.go` 建立目标详情、Tc 图表和查询数量回归测试。
 
-## 阶段 2：Expand Schema
+## 阶段 2：基础 Schema 与共同契约
 
-- [ ] T006 创建基于当前 Alembic head 的 Expand 迁移，新增 `property_modules`、`property_records`、`form_definitions`、`property_record_evidences` 和迁移映射表。
-- [ ] T007 在 Expand 迁移中建立 PropertyRecord 核心列、同 revision 外键、Tc CHECK、代表唯一键和图表索引。
-- [ ] T008 将 `calculation_contexts`、`experimental_contexts` 的目标名称和引用迁移为 `calculation_conditions`、`experimental_conditions`，保留旧读取阶段所需兼容视图或适配器。
-- [ ] T009 为 `chemical_systems`、`superconductors` 建立论文 revision 归属和目标范围唯一键，暂不删除旧全局唯一键。
-- [ ] T010 同步 `backend/models.py` 与 `goserver/models/models.go` 的 Expand 阶段模型。
-- [ ] T011 为四模块、预测/测量 Tc 和现有规范物性准备不可变 v1 定义种子及校验和。
+- [ ] T007 在 `alembic/versions/20260907_issue90_expand_modular_property_schema.py` 创建模块、统一记录、定义、升级事件、两类 Conditions、证据连接、影子材料表和迁移映射表，并建立复合外键、CHECK、唯一键与索引。
+- [ ] T008 在 `backend/models.py` 映射 Expand 模型、两个互斥 Conditions 外键及定义升级事件关系。
+- [ ] T009 在 `goserver/models/models.go` 映射目标只读模型和稳定 JSON 字段。
+- [ ] T010 在 `backend/data/form_definitions.v1.json` 定义四模块、预测/测量 Tc、既有规范物性及两类 Conditions 的不可变 v1 种子。
+- [ ] T011 在 `backend/ingest/upload_contracts.py` 定义统一模块、记录、Conditions、定义版本和稳定错误响应类型。
 
-## 阶段 3：定义服务与统一校验
+## 阶段 3：用户故事 1 - 按需添加物性模块（P1）
 
-- [ ] T012 [US4] 在 `backend/services/form_definition_service.py` 实现定义读取、版本选择、校验和和状态规则。
-- [ ] T013 [US4] 在 `backend/api/form_definitions.py` 实现当前/指定版本读取及超级管理员发布、停用接口和审计。
-- [ ] T014 [US4] 在 `backend/ingest/form_definitions.py` 实现受限 JSON Schema 和组级规则校验，拒绝脚本或未知关键字。
-- [ ] T015 [US4] 在 `frontend/src/lib/formDefinitions.ts` 实现定义类型、缓存和校验和检查。
-- [ ] T016 [US4] 在 `frontend/src/components/SchemaDrivenRecordForm.tsx` 用现有 UI 组件生成字段、条件显示和错误定位。
-- [ ] T017 [US4] 用共享 fixture 验证前端显示规则与后端提交校验一致，并覆盖定义 v1/v2 共存。
+- [ ] T012 [US1] 在 `backend/ingest/property_modules.py` 实现模块规范化、单一归属、空模块删除和非空模块删除保护。
+- [ ] T013 [US1] 在 `frontend/src/lib/propertyModules.ts` 定义模块、记录和稳定键契约。
+- [ ] T014 [US1] 在 `frontend/src/components/PropertyModuleEditor.tsx` 实现四模块按需添加、排序和显式记录删除。
+- [ ] T015 [US1] 在 `frontend/src/components/MaterialStatesEditor.tsx` 接入模块编辑器并移除空模块占位提交。
+- [ ] T016 [US1] 在 `backend/tests/test_property_modules.py` 与 `tests/01_decentralized_uploading/material-states-editor.test.tsx` 验证四模块独立往返、非空删除保护和其他模块数据不变。
 
-## 阶段 4：Copy 与 Reconcile
+**独立验收**：仅启用模块与通用记录契约，完成 Quickstart 场景一；不要求先切换历史数据或公开读取。
 
-- [ ] T018 [US5] 实现旧共享 `ChemicalSystem`、`Superconductor` 按实际引用论文 revision 复制及 ID 映射。
-- [ ] T019 [US5] 重连 `MaterialState` 到论文拥有的材料，并验证论文 A/B 的 LaH10 主键和生命周期隔离。
-- [ ] T020 [US2] 将旧理论/实验 Tc 分别迁为 `predicted_tc`、`measured_tc`，保留方法、值、代表标记和 Conditions。
-- [ ] T021 [US1] 将旧普通物性按定义映射到四模块，无法确定模块或定义的记录进入异常报告。
-- [ ] T022 [US3] 将旧 lambda、omega_log、mu_star 条件列迁为独立记录并保留正确 Conditions，不复制 Tc Evidence。
-- [ ] T023 [US6] 合并两类旧 Evidence 连接到 `property_record_evidences`，保留旧 ID 到新 ID 映射。
-- [ ] T024 在 `tests/02_maintenance_and_verification/test_issue90_migration.py` 对记录数、值、单位、Conditions、Evidence 和代表 Tc 逐项对账。
-- [ ] T025 在隔离 MySQL 验证 Expand、分批 Copy、重复执行、故障恢复和迁移异常报告。
+## 阶段 4：用户故事 2 - 录入多条预测和测量 Tc（P1）
 
-## 阶段 5：模块化写入与编辑
+- [ ] T017 [US2] 在 `backend/ingest/property_modules.py` 实现 Tc 记录类型、方法、规范单位、非负值、代表唯一和 Conditions 类型校验。
+- [ ] T018 [US2] 在 `backend/ingest/scientific_drafts.py` 让草稿保存与正式提交使用统一 Tc 记录契约。
+- [ ] T019 [US2] 在 `frontend/src/components/SchemaDrivenRecordForm.tsx` 实现预测/测量 Tc、方法切换及不适用字段清理或阻断。
+- [ ] T020 [US2] 在 `backend/tests/test_property_modules.py` 与 `tests/01_decentralized_uploading/material-states-editor.test.tsx` 验证多 Tc、错配、双代表和方法切换行为。
 
-- [ ] T026 [US1] 在 `backend/ingest/property_modules.py` 实现模块与 PropertyRecord 规范化、核心字段/JSON 单一来源检查。
-- [ ] T027 [US2] 在统一校验入口实现预测/测量 Tc、方法、Conditions 类型和代表唯一规则。
-- [ ] T028 [US3] 实现 Conditions 内容归并、决定性输入分组和同组规则校验。
-- [ ] T029 [US6] 更新 `backend/ingest/scientific_drafts.py`、`backend/api/rag.py` 和 `backend/services/scientific_draft_rewrite.py` 只写模块化目标模型。
-- [ ] T030 [US1] 在 `frontend/src/lib/propertyModules.ts` 定义模块、记录和 Conditions 契约及稳定键管理。
-- [ ] T031 [US1] 新增 `frontend/src/components/PropertyModuleEditor.tsx`，按需添加四模块并保证一条事实单一归属。
-- [ ] T032 [US2] 重构 `frontend/src/components/MaterialStatesEditor.tsx`，复用动态记录表单编辑多条预测/测量 Tc。
-- [ ] T033 [US2] 实现切换记录类型或方法时对不适用字段的明确清理、迁移预览或阻断错误。
-- [ ] T034 [US6] 更新上传和管理员编辑页，共用同一模块组件、定义缓存和后端错误路径。
+**独立验收**：在新建材料状态中完成 Quickstart 场景三，验证多条 Tc 和非法组合，不依赖迁移旧记录。
 
-## 阶段 6：读取、搜索与图表切换
+## 阶段 5：用户故事 3 - 保持 Tc 与相关性质准确对应（P1）
 
-- [ ] T035 [US6] 更新 Go 详情批量预加载模块、记录、Conditions、定义版本和 Evidence，避免 N+1 查询。
-- [ ] T036 [US6] 更新详情、探索和社区前端直接消费 `property_modules[]`，删除三来源拼装。
-- [ ] T037 [US5] 更新本地材料搜索按规范化学式和组成聚合论文内材料，不依赖共享材料主键。
-- [ ] T038 [US6] 更新 `goserver/handlers/stats.go` 从 PropertyRecord 固定列查询 Tc，保留方法和代表筛选。
-- [ ] T039 [US6] 比较新旧详情、搜索和图表结果并检查 MySQL 查询计划使用目标索引。
-- [ ] T040 [US6] 更新论文审核、升版、重写和物理删除拓扑，验证不会影响其他论文同名材料。
+- [ ] T021 [US3] 在 `backend/ingest/form_definitions.py` 实现 `identity_rules`、normalizer、cardinality 和 `group_rules` 的受限解析与整组校验。
+- [ ] T022 [US3] 在 `frontend/src/lib/formDefinitions.ts` 实现同一规则 fixture 的客户端求值与错误路径映射。
+- [ ] T023 [US3] 在 `frontend/src/components/MaterialStatesEditor.tsx` 实现创建、选择和维护不透明 `calc-`/`exp-` Conditions 键，不按内容自动合并。
+- [ ] T024 [US3] 在 `backend/tests/test_property_modules.py` 与 `tests/01_decentralized_uploading/material-states-editor.test.tsx` 验证两组 mu_star-Tc、同键冲突和相同输入重复运行。
 
-## 阶段 7：兼容、观察与 Contract
+**独立验收**：完成 Quickstart 场景二；`calc-a`/`calc-b` 不错配，输入相同的 `calc-c`/`calc-d` 仍保持独立。
 
-- [ ] T041 实现旧草稿和旧响应到模块化契约的单向边界转换，无法确定定义时显式报错。
-- [ ] T042 递增上传缓存 Schema version；旧缓存转换后只产生新契约。
-- [ ] T043 在目标环境确认新写入无旧表写入、详情/搜索/图表无差异并记录观察结果。
-- [ ] T044 创建独立 Contract 迁移，退役 `tc_results`、`superconductor_properties`、旧 Evidence 连接和旧 Conditions 物性列。
-- [ ] T045 在 Contract 迁移中删除被目标范围唯一键替代的材料全局唯一键，并验证恢复步骤。
-- [ ] T046 在隔离 MySQL 完成 Expand -> Copy -> Switch -> Contract 和最近稳定阶段恢复验证。
+## 阶段 6：用户故事 4 - 版本化 Schema 表单（P1）
 
-## 阶段 8：验收与文档
+- [ ] T025 [US4] 在 `backend/services/form_definition_service.py` 实现草稿编辑、版本分配、当前版本、发布不可变、停用和校验和规则。
+- [ ] T026 [US4] 在 `backend/api/form_definitions.py` 实现公开读取及超级管理员创建、修改草稿、发布和停用接口。
+- [ ] T027 [US4] 在 `frontend/src/lib/formDefinitions.ts` 实现按定义键、版本和校验和缓存，定义不可用时执行只读降级并阻止新写入。
+- [ ] T028 [US4] 在 `frontend/src/components/SchemaDrivenRecordForm.tsx` 根据 JSON Schema 与 UI Schema 生成字段、选项、单位提示和条件显示。
+- [ ] T029 [US4] 在 `backend/services/property_record_upgrade_service.py` 实现定义升级 preview/apply、前后快照、revision/校验和并发检查和事件式 rollback。
+- [ ] T030 [US4] 在 `backend/api/form_definitions.py` 实现记录定义升级 preview/apply/rollback 接口和超级管理员权限校验。
+- [ ] T031 [US4] 在 `backend/tests/test_form_definitions.py` 验证方法特有定义键、v1/v2 并存、升级回滚、过期事件冲突和无部分写入。
+- [ ] T032 [US4] 在 `tests/01_decentralized_uploading/material-states-editor.test.tsx` 使用共享 fixture 验证前端显示与后端校验矩阵一致。
 
-- [ ] T047 [P] 按 `quickstart.md` 完成模块、Tc 配对、定义版本、双论文材料、迁移和下游人工验收。
-- [ ] T048 [P] 运行 Python、Go、Vitest、前端构建、迁移专项和 `git diff --check`。
-- [ ] T049 使用 `big-project-overview-maintainer` 按实际实现更新上传、维护与验证、搜索与图表 Overview。
-- [ ] T050 使用 `big-project-issue-manager` 更新 #90 验收证据和 Documentation Impact，满足全部门槛后关闭 Issue。
+**独立验收**：完成 Quickstart 场景四；历史记录保留 v1，新记录使用 v2，升级可回滚且过期操作被拒绝。
+
+## 阶段 7：用户故事 5 - 每篇论文拥有独立材料记录（P1）
+
+- [ ] T033 [US5] 在 `alembic/versions/20260907_issue90_copy_property_records.py` 按论文 revision 向影子材料表复制 `ChemicalSystem`、`Superconductor`，保存 MaterialState 旧新 ID 映射；切换前保持旧外键不变。
+- [ ] T034 [US5] 在 `tests/02_maintenance_and_verification/test_issue90_migration.py` 验证论文 A/B 的 LaH10 主键、revision 外键、升版和删除隔离。
+- [ ] T035 [US5] 在 `backend/rag/search/sql_search.py` 与 `goserver/handlers/papers.go` 改用规范化学式和组成聚合跨论文结果。
+- [ ] T036 [US5] 在 `backend/services/scientific_draft_rewrite.py` 与 `goserver/handlers/paper_deletion.go` 更新升版、重写和物理删除拓扑，限制为当前论文 revision。
+
+**独立验收**：完成 Quickstart 场景五；两篇论文的同名材料可以分别修改、升版、删除并同时被搜索。
+
+## 阶段 8：用户故事 6 - 统一上传、管理和公开读取（P2）
+
+- [ ] T037 [US6] 在 `alembic/versions/20260907_issue90_copy_property_records.py` 迁移 Tc、普通物性、Conditions、参数和 Evidence，并输出逐行异常与对账结果。
+- [ ] T038 [US6] 在 `tests/02_maintenance_and_verification/test_issue90_migration.py` 验证 Copy 幂等、核心值、Conditions、Evidence、代表 Tc 和异常报告。
+- [ ] T039 [US6] 在 `backend/ingest/scientific_drafts.py`、`backend/api/rag.py` 与 `backend/services/scientific_draft_rewrite.py` 统一模块化写入并移除正常请求的旧字段写入。
+- [ ] T040 [US6] 在 `frontend/src/components/UploadTaskEditor.tsx`、`frontend/src/components/PaperEditView.tsx` 与 `frontend/src/pages/AdminPaperEditPage.tsx` 共用模块编辑器、定义缓存和后端错误路径。
+- [ ] T041 [US6] 在 `goserver/handlers/papers.go` 批量预加载模块、记录、Conditions、定义版本和 Evidence，并避免 N+1 查询。
+- [ ] T042 [US6] 在 `frontend/src/lib/paperDetailView.ts`、`frontend/src/pages/PaperDetailPage.tsx` 与 `frontend/src/pages/SearchPage.tsx` 直接消费模块化详情契约。
+- [ ] T043 [US6] 在 `goserver/handlers/stats.go` 从统一记录固定列查询 Tc，保留类型、方法和代表筛选。
+- [ ] T044 [US6] 在 `goserver/handlers/paper_detail_test.go` 与 `goserver/handlers/stats_test.go` 比较新旧详情、图表结果、查询次数和基准性能。
+
+**独立验收**：以目标模型 fixture 完成 Quickstart 场景六和场景八，上传只读态、管理、详情、搜索与图表结果一致。
+
+## 阶段 9：切换与旧模型退役
+
+- [ ] T045 在 `backend/ingest/upload_contracts.py` 与 `frontend/src/lib/paperProcessing.ts` 增加上传缓存 Schema 版本及旧草稿单向转换，转换失败返回明确错误。
+- [ ] T046 在 `backend/scripts/migrate_issue90_properties.py` 实现 Copy 进度、含修改与删除的最终同步、逐项 Reconcile、全部科学写入停写门、在途事务排空、影子材料表更名和外键重建及恢复检查点。
+- [ ] T047 在 `goserver/handlers/papers.go`、`goserver/handlers/stats.go` 与 `frontend/src/lib/paperDetailView.ts` 完成 Read switch；读取验收失败时恢复旧读取。
+- [ ] T048 在 `backend/ingest/scientific_drafts.py` 与 `backend/services/scientific_draft_rewrite.py` 完成 Write switch，通过读路径冒烟后才解除停写。
+- [ ] T049 在 `docs/specs/90-unified-superconductor-properties/validation.md` 记录目标环境无旧写入、详情/搜索/图表对比、停写窗口和恢复演练证据。
+- [ ] T050 在 `alembic/versions/20260907_issue90_contract_legacy_properties.py` 退役旧 Tc、普通物性、Evidence 连接、Context 表、两张 legacy 材料表及临时映射，不再改动已切换生效的论文内唯一键。
+- [ ] T051 在 `tests/02_maintenance_and_verification/test_issue90_migration.py` 运行预建测试验证 Expand -> Copy -> 最终增量 -> Read switch -> Write switch -> Observe -> Contract，并验证切写前恢复与切写后目标 Schema 检查点及日志重放均无已提交数据丢失。
+
+## 阶段 10：收尾、验收与文档
+
+- [ ] T052 [P] 在 `docs/specs/90-unified-superconductor-properties/quickstart.md` 记录模块、Tc、Conditions、定义升级回滚、双论文材料、迁移和下游人工验收结果。
+- [ ] T053 [P] 在 `docs/specs/90-unified-superconductor-properties/validation.md` 记录 Python、Go、Vitest、前端构建、隔离 MySQL 迁移专项和 `git diff --check` 结果。
+- [ ] T054 在 `docs/overview/01_Decentralized_Uploading_of_Superconductivity_Data/data-structure-and-form-mapping.md`、`docs/overview/02_Decentralized_Maintenance_and_Verification/domain-model-and-schema.md` 与 `docs/overview/03_Superconductivity_Data_Search_and_Database_Discovery/paper-and-property-results.md` 按实际实现更新当前功能总览。
+- [ ] T055 使用 `big-project-issue-manager` 核对 `docs/specs/90-unified-superconductor-properties/validation.md` 并将验收证据和 Documentation Impact 回写 Issue #90，满足关闭门槛后关闭 Issue。
 
 ## 依赖顺序
 
-- T001–T005 固定失败契约；T006–T011 完成前不得复制数据。
-- T012–T017 完成后才能让新记录绑定定义版本。
-- T018–T025 必须在写入和读取切换前完成并对账。
-- T026–T034 先切写入，T035–T040 再切公开读取和下游。
-- T043 观察通过后才能执行 T044–T046 的旧结构退役。
-- Overview 只能在实现与验证后更新，T049 阻断 T050。
+- T001–T006 固定失败契约；T007–T011 是所有用户故事的共同基础。
+- 用户故事章节按产品优先级排列，实际执行按技术依赖：基础阶段后先完成 US4 定义服务（T025–T031），
+  再完成 US1、US2、US3，最后执行跨前后端矩阵 T032。T021–T022 可先提供规则校验，US3 的编辑和验收依赖 US2。
+- T001–T006 必须预先包含各故事与恢复路径的失败场景；后续 T016、T020、T024、T031、T032、T034、
+  T038、T044、T051 为运行现有测试并记录验收结果，不是延迟到实现后才编写测试。
+- US5 的材料复制必须在 US6 复制物性前完成；US6 的读取实现可基于目标 fixture 开发，但生产切换依赖 US1–US5 全部通过。
+- T046 最终对账通过后才能执行 T047；T047 读取验收通过后才能执行 T048；T049 观察通过后才能执行 T050。
+- T054 只能记录真实落地行为，且阻断 T055。
+
+## 并行机会
+
+- T001–T006 修改不同测试或 fixture，可以并行。
+- 基础阶段完成后，T025–T032 的定义服务可与 T033–T036 的论文内材料迁移并行，但数据库迁移和 `backend/models.py` 修改保持串行。
+- T041–T044 的 Go 读取与前端详情消费可以并行开发，最终以同一目标 fixture 汇合。
+- T052 与 T053 可并行收集证据，T054 必须等待最终行为确定。
+
+## MVP 范围
+
+MVP 为基础阶段 + US1 + US2 + US3 + US4：在新建材料状态中可以按需添加模块，录入多条 Tc，
+保持 Conditions 配对，并由不可变定义完成前后端一致校验。US5、US6 和切换仍是关闭 #90 的必需
+范围，但不阻止先验收不依赖历史迁移的新数据编辑闭环。
 
 ## 需求覆盖
 
 | 需求 | 任务 |
 | --- | --- |
-| FR-001–FR-006 | T002、T003、T021、T026、T030–T032 |
-| FR-007–FR-012 | T002、T020、T022、T027–T033 |
-| FR-013–FR-019 | T001、T011–T017、T026、T033 |
-| FR-020–FR-022 | T004、T009、T018、T019、T037、T040、T045 |
-| FR-023–FR-030 | T004–T011、T020–T025、T029、T034–T046 |
-| FR-031–FR-033 | T002、T007、T013、T014、T040 |
-| FR-034–FR-035 | T047–T050 |
+| FR-001–FR-006 | T003、T007–T016 |
+| FR-007–FR-012 | T003、T017–T024 |
+| FR-013–FR-019 | T001、T002、T010、T021、T022、T025–T032 |
+| FR-020–FR-022 | T005、T007、T033–T036 |
+| FR-023–FR-030 | T005–T011、T033–T051 |
+| FR-031–FR-033 | T002、T007、T017、T025–T031、T041 |
+| FR-034–FR-035 | T049、T051–T055 |
+| SC-001–SC-003 | T016、T020、T024 |
+| SC-004–SC-005、SC-012 | T001、T002、T025–T032 |
+| SC-006–SC-011 | T034–T055 |

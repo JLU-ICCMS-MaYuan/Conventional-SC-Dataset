@@ -16,6 +16,7 @@ erDiagram
 
     property_modules ||--o{ property_records : "包含平级记录"
     form_definitions ||--o{ property_records : "按版本解释和校验"
+    property_records ||--o{ property_record_definition_events : "记录升级与回滚"
     calculation_conditions |o--o{ property_records : "同一次计算产生或使用"
     experimental_conditions |o--o{ property_records : "同一次实验产生"
     structure_models |o--o{ property_records : "可选本论文结构"
@@ -53,7 +54,8 @@ erDiagram
 ## 模块与记录
 
 `property_modules` 是材料状态中的模块清单，`property_records` 保存实际科学事实。添加一个新模块不需要
-给 `material_states` 新增一列；发布相应模块和记录定义后即可挂载。
+给 `material_states` 新增一列；发布相应模块和记录定义后即可挂载。记录只属于一个模块，非空模块不能
+在未显式处理记录时删除。
 
 ```text
 MaterialState
