@@ -148,6 +148,9 @@ export interface DraftMaterialState {
   experimental_context?: DraftExperimentalContext | null
   tc_results?: DraftTcResult[]
   properties?: DraftKeyProperty[]
+  property_modules?: import('./propertyModules').PropertyModuleDraft[]
+  deleted_record_keys?: string[]
+  deleted_module_keys?: string[]
   space_group_evidence?: SourceEvidence | SourceEvidence[] | null
 }
 

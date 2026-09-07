@@ -17,6 +17,7 @@ import {
 } from '../lib/classifications'
 import { useLanguage } from '../context/LanguageContext'
 import StructureCandidatePanel from './StructureCandidatePanel'
+import PropertyModuleEditor from './PropertyModuleEditor'
 import {
   CRYSTAL_SYSTEM_VALUES, CrystalSystem, DraftKeyProperty, DraftMaterialState, DraftTcResult, SourceEvidence,
   StructureCandidate, evidenceList, unwrapData,
@@ -667,6 +668,16 @@ const MaterialStatesEditor: React.FC<MaterialStatesEditorProps> = ({
                       <Button size="small" color="error" onClick={() => removeProperty(index, propertyIndex)}>{t('common.delete')}</Button>
                     </Box>
                   ))}
+
+                  {Array.isArray(state.property_modules) && (
+                    <Box data-testid={`property-modules-${index}`} sx={{ mt: 2 }}>
+                      <PropertyModuleEditor
+                        modules={state.property_modules}
+                        readOnly={readOnly}
+                        onChange={modules => updateMaterialState(index, 'property_modules', modules)}
+                      />
+                    </Box>
+                  )}
 
                   <StructureCandidatePanel
                     candidates={stateCandidates}

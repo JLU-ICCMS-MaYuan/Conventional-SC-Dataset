@@ -20,6 +20,7 @@ from backend.services.classification_catalog import (
 )
 from backend.services.space_groups import CRYSTAL_SYSTEMS
 from backend.services.structure_candidates import validate_structure_text
+from backend.ingest.property_modules import persist_property_modules
 
 
 RESERVED_PROPERTY_CODES = {
@@ -471,6 +472,21 @@ async def persist_scientific_draft(
                 targets.append(ScientificEvidenceTarget(
                     field_path, item["evidence"], "property", prop
                 ))
+
+        # Issue #90 unified contract.  During the migration window old draft
+        # keys above remain readable, while clients sending property_modules
+        # are persisted through the new schema-driven path.
+        property_modules = state_data.get("property_modules")
+        if isinstance(property_modules, list):
+            await persist_property_modules(
+                session,
+                paper_id=paper.id,
+                paper_revision=paper.content_revision,
+                material_state_id=state.id,
+                modules=property_modules,
+                deleted_record_keys=state_data.get("deleted_record_keys"),
+                deleted_module_keys=state_data.get("deleted_module_keys"),
+            )
     return targets
 
 

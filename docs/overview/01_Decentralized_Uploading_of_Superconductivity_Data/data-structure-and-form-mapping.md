@@ -6,6 +6,17 @@
 
 本文只描述“超导数据去中心化上传”当前实际使用的数据结构。账号、审核事件、检索索引、外部数据集和图表组合等表不属于本表单的直接写入范围。
 
+## 模块化物性记录（Issue #90）
+
+材料状态现可携带 `property_modules[]`。首批模块为超导、动力学、热力学和电子性质；模块只在用户
+实际添加时提交，记录通过 `record_key` 平级保存。每条记录包含值类型、单位、方法、代表标记以及
+`payload` 内的 Conditions、参数和预留扩展字段。预测 Tc 只能使用计算 Conditions，测量 Tc 只能使用
+实验 Conditions，服务端按绑定的版本化 `FormDefinition` 统一校验。
+
+旧草稿仍在上传边界单向转换为模块化记录；目标表由 `issue90_expand_modular_property_schema` 建立，
+历史数据复制由 `backend/scripts/migrate_issue90_properties.py` 幂等执行。切换前必须完成逐项对账，
+不会因为迁移缺失 Evidence 而伪造来源。
+
 ## 数据存放分层
 
 | 存放位置 | 数据                                                                  | 生命周期                               | 作用                                             |

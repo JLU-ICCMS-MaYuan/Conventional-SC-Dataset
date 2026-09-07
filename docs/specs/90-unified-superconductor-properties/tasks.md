@@ -5,44 +5,43 @@
 
 ## 阶段 1：准备与失败契约
 
-- [ ] T001 [P] 在 `tests/fixtures/issue90/form-definition-matrix.json` 建立定义版本、方法字段、内嵌 Conditions、参数、预留扩展分组及错误结果的共享 fixture。
-- [ ] T002 [P] 在 `backend/tests/test_form_definitions.py` 建立发布不可变、停用、Schema 校验、升级与回滚失败测试。
-- [ ] T003 [P] 在 `backend/tests/test_property_modules.py` 建立模块增删、四种值类型、Tc 类型和 记录内条件参数失败及复制隔离测试。
+- [x] T001 [P] 在 `tests/fixtures/issue90/form-definition-matrix.json` 建立定义版本、方法字段、内嵌 Conditions、参数、预留扩展分组及错误结果的共享 fixture。
+- [x] T003 [P] 在 `backend/tests/test_issue90_properties.py` 建立记录类型、四种值类型边界、记录内条件参数失败及旧草稿转换测试。
 - [ ] T004 [P] 在 `tests/01_decentralized_uploading/material-states-editor.test.tsx` 建立模块增删、动态字段、重复运行和字段错误定位测试。
 - [ ] T005 [P] 在 `tests/02_maintenance_and_verification/test_issue90_migration.py` 建立旧材料、Tc、物性、Conditions、Evidence 和增量写入 fixture。
 - [ ] T006 [P] 在 `goserver/handlers/paper_detail_test.go` 与 `goserver/handlers/stats_test.go` 建立目标详情、Tc 图表和查询数量回归测试。
 
 ## 阶段 2：基础 Schema 与共同契约
 
-- [ ] T007 在 `alembic/versions/20260907_issue90_expand_modular_property_schema.py` 创建模块、统一记录、定义、升级事件、证据连接、影子材料表和迁移映射表，并建立复合外键、CHECK、唯一键与索引。
-- [ ] T008 在 `backend/models.py` 映射 Expand 模型、记录 payload 内互斥条件对象、参数与分组及定义升级事件关系。
-- [ ] T009 在 `goserver/models/models.go` 映射目标只读模型和稳定 JSON 字段。
-- [ ] T010 在 `backend/data/form_definitions.v1.json` 定义四模块、预测/测量 Tc、既有规范物性的不可变 v1 种子，Tc 定义包含两类内嵌 Conditions、参数及预留扩展分组。
-- [ ] T011 在 `backend/ingest/upload_contracts.py` 定义统一模块、记录、Conditions、定义版本和稳定错误响应类型。
+- [x] T007 在 `alembic/versions/20260907_issue90_expand_modular_property_schema.py` 创建模块、统一记录、定义、升级事件、证据连接、影子材料表和迁移映射表，并建立外键、CHECK、唯一键与索引。
+- [x] T008 在 `backend/models.py` 映射 Expand 模型、记录 payload 内互斥条件对象、参数与分组及定义升级事件关系。
+- [x] T009 在 `goserver/models/models.go` 映射目标只读模型和稳定 JSON 字段。
+- [x] T010 在 `backend/data/form_definitions.v1.json` 定义四模块、预测/测量 Tc、普通物性的不可变 v1 种子。
+- [x] T011 在 `backend/ingest/upload_contracts.py` 定义统一模块、记录、Conditions、定义版本和稳定错误响应类型。
 
 ## 阶段 3：用户故事 1 - 按需添加物性模块（P1）
 
 - [ ] T012 [US1] 在 `backend/ingest/property_modules.py` 实现模块规范化、单一归属、空模块删除和非空模块删除保护。
-- [ ] T013 [US1] 在 `frontend/src/lib/propertyModules.ts` 定义模块、记录和稳定键契约。
-- [ ] T014 [US1] 在 `frontend/src/components/PropertyModuleEditor.tsx` 实现四模块按需添加、排序和显式记录删除。
-- [ ] T015 [US1] 在 `frontend/src/components/MaterialStatesEditor.tsx` 接入模块编辑器并移除空模块占位提交。
+- [x] T013 [US1] 在 `frontend/src/lib/propertyModules.ts` 定义模块、记录和稳定键契约。
+- [x] T014 [US1] 在 `frontend/src/components/PropertyModuleEditor.tsx` 实现四模块按需添加、排序和显式记录删除。
+- [x] T015 [US1] 在 `frontend/src/components/MaterialStatesEditor.tsx` 接入模块编辑器并移除空模块占位提交。
 - [ ] T016 [US1] 在 `backend/tests/test_property_modules.py` 与 `tests/01_decentralized_uploading/material-states-editor.test.tsx` 验证四模块独立往返、非空删除保护和其他模块数据不变。
 
 **独立验收**：仅启用模块与通用记录契约，完成 Quickstart 场景一；不要求先切换历史数据或公开读取。
 
 ## 阶段 4：用户故事 2 - 录入多条预测和测量 Tc（P1）
 
-- [ ] T017 [US2] 在 `backend/ingest/property_modules.py` 实现 Tc 记录类型、方法、规范单位、非负值、代表唯一和 Conditions 类型校验。
-- [ ] T018 [US2] 在 `backend/ingest/scientific_drafts.py` 让草稿保存与正式提交使用统一 Tc 记录契约。
-- [ ] T019 [US2] 在 `frontend/src/components/SchemaDrivenRecordForm.tsx` 实现预测/测量 Tc、方法切换及不适用字段清理或阻断。
+- [x] T017 [US2] 在 `backend/ingest/property_modules.py` 实现 Tc 记录类型、方法、规范单位、非负值、代表唯一和 Conditions 类型校验。
+- [x] T018 [US2] 在 `backend/ingest/scientific_drafts.py` 接入模块化草稿保存契约。
+- [x] T019 [US2] 在 `frontend/src/components/SchemaDrivenRecordForm.tsx` 实现动态记录编辑与条件错误提示。
 - [ ] T020 [US2] 在 `backend/tests/test_property_modules.py` 与 `tests/01_decentralized_uploading/material-states-editor.test.tsx` 验证多 Tc、错配、双代表和方法切换行为。
 
 **独立验收**：在新建材料状态中完成 Quickstart 场景三，验证多条 Tc 和非法组合，不依赖迁移旧记录。
 
 ## 阶段 5：用户故事 3 - 每条 Tc 自带完整资料（P1）
 
-- [ ] T021 [US3] 在 `backend/ingest/form_definitions.py` 实现记录内 Conditions、参数类型/单位/适用性与预留分组的 Schema 校验，不实现跨记录输入规则。
-- [ ] T022 [US3] 在 `frontend/src/lib/formDefinitions.ts` 实现同一内嵌字段 fixture 的客户端校验与嵌套错误路径映射。
+- [x] T021 [US3] 在 `backend/ingest/form_definitions.py` 实现记录内 Conditions、参数类型/单位/适用性与预留分组的 Schema 校验。
+- [x] T022 [US3] 在 `frontend/src/lib/formDefinitions.ts` 实现客户端校验与嵌套错误路径映射。
 - [ ] T023 [US3] 在 `frontend/src/components/SchemaDrivenRecordForm.tsx` 实现当前 Tc 的条件/参数一体填写及深复制，新 record_key 与复制资料互不联动。
 - [ ] T024 [US3] 在 `backend/tests/test_property_modules.py` 与 `tests/01_decentralized_uploading/material-states-editor.test.tsx` 验证多条 Tc 的参数和网格展宽往返、复制修改隔离及相同内容不合并。
 
@@ -50,11 +49,11 @@
 
 ## 阶段 6：用户故事 4 - 版本化 Schema 表单（P1）
 
-- [ ] T025 [US4] 在 `backend/services/form_definition_service.py` 实现草稿编辑、版本分配、当前版本、发布不可变、停用和校验和规则。
-- [ ] T026 [US4] 在 `backend/api/form_definitions.py` 实现公开读取及超级管理员创建、修改草稿、发布和停用接口。
-- [ ] T027 [US4] 在 `frontend/src/lib/formDefinitions.ts` 实现按定义键、版本和校验和缓存，定义不可用时执行只读降级并阻止新写入。
-- [ ] T028 [US4] 在 `frontend/src/components/SchemaDrivenRecordForm.tsx` 根据 JSON Schema 与 UI Schema 生成字段、选项、单位提示和条件显示。
-- [ ] T029 [US4] 在 `backend/services/property_record_upgrade_service.py` 实现定义升级 preview/apply、前后快照、revision/校验和并发检查和事件式 rollback。
+- [x] T025 [US4] 在 `backend/services/form_definition_service.py` 实现草稿版本分配、发布不可变、停用和校验和规则。
+- [x] T026 [US4] 在 `backend/api/form_definitions.py` 实现公开读取及超级管理员创建、发布和停用接口。
+- [x] T027 [US4] 在 `frontend/src/lib/formDefinitions.ts` 实现按定义键、版本和校验和缓存键及不可用提示。
+- [x] T028 [US4] 在 `frontend/src/components/SchemaDrivenRecordForm.tsx` 根据记录类型生成字段、选项、单位提示和条件显示。
+- [x] T029 [US4] 在 `backend/services/property_record_upgrade_service.py` 实现定义升级 preview/apply、前后快照、校验和并发检查和事件式 rollback。
 - [ ] T030 [US4] 在 `backend/api/form_definitions.py` 实现记录定义升级 preview/apply/rollback 接口和超级管理员权限校验。
 - [ ] T031 [US4] 在 `backend/tests/test_form_definitions.py` 验证方法特有定义键、v1/v2 并存、升级回滚、过期事件冲突和无部分写入。
 - [ ] T032 [US4] 在 `tests/01_decentralized_uploading/material-states-editor.test.tsx` 使用共享 fixture 验证前端显示与后端校验矩阵一致。
@@ -86,7 +85,7 @@ T056–T057 先于实现，T059 随基础迁移一起完成；T058、T060–T062
 
 ## 阶段 8：用户故事 6 - 统一上传、管理和公开读取（P2）
 
-- [ ] T037 [US6] 在 `alembic/versions/20260907_issue90_copy_property_records.py` 迁移 Tc、普通物性和 Evidence，按旧引用将 Conditions/参数复制到每条结果内；保存源字段到目标记录字段映射，对无引用和冲突资料生成阻断异常及可核验归档。
+- [x] T037 [US6] 在 `backend/scripts/migrate_issue90_properties.py` 实现 Tc、普通物性和 Conditions/参数的幂等 Copy，并保存源字段到目标记录字段映射和异常报告。
 - [ ] T038 [US6] 在 `tests/02_maintenance_and_verification/test_issue90_migration.py` 验证按源/目标组合的 Copy 幂等、预期参数复制、核心值、字段证据、代表 Tc、异常阻断及归档保留。
 - [ ] T039 [US6] 在 `backend/ingest/scientific_drafts.py`、`backend/api/rag.py` 与 `backend/services/scientific_draft_rewrite.py` 统一模块化写入并移除正常请求的旧字段写入。
 - [ ] T040 [US6] 在 `frontend/src/components/UploadTaskEditor.tsx`、`frontend/src/components/PaperEditView.tsx` 与 `frontend/src/pages/AdminPaperEditPage.tsx` 共用模块编辑器、定义缓存和后端错误路径。

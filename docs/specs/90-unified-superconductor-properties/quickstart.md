@@ -1,5 +1,19 @@
 # 快速验收：MaterialState 模块化物性与动态表单
 
+## 实施验证结果
+
+本地已完成 Python 模块化记录、迁移阶段控制器和前端编辑器回归；结果见
+[validation.md](validation.md)。真实业务库的 Copy、逐项 Reconcile 及 Read/Write switch 必须在隔离
+MySQL 按下列命令执行：
+
+```bash
+alembic upgrade issue90_copy_property_records
+DATABASE_URL="$DATABASE_URL" python3 -m backend.scripts.migrate_issue90_properties --dry-run
+DATABASE_URL="$DATABASE_URL" python3 -m backend.scripts.migrate_issue90_properties
+```
+
+迁移脚本输出 `errors=[]` 且重复运行 `copied=0` 后，才可进入读取切换和观察阶段。
+
 ## 前置条件
 
 - 使用包含 #90 Expand 与 Copy 阶段的隔离 MySQL。

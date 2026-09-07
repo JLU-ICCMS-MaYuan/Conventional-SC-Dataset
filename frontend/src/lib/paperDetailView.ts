@@ -160,6 +160,21 @@ export function collectPropertyRows(paper: any, t?: TranslateFn): PaperPropertyR
         })
       }
     }
+
+    // Issue #90 统一记录优先；旧字段仅作为迁移窗口回退。
+    for (const module of (Array.isArray(state?.property_modules) ? state.property_modules : [])) {
+      for (const record of (Array.isArray(module?.records) ? module.records : [])) {
+        const isTc = record?.record_type === 'predicted_tc' || record?.record_type === 'measured_tc'
+        rows.push({
+          key: `record-${record?.record_key ?? rows.length}`,
+          material,
+          label: isTc ? 'Tc' : (textOrNull(record?.name_raw) || textOrNull(record?.property_code) || '-'),
+          value: isTc ? tcValueText({ tc_value_k: record?.value_number, tc_min_k: record?.value_min, tc_max_k: record?.value_max, value_raw: record?.value_raw, unit_raw: record?.unit_raw }) : propertyValueText({ value_number: record?.value_number, value_min: record?.value_min, value_max: record?.value_max, value_raw: record?.value_text ?? record?.value_raw, unit: record?.unit_raw }),
+          condition,
+          note: textOrNull(record?.method_code) || '-',
+        })
+      }
+    }
   }
 
   // 普通物性挂在论文上，用 material_state_id 回查所属状态的条件。

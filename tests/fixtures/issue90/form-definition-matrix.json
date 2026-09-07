@@ -1,0 +1,14 @@
+{
+  "predicted_tc": {
+    "definition_key": "record.superconductive_properties.predicted_tc.allen_dynes",
+    "version": 1,
+    "payload": {"calculation_conditions": {"k_grid": [24, 24, 24]}, "parameters": {"mu_star": {"value_number": 0.1, "unit": "1"}}}
+  },
+  "measured_tc": {
+    "definition_key": "record.superconductive_properties.measured_tc.resistivity",
+    "version": 1,
+    "payload": {"experimental_conditions": {"measurement_method": "four_probe"}}
+  },
+  "extension_groups": ["payload.parameters.extensions", "payload.calculation_conditions.extensions", "payload.experimental_conditions.extensions"],
+  "errors": ["invalid_condition_type", "duplicate_representative_tc", "unknown_definition_version"]
+}

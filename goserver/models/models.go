@@ -344,6 +344,53 @@ type MaterialState struct {
 	Properties               []SuperconductorProperty       `gorm:"foreignKey:MaterialStateID" json:"properties,omitempty"`
 	Superconductor           Superconductor                 `gorm:"foreignKey:SuperconductorID" json:"superconductor,omitempty"`
 	StructureFamilyLinks     []MaterialStateStructureFamily `gorm:"foreignKey:MaterialStateID" json:"structure_families,omitempty"`
+	PropertyModules          []PropertyModule                `gorm:"foreignKey:MaterialStateID" json:"property_modules,omitempty"`
+}
+
+// PropertyModule/PropertyRecord 是 Issue #90 的统一只读投影。
+type PropertyModule struct {
+	ID               uint64          `gorm:"primaryKey" json:"-"`
+	ModuleKey        string          `gorm:"size:96;not null;uniqueIndex" json:"module_key"`
+	PaperID          uint            `gorm:"not null;index" json:"-"`
+	PaperRevision    uint            `gorm:"not null;index" json:"-"`
+	MaterialStateID  uint64          `gorm:"not null;index" json:"-"`
+	ModuleCode       string          `gorm:"size:64;not null" json:"module_code"`
+	DefinitionKey    string          `gorm:"size:255;not null" json:"definition_key"`
+	DefinitionVersion int            `gorm:"not null" json:"definition_version"`
+	DisplayOrder     int             `gorm:"not null" json:"display_order"`
+	MetadataJSON     json.RawMessage `gorm:"type:json" json:"metadata,omitempty"`
+	Records          []PropertyRecord `gorm:"foreignKey:ModuleID" json:"records,omitempty"`
+}
+
+type PropertyRecord struct {
+	ID                uint64          `gorm:"primaryKey" json:"-"`
+	RecordKey         string          `gorm:"size:96;not null" json:"record_key"`
+	PaperID           uint            `gorm:"not null;index" json:"-"`
+	PaperRevision     uint            `gorm:"not null;index" json:"-"`
+	MaterialStateID   uint64          `gorm:"not null;index" json:"-"`
+	ModuleID          uint64          `gorm:"not null;index" json:"-"`
+	RecordType        string          `gorm:"size:64;not null" json:"record_type"`
+	PropertyCode      string          `gorm:"size:100;not null" json:"property_code"`
+	CustomPropertyKey *string         `gorm:"size:96" json:"custom_property_key,omitempty"`
+	DefinitionID      uint            `gorm:"not null" json:"-"`
+	DefinitionKey     string          `gorm:"size:255;not null" json:"definition_key"`
+	DefinitionVersion int             `gorm:"not null" json:"definition_version"`
+	NameRaw           string          `gorm:"size:255;not null" json:"name_raw"`
+	ValueKind         string          `gorm:"size:20;not null" json:"value_kind"`
+	ValueRaw          string          `gorm:"type:text;not null" json:"value_raw"`
+	ValueNumber       *float64        `json:"value_number,omitempty"`
+	ValueMin          *float64        `json:"value_min,omitempty"`
+	ValueMax          *float64        `json:"value_max,omitempty"`
+	ValueText         *string         `json:"value_text,omitempty"`
+	ValueBoolean      *bool           `json:"value_boolean,omitempty"`
+	Uncertainty       *float64        `json:"uncertainty,omitempty"`
+	UnitRaw           *string         `json:"unit_raw,omitempty"`
+	CanonicalUnit     *string         `json:"canonical_unit,omitempty"`
+	MethodCode        *string         `json:"method_code,omitempty"`
+	IsRepresentative  bool            `json:"is_representative"`
+	StructureKey      *string         `json:"structure_key,omitempty"`
+	PayloadJSON       json.RawMessage `gorm:"type:json" json:"payload"`
+	RecordChecksum    string          `gorm:"size:64;not null" json:"-"`
 }
 
 type MaterialStateStructureFamily struct {

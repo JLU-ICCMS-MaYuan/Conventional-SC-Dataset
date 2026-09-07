@@ -6,6 +6,12 @@
 
 ## 当前行为
 
+- 详情 API 同时返回材料状态下的 `property_modules[].records[]`。检索投影优先读取统一记录的固定核心列，
+  并将记录内 Conditions、参数和定义版本原样提供给详情和导出；迁移窗口内旧 `tc_results`、
+  `superconductor_properties` 仍作为兼容回退。
+- `GET /api/papers/{paper_id}/material-states/{state_key}/export` 返回同一 revision 的离线 JSON 包，
+  包含材料、状态、结构、模块记录和定义快照，不暴露管理员审计字段。
+
 - 新上传提交链路写入条件化目标模型：`material_states` 保存压力与论文报告的空间群，`calculation_contexts` 保存 λ/ωlog，`tc_results` 保存理论或实验 Tc，`superconductor_properties` 只保存 Tc 之外的普通物性。
 - 材料状态不再保存含义不清的 `phase_label`、Material family 或 `superconductor_kind`；论文顶层保存单选 Superconductor type，空间群是结构事实，`More type labels` 继续由状态级结构家族关联表达。
 - 结果主链路为 `papers` 与条件化科学实体：论文保存 DOI、标题、作者、年份、摘要、审核状态和 LLM 富化字段；普通物性保存材料原文名、规范物性名、数值（原文值与解析值）、单位与条件说明。压强与温度属材料状态、结构文本属 `structure_models`，都不在物性上重复承载。（[Issue #57](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/57)）

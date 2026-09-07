@@ -6,6 +6,17 @@
 
 ## 当前行为
 
+### MaterialState 模块化物性与定义版本
+
+Issue #90 新增 `property_modules`、`property_records` 和 `form_definitions`。模块按需挂载在
+`MaterialState`，统一记录固定列保存可检索核心事实，`payload_json` 保存本条记录的 Conditions、参数及
+预设分组扩展。定义以 `definition_key + version` 唯一标识，发布后不可原地修改；升级和回滚写入不可变
+审计事件。`property_record_evidences` 连接记录与当前论文 revision 的 Evidence，管理员提升自定义性质
+时另写来源快照和目标定义。
+
+迁移采用 Expand、Copy、Reconcile、Read switch、Write switch、Observe、Contract 阶段控制器；目标读取
+验收前保持科学写入停用，Contract 迁移默认拒绝删除旧表，只有显式确认后才可退役。
+
 - Alembic 的 fresh 链可在全新空 MySQL 创建 21 张目标业务表；`0007` 建立论文 revision、
   File、Chunk、Evidence 和审核事件约束，`0008` 建立条件化科学数据模型。
 - SQLAlchemy `Base.metadata` 只包含目标表，不再把 `key_properties`、

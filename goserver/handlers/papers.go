@@ -61,6 +61,7 @@ func GetPaper(c *gin.Context) {
 		Preload("MaterialStates.TcResults").
 		Preload("MaterialStates.CalculationContexts").
 		Preload("MaterialStates.Structures").
+		Preload("MaterialStates.PropertyModules.Records").
 		First(&paper, uint(id)).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "论文不存在"})
 		return
@@ -561,9 +562,32 @@ func materialStatesToDict(states []models.MaterialState) []gin.H {
 			"tc_results":           tcResultsToDict(state.TcResults),
 			"calculation_contexts": calculationContextsToDict(state.CalculationContexts),
 			"structures":           structureModelsToDict(state.Structures),
+			"property_modules":     propertyModulesToDict(state.PropertyModules),
 		})
 	}
 	return result
+}
+
+func propertyModulesToDict(modules []models.PropertyModule) []gin.H {
+	output := make([]gin.H, 0, len(modules))
+	for _, module := range modules {
+		records := make([]gin.H, 0, len(module.Records))
+		for _, record := range module.Records {
+			records = append(records, gin.H{
+				"record_key": record.RecordKey, "record_type": record.RecordType,
+				"property_code": record.PropertyCode, "custom_property_key": record.CustomPropertyKey,
+				"definition_key": record.DefinitionKey, "definition_version": record.DefinitionVersion,
+				"name_raw": record.NameRaw, "value_kind": record.ValueKind, "value_raw": record.ValueRaw,
+				"value_number": record.ValueNumber, "value_min": record.ValueMin, "value_max": record.ValueMax,
+				"value_text": record.ValueText, "value_boolean": record.ValueBoolean,
+				"uncertainty": record.Uncertainty, "unit_raw": record.UnitRaw, "canonical_unit": record.CanonicalUnit,
+				"method_code": record.MethodCode, "is_representative": record.IsRepresentative,
+				"structure_key": record.StructureKey, "payload": json.RawMessage(record.PayloadJSON),
+			})
+		}
+		output = append(output, gin.H{"module_key": module.ModuleKey, "module_code": module.ModuleCode, "definition_key": module.DefinitionKey, "definition_version": module.DefinitionVersion, "display_order": module.DisplayOrder, "metadata": json.RawMessage(module.MetadataJSON), "records": records})
+	}
+	return output
 }
 
 // structureModelsToDict 结构模型是结构预览的唯一来源；物性表没有结构文本列。

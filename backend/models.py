@@ -1109,6 +1109,11 @@ class MaterialState(Base):
         "MaterialStateStructureFamily",
         back_populates="material_state",
     )
+    property_modules = relationship(
+        "PropertyModule",
+        back_populates="material_state",
+        cascade="all, delete-orphan",
+    )
 
 
 class MaterialStateStructureFamily(Base):
@@ -1872,6 +1877,244 @@ class SuperconductorPropertyEvidence(Base):
         default="primary",
         server_default="primary",
     )
+
+
+# Issue #90: unified, schema-driven material properties.  These models are
+# additive during the migration window; legacy tables remain available until
+# the contract migration has been verified in production.
+PROPERTY_MODULE_CODES = (
+    "superconductive_properties",
+    "dynamical_properties",
+    "thermodynamical_properties",
+    "electronic_properties",
+)
+PROPERTY_RECORD_VALUE_KINDS = ("number", "range", "text", "boolean")
+
+
+class PropertyModule(Base):
+    __tablename__ = "property_modules"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["material_state_id", "paper_id", "paper_revision"],
+            ["material_states.id", "material_states.paper_id", "material_states.paper_revision"],
+            name="fk_property_modules_state_revision",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "module_code IN ('superconductive_properties','dynamical_properties','thermodynamical_properties','electronic_properties')",
+            name="ck_property_modules_code",
+        ),
+        CheckConstraint("display_order >= 0", name="ck_property_modules_order"),
+        UniqueConstraint("material_state_id", "module_code", name="uq_property_modules_state_code"),
+        UniqueConstraint("module_key", name="uq_property_modules_key"),
+        Index("ix_property_modules_state", "material_state_id"),
+    )
+
+    id = Column(BIGINT_ID, primary_key=True, autoincrement=True)
+    module_key = Column(String(96), nullable=False)
+    paper_id = Column(Integer, nullable=False, index=True)
+    paper_revision = Column(Integer, nullable=False, index=True)
+    material_state_id = Column(BIGINT_ID, nullable=False)
+    module_code = Column(String(64), nullable=False)
+    definition_key = Column(String(255), nullable=False, default="module.property", server_default="module.property")
+    definition_version = Column(Integer, nullable=False, default=1, server_default="1")
+    display_order = Column(Integer, nullable=False, default=0, server_default="0")
+    metadata_json = Column(JSON, nullable=False, default=dict, server_default="{}")
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+    material_state = relationship("MaterialState", back_populates="property_modules")
+    records = relationship("PropertyRecord", back_populates="module", cascade="all, delete-orphan")
+
+
+class FormDefinition(Base):
+    __tablename__ = "form_definitions"
+    __table_args__ = (
+        CheckConstraint("target_kind IN ('property_module','property_record')", name="ck_form_definitions_target"),
+        CheckConstraint("status IN ('draft','published','retired')", name="ck_form_definitions_status"),
+        CheckConstraint("version >= 1", name="ck_form_definitions_version"),
+        UniqueConstraint("definition_key", "version", name="uq_form_definitions_key_version"),
+        Index("ix_form_definitions_lookup", "definition_key", "status"),
+        Index("ix_form_definitions_module", "module_code", "target_kind", "status"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    definition_key = Column(String(255), nullable=False)
+    version = Column(Integer, nullable=False)
+    target_kind = Column(String(32), nullable=False)
+    module_code = Column(String(64), nullable=False)
+    record_type = Column(String(64))
+    method_code = Column(String(64))
+    property_code = Column(String(100))
+    core_schema = Column(JSON, nullable=False, default=dict, server_default="{}")
+    json_schema = Column(JSON, nullable=False, default=dict, server_default="{}")
+    ui_schema = Column(JSON, nullable=False, default=dict, server_default="{}")
+    status = Column(String(20), nullable=False, default="draft", server_default="draft")
+    checksum = Column(String(64), nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="RESTRICT"))
+    published_by = Column(Integer, ForeignKey("users.id", ondelete="RESTRICT"))
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    published_at = Column(DateTime(timezone=True))
+
+
+class PropertyRecord(Base):
+    __tablename__ = "property_records"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["module_id", "material_state_id", "paper_id", "paper_revision"],
+            ["property_modules.id", "property_modules.material_state_id", "property_modules.paper_id", "property_modules.paper_revision"],
+            name="fk_property_records_module_revision",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["definition_id"], ["form_definitions.id"],
+            name="fk_property_records_definition", ondelete="RESTRICT",
+        ),
+        CheckConstraint("record_type IN ('predicted_tc','measured_tc','property')", name="ck_property_records_type"),
+        CheckConstraint("value_kind IN ('number','range','text','boolean')", name="ck_property_records_value_kind"),
+        CheckConstraint("(value_min IS NULL AND value_max IS NULL) OR (value_min IS NOT NULL AND value_max IS NOT NULL AND value_min <= value_max)", name="ck_property_records_range"),
+        CheckConstraint("uncertainty IS NULL OR uncertainty >= 0", name="ck_property_records_uncertainty"),
+        CheckConstraint("(value_kind <> 'number' OR value_number IS NOT NULL) AND (value_kind <> 'range' OR (value_min IS NOT NULL AND value_max IS NOT NULL)) AND (value_kind <> 'text' OR value_text IS NOT NULL) AND (value_kind <> 'boolean' OR value_boolean IS NOT NULL)", name="ck_property_records_value_shape"),
+        CheckConstraint("(record_type NOT IN ('predicted_tc','measured_tc')) OR (property_code = 'tc' AND method_code IS NOT NULL)", name="ck_property_records_tc_identity"),
+        CheckConstraint("(record_type <> 'predicted_tc' OR (payload_json IS NOT NULL AND JSON_EXTRACT(payload_json, '$.calculation_conditions') IS NOT NULL AND JSON_EXTRACT(payload_json, '$.experimental_conditions') IS NULL)) AND (record_type <> 'measured_tc' OR (payload_json IS NOT NULL AND JSON_EXTRACT(payload_json, '$.experimental_conditions') IS NOT NULL AND JSON_EXTRACT(payload_json, '$.calculation_conditions') IS NULL))", name="ck_property_records_condition_type"),
+        UniqueConstraint("module_id", "record_key", name="uq_property_records_module_key"),
+        UniqueConstraint("paper_id", "paper_revision", "source_fingerprint", name="uq_property_records_source"),
+        Index("ix_property_records_state_type_method", "material_state_id", "record_type", "method_code"),
+        Index("ix_property_records_tc_value", "property_code", "value_number"),
+    )
+
+    id = Column(BIGINT_ID, primary_key=True, autoincrement=True)
+    record_key = Column(String(96), nullable=False)
+    paper_id = Column(Integer, nullable=False, index=True)
+    paper_revision = Column(Integer, nullable=False, index=True)
+    material_state_id = Column(BIGINT_ID, nullable=False, index=True)
+    module_id = Column(BIGINT_ID, nullable=False, index=True)
+    record_type = Column(String(64), nullable=False)
+    property_code = Column(String(100), nullable=False)
+    custom_property_key = Column(String(96))
+    definition_id = Column(Integer, nullable=False)
+    definition_key = Column(String(255), nullable=False)
+    definition_version = Column(Integer, nullable=False)
+    name_raw = Column(String(255), nullable=False)
+    value_kind = Column(String(20), nullable=False)
+    value_raw = Column(Text, nullable=False)
+    value_number = Column(Numeric(30, 12))
+    value_min = Column(Numeric(30, 12))
+    value_max = Column(Numeric(30, 12))
+    value_text = Column(Text)
+    value_boolean = Column(Boolean)
+    uncertainty = Column(Numeric(30, 12))
+    unit_raw = Column(String(100))
+    canonical_unit = Column(String(50))
+    method_code = Column(String(100))
+    method_raw = Column(String(255))
+    criterion_code = Column(String(64))
+    criterion_raw = Column(String(255))
+    is_representative = Column(Boolean, nullable=False, default=False, server_default="0")
+    structure_key = Column(String(96))
+    payload_json = Column(JSON, nullable=False, default=dict, server_default="{}")
+    source_fingerprint = Column(String(64), nullable=False)
+    record_checksum = Column(String(64), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+    module = relationship("PropertyModule", back_populates="records")
+    definition = relationship("FormDefinition")
+    evidences = relationship("PropertyRecordEvidence", back_populates="record", cascade="all, delete-orphan")
+
+
+class PropertyRecordDefinitionEvent(Base):
+    __tablename__ = "property_record_definition_events"
+    __table_args__ = (Index("ix_property_record_definition_events_record", "record_id", "created_at"),)
+
+    id = Column(BIGINT_ID, primary_key=True, autoincrement=True)
+    record_id = Column(BIGINT_ID, ForeignKey("property_records.id", ondelete="RESTRICT"), nullable=False)
+    paper_id = Column(Integer, nullable=False)
+    paper_revision = Column(Integer, nullable=False)
+    record_key = Column(String(96), nullable=False)
+    operation = Column(String(20), nullable=False)
+    actor_user_id = Column(Integer, ForeignKey("users.id", ondelete="RESTRICT"))
+    from_definition_key = Column(String(255), nullable=False)
+    from_definition_version = Column(Integer, nullable=False)
+    to_definition_key = Column(String(255), nullable=False)
+    to_definition_version = Column(Integer, nullable=False)
+    before_snapshot = Column(JSON, nullable=False)
+    after_snapshot = Column(JSON, nullable=False)
+    request_checksum = Column(String(64), nullable=False)
+    previous_event_id = Column(BIGINT_ID)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class PropertyDefinitionPromotionEvent(Base):
+    __tablename__ = "property_definition_promotion_events"
+    __table_args__ = (
+        UniqueConstraint("operation_id", name="uq_property_promotion_operation"),
+        UniqueConstraint("source_paper_id", "source_paper_revision", "source_record_key", name="uq_property_promotion_source"),
+        Index("ix_property_promotion_target", "target_definition_key"),
+    )
+
+    id = Column(BIGINT_ID, primary_key=True, autoincrement=True)
+    operation_id = Column(String(64), nullable=False)
+    actor_user_id = Column(Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    source_paper_id = Column(Integer, nullable=False)
+    source_paper_revision = Column(Integer, nullable=False)
+    source_record_key = Column(String(96), nullable=False)
+    source_snapshot = Column(JSON, nullable=False)
+    target_definition_key = Column(String(255), nullable=False)
+    target_definition_version = Column(Integer, nullable=False)
+    target_checksum = Column(String(64), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class PropertyRecordEvidence(Base):
+    __tablename__ = "property_record_evidences"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["record_id", "paper_id", "paper_revision"],
+            ["property_records.id", "property_records.paper_id", "property_records.paper_revision"],
+            name="fk_property_record_evidences_record", ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["paper_evidence_id", "paper_id", "paper_revision"],
+            ["paper_evidences.id", "paper_evidences.paper_id", "paper_evidences.paper_revision"],
+            name="fk_property_record_evidences_evidence", ondelete="CASCADE",
+        ),
+        UniqueConstraint("record_id", "paper_evidence_id", name="uq_property_record_evidences"),
+    )
+
+    record_id = Column(BIGINT_ID, primary_key=True)
+    paper_evidence_id = Column(Integer, primary_key=True)
+    paper_id = Column(Integer, nullable=False)
+    paper_revision = Column(Integer, nullable=False)
+    field_path = Column(String(255), nullable=False, default="", server_default="")
+    evidence_role = Column(String(32), nullable=False, default="primary", server_default="primary")
+    record = relationship("PropertyRecord", back_populates="evidences")
+
+
+class Issue90PropertyMigrationMap(Base):
+    """旧记录到统一记录的可重放映射和逐项异常报告。"""
+
+    __tablename__ = "issue90_property_migration_map"
+    __table_args__ = (
+        UniqueConstraint(
+            "source_table", "source_id", "paper_id", "paper_revision", "target_table",
+            name="uq_issue90_migration_source",
+        ),
+        CheckConstraint("status IN ('copied','reconciled','archived','error')", name="ck_issue90_migration_status"),
+    )
+
+    id = Column(BIGINT_ID, primary_key=True, autoincrement=True)
+    source_table = Column(String(64), nullable=False)
+    source_id = Column(BIGINT_ID, nullable=False)
+    paper_id = Column(Integer, nullable=False)
+    paper_revision = Column(Integer, nullable=False)
+    target_table = Column(String(64), nullable=False)
+    target_id = Column(BIGINT_ID)
+    target_record_key = Column(String(96))
+    field_map = Column(JSON, nullable=False, default=dict, server_default="{}")
+    status = Column(String(20), nullable=False, default="copied", server_default="copied")
+    error_message = Column(Text)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
 class LegacyBase(DeclarativeBase):
