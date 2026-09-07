@@ -5,19 +5,19 @@
 
 ## 阶段 1：准备与失败契约
 
-- [ ] T001 [P] 在 `tests/fixtures/issue90/form-definition-matrix.json` 建立定义版本、方法字段、Conditions 身份规则和错误结果共享 fixture。
+- [ ] T001 [P] 在 `tests/fixtures/issue90/form-definition-matrix.json` 建立定义版本、方法字段、内嵌 Conditions、参数、预留扩展分组及错误结果的共享 fixture。
 - [ ] T002 [P] 在 `backend/tests/test_form_definitions.py` 建立发布不可变、停用、Schema 校验、升级与回滚失败测试。
-- [ ] T003 [P] 在 `backend/tests/test_property_modules.py` 建立模块增删、四种值类型、Tc 类型和 Conditions 组级失败测试。
+- [ ] T003 [P] 在 `backend/tests/test_property_modules.py` 建立模块增删、四种值类型、Tc 类型和 记录内条件参数失败及复制隔离测试。
 - [ ] T004 [P] 在 `tests/01_decentralized_uploading/material-states-editor.test.tsx` 建立模块增删、动态字段、重复运行和字段错误定位测试。
 - [ ] T005 [P] 在 `tests/02_maintenance_and_verification/test_issue90_migration.py` 建立旧材料、Tc、物性、Conditions、Evidence 和增量写入 fixture。
 - [ ] T006 [P] 在 `goserver/handlers/paper_detail_test.go` 与 `goserver/handlers/stats_test.go` 建立目标详情、Tc 图表和查询数量回归测试。
 
 ## 阶段 2：基础 Schema 与共同契约
 
-- [ ] T007 在 `alembic/versions/20260907_issue90_expand_modular_property_schema.py` 创建模块、统一记录、定义、升级事件、两类 Conditions、证据连接、影子材料表和迁移映射表，并建立复合外键、CHECK、唯一键与索引。
-- [ ] T008 在 `backend/models.py` 映射 Expand 模型、两个互斥 Conditions 外键及定义升级事件关系。
+- [ ] T007 在 `alembic/versions/20260907_issue90_expand_modular_property_schema.py` 创建模块、统一记录、定义、升级事件、证据连接、影子材料表和迁移映射表，并建立复合外键、CHECK、唯一键与索引。
+- [ ] T008 在 `backend/models.py` 映射 Expand 模型、记录 payload 内互斥条件对象、参数与分组及定义升级事件关系。
 - [ ] T009 在 `goserver/models/models.go` 映射目标只读模型和稳定 JSON 字段。
-- [ ] T010 在 `backend/data/form_definitions.v1.json` 定义四模块、预测/测量 Tc、既有规范物性及两类 Conditions 的不可变 v1 种子。
+- [ ] T010 在 `backend/data/form_definitions.v1.json` 定义四模块、预测/测量 Tc、既有规范物性的不可变 v1 种子，Tc 定义包含两类内嵌 Conditions、参数及预留扩展分组。
 - [ ] T011 在 `backend/ingest/upload_contracts.py` 定义统一模块、记录、Conditions、定义版本和稳定错误响应类型。
 
 ## 阶段 3：用户故事 1 - 按需添加物性模块（P1）
@@ -39,14 +39,14 @@
 
 **独立验收**：在新建材料状态中完成 Quickstart 场景三，验证多条 Tc 和非法组合，不依赖迁移旧记录。
 
-## 阶段 5：用户故事 3 - 保持 Tc 与相关性质准确对应（P1）
+## 阶段 5：用户故事 3 - 每条 Tc 自带完整资料（P1）
 
-- [ ] T021 [US3] 在 `backend/ingest/form_definitions.py` 实现 `identity_rules`、normalizer、cardinality 和 `group_rules` 的受限解析与整组校验。
-- [ ] T022 [US3] 在 `frontend/src/lib/formDefinitions.ts` 实现同一规则 fixture 的客户端求值与错误路径映射。
-- [ ] T023 [US3] 在 `frontend/src/components/MaterialStatesEditor.tsx` 实现创建、选择和维护不透明 `calc-`/`exp-` Conditions 键，不按内容自动合并。
-- [ ] T024 [US3] 在 `backend/tests/test_property_modules.py` 与 `tests/01_decentralized_uploading/material-states-editor.test.tsx` 验证两组 mu_star-Tc、同键冲突和相同输入重复运行。
+- [ ] T021 [US3] 在 `backend/ingest/form_definitions.py` 实现记录内 Conditions、参数类型/单位/适用性与预留分组的 Schema 校验，不实现跨记录输入规则。
+- [ ] T022 [US3] 在 `frontend/src/lib/formDefinitions.ts` 实现同一内嵌字段 fixture 的客户端校验与嵌套错误路径映射。
+- [ ] T023 [US3] 在 `frontend/src/components/SchemaDrivenRecordForm.tsx` 实现当前 Tc 的条件/参数一体填写及深复制，新 record_key 与复制资料互不联动。
+- [ ] T024 [US3] 在 `backend/tests/test_property_modules.py` 与 `tests/01_decentralized_uploading/material-states-editor.test.tsx` 验证多条 Tc 的参数和网格展宽往返、复制修改隔离及相同内容不合并。
 
-**独立验收**：完成 Quickstart 场景二；`calc-a`/`calc-b` 不错配，输入相同的 `calc-c`/`calc-d` 仍保持独立。
+**独立验收**：完成 Quickstart 场景二；Tc-A/Tc-B 内资料完整，修改副本不影响原记录，相同内容保持独立。
 
 ## 阶段 6：用户故事 4 - 版本化 Schema 表单（P1）
 
@@ -86,16 +86,27 @@ T056–T057 先于实现，T059 随基础迁移一起完成；T058、T060–T062
 
 ## 阶段 8：用户故事 6 - 统一上传、管理和公开读取（P2）
 
-- [ ] T037 [US6] 在 `alembic/versions/20260907_issue90_copy_property_records.py` 迁移 Tc、普通物性、Conditions、参数和 Evidence，并输出逐行异常与对账结果。
-- [ ] T038 [US6] 在 `tests/02_maintenance_and_verification/test_issue90_migration.py` 验证 Copy 幂等、核心值、Conditions、Evidence、代表 Tc 和异常报告。
+- [ ] T037 [US6] 在 `alembic/versions/20260907_issue90_copy_property_records.py` 迁移 Tc、普通物性和 Evidence，按旧引用将 Conditions/参数复制到每条结果内；保存源字段到目标记录字段映射，对无引用和冲突资料生成阻断异常及可核验归档。
+- [ ] T038 [US6] 在 `tests/02_maintenance_and_verification/test_issue90_migration.py` 验证按源/目标组合的 Copy 幂等、预期参数复制、核心值、字段证据、代表 Tc、异常阻断及归档保留。
 - [ ] T039 [US6] 在 `backend/ingest/scientific_drafts.py`、`backend/api/rag.py` 与 `backend/services/scientific_draft_rewrite.py` 统一模块化写入并移除正常请求的旧字段写入。
 - [ ] T040 [US6] 在 `frontend/src/components/UploadTaskEditor.tsx`、`frontend/src/components/PaperEditView.tsx` 与 `frontend/src/pages/AdminPaperEditPage.tsx` 共用模块编辑器、定义缓存和后端错误路径。
-- [ ] T041 [US6] 在 `goserver/handlers/papers.go` 批量预加载模块、记录、Conditions、定义版本和 Evidence，并避免 N+1 查询。
+- [ ] T041 [US6] 在 `goserver/handlers/papers.go` 批量预加载模块、含 Conditions/参数的记录、定义版本和 Evidence，并避免 N+1 查询。
 - [ ] T042 [US6] 在 `frontend/src/lib/paperDetailView.ts`、`frontend/src/pages/PaperDetailPage.tsx` 与 `frontend/src/pages/SearchPage.tsx` 直接消费模块化详情契约。
 - [ ] T043 [US6] 在 `goserver/handlers/stats.go` 从统一记录固定列查询 Tc，保留类型、方法和代表筛选。
 - [ ] T044 [US6] 在 `goserver/handlers/paper_detail_test.go` 与 `goserver/handlers/stats_test.go` 比较新旧详情、图表结果、查询次数和基准性能。
 
 **独立验收**：以目标模型 fixture 完成 Quickstart 场景六和场景八，上传只读态、管理、详情、搜索与图表结果一致。
+
+## 阶段 8a：预设分组字段与完整导出
+
+- [ ] T064 [US3] 在 `backend/tests/test_property_modules.py`、`tests/01_decentralized_uploading/material-states-editor.test.tsx` 和 `goserver/handlers/paper_detail_test.go` 先建立预留分组新增字段、审核后保留、越组/覆盖系统键拒绝和复制隔离测试。
+- [ ] T065 [US3] 在 `backend/ingest/property_modules.py`、`frontend/src/components/SchemaDrivenRecordForm.tsx` 与 `goserver/models/models.go` 实现分组内 extensions 条目、类型单位校验、原位置往返展示及论文审核保留，升级不得静默丢弃。
+- [ ] T066 [US6] 在 `goserver/handlers/material_state_export_test.go` 先建立完整包离线解析、定义及结构文件内嵌、字段 Evidence、公开权限、缺失资料错误和 revision 并发测试。
+- [ ] T067 [US6] 在 `goserver/handlers/material_state_export.go`、`goserver/main.go` 和 `frontend/src/pages/PaperDetailPage.tsx` 实现 MaterialState 导出路由、快照一致读取、完整资料打包及下载入口。
+- [ ] T068 [US6] 运行 T064/T066 预建测试并完成 Quickstart 场景十、十一，核验预设分组字段保留与离线包完整性，将证据记入 `docs/specs/90-unified-superconductor-properties/validation.md`。
+
+**依赖与验收**：T064/T066 在对应实现前完成；T065 依赖 US2/US4，T067 依赖 US6 详情契约。
+T068 阻断生产切换 T047 和收尾 T049–T055；新增字段和完整导出均属于 #90 必交付范围。
 
 ## 阶段 9：切换与旧模型退役
 
@@ -135,7 +146,7 @@ T056–T057 先于实现，T059 随基础迁移一起完成；T058、T060–T062
 ## MVP 范围
 
 MVP 为基础阶段 + US1 + US2 + US3 + US4：在新建材料状态中可以按需添加模块，录入多条 Tc，
-保持 Conditions 配对，并由不可变定义完成前后端一致校验。US5、US6 和切换仍是关闭 #90 的必需
+保留每条记录自己的完整 Conditions 和参数，并由不可变定义完成前后端一致校验。US5、US6 和切换仍是关闭 #90 的必需
 范围，但不阻止先验收不依赖历史迁移的新数据编辑闭环。US7 同样是本次确认的必交付范围，纳入新数据
 编辑闭环；其验收不依赖历史迁移，发布切换前必须完成。
 
@@ -151,7 +162,9 @@ MVP 为基础阶段 + US1 + US2 + US3 + US4：在新建材料状态中可以按�
 | FR-031–FR-033 | T002、T007、T017、T025–T031、T041 |
 | FR-034–FR-035 | T049、T051–T055 |
 | FR-032、FR-036–FR-039 | T056–T063 |
+| FR-040–FR-041 | T064–T068 |
 | SC-001–SC-003 | T016、T020、T024 |
 | SC-004–SC-005、SC-012 | T001、T002、T025–T032 |
 | SC-006–SC-011 | T034–T055 |
 | SC-013–SC-014 | T056、T057、T063 |
+| SC-015–SC-016 | T064、T066、T068 |

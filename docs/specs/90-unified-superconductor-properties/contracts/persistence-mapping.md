@@ -8,11 +8,10 @@
 | 论文内材料 | `superconductors` | 增加论文 revision 归属，不跨论文复用主键 |
 | 模块实例 | `property_modules` | 每行是一个材料状态挂载的模块 |
 | 物性记录 | `property_records` | 统一保存 Tc 和其他模块记录的核心字段与扩展 JSON |
-| 表单定义 | `form_definitions` | 保存不可变版本化 JSON Schema、UI Schema 和组级规则 |
+| 表单定义 | `form_definitions` | 保存不可变版本化核心 Schema、JSON Schema 和 UI Schema |
 | 定义升级事件 | `property_record_definition_events` | 保存记录定义升级与回滚的不可变前后快照 |
 | 自定义性质提升事件 | `property_definition_promotion_events` | 保存管理员、来源快照、目标定义和幂等键 |
-| 计算 Conditions | `calculation_conditions` | 由旧 `calculation_contexts` 迁移并改名 |
-| 实验 Conditions | `experimental_conditions` | 由旧 `experimental_contexts` 迁移并改名 |
+| 记录内 Conditions 与参数 | `property_records.payload_json` | 逐条内嵌保存，不新建共享条件表或输入关系表 |
 | 证据连接 | `property_record_evidences` | 统一连接 PropertyRecord 与 PaperEvidence |
 
 ## 旧数据映射
@@ -22,7 +21,8 @@
 | `tc_results` 理论行 | 超导模块中的 `predicted_tc` |
 | `tc_results` 实验行 | 超导模块中的 `measured_tc` |
 | `superconductor_properties` | 依据定义种子映射到目标模块的普通记录 |
-| Conditions 中的 `lambda_ep`、`omega_log_k`、`mu_star` | 独立 PropertyRecord，并保留原 Conditions 关联 |
+| 旧计算/实验 Context | 按每条原使用记录复制到其 `payload.calculation_conditions` 或 `payload.experimental_conditions` |
+| Context 中的 `lambda_ep`、`omega_log_k`、`mu_star` | 复制到每条原使用 Tc 的 `payload.parameters`，保留原值、单位和字段来源 |
 | `tc_result_evidences` | `property_record_evidences` |
 | `superconductor_property_evidences` | `property_record_evidences` |
 
@@ -31,15 +31,16 @@
 
 ## 核心字段与 JSON
 
-`property_modules`、两类 Conditions 和 `property_records` 都绑定各自目标类型的定义键与版本。
+`property_modules` 和 `property_records` 各自绑定定义键与版本；条件和参数随记录版本解释。
 `property_records` 的固定列至少包括归属、模块、记录类型、物性代码、定义键/版本、原始与规范值、
-单位、不确定度、方法、判据、代表标记、两个互斥的 Conditions 外键、结构外键、来源指纹和时间字段。
-计算与实验 Conditions 分别使用复合外键约束材料状态和论文 revision；CHECK 保证一条记录最多关联一种
-Conditions，并强制预测/测量 Tc 使用正确类型。
+单位、不确定度、方法、判据、代表标记、结构外键、来源指纹和时间字段。
 
-`payload_json` 只保存 `FormDefinition.json_schema` 声明的扩展字段。核心列与 JSON 同名或表达同一
-事实时拒绝写入。需要数据库筛选、排序、唯一约束或跨记录关联的扩展字段，必须先通过后续迁移提升
-为固定列。
+`payload_json` 保存 Schema 声明的本条 Conditions、参数和扩展分组；没有两个 Conditions 外键。
+CHECK 验证 Tc 类型对应的 JSON 条件对象存在且另一类不存在；具体字段类型、单位与方法规则由后端
+按记录定义校验。普通物性可按定义内嵌至多一种条件。
+
+Tc 数值和方法等固定核心列不得在 JSON 再次保存为另一可写来源。需要常用查询的参数可建立 JSON
+提取索引或只读投影；若未来提升为固定列，必须通过迁移维持唯一写入来源。
 
 自定义性质仍写入 `property_records`，增加可空 `custom_property_key` 列，只在 `property_code=custom`
 且 `record_type=property` 时非空；名称、四种类型的值及单位复用核心列，`core_schema` 校验它们。
@@ -52,8 +53,8 @@ Conditions，并强制预测/测量 Tc 使用正确类型。
 
 ## Tc 数据库约束
 
-- `record_type=predicted_tc` 时必须为 `property_code=tc` 并关联计算 Conditions。
-- `record_type=measured_tc` 时必须为 `property_code=tc` 并关联实验 Conditions。
+- `record_type=predicted_tc` 时必须为 `property_code=tc` 并包含计算 Conditions 对象。
+- `record_type=measured_tc` 时必须为 `property_code=tc` 并包含实验 Conditions 对象。
 - 其他记录不得填写 Tc 专用代表标记。
 - Tc 规范值、范围和不确定度必须非负；规范单位必须为 `K`。
 - 代表 Tc 唯一范围为论文、revision、材料状态、记录类型和方法。
@@ -63,8 +64,8 @@ Conditions，并强制预测/测量 Tc 使用正确类型。
 
 1. **Expand**：创建目标表、索引、定义种子和迁移映射表；材料使用 `issue90_chemical_systems` 与
    `issue90_superconductors` 影子表，直接建立论文 revision 内唯一键，旧材料表保持全局唯一约束。
-2. **Copy**：分批复制材料、Conditions、Tc、其他物性和 Evidence；每批记录进度。
-3. **Reconcile**：按记录数、核心值、关联和来源指纹对账；异常必须可定位。
+2. **Copy**：分批复制材料、Tc、其他物性和 Evidence；按旧引用把 Conditions 和参数展开到每条记录内，每批记录进度。
+3. **Reconcile**：按结果记录数、核心值、展开后的字段来源映射、证据和来源指纹对账；预期参数复制与意外重复分别核对，异常必须可定位。
 4. **切换准备**：阻止上传提交、科学数据编辑、审核、升版、物理删除和后台科学数据写入，并等待在途
    事务完成。最终同步所有发生变化或已删除论文的完整 revision 图，不仅追加新增行；完成再次对账和备份。
 5. **Read switch**：仍保持停写，将旧材料表更名为 `legacy_issue90_chemical_systems` 与
@@ -92,8 +93,26 @@ revision 建立目标材料记录；旧 MaterialState 外键在停写切换前�
 `ChemicalSystem` 同样按论文 revision 复制。旧 ID 到新 ID 映射必须包含论文和 revision，避免把
 两篇论文的 LaH10 再次合并。
 
-两类 Conditions 同样在新表中复制，保留旧主键和状态/revision；旧 Context 表在观察结束前保留，
-不以改名或兼容视图破坏旧读取。所有临时表名和映射表均限定在本次迁移，Contract 后退役。
+### 条件和参数展开
+
+旧 Context 表在观察结束前保留以支持旧读取；其内容按实际使用记录复制成独立 JSON 快照，不保留原条件
+主键作为新写入权威。迁移映射记录旧表、旧 ID、论文 revision、目标 record_key 和目标字段路径；
+同一旧条件服务多条 Tc 时，每条都获得自己的完整条件和参数。幂等依据来源与目标组合，不能把预期复制
+误判为重复，也不能重跑后新增额外结果。
+
+旧 Context 的结构引用转入所属记录的 `structure_key`；已有记录结构与它冲突时阻断并报告，不能丢弃其中一个。
+其他旧条件字段均须有目标字段路径或明确归档位置，包括方法扩展和原文补充，不能仅复制当前表单已展示的字段。
+
+仅按旧引用或明确的记录内来源映射输入，不按数值相近或材料同名猜测归属。若某条旧 Tc 具有明确的
+记录级参数，则保留它的来源；与共享旧字段不一致时生成阻断异常，不能静默选择一个值。
+原本独立报告的普通物性继续保留为记录，不因数值等同于某条 Tc 的参数而删除。
+
+Evidence 逐项保留真实来源，可在参数值对象内保存字段证据；不能把 Tc 的证据伪装成参数证据。
+迁移以旧字段到各目标记录字段的映射核对原值、单位、缺失状态和来源，不要求展开前后参数总数相等。
+
+无人引用的旧条件、无法归属的参数或无法解析的证据进入逐项异常清单，阻断切换和退役，直到完成明确
+归属或以带原内容、来源和处理决定的迁移归档保留。归档是历史异常留存，不作为新科研数据写入入口；
+已保留在归档中的资料须能核验，不能随临时映射表一同删除。所有科学归属不得靠迁移程序猜测。
 
 ## 定义版本
 
@@ -111,12 +130,11 @@ property_record_evidences
 -> property_record_definition_events
 -> property_records
 -> property_modules
--> calculation_conditions / experimental_conditions
 -> structure_models
 -> material_states
 -> superconductors
 -> chemical_systems
 ```
 
-只删除当前论文 revision 拥有的记录。Conditions 仍被记录引用时不得删除；同名材料属于另一论文时
-不受影响。
+只删除当前论文 revision 拥有的记录。Conditions 与参数随所属记录处理；同名材料和其他 Tc 的资料不受影响。
+字段内 Evidence 引用须与记录 Evidence 一并验证并随论文升版重映射，删除不能反向删除证据正文。

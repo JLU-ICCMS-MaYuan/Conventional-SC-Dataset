@@ -8,14 +8,15 @@
 material_states[].property_modules[].records[]
 ```
 
-Conditions 位于同一材料状态下：
+Conditions 与输入参数直接内嵌在当前记录：
 
 ```text
-material_states[].calculation_conditions[]
-material_states[].experimental_conditions[]
+material_states[].property_modules[].records[].payload.calculation_conditions
+material_states[].property_modules[].records[].payload.experimental_conditions
+material_states[].property_modules[].records[].payload.parameters
 ```
 
-记录使用 `condition_key` 引用 Conditions，不在每条记录中复制整份条件。
+两类 Conditions 对象互斥。每条 Tc 自带资料，没有 `condition_key` 或 Tc 输入关联表。
 
 ## 模块结构
 
@@ -73,9 +74,10 @@ material_states[].experimental_conditions[]
   "criterion_code": null,
   "criterion_raw": null,
   "is_representative": true,
-  "condition_key": "calc-a",
   "structure_key": null,
   "payload": {
+    "calculation_conditions": {"calculation_code": "Quantum ESPRESSO"},
+    "parameters": {"mu_star": {"value_raw": "0.10", "value_number": 0.1, "unit": "1"}},
     "solver_tolerance": "1e-8"
   },
   "evidences": []
@@ -138,30 +140,63 @@ GET /api/form-definitions/{definition_key}/current
 1. 定义目标类型、模块代码和记录类型是否匹配；
 2. 固定字段的类型、单位和条件规则；
 3. `payload` 是否符合 `json_schema`；
-4. 同一 Conditions 下的记录是否符合该 Conditions 绑定定义版本的 `identity_rules` 和 `group_rules`；
+4. 本条 Conditions、参数和预留扩展分组的类型、单位、条件必填及归属是否符合该记录版本；
 5. 定义是否允许新建或仅允许历史读取。
 
 前端使用 `ui_schema` 决定控件和顺序，但后端不信任前端校验结果。
 
-## Conditions 归组
+## 记录内资料
+
+- 计算或实验条件对象仅属于当前记录，随记录在同一事务保存、升版和删除。
+- 当前 Tc 使用的 λ、ωlog、μ* 在 `payload.parameters` 中保存；已知参数用稳定代码，值为带类型和单位的对象。
+- 复制记录必须复制内部资料，产生新 `record_key`，不能共享可变对象；修改、删除副本不改变原记录。
+- 其他独立物性可保存自己的 Conditions；不从同名物性记录自动读取、配对或同步参数。
+- 已报告的参数需保留原值及适用单位，未报告时留缺失；证据可精确到字段路径，不要求编造论文未提供的来源。
+- 字段内 `evidences[]` 引用同 revision 的有效 Evidence，并纳入记录的证据集合；字段路径说明证据支持哪个参数，
+  不把记录级 Tc 证据自动视为所有参数的证据。升版时一并重映射，导出时一并解析。
+
+## 预设分组内新增字段
+
+记录定义的 Schema 只在预设路径开放 `extensions[]`，例如 `payload.parameters.extensions`、
+`payload.calculation_conditions.extensions`、`payload.experimental_conditions.extensions` 和
+`payload.extensions`。方法定义决定哪些分组可用，前端不能任意创建新的分组路径。
+
+用户在参数区点击新增，字段就属于该条记录的参数区；后端根据嵌套位置确认归属，不信任客户端另报的
+分组名称。新增项使用已发布的通用字段结构：
 
 ```json
 {
-  "condition_key": "calc-a",
-  "definition_key": "conditions.calculation",
-  "definition_version": 1,
-  "calculation_code": "Quantum ESPRESSO",
-  "k_grid": "24x24x24",
-  "payload": {}
+  "field_key": "field-local-1",
+  "name_raw": "论文补充的计算参数",
+  "value_kind": "number",
+  "value_raw": "0.03 Ry",
+  "value_number": 0.03,
+  "unit_raw": "Ry",
+  "evidences": []
 }
 ```
 
-- 一个 Conditions 对象表示一次确定的运行或测量。
-- 计算键使用 `calc-` 前缀，实验键使用 `exp-` 前缀；`condition_key` 在一个材料状态内唯一，由系统生成。
-- 多条记录可共享该键；跨材料状态或跨 revision 引用无效。
-- 决定性输入不同必须建立不同 Conditions。
-- 定义的 `identity_rules` 声明决定性字段、输入物性、规范化方式和基数；同键规范值冲突时整组拒绝。
-- 键不是内容哈希，相同输入的重复运行不得被自动合并。
+`field_key` 由系统生成，在当前记录和分组内稳定唯一；`name_raw` 必须非空。同记录跨组移动必须显式
+编辑并重新审核。支持 number/range/text/boolean 的互斥值字段及单位，不允许覆盖已注册系统字段、
+借扩展伪装 Tc 核心值或绕过类型校验。记录内系统字段与新增项出现同名歧义时提示人工处理。
+
+这些字段随论文审核，批准后按原分组永久保留在该 revision 的数据中，后续版本不得静默丢弃；
+无需为每次提案发布新 Schema，也无需专门的字段关系表。审核退回允许修订；删除与修改遵守论文生命周期。
+全站推广仍需显式发布新定义版本，不自动改变其他记录。模块级自定义性质提升继续按既有独立流程执行。
+
+## 完整 MaterialState 导出
+
+`GET /api/papers/{paper_id}/material-states/{state_key}/export` 返回带 `export_version=1` 的 JSON 数据包；
+权限沿用论文读取，公开用户只能导出已批准内容，管理员审计信息不公开。
+
+包内含论文来源与 revision、所属 ChemicalSystem/Superconductor 的材料资料、MaterialState 全部状态字段、
+结构内容、全部物性模块及记录、每条记录内部 Conditions 和参数、Evidence 原文及定位、所有绑定的
+FormDefinition 完整版本及校验和。记录/字段证据和结构引用必须能在包内解析；结构原文件采用带文件名、
+媒体类型和校验和的内嵌内容表示，不能只输出本地路径或需联网下载的 URL。论文 PDF 本体不属于此数据导出。
+
+导出使用同一 revision 快照读取；过程中 revision 变化则重试或返回冲突，不输出混合版本。
+缺失本应存在的结构、证据、定义或文件时返回可定位的错误；历史未报告字段保留缺失及说明，不伪造资料。
+下载得到完整数据包，用户无需另导关系表或访问在线定义服务。
 
 ## 错误格式
 
@@ -188,12 +223,14 @@ GET /api/form-definitions/{definition_key}/current
 | `schema_checksum_mismatch` | 定义内容与校验和不一致 |
 | `schema_validation_failed` | 固定字段或 `payload` 不符合定义 |
 | `invalid_condition_type` | 记录类型与 Conditions 类型不匹配 |
-| `conflicting_condition` | 同一条件键的内容冲突 |
-| `condition_group_rule_failed` | 同一 Conditions 下的记录组合非法 |
+| `invalid_extension_group` | 字段不在定义预留分组中 |
+| `extension_field_conflict` | 扩展键重复或覆盖系统字段 |
+| `export_incomplete` | 导出所需的已有资料无法解析 |
+| `export_revision_conflict` | 导出过程中论文版本改变 |
 | `duplicate_representative_tc` | 同范围存在多条代表 Tc |
 | `nonempty_module_delete` | 未显式处理记录就删除非空模块 |
 | `custom_property_conflict` | 同论文内自定义性质键的名称、类型或单位语义冲突 |
-| `cross_revision_reference` | Conditions、结构或 Evidence 跨 revision |
+| `cross_revision_reference` | 结构或 Evidence 跨 revision |
 
 ## 兼容边界
 
@@ -202,9 +239,12 @@ GET /api/form-definitions/{definition_key}/current
 ```text
 tc_results[] -> superconductive_properties / predicted_tc 或 measured_tc
 properties[] -> 定义映射后的目标模块 / property
-calculation_contexts[] -> calculation_conditions[]
-experimental_contexts[] -> experimental_conditions[]
+calculation_contexts[] -> 逐条复制到原使用记录的 payload.calculation_conditions
+experimental_contexts[] -> 逐条复制到原使用记录的 payload.experimental_conditions
+旧 Context 的 lambda/omega_log/mu_star -> 原使用 Tc 的 payload.parameters
 ```
 
 新响应不输出旧字段作为第二份科学事实。无法确定目标模块或定义版本时进入明确的迁移异常报告，
 不能静默归入“其他”。
+
+旧共享条件按使用记录展开；无引用条件、来源不明或无法判定的参数必须进入可追溯保留/异常流程，禁止静默丢弃。

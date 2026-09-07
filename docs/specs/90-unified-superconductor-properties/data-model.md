@@ -11,12 +11,12 @@ PaperRevision
                 └── MaterialStates[]
                     └── MaterialState
                         ├── StructureModels[]
-                        ├── CalculationConditions[]
-                        ├── ExperimentalConditions[]
                         └── PropertyModules[]
                             └── PropertyModule
                                 └── PropertyRecords[]
                                     └── PropertyRecord
+                                        ├── 结果、方法、判据和证据
+                                        └── payload：本条 Conditions、参数及预设扩展分组
 ```
 
 这棵树表示论文科研数据的所有权。同名材料不跨论文共享：论文 A 与论文 B 的 LaH10 是两条
@@ -69,13 +69,11 @@ PaperRevision
 | `method_raw` | 否 | 论文中的原始方法文本 |
 | `criterion_code` / `criterion_raw` | 否 | 规范判据及原文判据 |
 | `is_representative` | 条件必填 | Tc 必填，其他记录默认空 |
-| `condition_key` | 否 | 关联一次确定的计算或实验 Conditions |
 | `structure_key` | 否 | 关联本论文 revision 当前材料状态中的结构 |
 | `payload` | 是 | 符合定义版本的扩展 JSON；默认 `{}` |
 | `evidences[]` | 是 | 当前论文 revision 的 Evidence；草稿可为空 |
 
-固定列负责搜索、统计、关联、唯一约束和审计。`payload` 不得再次保存 Tc 数值、方法、Conditions
-引用等核心事实。若某扩展字段后来成为核心查询条件，需要用迁移提升为固定列，不能同时保留两个
+固定列负责搜索、统计、关联、唯一约束和审计。`payload` 保存本条条件和参数，不得再次保存 Tc 数值、方法等固定列事实。若某扩展字段后来成为核心查询条件，需要用迁移提升为固定列，不能同时保留两个
 可写来源。
 
 ### 3.2 Tc 记录
@@ -84,8 +82,8 @@ Tc 使用 `property_code=tc`，并按 `record_type` 分为：
 
 | 记录类型 | Conditions | 方法示例 |
 | --- | --- | --- |
-| `predicted_tc` | 必须关联 `CalculationCondition` | Allen-Dynes、McMillan、Eliashberg、SCDFT、自定义理论方法 |
-| `measured_tc` | 必须关联 `ExperimentalCondition` | 电阻、磁化率、比热或自定义实验方法 |
+| `predicted_tc` | 必须包含 `payload.calculation_conditions` | Allen-Dynes、McMillan、Eliashberg、SCDFT、自定义理论方法 |
+| `measured_tc` | 必须包含 `payload.experimental_conditions` | 电阻、磁化率、比热或自定义实验方法 |
 
 `method_code` 是具体方法权威，`record_type` 是预测/测量性质权威。二者必须匹配。`result_kind`
 不再作为独立可写字段；兼容读取时由旧值映射到 `record_type`。
@@ -115,51 +113,28 @@ paper_id + paper_revision + material_state_id + record_type + method_code
 重复注册同一代码。服务在单个事务内注册代码、
 发布 v1 和保存事件。事件来源以快照留存，不建立阻止源论文升版或删除的强外键；目标定义不依赖源记录生存。
 
-## 4. Conditions
+## 4. 记录内 Conditions 与参数
 
-Conditions 表示一次确定的运行或测量，不是物性模块，也不保存物性结果。
-两类 Conditions 都保留可空 `structure_key`，引用同状态结构；记录与其 Conditions 都声明结构时必须
-一致。定义版本固定绑定到 Conditions，不随相关记录定义升级而自动改变。
+Conditions 和参数都是当前 `PropertyRecord.payload` 的组成部分，与结果在同一表单填写和保存。
+记录定义的 `json_schema` 同时校验它们，不另建 Conditions 实例表、条件键或输入关系表。
 
-### 4.1 CalculationCondition
-
-固定字段保存常用配置，例如电子方法、交换关联泛函、赝势、SOC、声子方法、EPC 方法、k/q 网格、
-截断能和计算软件。方法特有配置可以使用同样版本化定义管理扩展 JSON。
-
-### 4.2 ExperimentalCondition
-
-固定字段保存样品标识、制备方式、测量方法、外场、压力不确定度等共享实验条件。单条结果自己的
-判据仍属于 `PropertyRecord`。
-
-### 4.3 归组规则
-
-一个 `condition_key` 表示一次确定执行。以下例子必须建立两组 Conditions：
-
-```text
-calc-a: mu_star=0.10, Tc=250 K
-calc-b: mu_star=0.15, Tc=220 K
-```
-
-`condition_key` 是系统管理的不透明运行身份，不是内容哈希。计算键使用 `calc-` 前缀，实验键使用
-`exp-` 前缀。编辑器创建 Conditions 时生成临时稳定键，
-后端在保存时映射为持久化身份；后续写入只能引用同一材料状态顶层已经声明的键。计算和实验键在同一
-材料状态内共享唯一命名空间，避免只凭键无法判断引用目标。
-
-即使两次计算的软件、结构、网格相同，只要决定性输入不同，就不是同一次执行。`mu_star` 仍作为
-独立 PropertyRecord 保存，并与对应 Tc 共享 `condition_key`。相同输入的重复运行允许拥有不同键，
-后端不得根据内容指纹合并。
-
-Conditions 定义必须通过 `identity_rules` 声明决定性输入：
-
-| 字段 | 含义 |
+| 路径 | 内容 |
 | --- | --- |
-| `condition_fields[]` | Conditions 固定字段或 `payload` JSON Pointer |
-| `record_properties[]` | 作为输入的 `property_code`，例如 `mu_star` |
-| `normalizer` | `trimmed_string`、`casefolded_code`、`decimal`、`boolean` 或 `ordered_list` |
-| `cardinality` | 同一 Conditions 中该输入允许的数量；首批只支持 `exactly_one`、`zero_or_one` |
+| `payload.calculation_conditions` | 软件、电子方法、泛函、赝势、SOC、声子/EPC 方法、k/q 网格、k/q 各自展宽与单位、截断能及其他适用计算条件 |
+| `payload.experimental_conditions` | 样品、制备方式、测量装置、外场、压力不确定度等实验条件 |
+| `payload.parameters` | 当前预测 Tc 使用的 λ、ωlog、μ* 等结构化输入，保留原值、规范值、单位及可选字段证据 |
+| 各定义预留的 `extensions[]` | 当前分组内用户新增字段的名称、类型、单位、值和证据 |
 
-后端先按规则规范化，再验证同一 Conditions 内每项决定性输入最多形成一个规范值；同键出现两个不同
-规范值时返回 `conflicting_condition`。前端使用同一 fixture 提前提示，但后端结果是最终权威。
+预测 Tc 必须具有计算 Conditions 对象，不得有实验 Conditions 对象；测量 Tc 反之。
+普通物性可按定义携带至多一种条件。对象中未报告的可选字段允许缺失，不从结果反推。
+状态压力、温度和结构归 MaterialState；当前计算的网格和展宽归该条记录。记录的可选 `structure_key`
+只指向同状态结构，不在条件内再保存一个可冲突的结构引用。
+
+一条预测 Tc 的 `parameters` 每个规范输入只有一个值或一个明确范围，不保存两个无法配对的候选值。
+不同输入得到的多个 Tc 分别建立记录。不同记录参数可以完全相同；复制后修改一条不影响其他记录。
+λ 等也可以作为独立报告的普通物性录入，但与任何 Tc 没有自动输入关系，不用其值回填或同步 Tc。
+
+字段的预留分组和审核规则见[记录契约](contracts/property-record.md#预设分组内新增字段)。
 
 ## 5. FormDefinition
 
@@ -167,16 +142,14 @@ Conditions 定义必须通过 `identity_rules` 声明决定性输入：
 | --- | --- |
 | `definition_key` | 完整目标的稳定键，例如 `record.superconductive_properties.predicted_tc.allen_dynes` |
 | `version` | 从 1 开始单调递增；与键组成唯一标识 |
-| `target_kind` | `property_module`、`property_record`、`calculation_condition` 或 `experimental_condition` |
-| `module_code` | 模块或记录定义的适用模块；Conditions 定义为空 |
+| `target_kind` | `property_module` 或 `property_record` |
+| `module_code` | 模块或记录定义的适用模块 |
 | `record_type` | 记录定义的适用记录类型；其他目标类型为空 |
 | `method_code` | 可选；为空表示通用定义，非空表示方法扩展 |
 | `property_code` | 记录定义适用的性质代码；其他目标类型为空；`custom` 是保留的论文内性质类型 |
 | `core_schema` | 校验固定核心字段的声明式 Schema；与扩展 JSON 的 Schema 分开，二者共同绑定版本 |
 | `json_schema` | 扩展字段的数据结构、类型、枚举和条件必填规则 |
 | `ui_schema` | 控件、顺序、分组、标签键和单位提示；不拥有数据校验权威 |
-| `group_rules` | Conditions 定义用于观察同组多条记录的规则；其他目标类型为空 |
-| `identity_rules` | Conditions 的决定性字段、输入物性、规范化和基数规则；其他目标类型为空 |
 | `status` | `draft`、`published`、`retired` |
 | `checksum` | 定义内容校验和 |
 | `created_by` / `created_at` | 创建审计信息 |
@@ -191,7 +164,7 @@ draft -> published -> retired
 - `draft` 可修改，但不能用于正式记录。
 - `published` 不可修改；修订必须创建下一版本。
 - `retired` 可继续解释历史记录，但不用于新建记录。
-- 新建模块、记录或 Conditions 选择对应定义键最新的 `published` 版本。
+- 新建模块或记录选择对应定义键最新的 `published` 版本，内嵌条件和参数随记录版本解释。
 - 记录升级版本是显式操作，必须预览转换、重新验证并保留审计记录。
 
 方法特有记录使用包含 `method_code` 的完整 `definition_key`，不把不同方法放在同一键的不同版本中。
@@ -221,17 +194,14 @@ JSON Schema 只允许声明式、安全的受限关键字；定义不能包含�
 | `form_definitions` | 一份不可变版本化表单定义 |
 | `property_record_definition_events` | 记录定义升级与回滚的不可变审计事件 |
 | `property_definition_promotion_events` | 管理员把论文内自定义性质提升为全站定义的来源与操作快照 |
-| `calculation_conditions` | 一次计算运行 |
-| `experimental_conditions` | 一次实验测量 |
 | `property_record_evidences` | 记录与 Evidence 的多对多连接 |
 
 `property_records` 统一接收旧 `tc_results` 与 `superconductor_properties`。Tc 核心列保持专用 CHECK、
 生成列、唯一索引和统计索引；不同记录类型不适用的专用列必须为空。旧表完成对账和观察期后退役。
 
-持久化层保留 `calculation_condition_id` 与 `experimental_condition_id` 两个可空复合外键，并用 CHECK
-保证一条记录最多关联一种 Conditions。`predicted_tc` 必须且只能设置计算外键，`measured_tc` 必须且
-只能设置实验外键；API 的单一 `condition_key` 根据前缀解析到对应集合。这样数据库可以直接约束引用
-类型、材料状态和论文 revision，无需多态外键。
+持久化层把 Conditions、参数和分组扩展保存在当前记录的 `payload_json`。
+CHECK 验证预测/测量对应的 JSON 条件对象存在且另一类不存在；类型、单位、适用性和必填字段由
+记录绑定的 Schema 校验。Tc 的数值、方法和代表标记仍使用固定列。没有 Tc 输入关联表或 Conditions 外键。
 
 `chemical_systems` 和 `superconductors` 增加 `paper_id + paper_revision` 归属，唯一键从全库唯一调整为：
 
@@ -244,15 +214,13 @@ superconductors:   paper_id + paper_revision + composition_key
 
 ## 7. API 结构示例
 
+以下 LaH10 数据仅示意归属，不代表论文实测数据或 Allen-Dynes 公式验算；完整核心字段见记录契约。
+
 ```json
 {
   "material_states": [
     {
       "state_key": "state-1",
-      "calculation_conditions": [
-        {"condition_key": "calc-a", "calculation_code": "Quantum ESPRESSO"}
-      ],
-      "experimental_conditions": [],
       "property_modules": [
         {
           "module_code": "superconductive_properties",
@@ -262,14 +230,26 @@ superconductors:   paper_id + paper_revision + composition_key
               "record_type": "predicted_tc",
               "property_code": "tc",
               "definition_key": "record.superconductive_properties.predicted_tc.allen_dynes",
-              "definition_version": 2,
+              "definition_version": 1,
               "value_kind": "number",
               "value_raw": "250 K",
               "value_number": 250,
               "canonical_unit": "K",
               "method_code": "allen_dynes",
-              "condition_key": "calc-a",
-              "payload": {"solver_tolerance": "1e-8"},
+              "payload": {
+                "calculation_conditions": {
+                  "calculation_code": "Quantum ESPRESSO",
+                  "k_grid": [24, 24, 24],
+                  "q_grid": [6, 6, 6],
+                  "k_broadening": {"value_number": 0.02, "unit": "Ry"},
+                  "q_broadening": {"value_number": 0.01, "unit": "Ry"}
+                },
+                "parameters": {
+                  "lambda_ep": {"value_raw": "2.2", "value_number": 2.2, "unit": "1"},
+                  "omega_log": {"value_raw": "1100 K", "value_number": 1100, "unit": "K"},
+                  "mu_star": {"value_raw": "0.10", "value_number": 0.1, "unit": "1"}
+                }
+              },
               "evidences": []
             }
           ]
@@ -280,8 +260,12 @@ superconductors:   paper_id + paper_revision + composition_key
 }
 ```
 
-数组不存在时返回 `[]`，可空引用返回 `null`。API 不重复嵌入 Conditions 详情到每条记录；记录使用
-`condition_key` 引用同一材料状态顶层的 Conditions，避免同一内容被重复编辑。
+每条记录直接包含自己的条件和参数；增加 Tc-B 时复制所需资料并独立保存。
+网格、展宽的具体含义和单位必须由方法定义说明；不同程序的展宽不自动视为同一物理量。
+
+MaterialState 导出在单个包中包含材料身份、状态、结构、全部模块记录、证据和定义版本内容。
+内部稳定键可保留用于追溯，但包内必须能解析全部科学引用，不要求用户下载关系表后自行拼接。
+
 
 ## 8. 迁移与生命周期
 

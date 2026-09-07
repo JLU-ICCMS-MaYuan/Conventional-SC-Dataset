@@ -10,8 +10,8 @@
 
 以 `MaterialState` 为科研数据主体，建立 `property_modules`、统一 `property_records` 和版本化
 `form_definitions`。Tc 使用 `predicted_tc`、`measured_tc` 记录类型，固定核心列支持约束、搜索和图表，
-方法扩展字段由 JSON Schema 驱动。计算和实验 Context 改名为 Conditions，并继续作为一次确定运行或
-测量的关联节点。材料按论文 revision 独立保存，旧共享材料和分裂物性模型通过分阶段迁移收敛。
+方法扩展字段由 JSON Schema 驱动。每条 Tc 在记录内部保存自己的 Conditions、λ、ωlog、μ*、网格与
+展宽；允许复制，不建立共享条件节点或输入关联表。材料按论文 revision 独立保存，旧共享材料和分裂物性模型通过分阶段迁移收敛。
 
 ## 技术上下文
 
@@ -20,7 +20,7 @@
 - **数据库**：MySQL；Redis 只保存上传草稿，Qdrant/Neo4j 不作为物性权威存储。
 - **Schema 校验**：Python 使用支持 JSON Schema 2020-12 所需子集的验证器；前端使用兼容验证器和
   项目组件生成控件。新增依赖前先确认现有依赖是否满足，避免引入两套校验器。
-- **性能**：论文详情批量加载定义、模块、记录和 Conditions；Tc 图表走固定列与组合索引。
+- **性能**：论文详情批量加载定义、模块和包含 Conditions 的完整记录；Tc 图表走固定列与组合索引。
 - **权限**：自定义性质提升由管理员（含超级管理员）直接发布；其余定义管理沿用超级管理员。
   Schema 不执行脚本，后端始终重新校验，权限不以页面是否显示按钮代替。
 
@@ -28,9 +28,9 @@
 
 | 约束 | 设计响应 |
 | --- | --- |
-| MaterialState 是主体 | 全部模块、记录、Conditions、结构均使用同论文 revision 复合外键 |
+| MaterialState 是主体 | 模块、记录、结构使用同论文 revision 复合外键，Conditions 与参数内嵌于记录 |
 | 论文内材料独立 | 材料唯一键限定在论文 revision，迁移拆分旧共享材料 |
-| Tc 与相关物性不误配 | Conditions 表示一次确定执行，组级规则校验决定性输入 |
+| Tc 与相关物性不误配 | 每条 Tc 内嵌已报告条件及参数，复制不联动，Schema 校验字段 |
 | 动态扩展不破坏历史 | 已发布定义不可变，记录绑定具体版本，升级显式执行 |
 | 自定义性质可保留 | 用每模块的通用录入定义保存论文内性质，随论文审核，无需先发布全站定义 |
 | 管理员直接提升 | 受限模板生成普通性质定义并发布，事务化来源审计；发布不改写历史记录 |
@@ -86,23 +86,24 @@ Copy 和 Contract 依次连接，不得从当前文档日期推断过期 head。
 
 1. `property_modules` 只保存模块实例和顺序，不保存物性值。
 2. `property_records` 保存所有记录核心字段、定义版本和 `payload_json`。
-3. `property_records` 使用两个互斥的 Conditions 复合外键；CHECK 强制 Tc 类型与外键类型一致。
+3. `property_records.payload_json` 保存本条 Conditions、参数和预留扩展分组；CHECK 强制 Tc 的条件对象类型互斥。
    自定义记录使用 `property_code=custom` 和论文内 `custom_property_key`，同样保存核心值和 Evidence。
-4. `form_definitions` 保存定义、`identity_rules` 和 `group_rules`；发布操作做权限、版本递增、校验和和审计检查。
+4. `form_definitions` 保存核心 Schema、包含条件/参数的 JSON Schema 和 UI Schema；发布操作做权限、版本递增、校验和和审计检查。
 5. `property_record_definition_events` 保存定义升级与回滚的前后快照和并发校验依据。
-6. `calculation_conditions`、`experimental_conditions` 保留各自固定条件字段和扩展 JSON；键使用类型前缀，
-   但不根据内容自动合并。
-7. API 输出 MaterialState 顶层 Conditions 和模块数组，记录用 `condition_key` 关联。
+6. 记录内部 `payload.calculation_conditions`、`payload.experimental_conditions` 互斥；参数保存于 `payload.parameters`。
+7. API 直接返回完整记录；按 MaterialState 导出材料、状态、结构、记录、证据和定义版本内容，不要求使用者拼接关系表。
 8. 前端读取定义生成控件；Python 使用同一版本校验；Go 只读取已验证数据并执行专用查询。
 9. `form_definition_service.py` 复用受限模板处理管理员提升，生成普通性质定义并在同事务写入
    `property_definition_promotion_events`；`core_schema` 校验固定字段，`json_schema` 校验扩展字段。
    定义选择器按模块查询当前发布版本，新定义可在下一次打开或刷新选择器时被其他用户使用。
 
+10. 用户只能在 Schema 预设分组的 `extensions[]` 添加受限字段条目，随论文审核保留；不会自动发布为全站字段。
+
 ## 实施阶段
 
 ### 阶段 1：固定契约与失败测试
 
-建立四模块、三类记录、Conditions 归组、定义 v1/v2、论文内两份 LaH10 和旧数据迁移 fixture。
+建立四模块、三类记录、记录内 Conditions 和参数、定义 v1/v2、论文内两份 LaH10 和旧数据迁移 fixture。
 
 ### 阶段 2：Expand
 
@@ -110,11 +111,11 @@ Copy 和 Contract 依次连接，不得从当前文档日期推断过期 head。
 
 ### 阶段 3：定义服务与校验器
 
-实现定义读取、发布、停用、校验和、JSON Schema 校验和组级规则。前后端共享 fixture 验证一致性。
+实现定义读取、发布、停用、校验和、JSON Schema 校验和预设分组规则。前后端共享 fixture 验证一致性。
 
 ### 阶段 4：Copy 与 Reconcile
 
-在影子材料表拆分论文内材料，复制 Conditions、Tc、普通物性和 Evidence。目标材料直接采用论文内唯一
+在影子材料表拆分论文内材料，复制 Tc、普通物性和 Evidence，并按旧引用将 Conditions/参数展开到各记录内。目标材料直接采用论文内唯一
 键；旧材料表与 MaterialState 引用暂不变。生成逐项对账及异常报告，不删除旧数据。
 
 ### 阶段 5：最终增量复制与停写
@@ -144,12 +145,13 @@ Copy 和 Contract 依次连接，不得从当前文档日期推断过期 head。
 | 需求 | 设计组件 | 验证 |
 | --- | --- | --- |
 | FR-001–FR-006 | 模块和统一记录 | 模块增删及四种值类型往返测试 |
-| FR-007–FR-012 | Conditions 身份规则与 Tc 固定约束 | 两组 Tc 配对、重复运行、错配和代表唯一测试 |
+| FR-007–FR-012 | 内嵌条件参数与 Tc 固定约束 | 多条完整 Tc、复制隔离、错配和代表唯一测试 |
 | FR-013–FR-019 | FormDefinition、升级事件与动态表单 | v1/v2、发布不可变、升级回滚、前后端一致性测试 |
 | FR-020–FR-022 | 论文内材料 | 双论文 LaH10 隔离与搜索测试 |
 | FR-023–FR-030 | 目标 Schema 与分阶段迁移 | 隔离 MySQL 对账、切换、恢复和图表回归 |
 | FR-031–FR-033 | 本地结构、分操作权限和错误 | 跨 revision 拒绝、管理员提升/超级管理员常规发布和错误路径测试 |
 | FR-034–FR-035 | 全栈验证与文档 | 测试套件、构建、Quickstart 和 Overview |
+| FR-040–FR-041 | MaterialState 导出与预留字段分组 | 离线完整性、审核保留、越组拒绝和复制隔离测试 |
 | FR-036–FR-039 | 自定义模板、提升服务和审计 | 四种值审核保留、管理员独立发布、普通用户403、并发与历史保护 |
 
 ## 必要复杂度
@@ -159,11 +161,11 @@ Copy 和 Contract 依次连接，不得从当前文档日期推断过期 head。
 | 模块容器 | 新模块不需要修改 MaterialState 顶层字段集合 |
 | 固定核心列 + JSON | 同时满足统计查询和方法字段扩展 |
 | 不可变定义版本 | 新字段发布不改变历史记录语义 |
-| Conditions 组级规则 | 防止同一材料状态下多组 Tc 与参数错配 |
-| 两个互斥 Conditions 外键 | 让数据库直接约束记录关联的 Conditions 类型和 revision |
+| 每条记录内嵌条件和参数 | 允许重复并简化录入、修改和导出，无需配对关系 |
+| 完整 MaterialState 导出 | 使用者直接得到科学资料，包内解析结构、证据与定义 |
 | 定义升级事件 | 在不改写审计历史的前提下支持预览、并发保护和回滚 |
 | 分阶段迁移 | MySQL DDL 和历史数据切换需要可恢复稳定点 |
 | 有界停写窗口 | 保证先切读再切写时没有复制后的旧写入遗漏或新数据不可见窗口 |
 
 不引入可执行插件系统、完整物性本体或通用规则语言。首批规则只覆盖当前明确的四模块、Tc 方法和
-Conditions 组合。
+记录内条件组合。
