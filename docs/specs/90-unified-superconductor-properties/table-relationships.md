@@ -16,6 +16,7 @@ erDiagram
 
     property_modules ||--o{ property_records : "包含平级记录"
     form_definitions ||--o{ property_records : "按版本解释和校验"
+    form_definitions ||--o{ property_definition_promotion_events : "保存管理员提升来源"
     property_records ||--o{ property_record_definition_events : "记录升级与回滚"
     calculation_conditions |o--o{ property_records : "同一次计算产生或使用"
     experimental_conditions |o--o{ property_records : "同一次实验产生"
@@ -76,3 +77,7 @@ FormDefinition(predicted_tc, v2) <- 新记录 B
 ```
 
 v2 发布后不会改写 v1 或记录 A。只有显式升级操作才会把 A 转换并重新绑定到 v2。
+
+自定义性质可以使用已发布通用模板随论文审核保留。管理员提升时发布独立的全站普通性质定义，并保存
+来源快照；不改写原 PropertyRecord，不创建跨论文共享记录。来源以审计快照保留，不使用阻止论文删除
+的反向外键，也不因论文删除而删除全站定义。

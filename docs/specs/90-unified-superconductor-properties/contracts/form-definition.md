@@ -8,10 +8,13 @@ GET /api/form-definitions/{definition_key}/versions/{version}
 ```
 
 公开读取只返回已发布或用于历史记录解释的已停用版本。响应包含定义键、版本、目标类型、适用模块、
-记录类型、可选方法、JSON Schema、UI Schema、组级规则、状态和校验和。目标类型为
+记录类型、物性代码、可选方法、核心字段 Schema、JSON Schema、UI Schema、组级规则、状态和校验和。目标类型为
 `property_module`、`property_record`、`calculation_condition` 或 `experimental_condition`。
 
-## 发布
+定义选择器还使用 `GET /api/form-definitions?target_kind=property_record&module_code={module_code}`，按定义键
+返回当前已发布版本，包括系统自定义模板及管理员新提升的定义；停用项不出现在新建选项中。
+
+## 常规定义管理
 
 ```http
 POST /api/admin/form-definitions/{definition_key}/versions
@@ -20,7 +23,8 @@ POST /api/admin/form-definitions/{definition_key}/versions/{version}/publish
 POST /api/admin/form-definitions/{definition_key}/versions/{version}/retire
 ```
 
-只有超级管理员可调用。创建草稿时版本号由服务端分配；发布前必须验证：
+以上常规管理接口只有超级管理员可调用；管理员通过下述“自定义性质提升”接口直接发布通用性质，
+无需超级管理员复核。创建草稿时版本号由服务端分配；发布前必须验证：
 
 - 版本连续且同键同版本不存在；
 - Schema 只使用允许的声明式关键字；
@@ -32,6 +36,35 @@ POST /api/admin/form-definitions/{definition_key}/versions/{version}/retire
 `PUT` 只允许修改 `draft`。发布后定义内容不可修改；停用只改变是否可用于新建，不改变历史读取。
 方法特有定义的 `definition_key` 必须包含方法代码，例如
 `record.superconductive_properties.predicted_tc.allen_dynes`，版本号只表达该方法定义的演进。
+
+## 自定义性质提升
+
+```http
+POST /api/admin/papers/{paper_id}/property-records/{record_key}/promote-definition
+```
+
+普通管理员和超级管理员均可调用。请求携带 `operation_id`、预期论文 revision、源记录校验和、目标
+`property_code`、显示名称、描述、所属模块、`value_kind` 和单位规则（指定规范单位、无量纲或保留原文单位）。
+源记录必须是当前已批准 revision 的自定义记录；审核页先完成论文批准，再显示独立提升动作，选择不提升
+不影响论文批准或数据保留。目标模块必须已注册并与源模块一致。
+
+管理员论文读取响应提供当前 revision 和源记录校验和；校验和按 RFC 8785 规范 JSON 后计算 SHA-256，
+覆盖记录核心字段、定义绑定、扩展字段和 Evidence 关联，供提升请求回传并由服务端重新核对。
+
+服务端从受限模板生成 `target_kind=property_record`、`record_type=property` 的核心字段 Schema 和空扩展
+Schema，在一个事务内创建并发布 v1、写入提升审计事件。提升接口不接受客户端任意 Schema、Tc 规则、
+Conditions 规则或其他目标类型。普通性质的全站定义键统一为 `record.property.<property_code>`，使用
+定义键/版本唯一约束保证不同模块、并发管理员不能重复占用代码；种子定义和常规发布也遵守同一命名规则。
+拒绝 `custom`、Tc 及其保留别名或已有代码。服务端校验类型和单位与来源相符，不进行未经确认的单位换算。
+
+成功返回 201、目标定义键/版本/校验和及事件 ID；同 operation_id 同请求重试返回原结果，不重复发布。
+同 operation_id 不同请求、同来源已提升、代码已占用、源 revision 或快照变化返回 409；普通用户返回 403。
+锁定论文并重新验证公开资格，保证与论文升版、删除和其他审核动作串行。定义发布和审计必须同时成功。
+
+新定义立即进入全站对应模块的定义选择器，记录仍分别属于各自论文。源记录继续使用原通用模板和
+custom_property_key；发布不修改论文科学事实，不触发自动重绑或批量数据迁移。未来显式转换历史记录
+不属于本次提升操作，也不调用只支持同键升版的 definition-upgrade 接口。源论文删除或升版不会删除
+通用定义，提升事件保存必要来源快照；公开选择器不输出管理员审计内容。
 
 ## Conditions 身份规则
 
@@ -75,7 +108,7 @@ JSON Schema 以 2020-12 为基准，首批允许对象、数组、字符串、�
 additionalProperties=false、items、enum、const、minimum/maximum、minItems/maxItems、minLength/maxLength、
 if/then/else 和 allOf/anyOf/oneOf。拒绝远程引用、动态引用和自定义可执行关键字。UI Schema 仅包含字段
 JSON Pointer、控件、顺序、标签及相同声明式条件，不携带独立校验规则。校验和使用 RFC 8785 规范 JSON
-后的 SHA-256，覆盖目标身份、JSON/UI Schema、两类规则；状态和审计时间单独保存，停用不能改变内容校验和。
+后的 SHA-256，覆盖目标身份、core_schema、JSON/UI Schema、两类规则；状态和审计时间单独保存，停用不能改变内容校验和。
 
 ## 记录版本升级
 
@@ -111,11 +144,15 @@ Conditions 和 Evidence 规则。应用与回滚均返回操作后 revision、�
 | --- | --- | --- |
 | 400 | `unsupported_schema_keyword` | 使用了不支持或可执行的 Schema 能力 |
 | 403 | `definition_publish_forbidden` | 调用者不是超级管理员 |
+| 403 | `property_promotion_forbidden` | 提升调用者不是有效管理员或超级管理员 |
+| 409 | `property_promotion_conflict` | 代码、幂等键或同来源提升冲突 |
+| 409 | `property_promotion_stale` | 来源 revision、记录快照或批准状态已变化 |
 | 404 | `unknown_definition_version` | 定义键或版本不存在 |
 | 409 | `definition_version_conflict` | 版本重复、跳号或发布后修改 |
 | 409 | `definition_upgrade_stale` | 记录在预览后已变化 |
 | 409 | `definition_rollback_stale` | 升级事件不是当前记录的可回滚前序事件 |
 | 422 | `definition_invalid` | Schema、UI Schema 或组级规则不一致 |
+| 422 | `property_promotion_invalid` | 自定义来源、类型、单位或保留代码不符合提升规则 |
 
 ## 缓存
 

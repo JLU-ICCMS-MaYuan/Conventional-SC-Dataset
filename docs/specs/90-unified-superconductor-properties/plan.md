@@ -21,7 +21,8 @@
 - **Schema 校验**：Python 使用支持 JSON Schema 2020-12 所需子集的验证器；前端使用兼容验证器和
   项目组件生成控件。新增依赖前先确认现有依赖是否满足，避免引入两套校验器。
 - **性能**：论文详情批量加载定义、模块、记录和 Conditions；Tc 图表走固定列与组合索引。
-- **安全**：定义只允许超级管理员发布；Schema 不执行脚本；后端始终重新校验。
+- **权限**：自定义性质提升由管理员（含超级管理员）直接发布；其余定义管理沿用超级管理员。
+  Schema 不执行脚本，后端始终重新校验，权限不以页面是否显示按钮代替。
 
 ## 质量门
 
@@ -31,6 +32,8 @@
 | 论文内材料独立 | 材料唯一键限定在论文 revision，迁移拆分旧共享材料 |
 | Tc 与相关物性不误配 | Conditions 表示一次确定执行，组级规则校验决定性输入 |
 | 动态扩展不破坏历史 | 已发布定义不可变，记录绑定具体版本，升级显式执行 |
+| 自定义性质可保留 | 用每模块的通用录入定义保存论文内性质，随论文审核，无需先发布全站定义 |
+| 管理员直接提升 | 受限模板生成普通性质定义并发布，事务化来源审计；发布不改写历史记录 |
 | 升级可以安全撤销 | 不可变升级事件保存前后快照，应用和回滚校验 revision、记录校验和与前序事件 |
 | 核心查询可靠 | 核心字段固定列；JSON 只保存扩展字段 |
 | Evidence 完整 | 使用统一证据连接，迁移缺口报告且不伪造 |
@@ -84,12 +87,16 @@ Copy 和 Contract 依次连接，不得从当前文档日期推断过期 head。
 1. `property_modules` 只保存模块实例和顺序，不保存物性值。
 2. `property_records` 保存所有记录核心字段、定义版本和 `payload_json`。
 3. `property_records` 使用两个互斥的 Conditions 复合外键；CHECK 强制 Tc 类型与外键类型一致。
+   自定义记录使用 `property_code=custom` 和论文内 `custom_property_key`，同样保存核心值和 Evidence。
 4. `form_definitions` 保存定义、`identity_rules` 和 `group_rules`；发布操作做权限、版本递增、校验和和审计检查。
 5. `property_record_definition_events` 保存定义升级与回滚的前后快照和并发校验依据。
 6. `calculation_conditions`、`experimental_conditions` 保留各自固定条件字段和扩展 JSON；键使用类型前缀，
    但不根据内容自动合并。
 7. API 输出 MaterialState 顶层 Conditions 和模块数组，记录用 `condition_key` 关联。
 8. 前端读取定义生成控件；Python 使用同一版本校验；Go 只读取已验证数据并执行专用查询。
+9. `form_definition_service.py` 复用受限模板处理管理员提升，生成普通性质定义并在同事务写入
+   `property_definition_promotion_events`；`core_schema` 校验固定字段，`json_schema` 校验扩展字段。
+   定义选择器按模块查询当前发布版本，新定义可在下一次打开或刷新选择器时被其他用户使用。
 
 ## 实施阶段
 
@@ -141,8 +148,9 @@ Copy 和 Contract 依次连接，不得从当前文档日期推断过期 head。
 | FR-013–FR-019 | FormDefinition、升级事件与动态表单 | v1/v2、发布不可变、升级回滚、前后端一致性测试 |
 | FR-020–FR-022 | 论文内材料 | 双论文 LaH10 隔离与搜索测试 |
 | FR-023–FR-030 | 目标 Schema 与分阶段迁移 | 隔离 MySQL 对账、切换、恢复和图表回归 |
-| FR-031–FR-033 | 本地结构、权限和错误 | 跨 revision 拒绝、发布权限和错误路径测试 |
+| FR-031–FR-033 | 本地结构、分操作权限和错误 | 跨 revision 拒绝、管理员提升/超级管理员常规发布和错误路径测试 |
 | FR-034–FR-035 | 全栈验证与文档 | 测试套件、构建、Quickstart 和 Overview |
+| FR-036–FR-039 | 自定义模板、提升服务和审计 | 四种值审核保留、管理员独立发布、普通用户403、并发与历史保护 |
 
 ## 必要复杂度
 

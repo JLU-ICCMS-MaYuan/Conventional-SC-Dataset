@@ -70,6 +70,20 @@
 
 **独立验收**：完成 Quickstart 场景五；两篇论文的同名材料可以分别修改、升版、删除并同时被搜索。
 
+## 阶段 7a：用户故事 7 - 自定义性质保留与管理员提升（P1）
+
+- [ ] T056 [US7] 在 `backend/tests/test_form_definitions.py` 与 `backend/tests/test_property_modules.py` 先建立自定义四种值类型保留、普通管理员提升成功、普通用户拒绝、重复请求、代码冲突与旧记录不变的失败测试。
+- [ ] T057 [US7] 在 `tests/fixtures/issue90/form-definition-matrix.json`、`tests/01_decentralized_uploading/material-states-editor.test.tsx` 和 `goserver/handlers/paper_detail_test.go` 先建立用户自定义录入、审核不提升仍保留、详情保留自定义字段、新定义供其他用户选择的前后端测试矩阵。
+- [ ] T058 [US7] 在 `backend/data/form_definitions.v1.json`、`backend/ingest/property_modules.py` 与 `backend/ingest/upload_contracts.py` 增加每模块已发布自定义模板、论文内 custom_property_key 校验和核心 Schema，保留原名、四种类型、单位及 Evidence。
+- [ ] T059 [US7] 在 `alembic/versions/20260907_issue90_expand_modular_property_schema.py` 与 `backend/models.py` 增加自定义性质键和提升事件表，落实来源快照、代码命名唯一、幂等唯一、来源重复提升约束。
+- [ ] T060 [US7] 在 `backend/services/form_definition_service.py` 与 `backend/api/form_definitions.py` 实现管理员直接提升、受限模板生成发布 v1、事务审计、来源并发检查、错误码和全站定义选择器接口。
+- [ ] T061 [US7] 在 `frontend/src/components/PropertyModuleEditor.tsx`、`frontend/src/components/SchemaDrivenRecordForm.tsx` 与 `frontend/src/pages/AdminPaperEditPage.tsx` 接入自定义录入、审核保留及批准后独立提升操作，提交成功刷新定义选择器。
+- [ ] T062 [US7] 在 `goserver/models/models.go`、`goserver/handlers/papers.go` 与 `frontend/src/lib/paperDetailView.ts` 保留自定义性质名称、类型、值、单位、键和 Evidence，隔离未规范化性质的跨论文聚合并防止公开审计信息。
+- [ ] T063 [US7] 运行 `backend/tests/test_form_definitions.py`、`backend/tests/test_property_modules.py`、`tests/01_decentralized_uploading/material-states-editor.test.tsx` 和 `goserver/handlers/paper_detail_test.go` 的预建用例，验证普通管理员无需超级管理员即可发布、历史绑定不变、源删除不影响通用定义。
+
+**独立验收**：完成 Quickstart 场景九；用户自定义数据审核后可保留，普通管理员选择提升后其他用户可录入。
+T056–T057 先于实现，T059 随基础迁移一起完成；T058、T060–T062 依赖 US1/US4，T063 阻断 T049–T055 收尾。
+
 ## 阶段 8：用户故事 6 - 统一上传、管理和公开读取（P2）
 
 - [ ] T037 [US6] 在 `alembic/versions/20260907_issue90_copy_property_records.py` 迁移 Tc、普通物性、Conditions、参数和 Evidence，并输出逐行异常与对账结果。
@@ -122,7 +136,8 @@
 
 MVP 为基础阶段 + US1 + US2 + US3 + US4：在新建材料状态中可以按需添加模块，录入多条 Tc，
 保持 Conditions 配对，并由不可变定义完成前后端一致校验。US5、US6 和切换仍是关闭 #90 的必需
-范围，但不阻止先验收不依赖历史迁移的新数据编辑闭环。
+范围，但不阻止先验收不依赖历史迁移的新数据编辑闭环。US7 同样是本次确认的必交付范围，纳入新数据
+编辑闭环；其验收不依赖历史迁移，发布切换前必须完成。
 
 ## 需求覆盖
 
@@ -135,6 +150,8 @@ MVP 为基础阶段 + US1 + US2 + US3 + US4：在新建材料状态中可以按�
 | FR-023–FR-030 | T005–T011、T033–T051 |
 | FR-031–FR-033 | T002、T007、T017、T025–T031、T041 |
 | FR-034–FR-035 | T049、T051–T055 |
+| FR-032、FR-036–FR-039 | T056–T063 |
 | SC-001–SC-003 | T016、T020、T024 |
 | SC-004–SC-005、SC-012 | T001、T002、T025–T032 |
 | SC-006–SC-011 | T034–T055 |
+| SC-013–SC-014 | T056、T057、T063 |

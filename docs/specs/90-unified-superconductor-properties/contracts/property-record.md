@@ -82,6 +82,40 @@ material_states[].experimental_conditions[]
 }
 ```
 
+## 自定义性质与审核
+
+已有模块的定义选择器提供已发布 `record.<module_code>.custom` 定义，允许用户显式选择自定义性质。
+以下为突出新增字段而省略其他可空核心字段的示例，批准时 Evidence 必须解析为同 revision 的有效证据：
+
+```json
+{
+  "record_key": "record-custom-1",
+  "module_code": "electronic_properties",
+  "record_type": "property",
+  "property_code": "custom",
+  "custom_property_key": "custom-opaque-1",
+  "definition_key": "record.electronic_properties.custom",
+  "definition_version": 1,
+  "name_raw": "论文报告的新性质",
+  "value_kind": "number",
+  "value_raw": "1.25 eV",
+  "value_number": 1.25,
+  "unit_raw": "eV",
+  "canonical_unit": null,
+  "payload": {},
+  "evidences": []
+}
+```
+
+通用模板只接受已声明的核心字段和类型；数值原始单位可以保留为文本，不擅自换算或推断规范单位。
+`name_raw` 必填且去首尾空白后非空，同键在同论文 revision/模块内必须具有一致性质含义和类型，
+有冲突返回 `custom_property_conflict`。不同论文同名性质不共享身份。审核不要求生成全站定义；管理员
+批准论文后自定义记录按原文展示，详情和搜索投影不得因其 `property_code=custom` 而遗漏。
+
+用户选择已注册 Tc 或其他规范性质时仍使用专用定义，不允许以保留代码（例如 `tc`）配自定义定义绕过
+约束。自定义同名科学语义由管理员审查，不宣称系统能自动判定。未提升的自定义记录不作为已规范化
+Tc 图表点或跨论文同性质聚合依据。提升后的历史记录仍保持原自定义绑定，后续新记录可选择新定义。
+
 ## Tc 规则
 
 - `predicted_tc` 必须满足 `property_code=tc`、理论 `method_code`、计算 Conditions。
@@ -158,6 +192,7 @@ GET /api/form-definitions/{definition_key}/current
 | `condition_group_rule_failed` | 同一 Conditions 下的记录组合非法 |
 | `duplicate_representative_tc` | 同范围存在多条代表 Tc |
 | `nonempty_module_delete` | 未显式处理记录就删除非空模块 |
+| `custom_property_conflict` | 同论文内自定义性质键的名称、类型或单位语义冲突 |
 | `cross_revision_reference` | Conditions、结构或 Evidence 跨 revision |
 
 ## 兼容边界

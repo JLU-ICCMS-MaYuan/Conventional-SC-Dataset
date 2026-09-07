@@ -54,6 +54,7 @@ PaperRevision
 | `module_code` | 是 | 所属模块，必须与模块实例一致 |
 | `record_type` | 是 | 例如 `predicted_tc`、`measured_tc`、`property` |
 | `property_code` | 是 | 规范科学量代码，例如 `tc`、`lambda_ep`、`omega_log`、`mu_star`、`hc2` |
+| `custom_property_key` | 条件必填 | `property_code=custom` 时必填的论文 revision 内性质键；通用性质记录为空 |
 | `definition_key` | 是 | 使用的表单定义键 |
 | `definition_version` | 是 | 使用的不可变定义版本 |
 | `name_raw` | 是 | 论文原文名称 |
@@ -96,6 +97,23 @@ paper_id + paper_revision + material_state_id + record_type + method_code
 ```
 
 同一范围最多一条 `is_representative=true`。
+
+### 3.3 自定义性质
+
+自定义性质仍为 `PropertyRecord`，固定使用 `record_type=property`、`property_code=custom`，按模块绑定
+已发布的 `record.<module_code>.custom` 定义。性质名称保存在 `name_raw`，值和单位仍使用固定核心字段；
+不把用户名称当作任意 JSON 键。`custom_property_key` 由系统生成，身份范围是论文 revision 和模块，
+同一性质的多条测量可以共享该键；同键名称、值类型和单位语义必须一致，跨论文不按名称自动合并。
+论文升版复制该键随其他科学事实一起归入新 revision。自定义记录没有独立审核状态，公开资格继承论文。
+
+### 3.4 PropertyDefinitionPromotionEvent
+
+全站提升不修改源记录，仅新增已发布 `FormDefinition` 和不可变提升事件。事件保存 operation_id、管理员、
+时间、源论文 revision、源记录稳定键及快照、目标定义键/版本/校验和；operation_id 唯一。同一来源
+论文/revision/模块/custom_property_key 最多成功提升一次；并发不同来源提升同一目标代码由全局唯一约束拒绝。
+全站普通性质代码用定义键 `record.property.<property_code>` 定位，模块作为定义适用字段，不能通过换模块
+重复注册同一代码。服务在单个事务内注册代码、
+发布 v1 和保存事件。事件来源以快照留存，不建立阻止源论文升版或删除的强外键；目标定义不依赖源记录生存。
 
 ## 4. Conditions
 
@@ -153,6 +171,8 @@ Conditions 定义必须通过 `identity_rules` 声明决定性输入：
 | `module_code` | 模块或记录定义的适用模块；Conditions 定义为空 |
 | `record_type` | 记录定义的适用记录类型；其他目标类型为空 |
 | `method_code` | 可选；为空表示通用定义，非空表示方法扩展 |
+| `property_code` | 记录定义适用的性质代码；其他目标类型为空；`custom` 是保留的论文内性质类型 |
+| `core_schema` | 校验固定核心字段的声明式 Schema；与扩展 JSON 的 Schema 分开，二者共同绑定版本 |
 | `json_schema` | 扩展字段的数据结构、类型、枚举和条件必填规则 |
 | `ui_schema` | 控件、顺序、分组、标签键和单位提示；不拥有数据校验权威 |
 | `group_rules` | Conditions 定义用于观察同组多条记录的规则；其他目标类型为空 |
@@ -200,6 +220,7 @@ JSON Schema 只允许声明式、安全的受限关键字；定义不能包含�
 | `property_records` | 模块中的一条科学事实 |
 | `form_definitions` | 一份不可变版本化表单定义 |
 | `property_record_definition_events` | 记录定义升级与回滚的不可变审计事件 |
+| `property_definition_promotion_events` | 管理员把论文内自定义性质提升为全站定义的来源与操作快照 |
 | `calculation_conditions` | 一次计算运行 |
 | `experimental_conditions` | 一次实验测量 |
 | `property_record_evidences` | 记录与 Evidence 的多对多连接 |

@@ -10,6 +10,7 @@
 | 物性记录 | `property_records` | 统一保存 Tc 和其他模块记录的核心字段与扩展 JSON |
 | 表单定义 | `form_definitions` | 保存不可变版本化 JSON Schema、UI Schema 和组级规则 |
 | 定义升级事件 | `property_record_definition_events` | 保存记录定义升级与回滚的不可变前后快照 |
+| 自定义性质提升事件 | `property_definition_promotion_events` | 保存管理员、来源快照、目标定义和幂等键 |
 | 计算 Conditions | `calculation_conditions` | 由旧 `calculation_contexts` 迁移并改名 |
 | 实验 Conditions | `experimental_conditions` | 由旧 `experimental_contexts` 迁移并改名 |
 | 证据连接 | `property_record_evidences` | 统一连接 PropertyRecord 与 PaperEvidence |
@@ -39,6 +40,15 @@ Conditions，并强制预测/测量 Tc 使用正确类型。
 `payload_json` 只保存 `FormDefinition.json_schema` 声明的扩展字段。核心列与 JSON 同名或表达同一
 事实时拒绝写入。需要数据库筛选、排序、唯一约束或跨记录关联的扩展字段，必须先通过后续迁移提升
 为固定列。
+
+自定义性质仍写入 `property_records`，增加可空 `custom_property_key` 列，只在 `property_code=custom`
+且 `record_type=property` 时非空；名称、四种类型的值及单位复用核心列，`core_schema` 校验它们。
+初始定义种子包含四模块的已发布自定义模板，用户不发布 Schema 即可提交并随论文批准。
+
+提升只写 `form_definitions` 和 `property_definition_promotion_events`，不更新源物性。所有全站普通性质
+使用 `record.property.<property_code>` 定义键，v1 的唯一键防止并发代码注册，版本语义和模块不能改变代码
+身份。提升事件按 operation_id 及来源论文/revision/模块/custom_property_key 分别设唯一约束。
+事件存必要来源快照，源论文删除不会级联删除通用定义或事件；公开接口不输出审计内容。
 
 ## Tc 数据库约束
 
