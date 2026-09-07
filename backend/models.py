@@ -68,14 +68,18 @@ class PeriodicTableElement(Base):
 class ChemicalSystem(Base):
     __tablename__ = "chemical_systems"
     __table_args__ = (
-        UniqueConstraint(
-            "system_key",
-            name="uq_chemical_systems_system_key",
+        ForeignKeyConstraint(
+            ["paper_id", "paper_revision"], ["papers.id", "papers.content_revision"],
+            name="fk_chemical_systems_paper_revision", ondelete="RESTRICT", onupdate="CASCADE",
         ),
+        UniqueConstraint("id", "paper_id", "paper_revision", name="uq_chemical_systems_identity_revision"),
+        UniqueConstraint("paper_id", "paper_revision", "system_key", name="uq_chemical_systems_scope"),
         Index("ix_chemical_systems_system_key", "system_key"),
     )
 
     id = Column(Integer, primary_key=True)
+    paper_id = Column(Integer, nullable=False, index=True)
+    paper_revision = Column(Integer, nullable=False, index=True)
     system_key = Column(String(255), nullable=False)
     elements_list = Column(JSON, nullable=False)
     element_count = Column(Integer, nullable=False)
@@ -92,14 +96,13 @@ class ChemicalSystem(Base):
 class Superconductor(Base):
     __tablename__ = "superconductors"
     __table_args__ = (
-        UniqueConstraint(
-            "composition_key",
-            name="uq_superconductors_composition_key",
+        ForeignKeyConstraint(
+            ["chemical_system_id", "paper_id", "paper_revision"],
+            ["chemical_systems.id", "chemical_systems.paper_id", "chemical_systems.paper_revision"],
+            name="fk_superconductors_system_revision", ondelete="RESTRICT", onupdate="CASCADE",
         ),
-        UniqueConstraint(
-            "formula_normalized",
-            name="uq_superconductors_formula_normalized",
-        ),
+        UniqueConstraint("id", "paper_id", "paper_revision", name="uq_superconductors_identity_revision"),
+        UniqueConstraint("paper_id", "paper_revision", "composition_key", name="uq_superconductors_scope"),
         Index(
             "ix_superconductors_formula_normalized",
             "formula_normalized",
@@ -111,12 +114,9 @@ class Superconductor(Base):
     )
 
     id = Column(Integer, primary_key=True)
-    chemical_system_id = Column(
-        Integer,
-        ForeignKey("chemical_systems.id"),
-        nullable=False,
-        index=True,
-    )
+    paper_id = Column(Integer, nullable=False, index=True)
+    paper_revision = Column(Integer, nullable=False, index=True)
+    chemical_system_id = Column(Integer, nullable=False, index=True)
     chemical_formula = Column(String(255), nullable=False)
     formula_normalized = Column(String(255), nullable=False)
     composition_key = Column(String(255), nullable=False)
@@ -133,7 +133,11 @@ class Superconductor(Base):
     )
 
     chemical_system = relationship("ChemicalSystem", back_populates="superconductors")
-    material_states = relationship("MaterialState", back_populates="superconductor")
+    material_states = relationship(
+        "MaterialState",
+        back_populates="superconductor",
+        overlaps="material_states,paper",
+    )
 
 
 class User(Base):
@@ -429,7 +433,11 @@ class Paper(Base):
         back_populates="paper",
         cascade="all, delete-orphan",
     )
-    material_states = relationship("MaterialState", back_populates="paper")
+    material_states = relationship(
+        "MaterialState",
+        back_populates="paper",
+        overlaps="material_states,superconductor",
+    )
 
 
 class PaperFile(Base):
@@ -983,6 +991,11 @@ class MaterialState(Base):
             name="fk_material_states_paper_revision",
             ondelete="RESTRICT",
         ),
+        ForeignKeyConstraint(
+            ["superconductor_id", "paper_id", "paper_revision"],
+            ["superconductors.id", "superconductors.paper_id", "superconductors.paper_revision"],
+            name="fk_material_states_superconductor_revision", ondelete="RESTRICT", onupdate="CASCADE",
+        ),
         CheckConstraint(
             "state_kind IN ('theoretical', 'experimental', 'mixed', 'unknown')",
             name="ck_material_states_kind",
@@ -1033,6 +1046,7 @@ class MaterialState(Base):
             "paper_revision",
             name="uq_material_states_identity_revision",
         ),
+        UniqueConstraint("paper_id", "paper_revision", "state_key", name="uq_material_states_paper_state_key"),
         Index(
             "ix_material_states_paper_revision",
             "paper_id",
@@ -1053,13 +1067,10 @@ class MaterialState(Base):
     )
 
     id = Column(BIGINT_ID, primary_key=True, autoincrement=True)
+    state_key = Column(String(96), nullable=False)
     paper_id = Column(Integer, nullable=False)
     paper_revision = Column(Integer, nullable=False)
-    superconductor_id = Column(
-        Integer,
-        ForeignKey("superconductors.id", ondelete="RESTRICT"),
-        nullable=False,
-    )
+    superconductor_id = Column(Integer, nullable=False)
     element_count = Column(SmallInteger)
     material_dimensionality = Column(
         String(32),
@@ -1103,8 +1114,16 @@ class MaterialState(Base):
         onupdate=func.now(),
     )
 
-    paper = relationship("Paper", back_populates="material_states")
-    superconductor = relationship("Superconductor", back_populates="material_states")
+    paper = relationship(
+        "Paper",
+        back_populates="material_states",
+        overlaps="material_states,superconductor",
+    )
+    superconductor = relationship(
+        "Superconductor",
+        back_populates="material_states",
+        overlaps="material_states,paper",
+    )
     structure_family_links = relationship(
         "MaterialStateStructureFamily",
         back_populates="material_state",
@@ -1899,6 +1918,7 @@ class PropertyModule(Base):
             ["material_states.id", "material_states.paper_id", "material_states.paper_revision"],
             name="fk_property_modules_state_revision",
             ondelete="RESTRICT",
+            onupdate="CASCADE",
         ),
         CheckConstraint(
             "module_code IN ('superconductive_properties','dynamical_properties','thermodynamical_properties','electronic_properties')",
@@ -1906,7 +1926,12 @@ class PropertyModule(Base):
         ),
         CheckConstraint("display_order >= 0", name="ck_property_modules_order"),
         UniqueConstraint("material_state_id", "module_code", name="uq_property_modules_state_code"),
-        UniqueConstraint("module_key", name="uq_property_modules_key"),
+        UniqueConstraint(
+            "material_state_id",
+            "module_key",
+            name="uq_property_modules_state_key",
+        ),
+        UniqueConstraint("id", "material_state_id", "paper_id", "paper_revision", name="uq_property_modules_identity_rev"),
         Index("ix_property_modules_state", "material_state_id"),
     )
 
@@ -1965,6 +1990,7 @@ class PropertyRecord(Base):
             ["property_modules.id", "property_modules.material_state_id", "property_modules.paper_id", "property_modules.paper_revision"],
             name="fk_property_records_module_revision",
             ondelete="RESTRICT",
+            onupdate="CASCADE",
         ),
         ForeignKeyConstraint(
             ["definition_id"], ["form_definitions.id"],
@@ -1976,9 +2002,11 @@ class PropertyRecord(Base):
         CheckConstraint("uncertainty IS NULL OR uncertainty >= 0", name="ck_property_records_uncertainty"),
         CheckConstraint("(value_kind <> 'number' OR value_number IS NOT NULL) AND (value_kind <> 'range' OR (value_min IS NOT NULL AND value_max IS NOT NULL)) AND (value_kind <> 'text' OR value_text IS NOT NULL) AND (value_kind <> 'boolean' OR value_boolean IS NOT NULL)", name="ck_property_records_value_shape"),
         CheckConstraint("(record_type NOT IN ('predicted_tc','measured_tc')) OR (property_code = 'tc' AND method_code IS NOT NULL)", name="ck_property_records_tc_identity"),
+        CheckConstraint("(property_code = 'custom' AND record_type = 'property' AND custom_property_key IS NOT NULL) OR (property_code <> 'custom' AND custom_property_key IS NULL)", name="ck_property_records_custom_identity"),
         CheckConstraint("(record_type <> 'predicted_tc' OR (payload_json IS NOT NULL AND JSON_EXTRACT(payload_json, '$.calculation_conditions') IS NOT NULL AND JSON_EXTRACT(payload_json, '$.experimental_conditions') IS NULL)) AND (record_type <> 'measured_tc' OR (payload_json IS NOT NULL AND JSON_EXTRACT(payload_json, '$.experimental_conditions') IS NOT NULL AND JSON_EXTRACT(payload_json, '$.calculation_conditions') IS NULL))", name="ck_property_records_condition_type"),
         UniqueConstraint("module_id", "record_key", name="uq_property_records_module_key"),
         UniqueConstraint("paper_id", "paper_revision", "source_fingerprint", name="uq_property_records_source"),
+        UniqueConstraint("id", "paper_id", "paper_revision", name="uq_property_records_identity_rev"),
         Index("ix_property_records_state_type_method", "material_state_id", "record_type", "method_code"),
         Index("ix_property_records_tc_value", "property_code", "value_number"),
     )
@@ -2072,11 +2100,11 @@ class PropertyRecordEvidence(Base):
         ForeignKeyConstraint(
             ["record_id", "paper_id", "paper_revision"],
             ["property_records.id", "property_records.paper_id", "property_records.paper_revision"],
-            name="fk_property_record_evidences_record", ondelete="CASCADE",
+            name="fk_property_record_evidences_record", ondelete="CASCADE", onupdate="CASCADE",
         ),
         ForeignKeyConstraint(
-            ["paper_evidence_id", "paper_id", "paper_revision"],
-            ["paper_evidences.id", "paper_evidences.paper_id", "paper_evidences.paper_revision"],
+            ["paper_evidence_id"],
+            ["paper_evidences.id"],
             name="fk_property_record_evidences_evidence", ondelete="CASCADE",
         ),
         UniqueConstraint("record_id", "paper_evidence_id", name="uq_property_record_evidences"),
@@ -2111,10 +2139,48 @@ class Issue90PropertyMigrationMap(Base):
     target_table = Column(String(64), nullable=False)
     target_id = Column(BIGINT_ID)
     target_record_key = Column(String(96))
+    source_checksum = Column(String(64), nullable=False)
+    target_checksum = Column(String(64))
     field_map = Column(JSON, nullable=False, default=dict, server_default="{}")
     status = Column(String(20), nullable=False, default="copied", server_default="copied")
     error_message = Column(Text)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+
+class Issue90MigrationAnomaly(Base):
+    __tablename__ = "issue90_migration_anomalies"
+    __table_args__ = (
+        UniqueConstraint("source_table", "source_id", "paper_id", "paper_revision", "code", name="uq_issue90_anomaly"),
+    )
+
+    id = Column(BIGINT_ID, primary_key=True, autoincrement=True)
+    source_table = Column(String(64), nullable=False)
+    source_id = Column(BIGINT_ID, nullable=False)
+    paper_id = Column(Integer, nullable=False)
+    paper_revision = Column(Integer, nullable=False)
+    code = Column(String(64), nullable=False)
+    details = Column(JSON, nullable=False, default=dict, server_default="{}")
+    resolved = Column(Boolean, nullable=False, default=False, server_default="0")
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class Issue90MigrationCheckpoint(Base):
+    __tablename__ = "issue90_migration_checkpoint"
+    __table_args__ = (
+        CheckConstraint("phase IN ('expand','copy','reconcile','read_switch','write_switch','observe','contract')", name="ck_issue90_checkpoint_phase"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    phase = Column(String(20), nullable=False)
+    writes_blocked = Column(Boolean, nullable=False, default=False, server_default="0")
+    reads_target = Column(Boolean, nullable=False, default=False, server_default="0")
+    writes_target = Column(Boolean, nullable=False, default=False, server_default="0")
+    reconciled = Column(Boolean, nullable=False, default=False, server_default="0")
+    observed = Column(Boolean, nullable=False, default=False, server_default="0")
+    checkpoint_json = Column(JSON, nullable=False, default=dict, server_default="{}")
+    error_json = Column(JSON, nullable=False, default=list, server_default="[]")
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
 
 class LegacyBase(DeclarativeBase):

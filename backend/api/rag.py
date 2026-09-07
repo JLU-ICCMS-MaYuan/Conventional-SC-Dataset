@@ -259,6 +259,7 @@ def _validate_draft(
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     paper, material_states = _draft_values(draft)
     _validate_tc_method_invariants(material_states, partial=partial)
+    _validate_property_module_contract(material_states, partial=partial)
     if partial:
         # 草稿保存（PUT）仅做结构性检查，业务字段校验留给提交时执行，
         # 避免半成品草稿被 400 拒绝导致编辑丢失。
@@ -410,6 +411,84 @@ def _validate_tc_method_invariants(
                     "tc_method_result_kind_mismatch",
                     f"{field_label} 的 Tc 方法与结果类型不一致",
                 )
+
+
+def _validate_property_module_contract(
+    material_states: list[dict[str, Any]], *, partial: bool
+) -> None:
+    """在提交前执行不依赖数据库的模块化记录校验。"""
+    from backend.ingest.property_modules import (
+        MODULE_CODES,
+        PropertyIssue,
+        PropertyValidationError,
+        normalize_module,
+    )
+
+    for state_index, state in enumerate(material_states):
+        modules = state.get("property_modules")
+        if modules is None:
+            continue
+        if not isinstance(modules, list):
+            raise HTTPException(
+                status_code=400,
+                detail=PropertyValidationError([
+                    PropertyIssue(
+                        f"material_states[{state_index}].property_modules",
+                        "schema_validation_failed",
+                        "物性模块必须是数组",
+                    )
+                ]).as_dict(),
+            )
+        if partial:
+            # 草稿可保存未填写完成的记录，但已经选择的模块代码必须有效。
+            invalid = next((
+                index for index, module in enumerate(modules)
+                if not isinstance(module, dict)
+                or (
+                    module.get("module_code") not in (None, "")
+                    and module.get("module_code") not in MODULE_CODES
+                )
+            ), None)
+            if invalid is not None:
+                raise HTTPException(
+                    status_code=400,
+                    detail=PropertyValidationError([
+                        PropertyIssue(
+                            f"material_states[{state_index}].property_modules[{invalid}].module_code",
+                            "unknown_module",
+                            "未注册的物性模块",
+                        )
+                    ]).as_dict(),
+                )
+            continue
+
+        seen_keys: set[str] = set()
+        seen_codes: set[str] = set()
+        try:
+            for module_index, module in enumerate(modules):
+                if not isinstance(module, dict):
+                    raise PropertyValidationError([
+                        PropertyIssue(
+                            f"material_states[{state_index}].property_modules[{module_index}]",
+                            "schema_validation_failed",
+                            "物性模块必须是对象",
+                        )
+                    ])
+                normalized = normalize_module(module, paper_id=0, paper_revision=1)
+                module_key = normalized["module_key"]
+                module_code = normalized["module_code"]
+                if module_key in seen_keys or module_code in seen_codes:
+                    raise PropertyValidationError([
+                        PropertyIssue(
+                            f"material_states[{state_index}].property_modules[{module_index}]",
+                            "schema_validation_failed",
+                            "模块键或模块代码重复",
+                        )
+                    ])
+                seen_keys.add(module_key)
+                seen_codes.add(module_code)
+        except PropertyValidationError as exc:
+            raise HTTPException(status_code=400, detail=exc.as_dict()) from exc
 
 
 def _fit_column(value: str | None, limit: int) -> str | None:
@@ -1133,10 +1212,17 @@ async def _create_pending_paper(
         persist_scientific_draft,
     )
     from backend.ingest.upload_jobs import _normalize_draft, normalize_doi
+    from backend.ingest.upload_contracts import (
+        UploadContractError,
+        convert_legacy_scientific_draft,
+    )
     from backend.ingest.upload_tasks import markdown_path
     from backend.rag.database import async_session_factory
 
-    draft = _normalize_draft(draft)
+    try:
+        draft = _normalize_draft(convert_legacy_scientific_draft(draft))
+    except UploadContractError as exc:
+        raise _upload_error(400, exc.code, str(exc), field=exc.field) from exc
     paper_data, material_states = _validate_draft(draft)
     doi = normalize_doi(paper_data.get("doi"))
     md_path = markdown_path(task_id)
@@ -1338,6 +1424,12 @@ async def _create_pending_paper(
         return paper_id
     except IntegrityError as exc:
         raise _upload_error(409, "scientific_data_integrity_error", "科学数据不满足完整性约束") from exc
+    except Exception as exc:
+        from backend.ingest.property_modules import PropertyValidationError
+
+        if isinstance(exc, PropertyValidationError):
+            raise HTTPException(status_code=400, detail=exc.as_dict()) from exc
+        raise
 
 
 async def _submitted_paper_for_task(task_id: str) -> dict[str, Any] | None:

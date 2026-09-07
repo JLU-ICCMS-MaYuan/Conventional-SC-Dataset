@@ -21,6 +21,8 @@ from backend.services.classification_catalog import (
 from backend.services.space_groups import CRYSTAL_SYSTEMS
 from backend.services.structure_candidates import validate_structure_text
 from backend.ingest.property_modules import persist_property_modules
+from backend.ingest.upload_contracts import convert_legacy_state
+from backend.services.issue90_migration import assert_scientific_write_allowed
 
 
 RESERVED_PROPERTY_CODES = {
@@ -112,12 +114,45 @@ def _fingerprint(field_path: str, payload: dict[str, Any]) -> str:
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
-async def _get_or_create_superconductor(session, chemical_formula: str):
+def _property_modules_for_state(state_data: dict[str, Any]) -> list[dict[str, Any]]:
+    is_legacy = not isinstance(state_data.get("property_modules"), list)
+    normalized_state = convert_legacy_state(state_data)
+    property_modules = normalized_state.get("property_modules") or []
+    if not is_legacy:
+        return property_modules
+
+    calculation_data = state_data.get("calculation_context") if isinstance(state_data.get("calculation_context"), dict) else {}
+    experimental_data = state_data.get("experimental_context") if isinstance(state_data.get("experimental_context"), dict) else {}
+    for module in property_modules:
+        for item in module.get("records") or []:
+            if item.get("record_type") == "predicted_tc":
+                conditions = item.get("calculation_context") if isinstance(item.get("calculation_context"), dict) else calculation_data
+                payload = item.setdefault("payload", {})
+                payload["calculation_conditions"] = {key: value for key, value in conditions.items() if key not in {"lambda_ep", "omega_log_k", "mu_star", "evidence"}}
+                parameters = payload.setdefault("parameters", {})
+                for key, unit in (("lambda_ep", "1"), ("omega_log_k", "K"), ("mu_star", "1")):
+                    if conditions.get(key) is not None:
+                        parameters[key] = {"value_raw": str(conditions[key]), "value_number": _number(conditions[key]), "unit": unit}
+            elif item.get("record_type") == "measured_tc":
+                if item.get("method_code") == "experimental":
+                    item["method_code"] = "resistivity"
+                    item["definition_key"] = "record.superconductive_properties.measured_tc.resistivity"
+                item.setdefault("payload", {})["experimental_conditions"] = {key: value for key, value in experimental_data.items() if key != "evidence"}
+            elif item.get("record_type") == "property" and item.get("property_code") != "custom":
+                item["custom_property_key"] = item.get("custom_property_key") or item.get("record_key")
+                item["property_code"] = "custom"
+                item["definition_key"] = f"record.{module.get('module_code')}.custom"
+    return property_modules
+
+
+async def _get_or_create_superconductor(session, paper: models.Paper, chemical_formula: str):
     normalized, elements, composition, ratios = normalize_formula(chemical_formula)
     composition_key = build_composition_key(composition)
     result = await session.execute(
         select(models.Superconductor).where(
-            models.Superconductor.composition_key == composition_key
+            models.Superconductor.paper_id == paper.id,
+            models.Superconductor.paper_revision == paper.content_revision,
+            models.Superconductor.composition_key == composition_key,
         )
     )
     superconductor = result.scalar_one_or_none()
@@ -127,12 +162,16 @@ async def _get_or_create_superconductor(session, chemical_formula: str):
     system_key, elements_list = build_system_key(elements)
     result = await session.execute(
         select(models.ChemicalSystem).where(
-            models.ChemicalSystem.system_key == system_key
+            models.ChemicalSystem.paper_id == paper.id,
+            models.ChemicalSystem.paper_revision == paper.content_revision,
+            models.ChemicalSystem.system_key == system_key,
         )
     )
     system = result.scalar_one_or_none()
     if system is None:
         system = models.ChemicalSystem(
+            paper_id=paper.id,
+            paper_revision=paper.content_revision,
             system_key=system_key,
             elements_list=elements_list,
             element_count=len(elements_list),
@@ -141,6 +180,8 @@ async def _get_or_create_superconductor(session, chemical_formula: str):
         await session.flush()
 
     superconductor = models.Superconductor(
+        paper_id=paper.id,
+        paper_revision=paper.content_revision,
         chemical_system_id=system.id,
         chemical_formula=chemical_formula,
         formula_normalized=normalized,
@@ -215,6 +256,7 @@ async def persist_scientific_draft(
     draft: dict[str, Any],
 ) -> list[ScientificEvidenceTarget]:
     """Create the scientific entity graph and return evidence-link targets."""
+    await assert_scientific_write_allowed(session)
     targets: list[ScientificEvidenceTarget] = []
     paper_data = draft.get("paper") if isinstance(draft.get("paper"), dict) else {}
     superconductor_kind = paper_data.get("superconductor_kind") or "unknown"
@@ -224,7 +266,7 @@ async def persist_scientific_draft(
     candidates_by_state = _confirmed_candidates_by_state(draft)
     for state_index, state_data in enumerate(draft.get("material_states") or []):
         material = str(state_data.get("material") or "").strip()
-        superconductor = await _get_or_create_superconductor(session, material)
+        superconductor = await _get_or_create_superconductor(session, paper, material)
         dimensionality = str(state_data.get("material_dimensionality") or "unknown")
         if dimensionality not in MATERIAL_DIMENSIONALITIES:
             raise ValueError("材料维度无效")
@@ -238,6 +280,7 @@ async def persist_scientific_draft(
         if crystal_system not in CRYSTAL_SYSTEMS:
             crystal_system = "unknown"
         state = models.MaterialState(
+            state_key=str(state_data.get("state_key") or f"state-{state_index + 1}"),
             paper_id=paper.id,
             paper_revision=paper.content_revision,
             superconductor_id=superconductor.id,
@@ -347,146 +390,23 @@ async def persist_scientific_draft(
             if structure is None:
                 structure = candidate_structure
 
-        tc_items = [item for item in state_data.get("tc_results") or [] if isinstance(item, dict)]
-        calculation_data = state_data.get("calculation_context")
-        needs_calculation = isinstance(calculation_data, dict) or any(
-            (item.get("tc_method") or "unknown") != "experimental" for item in tc_items
+        property_modules = _property_modules_for_state(state_data)
+        records = await persist_property_modules(
+            session, paper_id=paper.id, paper_revision=paper.content_revision,
+            material_state_id=state.id, modules=property_modules,
+            deleted_record_keys=state_data.get("deleted_record_keys"),
+            deleted_module_keys=state_data.get("deleted_module_keys"),
         )
-        calculation = None
-        if needs_calculation:
-            calculation_data = calculation_data if isinstance(calculation_data, dict) else {}
-            calculation = await _create_calculation_context(
-                session, paper, state, structure, calculation_data
-            )
-            if isinstance(calculation_data.get("evidence"), dict):
-                targets.append(ScientificEvidenceTarget(
-                    f"{state_path}.calculation_context", calculation_data["evidence"]
-                ))
-
-        experimental_data = state_data.get("experimental_context")
-        needs_experiment = isinstance(experimental_data, dict) or any(
-            item.get("tc_method") == "experimental" for item in tc_items
-        )
-        experimental = None
-        if needs_experiment:
-            experimental_data = experimental_data if isinstance(experimental_data, dict) else {}
-            experimental = models.ExperimentalContext(
-                paper_id=paper.id,
-                paper_revision=paper.content_revision,
-                material_state_id=state.id,
-                structure_id=structure.id if structure is not None else None,
-                sample_label=experimental_data.get("sample_label"),
-                measurement_method=experimental_data.get("measurement_method"),
-                tc_criterion=experimental_data.get("tc_criterion") or "unknown",
-                applied_field_t=_number(experimental_data.get("applied_field_t")),
-                pressure_uncertainty_gpa=_number(experimental_data.get("pressure_uncertainty_gpa")),
-                parameters_json=experimental_data.get("parameters_json"),
-            )
-            session.add(experimental)
-            await session.flush()
-
-        for tc_index, item in enumerate(tc_items):
-            requested_kind = item.get("result_kind") or "theoretical"
-            value_raw = str(item.get("value_raw") or item.get("tc_value_k") or "").strip()
-            tc_method = item.get("tc_method") or (
-                "experimental" if requested_kind == "experimental" else "unknown"
-            )
-            result_kind = "experimental" if tc_method == "experimental" else "theoretical"
-            field_path = f"{state_path}.tc_results[{tc_index}]"
-            item_calculation = None
-            item_calculation_data = item.get("calculation_context")
-            if tc_method != "experimental" and isinstance(item_calculation_data, dict) and any(
-                _number(item_calculation_data.get(key)) is not None
-                for key in ("lambda_ep", "omega_log_k", "mu_star")
-            ):
-                item_calculation = await _create_calculation_context(
-                    session, paper, state, structure, item_calculation_data
-                )
-                if isinstance(item_calculation_data.get("evidence"), dict):
+        records_by_key = {record.record_key: record for record in records}
+        for module_index, module in enumerate(property_modules):
+            for record_index, item in enumerate(module.get("records") or []):
+                evidence = item.get("evidence")
+                entity = records_by_key.get(item.get("record_key"))
+                if entity is not None and isinstance(evidence, dict):
                     targets.append(ScientificEvidenceTarget(
-                        f"{field_path}.calculation_context", item_calculation_data["evidence"]
+                        f"{state_path}.property_modules[{module_index}].records[{record_index}]",
+                        evidence, "property_record", entity,
                     ))
-            calculation_context_id = None
-            if tc_method != "experimental":
-                context = item_calculation or calculation
-                calculation_context_id = context.id if context is not None else None
-            tc_result = models.TcResult(
-                paper_id=paper.id,
-                paper_revision=paper.content_revision,
-                material_state_id=state.id,
-                calculation_context_id=calculation_context_id,
-                experimental_context_id=experimental.id if result_kind == "experimental" and experimental else None,
-                result_kind=result_kind,
-                tc_method=tc_method,
-                tc_method_custom=(item.get("tc_method_custom") or None) if tc_method == "other" else None,
-                tc_value_k=_number(item.get("tc_value_k")),
-                tc_min_k=_number(item.get("tc_min_k")),
-                tc_max_k=_number(item.get("tc_max_k")),
-                uncertainty_k=_number(item.get("uncertainty_k")),
-                value_raw=value_raw,
-                unit_raw=str(item.get("unit_raw") or "K"),
-                source_locator=_source_locator(item.get("evidence")),
-                source_fingerprint=_fingerprint(field_path, item),
-                is_representative=False,
-            )
-            session.add(tc_result)
-            await session.flush()
-            if isinstance(item.get("evidence"), dict):
-                targets.append(ScientificEvidenceTarget(
-                    field_path, item["evidence"], "tc", tc_result
-                ))
-
-        for property_index, item in enumerate(state_data.get("properties") or []):
-            if not isinstance(item, dict):
-                continue
-            value_min = _number(item.get("value_min"))
-            value_max = _number(item.get("value_max"))
-            value_number = _number(item.get("value"))
-            value_raw = str(item.get("value_raw") or item.get("value") or "").strip()
-            value_kind = "range" if value_min is not None and value_max is not None else "number" if value_number is not None else "text"
-            definition = await _get_or_create_property_definition(
-                session, item, value_kind=value_kind
-            )
-            field_path = f"{state_path}.properties[{property_index}]"
-            prop = models.SuperconductorProperty(
-                paper_id=paper.id,
-                paper_revision=paper.content_revision,
-                material_state_id=state.id,
-                structure_id=structure.id if structure is not None else None,
-                calculation_context_id=calculation.id if calculation is not None else None,
-                property_definition_id=definition.id,
-                material_raw=material,
-                name_raw=str(item.get("name_raw") or item.get("name") or "").strip(),
-                value_raw=value_raw,
-                unit_raw=item.get("unit"),
-                value_number=value_number if value_kind == "number" else None,
-                value_min=value_min,
-                value_max=value_max,
-                canonical_unit=item.get("unit"),
-                condition_note=item.get("condition_note"),
-                source_fingerprint=_fingerprint(field_path, item),
-            )
-            session.add(prop)
-            await session.flush()
-            if isinstance(item.get("evidence"), dict):
-                targets.append(ScientificEvidenceTarget(
-                    field_path, item["evidence"], "property", prop
-                ))
-
-        # Issue #90 unified contract.  During the migration window old draft
-        # keys above remain readable, while clients sending property_modules
-        # are persisted through the new schema-driven path.
-        property_modules = state_data.get("property_modules")
-        if isinstance(property_modules, list):
-            await persist_property_modules(
-                session,
-                paper_id=paper.id,
-                paper_revision=paper.content_revision,
-                material_state_id=state.id,
-                modules=property_modules,
-                deleted_record_keys=state_data.get("deleted_record_keys"),
-                deleted_module_keys=state_data.get("deleted_module_keys"),
-            )
     return targets
 
 
@@ -508,5 +428,11 @@ def add_scientific_evidence_link(
     elif target.kind == "property":
         session.add(models.SuperconductorPropertyEvidence(
             superconductor_property_id=target.entity.id,
+            **common,
+        ))
+    elif target.kind == "property_record":
+        session.add(models.PropertyRecordEvidence(
+            record_id=target.entity.id,
+            field_path=target.field_path,
             **common,
         ))

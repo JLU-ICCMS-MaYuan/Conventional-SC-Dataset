@@ -14,32 +14,41 @@ Issue #90 新增 `property_modules`、`property_records` 和 `form_definitions`�
 审计事件。`property_record_evidences` 连接记录与当前论文 revision 的 Evidence，管理员提升自定义性质
 时另写来源快照和目标定义。
 
-迁移采用 Expand、Copy、Reconcile、Read switch、Write switch、Observe、Contract 阶段控制器；目标读取
-验收前保持科学写入停用，Contract 迁移默认拒绝删除旧表，只有显式确认后才可退役。
+`chemical_systems`、`superconductors`、`material_states`、`property_modules`、`property_records` 和
+Evidence 均归属于确定的论文 revision。同名材料不再跨论文共享主键，跨论文检索通过规范化学式、
+组成等字段聚合。
+
+迁移采用 Expand、Copy、Reconcile、Final sync、Read switch、Write switch、Observe、Contract 状态机。
+Copy 按源表、源 ID 和论文 revision 幂等记录映射与检查点；Final sync 覆盖迁移窗口内的新增、修改、
+删除和论文升版。每个阶段只有在逐项对账无未处理异常时才能前进，失败可从最近稳定检查点恢复。
+Read switch 验收前保持科学写入停用，Contract 默认拒绝删除旧表，只有显式设置
+`ISSUE90_CONTRACT_CONFIRMED=1` 才能进入最终退役。
 
 - Alembic 的 fresh 链可在全新空 MySQL 创建 21 张目标业务表；`0007` 建立论文 revision、
   File、Chunk、Evidence 和审核事件约束，`0008` 建立条件化科学数据模型。
 - SQLAlchemy `Base.metadata` 只包含目标表，不再把 `key_properties`、
   `superconductor_records` 或 `superconductors_structures` 纳入 fresh Schema。
-- `MaterialState` 表达论文当前 revision 中的材料状态；`StructureModel`、
-  `CalculationContext` 和 `ExperimentalContext` 分别表达结构、理论计算和实验测量上下文。
+- `MaterialState` 表达论文当前 revision 中的材料状态；`StructureModel` 与物性模块在状态下平行。
 - `MaterialState.reported_space_group_symbol/number` 保存论文报告但没有完整结构几何时的空间群事实；只有存在真实结构文本时才创建 `StructureModel`，不会为凑必填字段伪造 CIF/POSCAR。
 - `MaterialState` 不再包含 `phase_label`、材料家族外键或 `superconductor_kind`；空间群不属于分类树。Material family 是论文 revision 级多选分类，`Paper.superconductor_kind` 是论文 revision 级单选（`conventional`、`unconventional`、`unknown`），结构家族仍是材料状态级多选标签；三者在论文审核内确认。
-- `TcResult` 纵向保存每条 Tc；`PropertyDefinition` 和
-  `SuperconductorProperty` 保存 Tc 之外的普通物性，表名为
-  `superconductor_properties`，同时保留论文原文和可空规范值。
-- `TcResult.tc_method` 是 Tc 结果语义和上下文关联的权威字段。`experimental` 必须同时满足 `result_kind='experimental'`、`calculation_context_id IS NULL` 和非空 `experimental_context_id`；其他方法必须是理论结果、关联 `CalculationContext` 且不关联实验上下文。`ck_tc_results_context_kind` 在 MySQL 中强制该规则。
-- Alembic revision `experimental_tc_context` 会将历史 `tc_method='experimental'` 的错误计算上下文关联清空、修正其 `result_kind`，并只删除没有被任何 Tc 或普通物性引用的 `calculation_contexts`。迁移不会伪造缺失的 `experimental_context_id`，发现此类历史行会带 ID 失败。
+- `PropertyRecord` 统一保存 Tc、普通物性和计算参数。固定列保存 property identity、值、单位、方法和
+  代表标记，`payload_json` 保存记录自带的 `calculation_conditions`、`experimental_conditions`、
+  参数与定义允许的扩展字段。
+- 预测 Tc 和测量 Tc 由记录类型、方法和 Conditions 类型共同约束；每个“论文 revision +
+  MaterialState + Tc 记录类型 + 方法”最多一条代表记录。
 - 科学子实体没有独立审核状态。论文一次审核覆盖当前 revision 的 File、Chunk、Evidence、
   结构、Tc 和普通物性；只有 `approved_revision = content_revision` 才具备公开资格。
-- Go 模型已经映射目标表；`KeyProperty` 仅保留为旧 Handler 的临时编译别名，实际表名仍是
-  `superconductor_properties`。
-- 两个现有运行 MySQL 保持原状，仍使用旧表和旧列。fresh 迁移有非空业务库 guard，不会
-  自动读取、回填、转换或删除现有数据。
+- Python 与 Go 模型已经映射目标表；上传、管理员重写、公开详情、搜索、统计和导出正常路径均使用
+  `PropertyRecord`。旧载荷只在输入边界单向转换，旧科学表不再作为正常读取或写入回退。
+- `run_migrations.py` 默认只升级到 `issue90_copy_v1`；未经显式 Contract 确认，不会删除旧科学表。
+- 完整迁移状态机已在隔离真实 MySQL 上验证，包括共享材料拆分、幂等恢复、增量同步、读写切换和
+  Contract 后删除旧表的访问回归。此验证不表示生产数据库已经部署迁移。
 
 ## 工作流程
 
-目标模型由 Alembic、SQLAlchemy 和 GORM 共同描述。论文上传的 Python 提取、草稿编辑和提交事务已经切换到目标表；Go 搜索、RAG/Qdrant、图表、导入导出和公开网页仍未整体切换。
+目标模型由 Alembic、SQLAlchemy 和 GORM 共同描述。Python 上传与管理员重写只写目标契约；Go 详情、
+搜索、统计、管理员读取、删除和 MaterialState 导出只读目标科学表。前端上传、管理编辑和详情统一消费
+`property_modules[].records[]`，不再把 `key_properties` 或旧上下文表作为第二套权威。
 
 ## 化学体系与具体材料的建模边界
 
@@ -65,7 +74,7 @@ Issue #90 新增 `property_modules`、`property_records` 和 `form_definitions`�
 
 五张论文相关表表达不同粒度和生命周期，不属于应直接合并的重复表：
 
-| 表 | fresh 目标职责 | 生命周期 |
+| 表 | 当前职责 | 生命周期 |
 | --- | --- | --- |
 | `papers` | 出版信息、当前内容 revision 和一次整篇审核状态 | 稳定主实体 |
 | `paper_files` | 当前 revision 的正文、补充材料或附件元数据 | 当前代文件清单 |
@@ -81,7 +90,7 @@ flowchart LR
     P --> PRE[paper_history_events]
 ```
 
-fresh 目标 Schema 已落实以下边界：
+当前目标 Schema 已落实以下边界：
 
 - `paper_files.stored_path` 是唯一文件路径来源，目标 `papers` 不含 `source_file_path`。
 - 每个文件的 `chunk_index` 独立编号；Evidence 通过必填 `paper_chunk_id` 直接引用同论文、
@@ -91,7 +100,8 @@ fresh 目标 Schema 已落实以下边界：
 - `paper_history_events.paper_id` 单列外键指向论文并使用 `ON DELETE RESTRICT`；其 `paper_id, paper_revision` 索引在表名演进时持续保留，以满足 MySQL 外键索引要求。
   `paper_revision` 是历史快照，不与论文当前 revision 建组合外键，因此旧审核事件不阻止升版。
 
-这些约束已经在隔离 fresh MySQL 验证，但上传、重分块、Qdrant 和公开查询业务流程尚未切换。
+这些约束已经在隔离 fresh MySQL 验证。论文文件重新分块与 Qdrant 投影仍属于各自业务流程边界，
+不改变 #90 已完成的关系型物性契约切换。
 
 ## 论文叙述字段的语言约定
 
@@ -102,7 +112,7 @@ fresh 目标 Schema 已落实以下边界：
 - 当前 Docker 部署要求 `DATABASE_URL` 指向 MySQL；Python 仍保留 SQLite fallback 逻辑，但 Go 服务要求可解析的 MySQL DSN。
 - GORM 与 SQLAlchemy 两套模型需要保持字段一致，否则会出现接口可读写范围不一致。
 - RAG 向量数据位于 Qdrant，Neo4j 图数据由同步工具或 `graph.json` 快照支撑，不属于普通关系表字段。
-- fresh 目标模型是新空库的 Schema 事实；现有运行库仍以实测旧 Schema 为事实来源。
+- 目标模型同时支持 fresh 建库和受控历史迁移；生产部署仍须按阶段门禁执行，不以本地验证替代部署确认。
 - 运行数据库的逐表字段和关系以 [运行中 MySQL 表目录](mysql-schema-catalog.md) 的实测盘点为准。
 - 可推导字段采用“上传时生成、入库前人工复核、读取时直接使用”的策略；不以运行时重复计算替代持久化字段。
 - 一致性校验用于发现和提示差异，不自动覆盖人工确认的数据。
@@ -143,15 +153,13 @@ Material family 属于论文当前 revision，通过 `paper_material_families(pa
   将 Superconductor type 提升为论文 revision 级单选字段，保留状态级 More type labels 和条件化科学数据。
 - [Feature #84：实验 Tc 的条件字段与计算上下文一致性](../../specs/84-experimental-tc-fields/spec.md)
   已将 Tc 方法确定为字段和上下文关联的唯一开关，并增加应用层与 MySQL 的双重约束。
+- [Feature #90：MaterialState 模块化物性与动态表单](../../specs/90-unified-superconductor-properties/spec.md)
+  已完成统一物性记录、动态定义、跨入口切换、分阶段历史迁移和旧科学表 Contract 收敛。
 
 ## 已知问题
 
-- 两个现有运行数据库尚未部署 fresh Schema，也不在本次范围内迁移；其
-  `key_properties`、`superconductors_structures` 和历史数据继续保持原状。
-- 搜索、RAG/Qdrant、图表、导入导出和部分网页仍可能依赖旧表或旧字段，不能在这些调用方
-  完成切换前把 fresh Schema 部署到运行库。
-- 重新分块的单代事务和 Qdrant 删除后重建仅形成数据库契约，业务编排尚未实现。
-- 普通物性网页展示“论文原文优先、规范值补充”的契约尚未切换到前端。
-- `chemical_systems.elements_list` 与 `superconductors.elements_list` 存在有意保留的查询冗余；后续需要补充覆盖非标准化学式的人工复核和差异报告机制，但不通过合并表或删除字段解决。
-- 现有数据库的未来迁移、调用方切换和部署必须另行设计并验收，不能直接运行本次仅支持空业务库
-  的目标 revision。
+- 生产数据库是否已执行 #90 迁移不属于代码仓库可验证事实；部署时必须依次完成 Copy、Reconcile、
+  Final sync、读写切换和观察，并在显式确认后执行 Contract。
+- 重新分块的单代事务和 Qdrant 删除后重建属于论文/RAG 生命周期，不由 #90 的关系型物性迁移代替。
+- `chemical_systems.elements_list` 与 `superconductors.elements_list` 存在有意保留的查询冗余；非标准化学式
+  仍需人工复核，但不通过合并表或删除字段解决。

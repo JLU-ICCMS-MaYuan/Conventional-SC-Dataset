@@ -188,9 +188,8 @@ func CommunityContributions(c *gin.Context) {
 
 const defaultTcField = "experimental_tc"
 
-// chartTcColumns 把对外的 tc_field 契约映射到条件化模型的 tc_results.tc_method 取值。
-// 旧模型每种 Tc 是 superconductor_records 上的一列，故字段名映射到列名；该表迁移后已删除，
-// Tc 现在是 tc_results 的行，方法存在 tc_method 里，所以映射目标从「列」变成「行过滤值」。
+// chartTcColumns 把对外 tc_field 映射到统一记录的方法代码。
+// experimental_tc 以 record_type=measured_tc 过滤，映射值只用于保持现有函数契约。
 // 对外白名单与默认值保持不变，前端偏好无需迁移。
 var chartTcColumns = map[string]string{
 	"experimental_tc":           "experimental",
@@ -200,7 +199,7 @@ var chartTcColumns = map[string]string{
 	"mcmillan_tc":               "mcmillan",
 }
 
-// resolveChartTcField 返回 (对外字段名, tc_results.tc_method 取值, 是否合法)。
+// resolveChartTcField 返回（对外字段名、目标方法代码、是否合法）。
 func resolveChartTcField(value string) (string, string, bool) {
 	field := strings.TrimSpace(value)
 	if field == "" {
@@ -214,22 +213,30 @@ func resolveChartTcField(value string) (string, string, bool) {
 }
 
 // 图表点的公共可见性边界：论文审核通过，且数据属于已批准的那一版内容。
-// tc_results/material_states 按 (paper_id, paper_revision) 绑定版本，不加版本条件会把
+// property_records/material_states 按 (paper_id, paper_revision) 绑定版本，不加版本条件会把
 // 审核后又被编辑出的新版本数据混进公共图表。
 const chartApprovedJoin = `
-	FROM tc_results t
+	FROM property_records t
+	JOIN property_modules pm ON pm.id = t.module_id
 	JOIN material_states ms ON ms.id = t.material_state_id
 	JOIN superconductors sc ON sc.id = ms.superconductor_id
 	JOIN papers p ON p.id = t.paper_id
 		AND p.review_status = 'approved'
-		AND t.paper_revision = p.content_revision`
+		AND t.paper_revision = p.content_revision
+		AND ms.paper_revision = p.content_revision`
 
-const chartFamilyIDsExpr = `(SELECT GROUP_CONCAT(pmf.material_family_id ORDER BY pmf.material_family_id)
-	FROM paper_material_families pmf
-	WHERE pmf.paper_id = p.id AND pmf.paper_revision = p.content_revision)`
+func chartFamilyIDsExpr() string {
+	if database.DB != nil && database.DB.Dialector.Name() == "sqlite" {
+		return `(SELECT GROUP_CONCAT(pmf.material_family_id) FROM paper_material_families pmf
+			WHERE pmf.paper_id = p.id AND pmf.paper_revision = p.content_revision)`
+	}
+	return `(SELECT GROUP_CONCAT(pmf.material_family_id ORDER BY pmf.material_family_id)
+		FROM paper_material_families pmf
+		WHERE pmf.paper_id = p.id AND pmf.paper_revision = p.content_revision)`
+}
 
 // 只有区间没有单值的 Tc 条目取区间中点，否则这些数据永远上不了图。
-const chartTcValueExpr = `CAST(COALESCE(t.tc_value_k, (t.tc_min_k + t.tc_max_k) / 2) AS DOUBLE)`
+const chartTcValueExpr = `CAST(COALESCE(t.value_number, (t.value_min + t.value_max) / 2) AS DOUBLE)`
 
 func chartFamilyIDs(value *string) []uint {
 	result := make([]uint, 0)
@@ -246,7 +253,14 @@ func chartFamilyIDs(value *string) []uint {
 }
 
 func chartCacheKey(chart, field string) string {
-	return fmt.Sprintf("chart:approved:%s:%s", chart, field)
+	return fmt.Sprintf("chart:issue90:approved:%s:%s", chart, field)
+}
+
+func chartTcPredicate(tcField, method string) (string, []any) {
+	if tcField == "experimental_tc" {
+		return "t.record_type = ?", []any{"measured_tc"}
+	}
+	return "t.record_type = ? AND t.method_code = ?", []any{"predicted_tc", method}
 }
 
 // ═══════════════════════════════════════════════
@@ -279,18 +293,22 @@ func TcPressureChart(c *gin.Context) {
 		Year      int     `gorm:"column:year"`
 	}
 	var rows []row
+	predicate, args := chartTcPredicate(tcField, tcMethod)
 	query := fmt.Sprintf(`
 		SELECT sc.chemical_formula AS material,
 			%s AS y, CAST(ms.pressure_value_gpa AS DOUBLE) AS x,
 			%s AS family_ids,
-			t.result_kind AS type,
+				t.record_type AS type,
 			t.paper_id AS paper_id, COALESCE(p.doi,'') AS doi, COALESCE(p.year,0) AS year
 		%s
-		WHERE t.tc_method = ?
-			AND %s IS NOT NULL
-			AND ms.pressure_value_gpa IS NOT NULL
-	`, chartTcValueExpr, chartFamilyIDsExpr, chartApprovedJoin, chartTcValueExpr)
-	if err := database.DB.Raw(query, tcMethod).Scan(&rows).Error; err != nil {
+			WHERE t.property_code = 'tc'
+				AND pm.module_code = 'superconductive_properties'
+				AND t.is_representative = TRUE
+				AND %s
+				AND %s IS NOT NULL
+				AND ms.pressure_value_gpa IS NOT NULL
+		`, chartTcValueExpr, chartFamilyIDsExpr(), chartApprovedJoin, predicate, chartTcValueExpr)
+	if err := database.DB.Raw(query, args...).Scan(&rows).Error; err != nil {
 		// 静默返回空数组会把 schema 漂移伪装成「暂无数据」，#30 的旧表查询正是这样
 		// 在条件化模型迁移后无声失效的。这里必须让错误浮出来，且不缓存失败结果。
 		log.Printf("Tc-Pressure 图表查询失败 (tc_field=%s): %v", tcField, err)
@@ -317,10 +335,9 @@ func TcPressureChart(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// chartResultType 把 tc_results.result_kind 归一到图表的实验/计算两分。
-// 旧实现依据 superconductor_records.article_type='e'，该列已随表删除。
-func chartResultType(resultKind string) string {
-	if resultKind == "experimental" {
+// chartResultType 把统一记录类型归一到图表的实验/计算两分。
+func chartResultType(recordType string) string {
+	if recordType == "measured_tc" {
 		return "experimental"
 	}
 	return "theoretical"
@@ -352,18 +369,22 @@ func TcYearChart(c *gin.Context) {
 		Pressure  *float64 `gorm:"column:pressure_gpa"`
 	}
 	var rows []row
+	predicate, args := chartTcPredicate(tcField, tcMethod)
 	query := fmt.Sprintf(`
 		SELECT p.year AS x, %s AS y,
-			t.result_kind AS type,
+				t.record_type AS type,
 			%s AS family_ids,
 			sc.chemical_formula AS formula, COALESCE(p.doi,'') AS doi,
 			t.paper_id AS paper_id, CAST(ms.pressure_value_gpa AS DOUBLE) AS pressure_gpa
 		%s
-		WHERE t.tc_method = ?
-			AND %s IS NOT NULL
-			AND p.year IS NOT NULL
-	`, chartTcValueExpr, chartFamilyIDsExpr, chartApprovedJoin, chartTcValueExpr)
-	if err := database.DB.Raw(query, tcMethod).Scan(&rows).Error; err != nil {
+			WHERE t.property_code = 'tc'
+				AND pm.module_code = 'superconductive_properties'
+				AND t.is_representative = TRUE
+				AND %s
+				AND %s IS NOT NULL
+				AND p.year IS NOT NULL
+		`, chartTcValueExpr, chartFamilyIDsExpr(), chartApprovedJoin, predicate, chartTcValueExpr)
+	if err := database.DB.Raw(query, args...).Scan(&rows).Error; err != nil {
 		log.Printf("Tc-Year 图表查询失败 (tc_field=%s): %v", tcField, err)
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "图表数据暂不可用"})
 		return

@@ -10,6 +10,7 @@ from sqlalchemy import create_engine, inspect
 
 
 IMPORTED_SCHEMA_BASELINE = "b95420be551f"
+ISSUE90_SAFE_HEAD = "issue90_copy_v1"
 
 
 def main() -> None:
@@ -33,7 +34,8 @@ def main() -> None:
     if "papers" in tables and not has_version:
         print(f"检测到已导入数据库，标记迁移基线 {IMPORTED_SCHEMA_BASELINE}")
         command.stamp(config, IMPORTED_SCHEMA_BASELINE)
-    command.upgrade(config, "head")
+    target = "head" if os.environ.get("ISSUE90_CONTRACT_CONFIRMED") == "1" else ISSUE90_SAFE_HEAD
+    command.upgrade(config, target)
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ import UploadTaskEditor from '../../frontend/src/components/UploadTaskEditor'
 import { api } from '../../frontend/src/lib/api'
 import type { ApiError } from '../../frontend/src/lib/api'
 import type { DraftMaterialState, UploadDraft } from '../../frontend/src/lib/paperProcessing'
+import type { PropertyModuleDraft, PropertyRecordDraft } from '../../frontend/src/lib/propertyModules'
 import zhUpload from '../../frontend/src/i18n/zh/upload'
 import enUpload from '../../frontend/src/i18n/en/upload'
 
@@ -43,9 +44,27 @@ const makeState = (overrides: Partial<DraftMaterialState> = {}): DraftMaterialSt
   structure_families: [],
   element_count: 2,
   material_dimensionality: 'unknown',
-  tc_results: [],
-  properties: [],
+  property_modules: [],
+  deleted_record_keys: [],
+  deleted_module_keys: [],
+  schema_version: 2,
   ...overrides,
+})
+
+const moduleWith = (moduleCode: 'superconductive_properties' | 'electronic_properties', records: PropertyRecordDraft[] = []): PropertyModuleDraft => ({
+  module_key: `module-${moduleCode}`,
+  module_code: moduleCode,
+  definition_key: `module.${moduleCode}`,
+  definition_version: 1,
+  display_order: 0,
+  records,
+})
+
+const customRecord = (overrides: Partial<PropertyRecordDraft> = {}): PropertyRecordDraft => ({
+  record_key: 'record-energy', module_code: 'electronic_properties', record_type: 'property',
+  property_code: 'custom', definition_key: 'record.electronic_properties.custom', definition_version: 1,
+  name_raw: 'Energy Above Hull', value_kind: 'number', value_raw: '0', value_number: 0,
+  unit_raw: 'eV/atom', payload: {}, ...overrides,
 })
 
 const makeDraft = (states: DraftMaterialState[]) => ({
@@ -221,22 +240,19 @@ describe('上传校对页布局与材料状态折叠', () => {
 
 describe('超导类型与条件化 Tc 字段', () => {
   it('每条 Tc 方法独立控制计算字段，论文级超导类型不再影响字段集', async () => {
-    render(<UploadTaskEditor taskId={'d'.repeat(32)} onSubmitted={vi.fn()} draftOverride={makeDraft([makeState(), makeState({ material: 'H3S' })])} />)
+    render(<UploadTaskEditor taskId={'d'.repeat(32)} onSubmitted={vi.fn()} draftOverride={makeDraft([
+      makeState({ property_modules: [moduleWith('superconductive_properties')] }),
+      makeState({ material: 'H3S', property_modules: [moduleWith('superconductive_properties')] }),
+    ])} />)
 
-    const addTcButtons = await screen.findAllByRole('button', { name: '添加 Tc' })
-    fireEvent.click(addTcButtons[0])
-    fireEvent.click(addTcButtons[1])
-    expect(await screen.findAllByLabelText('Tc 数值 (K)')).toHaveLength(2)
-    expect(screen.queryByLabelText('电声耦合强度 λ')).not.toBeInTheDocument()
-
-    fireEvent.mouseDown(screen.getAllByRole('combobox', { name: 'Tc 方法' })[0])
-    fireEvent.click(await screen.findByRole('option', { name: 'McMillan 方法' }))
+    fireEvent.mouseDown((await screen.findAllByRole('combobox', { name: '添加记录' }))[0])
+    fireEvent.click(await screen.findByRole('option', { name: /预测 Tc · mcmillan/ }))
     expect(await screen.findAllByLabelText('电声耦合强度 λ')).toHaveLength(1)
-    expect(screen.getAllByLabelText('对数声子频率 ωlog (K)')).toHaveLength(1)
-    expect(screen.getAllByLabelText('库伦屏蔽常数 μ*')).toHaveLength(1)
+    expect(screen.getAllByLabelText('ωlog (K)')).toHaveLength(1)
+    expect(screen.getAllByLabelText('μ*')).toHaveLength(1)
 
-    fireEvent.mouseDown(screen.getAllByRole('combobox', { name: 'Tc 方法' })[1])
-    fireEvent.click(await screen.findByRole('option', { name: '实验测量' }))
+    fireEvent.mouseDown(screen.getAllByRole('combobox', { name: '添加记录' })[1])
+    fireEvent.click(await screen.findByRole('option', { name: /测量 Tc · resistivity/ }))
     expect(screen.getAllByLabelText('电声耦合强度 λ')).toHaveLength(1)
 
     fireEvent.mouseDown(screen.getByRole('combobox', { name: '超导类型' }))
@@ -244,31 +260,28 @@ describe('超导类型与条件化 Tc 字段', () => {
     expect(screen.getAllByLabelText('电声耦合强度 λ')).toHaveLength(1)
   })
 
-  it('非常规类型添加 Tc 仅含数值框，且不再显示状态级 λ/ωlog 输入框', async () => {
-    const draft = makeDraft([makeState()])
+  it('非常规类型添加测量 Tc 不生成计算参数字段', async () => {
+    const draft = makeDraft([makeState({ property_modules: [moduleWith('superconductive_properties')] })])
     draft.paper.superconductor_kind = 'unconventional'
     render(<UploadTaskEditor taskId={'e'.repeat(32)} onSubmitted={vi.fn()} draftOverride={draft} />)
 
-    fireEvent.click(await screen.findByRole('button', { name: '添加 Tc' }))
-    expect(await screen.findByLabelText('Tc 数值 (K)')).toBeInTheDocument()
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: '添加记录' }))
+    fireEvent.click(await screen.findByRole('option', { name: /测量 Tc · resistivity/ }))
+    expect(await screen.findByLabelText('数值')).toBeInTheDocument()
     expect(screen.queryByLabelText('电声耦合强度 λ')).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('对数声子频率 ωlog (K)')).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('库伦屏蔽常数 μ*')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('ωlog (K)')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('μ*')).not.toBeInTheDocument()
   })
 
-  it('新增 Tc 只有选中非实验方法后才创建空计算上下文，不复制状态级旧值', async () => {
-    const draft = makeDraft([makeState({
-      calculation_context: { phonon_nuclear_treatment: 'unknown', lambda_ep: 1.2, omega_log_k: 210, mu_star: 0.1 },
-    })])
+  it('新增预测 Tc 按定义创建空参数，不从其他字段复制旧值', async () => {
+    const draft = makeDraft([makeState({ property_modules: [moduleWith('superconductive_properties')] })])
     render(<UploadTaskEditor taskId={'f'.repeat(32)} onSubmitted={vi.fn()} draftOverride={draft} />)
 
-    fireEvent.click(await screen.findByRole('button', { name: '添加 Tc' }))
-    expect(screen.queryByLabelText('电声耦合强度 λ')).not.toBeInTheDocument()
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Tc 方法' }))
-    fireEvent.click(await screen.findByRole('option', { name: 'McMillan 方法' }))
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: '添加记录' }))
+    fireEvent.click(await screen.findByRole('option', { name: /预测 Tc · mcmillan/ }))
     expect(await screen.findByLabelText('电声耦合强度 λ')).toHaveValue(null)
-    expect(screen.getByLabelText('对数声子频率 ωlog (K)')).toHaveValue(null)
-    expect(screen.getByLabelText('库伦屏蔽常数 μ*')).toHaveValue(null)
+    expect(screen.getByLabelText('ωlog (K)')).toHaveValue(null)
+    expect(screen.getByLabelText('μ*')).toHaveValue(null)
   })
 
   it('论文级超导类型下拉含完整单选值域', async () => {
@@ -299,7 +312,7 @@ describe('空间群标准表自动补全', () => {
 })
 
 describe('文案、类型标签与模块顺序', () => {
-  it('显示压强文案与新类型标签，无主结构家族字段，结构附件渲染在 Tc 与普通物性之后', async () => {
+  it('显示压强文案与新类型标签，无主结构家族字段，结构附件渲染在物性模块之后', async () => {
     render(<UploadTaskEditor taskId={'1'.repeat(32)} onSubmitted={vi.fn()} draftOverride={makeDraft([
       makeState(),
       makeState({
@@ -313,37 +326,35 @@ describe('文案、类型标签与模块顺序', () => {
     expect(screen.queryByLabelText('主结构家族')).not.toBeInTheDocument()
     expect(screen.getAllByLabelText('更多类型标签（可以填写不止一个类型）')).toHaveLength(2)
 
-    const tcHeadings = screen.getAllByText('临界温度 Tc')
-    const propertiesHeadings = screen.getAllByText('其他普通物性')
+    const moduleSections = screen.getAllByTestId(/property-modules-/)
     const panels = screen.getAllByTestId('structure-candidate-panel')
     expect(
-      tcHeadings[0].compareDocumentPosition(panels[0]) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy()
-    expect(
-      propertiesHeadings[0].compareDocumentPosition(panels[0]) & Node.DOCUMENT_POSITION_FOLLOWING,
+      moduleSections[0].compareDocumentPosition(panels[0]) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
   })
 })
 
-describe('energy above hull 预置物性', () => {
-  it('点击预置按钮生成空值条目且重复添加被禁用', async () => {
-    render(<UploadTaskEditor taskId={'2'.repeat(32)} onSubmitted={vi.fn()} draftOverride={makeDraft([makeState()])} />)
-
-    const addButton = await screen.findByRole('button', { name: 'energy above hull' })
-    expect(addButton).toBeEnabled()
-
-    fireEvent.click(addButton)
-    expect(screen.getByDisplayValue('energy above hull')).toBeInTheDocument()
-    expect(screen.getByDisplayValue('eV/atom')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'energy above hull' })).toBeDisabled()
-  })
-
-  it('已存在同名条目（忽略大小写）时按钮禁用', async () => {
-    render(<UploadTaskEditor taskId={'3'.repeat(32)} onSubmitted={vi.fn()} draftOverride={makeDraft([
-      makeState({ properties: [{ name: 'Energy Above Hull', name_raw: 'Energy Above Hull', value_raw: '0', unit: 'eV/atom' }] }),
+describe('energy above hull 统一物性记录', () => {
+  it('通过电子性质模块新增自定义记录', async () => {
+    render(<UploadTaskEditor taskId={'2'.repeat(32)} onSubmitted={vi.fn()} draftOverride={makeDraft([
+      makeState({ property_modules: [moduleWith('electronic_properties')] }),
     ])} />)
 
-    expect(await screen.findByRole('button', { name: 'energy above hull' })).toBeDisabled()
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: '添加记录' }))
+    fireEvent.click(await screen.findByRole('option', { name: /自定义性质/ }))
+    fireEvent.change(await screen.findByLabelText('名称'), { target: { value: 'energy above hull' } })
+    fireEvent.change(screen.getByLabelText('单位'), { target: { value: 'eV/atom' } })
+    expect(screen.getByDisplayValue('energy above hull')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('eV/atom')).toBeInTheDocument()
+  })
+
+  it('已存在同名目标记录时直接回填，不再提供旧预置按钮', async () => {
+    render(<UploadTaskEditor taskId={'3'.repeat(32)} onSubmitted={vi.fn()} draftOverride={makeDraft([
+      makeState({ property_modules: [moduleWith('electronic_properties', [customRecord()])] }),
+    ])} />)
+
+    expect(await screen.findByDisplayValue('Energy Above Hull')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'energy above hull' })).not.toBeInTheDocument()
   })
 })
 

@@ -14,14 +14,15 @@ import json
 import re
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import func
 
 from backend.models import (
     ChemicalSystem,
-    KeyProperty,
+    MaterialState,
     Paper,
+    PropertyRecord,
     Superconductor,
 )
 
@@ -50,13 +51,9 @@ async def search_by_formula(
 
     返回该超导体的所有物性记录（含 paper 信息）。
     """
-    from sqlalchemy.orm import joinedload
-
-    # 先找 superconductor
     r = await session.execute(
         select(Superconductor)
         .where(Superconductor.chemical_formula.ilike(formula))
-        .options(joinedload(Superconductor.key_properties).joinedload(KeyProperty.paper))
     )
     superconductors = r.unique().scalars().all()
 
@@ -66,23 +63,29 @@ async def search_by_formula(
         r = await session.execute(
             select(Superconductor)
             .where(Superconductor.formula_normalized.ilike(normalized))
-            .options(joinedload(Superconductor.key_properties).joinedload(KeyProperty.paper))
         )
         superconductors = r.unique().scalars().all()
 
     result = []
     for sc in superconductors:
-        props = []
-        for kp in sc.key_properties:
-            if kp.paper and kp.paper.review_status == "approved":
-                props.append(_format_property(kp))
+        rows = (await session.execute(
+            select(PropertyRecord, MaterialState, Paper)
+            .join(MaterialState, MaterialState.id == PropertyRecord.material_state_id)
+            .join(Paper, and_(Paper.id == PropertyRecord.paper_id, Paper.content_revision == PropertyRecord.paper_revision))
+            .where(MaterialState.superconductor_id == sc.id, Paper.review_status == "approved")
+        )).all()
+        props = [_format_record(record, state, paper, sc) for record, state, paper in rows]
         result.append({
             "type": "superconductor",
             "id": sc.id,
             "chemical_formula": sc.chemical_formula,
             "formula_normalized": sc.formula_normalized,
             "display_name": sc.display_name,
-            "composition": json.loads(sc.composition) if sc.composition else {},
+            "composition": (
+                json.loads(sc.composition)
+                if isinstance(sc.composition, str)
+                else sc.composition or {}
+            ),
             "element_ratio": json.loads(sc.element_ratio) if sc.element_ratio else {},
             "properties": props,
         })
@@ -216,17 +219,14 @@ async def get_superconductor_records(
     superconductor_id: int,
 ) -> list[dict]:
     """获取某个超导体的所有物性记录。"""
-    from sqlalchemy.orm import joinedload
-
     r = await session.execute(
-        select(KeyProperty)
-        .where(KeyProperty.superconductor_id == superconductor_id)
-        .options(joinedload(KeyProperty.paper))
+        select(PropertyRecord, MaterialState, Paper, Superconductor)
+        .join(MaterialState, MaterialState.id == PropertyRecord.material_state_id)
+        .join(Superconductor, Superconductor.id == MaterialState.superconductor_id)
+        .join(Paper, and_(Paper.id == PropertyRecord.paper_id, Paper.content_revision == PropertyRecord.paper_revision))
+        .where(MaterialState.superconductor_id == superconductor_id, Paper.review_status == "approved")
     )
-    props = r.scalars().all()
-    # 只返回已审核论文的记录
-    props = [kp for kp in props if kp.paper and kp.paper.review_status == "approved"]
-    return [_format_property(kp) for kp in props]
+    return [_format_record(record, state, paper, material) for record, state, paper, material in r.all()]
 
 
 async def get_paper_detail(session: AsyncSession, paper_id: int) -> dict | None:
@@ -239,9 +239,9 @@ async def get_paper_detail(session: AsyncSession, paper_id: int) -> dict | None:
     if not paper:
         return None
     record_count = await session.scalar(
-        select(func.count(KeyProperty.id)).where(
-            KeyProperty.paper_id == paper.id,
-            KeyProperty.paper_revision == paper.content_revision,
+        select(func.count(PropertyRecord.id)).where(
+            PropertyRecord.paper_id == paper.id,
+            PropertyRecord.paper_revision == paper.content_revision,
         )
     )
 
@@ -260,32 +260,24 @@ async def get_paper_detail(session: AsyncSession, paper_id: int) -> dict | None:
     }
 
 
-def _format_property(kp: KeyProperty) -> dict:
-    """物性记录 → 供 LLM 上下文/前端展示的字典（含规范名中文标签与范围值）"""
+def _format_record(record: PropertyRecord, state: MaterialState, paper: Paper, material: Superconductor) -> dict:
+    """统一记录转为搜索/RAG 使用的稳定投影。"""
     from backend.ingest.prop_names import PROP_LABELS
+    value = record.value_number
+    if value is None and record.value_min is not None and record.value_max is not None:
+        value = (record.value_min + record.value_max) / 2
     return {
-        "id": kp.id,
-        "superconductor_id": kp.superconductor_id,
-        "paper_id": kp.paper_id,
-        "material": kp.material,
-        "name": kp.name,
-        "label": PROP_LABELS.get(kp.name, kp.name),
-        "name_raw": kp.name_raw,
-        "name_note": kp.name_note,
-        "value_min": kp.value_min,
-        "value_max": kp.value_max,
-        "value_raw": kp.value_raw,
-        "unit": kp.unit,
-        "pressure_gpa": kp.pressure_gpa,
-        "temperature_k": kp.temperature_k,
-        "condition_note": kp.condition_note,
-        "is_primary": kp.is_primary,
-        "superconductor_type": kp.superconductor_type,
-        "article_type": kp.article_type,
-        "source_label": kp.source_label,
-        "paper_doi": kp.paper.doi if kp.paper else None,
-        "paper_title": kp.paper.title if kp.paper else None,
-        "paper_year": kp.paper.year if kp.paper else None,
+        "id": record.id, "record_key": record.record_key,
+        "superconductor_id": material.id, "paper_id": record.paper_id,
+        "material": material.chemical_formula, "name": record.property_code,
+        "label": PROP_LABELS.get(record.property_code, record.name_raw), "name_raw": record.name_raw,
+        "value_min": record.value_min, "value_max": record.value_max,
+        "value": value, "value_raw": record.value_raw, "unit": record.unit_raw,
+        "pressure_gpa": state.pressure_value_gpa, "temperature_k": state.temperature_value_k,
+        "condition_note": None, "is_primary": record.is_representative,
+        "superconductor_type": state.state_kind, "article_type": paper.paper_type,
+        "source_label": "SC-Wiki", "payload": record.payload_json,
+        "paper_doi": paper.doi, "paper_title": paper.title, "paper_year": paper.year,
     }
 
 

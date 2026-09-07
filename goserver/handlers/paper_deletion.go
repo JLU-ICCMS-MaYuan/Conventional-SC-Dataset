@@ -52,29 +52,39 @@ func cascadeDeleteInDB(tx *gorm.DB, paperID uint) error {
 
 	// 按 paper_id 直接删除的表，严格按依赖逆序排列。
 	steps := []struct {
-		table string
-		model any
+		table    string
+		model    any
+		optional bool
 	}{
 		// 1. 证据连接表：引用 tc_results / structure_models / paper_evidences
-		{"tc_result_evidences", &models.TcResultEvidence{}},
-		{"structure_model_evidences", &models.StructureModelEvidence{}},
-		{"superconductor_property_evidences", &models.SuperconductorPropertyEvidence{}},
+		{"property_record_evidences", &models.PropertyRecordEvidence{}, false},
+		{"tc_result_evidences", &models.TcResultEvidence{}, true},
+		{"structure_model_evidences", &models.StructureModelEvidence{}, false},
+		{"superconductor_property_evidences", &models.SuperconductorPropertyEvidence{}, true},
 
-		// 2. 引用 contexts 与 material_states 的叶子业务表
-		{"tc_results", &models.TcResult{}},
-		{"superconductor_properties", &models.KeyProperty{}},
+		// 2. 统一记录的审计事件和记录必须先于模块删除。
+		{"property_record_definition_events", &models.PropertyRecordDefinitionEvent{}, false},
+		{"property_records", &models.PropertyRecord{}, false},
+		{"property_modules", &models.PropertyModule{}, false},
 
-		// 3. contexts：引用 structure_models 与 material_states
-		{"calculation_contexts", &models.CalculationContext{}},
-		{"experimental_contexts", &models.ExperimentalContext{}},
+		// 3. 迁移观察期旧表；Contract 后由表存在性门控制调用此路径。
+		{"tc_results", &models.TcResult{}, true},
+		{"superconductor_properties", &models.KeyProperty{}, true},
+
+		// 4. contexts：引用 structure_models 与 material_states
+		{"calculation_contexts", &models.CalculationContext{}, true},
+		{"experimental_contexts", &models.ExperimentalContext{}, true},
 	}
 	for _, step := range steps {
+		if step.optional && !tx.Migrator().HasTable(step.model) {
+			continue
+		}
 		if err := tx.Where("paper_id = ?", paperID).Delete(step.model).Error; err != nil {
 			return fmt.Errorf("删除 %s 失败: %w", step.table, err)
 		}
 	}
 
-	// 4. structure_models 自引用 parent_structure_id：先置空再删，
+	// 5. structure_models 自引用 parent_structure_id：先置空再删，
 	// 否则同论文内父子结构的删除先后顺序不定，可能触发 Error 1451。
 	if err := tx.Model(&models.StructureModel{}).
 		Where("paper_id = ? AND parent_structure_id IS NOT NULL", paperID).
@@ -85,7 +95,7 @@ func cascadeDeleteInDB(tx *gorm.DB, paperID uint) error {
 		return fmt.Errorf("删除 structure_models 失败: %w", err)
 	}
 
-	// 5. 连接表无 paper_id，按本论文的 material_state 子查询删除
+	// 6. 连接表无 paper_id，按本论文的 material_state 子查询删除
 	if err := tx.Exec(
 		"DELETE FROM material_state_structure_families WHERE material_state_id IN (SELECT id FROM material_states WHERE paper_id = ?)",
 		paperID,
@@ -93,15 +103,21 @@ func cascadeDeleteInDB(tx *gorm.DB, paperID uint) error {
 		return fmt.Errorf("删除 material_state_structure_families 失败: %w", err)
 	}
 
-	// 6. 材料状态（此时所有子表已清空）
+	// 7. 材料状态（此时所有子表已清空）
 	if err := tx.Where("paper_id = ?", paperID).Delete(&models.MaterialState{}).Error; err != nil {
 		return fmt.Errorf("删除 material_states 失败: %w", err)
 	}
 	if err := tx.Where("paper_id = ?", paperID).Delete(&models.PaperMaterialFamily{}).Error; err != nil {
 		return fmt.Errorf("删除 paper_material_families 失败: %w", err)
 	}
+	if err := tx.Where("paper_id = ?", paperID).Delete(&models.Superconductor{}).Error; err != nil {
+		return fmt.Errorf("删除 superconductors 失败: %w", err)
+	}
+	if err := tx.Where("paper_id = ?", paperID).Delete(&models.ChemicalSystem{}).Error; err != nil {
+		return fmt.Errorf("删除 chemical_systems 失败: %w", err)
+	}
 
-	// 7. 证据 → 分块 → 文件：paper_evidences 引用 paper_chunks，后者引用 paper_files
+	// 8. 证据 → 分块 → 文件：paper_evidences 引用 paper_chunks，后者引用 paper_files
 	rest := []struct {
 		table string
 		model any

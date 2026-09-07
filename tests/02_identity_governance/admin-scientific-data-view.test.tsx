@@ -1,14 +1,14 @@
 /**
  * Issue #76 阶段 5（T018/T019）：管理员在编辑弹窗查看完整超导性质。
  *
- * - detail（GET /api/admin/papers/:id）携带 material_states（含 tc_results/properties/structures），
+ * - detail（GET /api/admin/papers/:id）携带 material_states（含 property_modules/structures），
  *   打开编辑弹窗后共享组件 MaterialStatesEditor 渲染材料状态卡片，Tc/物性/结构区可见。
  * - 无材料状态时显示空态且不报错。
  */
 
 import '@testing-library/jest-dom/vitest'
 import React from 'react'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -48,7 +48,7 @@ const paper = {
 }
 
 // Go 详情行形态（GET /api/admin/papers/:id 直接序列化模型）：
-// 化学式在 superconductor.chemical_formula，结构家族是链接行，Tc/物性/结构已预加载。
+// 化学式在 superconductor.chemical_formula，结构家族是链接行，统一物性模块与结构已预加载。
 const detailWithStates = {
   ...paper,
   paper_type: 'experimental',
@@ -66,11 +66,22 @@ const detailWithStates = {
     pressure_value_gpa: 0.001,
     reported_space_group_symbol: null,
     reported_space_group_number: null,
-    tc_results: [{
-      id: 31, result_kind: 'experimental', tc_method: 'experimental',
-      tc_value_k: 3.78, value_raw: '3.78', unit_raw: 'K', is_representative: true,
+    property_modules: [{
+      module_key: 'module-superconductive', module_code: 'superconductive_properties',
+      definition_key: 'module.superconductive_properties', definition_version: 1, display_order: 0,
+      records: [{
+        record_key: 'record-tc', module_code: 'superconductive_properties', record_type: 'measured_tc',
+        property_code: 'tc', definition_key: 'record.superconductive_properties.measured_tc.resistivity',
+        definition_version: 1, name_raw: 'critical temperature', value_kind: 'number',
+        value_raw: '3.78', value_number: 3.78, unit_raw: 'K', method_code: 'resistivity',
+        is_representative: true, payload: { experimental_conditions: {} },
+      }, {
+        record_key: 'record-current', module_code: 'superconductive_properties', record_type: 'property',
+        property_code: 'custom', definition_key: 'record.superconductive_properties.custom',
+        definition_version: 1, name_raw: 'threshold current', value_kind: 'number',
+        value_raw: '0.28', value_number: 0.28, unit_raw: 'A', payload: {},
+      }],
     }],
-    properties: [{ id: 41, material: 'Sn', name_raw: 'threshold current', value_raw: '0.28', unit: 'A' }],
     structures: [{ id: 51, structure_format: 'cif', structure_text: 'data_Sn', source_locator: 'supp.pdf' }],
   }],
 }
@@ -128,14 +139,16 @@ describe('T018：管理员查看完整超导性质', () => {
     expect(screen.getByText('材料状态 #1')).toBeVisible()
     expect(screen.getByLabelText('化学式')).toHaveValue('Sn')
 
-    // Tc 区：标题与数值回填（conventional 类型渲染完整字段组；type=number 值为数字）
-    expect(screen.getByText('临界温度 Tc')).toBeVisible()
-    expect(screen.getByLabelText('Tc 数值 (K)')).toHaveValue(3.78)
+    // 统一模块区：Tc 数值与普通物性均从记录回填
+    expect(screen.getByText('超导性质')).toBeVisible()
+    const tcRecord = screen.getByTestId('property-record-record-tc')
+    expect(tcRecord).toBeVisible()
+    expect(within(tcRecord).getByLabelText('数值')).toHaveValue(3.78)
 
     // 物性区：标题与原始值回填
-    expect(screen.getByText('其他普通物性')).toBeVisible()
-    expect(screen.getByDisplayValue('threshold current')).toBeVisible()
-    expect(screen.getByDisplayValue('0.28')).toBeVisible()
+    const propertyRecord = screen.getByTestId('property-record-record-current')
+    expect(within(propertyRecord).getByLabelText('名称')).toHaveValue('threshold current')
+    expect(within(propertyRecord).getByLabelText('原始值')).toHaveValue('0.28')
 
     // 结构区可见（既有结构模型已并入候选面板）
     expect(screen.getByTestId('structure-candidate-panel')).toBeInTheDocument()
@@ -157,7 +170,7 @@ describe('T018：管理员查看完整超导性质', () => {
 
     await openEditDialog()
 
-    expect(screen.getByText(/AI 没有提取到材料状态/)).toBeVisible()
+    expect(screen.getByText(/未提取到材料状态/)).toBeVisible()
     // 页面仍完整可用：论文级字段与保存按钮保留
     expect(screen.getByRole('textbox', { name: '标题' })).toBeVisible()
     expect(screen.getByRole('button', { name: '保存修改' })).toBeVisible()

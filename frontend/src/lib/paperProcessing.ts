@@ -3,6 +3,7 @@ import type {
   MaterialDimensionality,
   StructureFamilySelection,
 } from './classifications'
+import { convertLegacyPropertyModules, PROPERTY_SCHEMA_VERSION } from './propertyModules'
 
 export type ProcessingStage = 'saving_file' | 'queued' | 'extracting' | 'reading' | 'summarizing' | 'ready'
 export type ProcessingStatus = 'processing' | 'succeeded' | 'failed' | 'cancelled'
@@ -129,6 +130,7 @@ export const CRYSTAL_SYSTEM_VALUES = [
 export type CrystalSystem = typeof CRYSTAL_SYSTEM_VALUES[number]
 
 export interface DraftMaterialState {
+  state_key?: string
   material?: string
   structure_families?: StructureFamilySelection[]
   crystal_system?: CrystalSystem
@@ -151,6 +153,7 @@ export interface DraftMaterialState {
   property_modules?: import('./propertyModules').PropertyModuleDraft[]
   deleted_record_keys?: string[]
   deleted_module_keys?: string[]
+  schema_version?: number
   space_group_evidence?: SourceEvidence | SourceEvidence[] | null
 }
 
@@ -376,11 +379,19 @@ export function normalizeUploadDraft(value: unknown): UploadDraft {
       superconductor_kind: normalizePaperSuperconductorKind(rawPaper, raw.material_states),
     }),
     material_states: Array.isArray(raw.material_states) ? raw.material_states.map(state => {
+      if (state.schema_version != null && (!Number.isInteger(state.schema_version) || state.schema_version > PROPERTY_SCHEMA_VERSION)) {
+        throw new Error(`不支持的物性草稿 Schema 版本：${state.schema_version}`)
+      }
       const normalizedState = { ...state }
       delete (normalizedState as { phase_label?: unknown }).phase_label
       delete (normalizedState as { material_family?: unknown }).material_family
       delete (normalizedState as { superconductor_kind?: unknown }).superconductor_kind
       const rawCrystalSystem = String(state.crystal_system || 'unknown')
+      const propertyModules = convertLegacyPropertyModules(normalizedState)
+      delete normalizedState.tc_results
+      delete normalizedState.properties
+      delete normalizedState.calculation_context
+      delete normalizedState.experimental_context
       return {
         ...normalizedState,
         structure_families: Array.isArray(state.structure_families) ? state.structure_families : [],
@@ -389,18 +400,10 @@ export function normalizeUploadDraft(value: unknown): UploadDraft {
           : 'unknown',
         element_count: state.element_count ?? null,
         material_dimensionality: state.material_dimensionality || 'unknown',
-        tc_results: Array.isArray(state.tc_results) ? state.tc_results : [],
-        properties: Array.isArray(state.properties) ? state.properties.map(item => ({
-          ...item,
-          value_raw: item.value_raw ?? (item.value == null ? '' : String(item.value)),
-        })) : [],
-        calculation_context: state.calculation_context ? {
-          phonon_nuclear_treatment: 'unknown',
-          lambda_ep: null,
-          omega_log_k: null,
-          mu_star: null,
-          ...state.calculation_context,
-        } : null,
+        property_modules: propertyModules,
+        deleted_record_keys: Array.isArray(state.deleted_record_keys) ? state.deleted_record_keys : [],
+        deleted_module_keys: Array.isArray(state.deleted_module_keys) ? state.deleted_module_keys : [],
+        schema_version: PROPERTY_SCHEMA_VERSION,
       }
     }) : [],
     structure_candidates: Array.isArray(raw.structure_candidates) ? raw.structure_candidates : [],

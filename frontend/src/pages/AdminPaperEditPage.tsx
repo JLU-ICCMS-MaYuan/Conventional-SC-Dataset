@@ -14,6 +14,7 @@ import {
 import { DraftMaterialState, StructureCandidate, unwrapData } from '../lib/paperProcessing'
 import MaterialStatesEditor, { SpaceGroupOption } from '../components/MaterialStatesEditor'
 import { useLanguage } from '../context/LanguageContext'
+import { convertLegacyPropertyModules, PROPERTY_SCHEMA_VERSION } from '../lib/propertyModules'
 
 /**
  * Go 详情行的材料状态 → 共享编辑器（MaterialStatesEditor）的 DraftMaterialState（T020）。
@@ -23,12 +24,16 @@ import { useLanguage } from '../context/LanguageContext'
  * （原 AdminPage.tsx 弹窗逻辑迁移，Issue #78。）
  */
 const materialStateFromDetail = (state: Record<string, any>): DraftMaterialState => {
-  const { superconductor_kind: _legacySuperconductorKind, ...stateWithoutLegacyKind } = state
-  const contextsById = new Map(
-    (state.calculation_contexts || []).map((context: Record<string, any>) => [context.id, context]),
-  )
+  const stateWithoutLegacyProperties = { ...state }
+  delete stateWithoutLegacyProperties.superconductor_kind
+  delete stateWithoutLegacyProperties.tc_results
+  delete stateWithoutLegacyProperties.calculation_contexts
+  delete stateWithoutLegacyProperties.calculation_context
+  delete stateWithoutLegacyProperties.experimental_context
+  delete stateWithoutLegacyProperties.properties
+  delete stateWithoutLegacyProperties.key_properties
   return {
-    ...stateWithoutLegacyKind,
+    ...stateWithoutLegacyProperties,
     material: state.superconductor?.chemical_formula || state.material || '',
     structure_families: (state.structure_families || []).map((item: any) => ({
       id: item.id ?? item.structure_family_id,
@@ -38,16 +43,10 @@ const materialStateFromDetail = (state: Record<string, any>): DraftMaterialState
       status: 'confirmed',
       is_primary: Boolean(item.is_primary),
     })),
-    tc_results: (state.tc_results || []).map((result: Record<string, any>) => ({
-      ...result,
-      calculation_context: result.calculation_context
-        || contextsById.get(result.calculation_context_id)
-        || undefined,
-    })),
-    properties: (state.properties || []).map((item: any) => ({
-      ...item,
-      value_raw: item.value_raw ?? (item.value == null ? '' : String(item.value)),
-    })),
+    property_modules: convertLegacyPropertyModules(state),
+    deleted_record_keys: [],
+    deleted_module_keys: [],
+    schema_version: PROPERTY_SCHEMA_VERSION,
   }
 }
 
@@ -185,6 +184,7 @@ const AdminPaperEditPage: React.FC = () => {
         }
         setEditForm({
           ...detail,
+          key_properties: [],
           superconductor_kind: pendingValues?.paper?.superconductor_kind
             ?? detail.superconductor_kind
             ?? 'unknown',
@@ -218,6 +218,9 @@ const AdminPaperEditPage: React.FC = () => {
             structure_families: Array.isArray(pendingState.structure_families)
               ? pendingState.structure_families
               : normalized.structure_families,
+            property_modules: Array.isArray(pendingState.property_modules)
+              ? convertLegacyPropertyModules(pendingState)
+              : normalized.property_modules,
           }
         })
         const structureCandidates = detailStates.flatMap((state, index) =>
@@ -275,6 +278,7 @@ const AdminPaperEditPage: React.FC = () => {
     try {
       const historyOperationId = crypto.randomUUID()
       const payload: Record<string, any> = { ...editForm, history_operation_id: historyOperationId }
+      delete payload.key_properties
       // 只提交 superconductor_properties 的真实列。压强、温度等条件字段属材料状态，
       // 不经物性接口修改；后端也不再接受这些无对应列的字段。
       if (payload.key_properties) {
@@ -578,8 +582,8 @@ const AdminPaperEditPage: React.FC = () => {
           {editForm.review_status === 'approved' && (
             <Alert severity="warning">{t('admin.revisionBumpWarning')}</Alert>
           )}
-          {/* 科学数据编辑区（Issue #76）：材料状态、Tc、物性、结构候选与补传。
-              数据来自 /api/admin/papers/:id 的 material_states（含 tc_results/properties/structures），
+          {/* 科学数据编辑区（Issue #76）：材料状态、物性模块、结构候选与补传。
+              数据来自 /api/admin/papers/:id 的 material_states（含 property_modules/structures），
               编辑结果随保存时的 C1 请求整体替换（T020/T030/T034）。 */}
           <MaterialStatesEditor
             states={editMaterialStates}

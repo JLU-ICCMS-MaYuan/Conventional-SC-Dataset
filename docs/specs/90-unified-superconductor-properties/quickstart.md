@@ -2,12 +2,12 @@
 
 ## 实施验证结果
 
-本地已完成 Python 模块化记录、迁移阶段控制器和前端编辑器回归；结果见
-[validation.md](validation.md)。真实业务库的 Copy、逐项 Reconcile 及 Read/Write switch 必须在隔离
-MySQL 按下列命令执行：
+本地已完成 Python、Go、前端模块化契约回归，并在隔离真实 MySQL 完成 Expand、Copy、Reconcile、
+Final sync、Read/Write switch、Observe、Contract 和恢复验证；结果见 [validation.md](validation.md)。
+部署到具体数据库时仍必须按阶段门禁执行，不能用仓库验收替代部署确认：
 
 ```bash
-alembic upgrade issue90_copy_property_records
+alembic upgrade issue90_copy_v1
 DATABASE_URL="$DATABASE_URL" python3 -m backend.scripts.migrate_issue90_properties --dry-run
 DATABASE_URL="$DATABASE_URL" python3 -m backend.scripts.migrate_issue90_properties
 ```
@@ -145,8 +145,9 @@ Tc-B：220 K；Allen-Dynes；自己的 Conditions；λ=2.2，ωlog=1100 K，μ*=
 ```bash
 bash scripts/run-tests.sh backend
 bash scripts/run-tests.sh go
-bash scripts/run-tests.sh frontend
+cd frontend && npm run test:upload-ui
 cd frontend && npm run build
+PYTHONPATH=. python -m compileall -q backend alembic
 git diff --check
 ```
 

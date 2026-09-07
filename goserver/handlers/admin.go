@@ -39,22 +39,7 @@ var (
 		"methodology", "key_finding", "research_motivation", "research_materials",
 		"material_relations", "builds_on", "knowledge_graph_title",
 	}
-	// 请求字段 → superconductor_properties 真实列。
-	// Updates(map) 直接把键当列名，因此这里必须用数据库列名（material_raw / unit_raw）。
-	// 压强、温度等条件字段属材料状态，不经物性接口修改；名称由 name_raw 承载。
-	keyPropertyUpdateFields = map[string]string{
-		"material":       "material_raw",
-		"name_raw":       "name_raw",
-		"value_min":      "value_min",
-		"value_max":      "value_max",
-		"value_raw":      "value_raw",
-		"value_number":   "value_number",
-		"unit":           "unit_raw",
-		"canonical_unit": "canonical_unit",
-		"condition_note": "condition_note",
-	}
-	errKeyPropertyNotFound = errors.New("物性记录不存在或不属于当前论文")
-	pythonBackendClient    = &http.Client{Timeout: 2 * time.Minute}
+	pythonBackendClient = &http.Client{Timeout: 2 * time.Minute}
 )
 
 // ═══════════════════════════════════════════════
@@ -84,15 +69,16 @@ func GetPapers(c *gin.Context) {
 	}
 	if material != "" {
 		like := "%" + material + "%"
-		// 子查询：找出含该材料的 paper_id。化学式在 superconductors，
-		// 原文材料名在 superconductor_properties.material_raw；key_properties 表已不存在。
-		query = query.Where(`id IN (
-			SELECT ms.paper_id FROM material_states ms
-			JOIN superconductors sc ON sc.id = ms.superconductor_id
-			WHERE sc.chemical_formula LIKE ?
-			UNION
-			SELECT sp.paper_id FROM superconductor_properties sp WHERE sp.material_raw LIKE ?
-		)`, like, like)
+		query = query.Where(`EXISTS (
+			SELECT 1 FROM material_states ms
+			JOIN superconductors sc
+			  ON sc.id = ms.superconductor_id
+			 AND sc.paper_id = ms.paper_id
+			 AND sc.paper_revision = ms.paper_revision
+			WHERE ms.paper_id = papers.id
+			  AND ms.paper_revision = papers.content_revision
+			  AND (sc.chemical_formula LIKE ? OR sc.formula_normalized LIKE ? OR sc.display_name LIKE ?)
+		)`, like, like, like)
 	}
 	if yearMin != "" {
 		query = query.Where("year >= ?", yearMin)
@@ -143,22 +129,11 @@ func uploaderNameForPaper(paper models.Paper) *string {
 func GetPaperDetail(c *gin.Context) {
 	id := c.Param("id")
 	var paper models.Paper
-	// First = SELECT ... LIMIT 1
-	// 材料状态下的 Tc、物性与结构必须预加载，否则编辑页只能看到空数组
-	// （GORM 未预加载的关联序列化为空，且接口返回 200 无错误信号）。
-	if err := database.DB.
-		Preload("KeyProperties").
-		Preload("MaterialFamilyLinks.MaterialFamily").
-		Preload("MaterialStates.Superconductor").
-		Preload("MaterialStates.StructureFamilyLinks.StructureFamily").
-		Preload("MaterialStates.TcResults").
-		Preload("MaterialStates.CalculationContexts").
-		Preload("MaterialStates.Properties").
-		Preload("MaterialStates.Structures").
-		First(&paper, id).Error; err != nil {
+	if err := targetPaperGraphQuery(database.DB).First(&paper, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "论文不存在"})
 		return
 	}
+	hydratePropertyModuleRecords(&paper)
 	paper.MaterialFamilies = materialFamiliesFromLinks(paper.MaterialFamilyLinks)
 	c.JSON(http.StatusOK, paper)
 }
@@ -175,7 +150,7 @@ func paperUpdatesFromBody(body map[string]interface{}) map[string]interface{} {
 	return updates
 }
 
-// UpdatePaper 编辑论文（含 key_properties 增删改）
+// UpdatePaper 只编辑论文元数据；科学数据使用模块化物性写入契约。
 // PUT /api/admin/papers/:id
 func UpdatePaper(c *gin.Context) {
 	id := c.Param("id")
@@ -185,9 +160,10 @@ func UpdatePaper(c *gin.Context) {
 		return
 	}
 
-	kps, err := parseAndValidateKeyProperties(body)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if _, legacy := body["key_properties"]; legacy {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code": "legacy_property_contract", "error": "key_properties 已退役，请使用 material_states[].property_modules[].records[]",
+		})
 		return
 	}
 
@@ -231,7 +207,7 @@ func UpdatePaper(c *gin.Context) {
 	}
 
 	var paper models.Paper
-	err = database.DB.Transaction(func(tx *gorm.DB) error {
+	err := database.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.First(&paper, id).Error; err != nil {
 			return err
 		}
@@ -241,11 +217,7 @@ func UpdatePaper(c *gin.Context) {
 				return err
 			}
 		}
-		keyPropertiesChanged, err := updateKeyPropertiesWithChange(tx, paper.ID, kps)
-		if err != nil {
-			return err
-		}
-		if !paperChanged && !keyPropertiesChanged {
+		if !paperChanged {
 			return nil
 		}
 		var operationID *string
@@ -256,18 +228,14 @@ func UpdatePaper(c *gin.Context) {
 		if revision == 0 {
 			revision = 1
 		}
-		_, err = appendPaperHistoryEvent(tx, paperHistoryInput{
+		_, eventErr := appendPaperHistoryEvent(tx, paperHistoryInput{
 			PaperID: paper.ID, PaperRevision: revision, EventType: paperHistoryModified,
 			Actor: &actor, OperationID: operationID, OccurredAt: time.Now(),
 		})
-		return err
+		return eventErr
 	})
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "论文不存在"})
-		return
-	}
-	if errors.Is(err, errKeyPropertyNotFound) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	if err != nil {
@@ -275,11 +243,11 @@ func UpdatePaper(c *gin.Context) {
 		return
 	}
 
-	// 重新加载 paper（含更新后的 key_properties）
-	if err := database.DB.Preload("KeyProperties").First(&paper, id).Error; err != nil {
+	if err := targetPaperGraphQuery(database.DB).First(&paper, id).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "论文已保存，但读取结果失败"})
 		return
 	}
+	hydratePropertyModuleRecords(&paper)
 	c.JSON(http.StatusOK, gin.H{"message": "已更新", "paper": paper})
 }
 
@@ -301,172 +269,6 @@ func paperUpdatesChanged(paper models.Paper, updates map[string]interface{}) boo
 		}
 	}
 	return false
-}
-
-func parseAndValidateKeyProperties(body map[string]interface{}) ([]map[string]interface{}, error) {
-	raw, exists := body["key_properties"]
-	if !exists {
-		return nil, nil
-	}
-	items, ok := raw.([]interface{})
-	if !ok {
-		return nil, errors.New("key_properties 必须是数组")
-	}
-	kps := make([]map[string]interface{}, 0, len(items))
-	for _, item := range items {
-		kp, ok := item.(map[string]interface{})
-		if !ok {
-			return nil, errors.New("key_properties 包含无效项目")
-		}
-		if deleted, _ := kp["_deleted"].(bool); deleted {
-			if id, ok := getFloatAsUint(kp["id"]); !ok || id == 0 {
-				return nil, errors.New("删除物性时必须提供有效 id")
-			}
-			kps = append(kps, kp)
-			continue
-		}
-		material, _ := kp["material"].(string)
-		name, _ := kp["name"].(string)
-		if material == "" {
-			return nil, errors.New("物性 material 不能为空")
-		}
-		if name == "" {
-			return nil, errors.New("物性 name 不能为空")
-		}
-		vmin, hasMin := kp["value_min"].(float64)
-		vmax, hasMax := kp["value_max"].(float64)
-		if hasMin && hasMax && vmin > vmax {
-			return nil, fmt.Errorf("物性 %s: value_min(%.4f) 不能大于 value_max(%.4f)", material, vmin, vmax)
-		}
-		if pg, ok := kp["pressure_gpa"].(float64); ok && pg < 0 {
-			return nil, fmt.Errorf("物性 %s: pressure_gpa 不能为负", material)
-		}
-		if tk, ok := kp["temperature_k"].(float64); ok && tk < 0 {
-			return nil, fmt.Errorf("物性 %s: temperature_k 不能为负", material)
-		}
-		kps = append(kps, kp)
-	}
-	return kps, nil
-}
-
-func updateKeyProperties(tx *gorm.DB, paperID uint, kps []map[string]interface{}) error {
-	_, err := updateKeyPropertiesWithChange(tx, paperID, kps)
-	return err
-}
-
-func updateKeyPropertiesWithChange(tx *gorm.DB, paperID uint, kps []map[string]interface{}) (bool, error) {
-	changed := false
-	for _, values := range kps {
-		kpID, hasID := getFloatAsUint(values["id"])
-		if deleted, _ := values["_deleted"].(bool); deleted {
-			result := tx.Where("id = ? AND paper_id = ?", kpID, paperID).Delete(&models.KeyProperty{})
-			if result.Error != nil {
-				return false, result.Error
-			}
-			if result.RowsAffected != 1 {
-				return false, errKeyPropertyNotFound
-			}
-			changed = true
-			continue
-		}
-		if hasID && kpID > 0 {
-			var kp models.KeyProperty
-			if err := tx.Where("id = ? AND paper_id = ?", kpID, paperID).First(&kp).Error; err != nil {
-				if errors.Is(err, gorm.ErrRecordNotFound) {
-					return false, errKeyPropertyNotFound
-				}
-				return false, err
-			}
-			kpUpdates := make(map[string]interface{})
-			for field, column := range keyPropertyUpdateFields {
-				if value, exists := values[field]; exists {
-					kpUpdates[column] = value
-				}
-			}
-			if len(kpUpdates) > 0 {
-				if err := tx.Model(&kp).Updates(kpUpdates).Error; err != nil {
-					return false, err
-				}
-				changed = changed || keyPropertyUpdatesChanged(kp, values)
-			}
-			continue
-		}
-
-		newKP := newKeyProperty(paperID, values)
-		if err := tx.Create(&newKP).Error; err != nil {
-			return false, err
-		}
-		changed = true
-	}
-	return changed, nil
-}
-
-func keyPropertyUpdatesChanged(property models.KeyProperty, values map[string]interface{}) bool {
-	encoded, err := json.Marshal(property)
-	if err != nil {
-		return true
-	}
-	current := make(map[string]interface{})
-	if err := json.Unmarshal(encoded, &current); err != nil {
-		return true
-	}
-	for field := range keyPropertyUpdateFields {
-		if value, exists := values[field]; exists && !reflect.DeepEqual(current[field], value) {
-			return true
-		}
-	}
-	return false
-}
-
-// newKeyProperty 只接受 superconductor_properties 的真实列。
-// 无对应列的字段（压强、温度、主次标记、结构文本等）一律不接受，而非接受后静默丢弃——
-// 后者会让管理员以为改动已保存。
-func newKeyProperty(paperID uint, values map[string]interface{}) models.KeyProperty {
-	kp := models.KeyProperty{PaperID: paperID}
-	kp.Material, _ = values["material"].(string)
-	kp.NameRaw, _ = values["name_raw"].(string)
-	assignFloatPointer(values, "value_min", &kp.ValueMin)
-	assignFloatPointer(values, "value_max", &kp.ValueMax)
-	assignFloatPointer(values, "value_number", &kp.ValueNumber)
-	assignStringPointer(values, "value_raw", &kp.ValueRaw)
-	assignStringPointer(values, "unit", &kp.Unit)
-	assignStringPointer(values, "canonical_unit", &kp.CanonicalUnit)
-	assignStringPointer(values, "condition_note", &kp.ConditionNote)
-	return kp
-}
-
-func assignStringPointer(values map[string]interface{}, key string, target **string) {
-	if value, ok := values[key].(string); ok {
-		*target = &value
-	}
-}
-
-func assignFloatPointer(values map[string]interface{}, key string, target **float64) {
-	if value, ok := values[key].(float64); ok {
-		*target = &value
-	}
-}
-
-// getFloatAsUint 将 JSON number (float64) 安全转为 uint
-func getFloatAsUint(v interface{}) (uint, bool) {
-	switch n := v.(type) {
-	case float64:
-		if n < 0 || math.Trunc(n) != n {
-			return 0, false
-		}
-		return uint(n), true
-	case int:
-		if n < 0 {
-			return 0, false
-		}
-		return uint(n), true
-	case int64:
-		if n < 0 {
-			return 0, false
-		}
-		return uint(n), true
-	}
-	return 0, false
 }
 
 // ReviewPaper 审核论文
@@ -841,8 +643,7 @@ func GetMyUploads(c *gin.Context) {
 	query.Count(&total)
 
 	var papers []models.Paper
-	query.Preload("KeyProperties").
-		Order("created_at DESC").
+	query.Order("created_at DESC").
 		Limit(limit).Offset(offset).
 		Find(&papers)
 
@@ -866,12 +667,13 @@ func GetMyUploadDetail(c *gin.Context) {
 		return
 	}
 	var paper models.Paper
-	if err := database.DB.Preload("KeyProperties").
+	if err := targetPaperGraphQuery(database.DB).
 		Where("id = ? AND uploaded_by_user_id = ?", c.Param("id"), user.ID).
 		First(&paper).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "论文不存在"})
 		return
 	}
+	hydratePropertyModuleRecords(&paper)
 	c.JSON(http.StatusOK, paper)
 }
 

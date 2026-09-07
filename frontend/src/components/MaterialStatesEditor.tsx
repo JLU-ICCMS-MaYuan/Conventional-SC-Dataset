@@ -18,6 +18,7 @@ import {
 import { useLanguage } from '../context/LanguageContext'
 import StructureCandidatePanel from './StructureCandidatePanel'
 import PropertyModuleEditor from './PropertyModuleEditor'
+import { PROPERTY_SCHEMA_VERSION } from '../lib/propertyModules'
 import {
   CRYSTAL_SYSTEM_VALUES, CrystalSystem, DraftKeyProperty, DraftMaterialState, DraftTcResult, SourceEvidence,
   StructureCandidate, evidenceList, unwrapData,
@@ -360,7 +361,7 @@ const MaterialStatesEditor: React.FC<MaterialStatesEditorProps> = ({
     emitStates(states.filter((_, itemIndex) => itemIndex !== index))
   }
 
-  // 新增材料状态：默认上下文取决于论文类型（与上传页原实现一致）
+  // 新材料状态只写统一物性模块；旧字段仅保留给迁移前草稿的兼容编辑。
   const addState = () => {
     emitStates([...states, {
       material: '',
@@ -373,12 +374,10 @@ const MaterialStatesEditor: React.FC<MaterialStatesEditorProps> = ({
       crystal_system: 'unknown',
       reported_space_group_symbol: null,
       reported_space_group_number: null,
-      calculation_context: paperType === 'experimental' ? null : {
-        phonon_nuclear_treatment: 'unknown', lambda_ep: null, omega_log_k: null, mu_star: null,
-      },
-      experimental_context: paperType === 'experimental' ? { tc_criterion: 'unknown' } : null,
-      tc_results: [],
-      properties: [],
+      property_modules: [],
+      deleted_record_keys: [],
+      deleted_module_keys: [],
+      schema_version: PROPERTY_SCHEMA_VERSION,
     }])
   }
 
@@ -604,6 +603,7 @@ const MaterialStatesEditor: React.FC<MaterialStatesEditorProps> = ({
                     evidence={state.space_group_evidence}
                   />
 
+                  {state.property_modules === undefined && <>
                   <Box data-issue-field={`material_states[${index}].calculation_context`}
                     sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography variant="subtitle2" fontWeight={700}>{t('upload.criticalTempTitle')}</Typography>
@@ -668,16 +668,27 @@ const MaterialStatesEditor: React.FC<MaterialStatesEditorProps> = ({
                       <Button size="small" color="error" onClick={() => removeProperty(index, propertyIndex)}>{t('common.delete')}</Button>
                     </Box>
                   ))}
+                  </>}
 
-                  {Array.isArray(state.property_modules) && (
-                    <Box data-testid={`property-modules-${index}`} sx={{ mt: 2 }}>
-                      <PropertyModuleEditor
-                        modules={state.property_modules}
-                        readOnly={readOnly}
-                        onChange={modules => updateMaterialState(index, 'property_modules', modules)}
-                      />
-                    </Box>
-                  )}
+                  <Box data-testid={`property-modules-${index}`} sx={{ mt: 2 }}>
+                    <PropertyModuleEditor
+                      modules={state.property_modules || []}
+                      readOnly={readOnly}
+                      basePath={`material_states.${index}.property_modules`}
+                      issues={(issues || []).map(item => ({ field: item.field.replace(/\[(\d+)\]/g, '.$1'), code: 'schema_validation_failed', message: item.message }))}
+                      onChange={(modules, deletion) => emitStates(states.map((item, itemIndex) => itemIndex === index ? {
+                        ...item,
+                        property_modules: modules,
+                        deleted_record_keys: deletion?.deletedRecordKey
+                          ? [...new Set([...(item.deleted_record_keys || []), deletion.deletedRecordKey])]
+                          : item.deleted_record_keys || [],
+                        deleted_module_keys: deletion?.deletedModuleKey
+                          ? [...new Set([...(item.deleted_module_keys || []), deletion.deletedModuleKey])]
+                          : item.deleted_module_keys || [],
+                        schema_version: PROPERTY_SCHEMA_VERSION,
+                      } : item))}
+                    />
+                  </Box>
 
                   <StructureCandidatePanel
                     candidates={stateCandidates}

@@ -1,11 +1,11 @@
 /**
  * Feature: 探索页与社区页的物性与结构读取来源 (Issue #65)
  *
- * 条件化科学数据模型把 Tc、计算参数、普通物性、晶体结构拆到四张表。
- * 本测试固化「跨来源汇总」的读取契约，防止再次退回只读 key_properties。
+ * 统一物性模型把 Tc、计算参数和普通物性收敛为模块记录，晶体结构独立存储。
+ * 本测试固化目标读取契约，防止再次退回读取旧物性字段。
  *
  * 载荷取自单质超导 Hg（papers id=9，1911 Onnes 原始报告）的真实 API 响应：
- * key_properties 为空数组，Tc 4.2 K 在 tc_results，816 字节 CIF 在 structures。
+ * Tc 4.2 K 在 property_modules，816 字节 CIF 在 structures。
  */
 
 import { describe, it, expect } from 'vitest'
@@ -13,11 +13,52 @@ import {
   collectPropertyRows, collectStructures, viewerFormat,
 } from '../../frontend/src/lib/paperDetailView'
 
-// Hg 论文的真实响应切片：只报告 Tc 的实验论文，没有任何普通物性
+const moduleWith = (records: Array<Record<string, unknown>>) => ({
+  module_key: 'module-superconductive',
+  module_code: 'superconductive_properties',
+  definition_key: 'module.superconductive_properties',
+  definition_version: 1,
+  display_order: 0,
+  records,
+})
+
+const tcRecord = (overrides: Record<string, unknown> = {}) => ({
+  record_key: 'record-tc',
+  module_code: 'superconductive_properties',
+  record_type: 'measured_tc',
+  property_code: 'tc',
+  definition_key: 'record.superconductive_properties.measured_tc.resistivity',
+  definition_version: 1,
+  name_raw: 'critical temperature',
+  value_kind: 'number',
+  value_raw: '4.2',
+  value_number: 4.2,
+  unit_raw: 'K',
+  method_code: 'resistivity',
+  payload: { experimental_conditions: {} },
+  ...overrides,
+})
+
+const propertyRecord = (overrides: Record<string, unknown> = {}) => ({
+  record_key: 'record-property',
+  module_code: 'superconductive_properties',
+  record_type: 'property',
+  property_code: 'custom',
+  definition_key: 'record.superconductive_properties.custom',
+  definition_version: 1,
+  name_raw: '形成焓',
+  value_kind: 'number',
+  value_raw: '0',
+  value_number: 200,
+  unit_raw: 'meV/atom',
+  payload: {},
+  ...overrides,
+})
+
+// Hg 论文的目标响应切片：只报告 Tc 的实验论文，没有任何普通物性
 const HG_PAPER = {
   id: 9,
   title: 'Further experiments with liquid helium. V.',
-  key_properties: [],
   material_states: [
     {
       id: 50,
@@ -26,14 +67,7 @@ const HG_PAPER = {
       pressure_value_gpa: null,
       pressure_raw: null,
       temperature_value_k: null,
-      tc_results: [
-        {
-          id: 90, result_kind: 'experimental', tc_value_k: 4.2, tc_min_k: null, tc_max_k: null,
-          tc_method: 'experimental', tc_method_custom: null, uncertainty_k: null,
-          value_raw: '4.2', unit_raw: 'K',
-        },
-      ],
-      calculation_contexts: [],
+      property_modules: [moduleWith([tcRecord()])],
       structures: [
         {
           id: 1, structure_format: 'cif', space_group_symbol: 'I4/mmm',
@@ -45,7 +79,7 @@ const HG_PAPER = {
 }
 
 describe('关键物性跨来源汇总（Issue #65）', () => {
-  it('key_properties 为空但存在 Tc 时，物性表不得为空', () => {
+  it('普通物性为空但存在 Tc 时，物性表不得为空', () => {
     const rows = collectPropertyRows(HG_PAPER)
 
     expect(rows.length).toBeGreaterThan(0)
@@ -57,7 +91,7 @@ describe('关键物性跨来源汇总（Issue #65）', () => {
 
   it('Tc 的判定方法作为备注展示，枚举值翻译为中文', () => {
     const tc = collectPropertyRows(HG_PAPER).find(row => row.label === 'Tc')!
-    expect(tc.note).toContain('实验测量')
+    expect(tc.note).toContain('电阻法')
   })
 
   it('计算上下文的 λ、ωlog、μ* 各自成行，NULL 项不产生空行', () => {
@@ -65,10 +99,14 @@ describe('关键物性跨来源汇总（Issue #65）', () => {
       key_properties: [],
       material_states: [{
         id: 1, material: 'LaH10', pressure_value_gpa: 200,
-        tc_results: [],
-        calculation_contexts: [
-          { id: 7, lambda_ep: 3.41, omega_log_k: 1120, mu_star: null, calculation_code: 'QE' },
-        ],
+        property_modules: [moduleWith([tcRecord({
+          record_key: 'record-predicted', record_type: 'predicted_tc', method_code: 'allen_dynes',
+          definition_key: 'record.superconductive_properties.predicted_tc.allen_dynes',
+          payload: {
+            calculation_conditions: { calculation_code: 'QE' },
+            parameters: { lambda_ep: 3.41, omega_log: 1120, mu_star: null },
+          },
+        })])],
         structures: [],
       }],
     })
@@ -87,10 +125,10 @@ describe('关键物性跨来源汇总（Issue #65）', () => {
 
   it('普通物性仍然纳入，且按 material_state_id 回查条件', () => {
     const rows = collectPropertyRows({
-      key_properties: [
-        { id: 3, material_state_id: 1, material: 'LaH10', name: '形成焓', value_raw: '0', value_number: 200, unit: 'meV/atom' },
-      ],
-      material_states: [{ id: 1, material: 'LaH10', pressure_raw: '200 GPa', tc_results: [], calculation_contexts: [], structures: [] }],
+      material_states: [{
+        id: 1, material: 'LaH10', pressure_raw: '200 GPa',
+        property_modules: [moduleWith([propertyRecord()])], structures: [],
+      }],
     })
 
     expect(rows).toHaveLength(1)
@@ -101,13 +139,13 @@ describe('关键物性跨来源汇总（Issue #65）', () => {
 
   it('Tc 排在普通物性之前——Tc 是超导论文的核心结论', () => {
     const rows = collectPropertyRows({
-      key_properties: [
-        { id: 3, material_state_id: 1, material: 'LaH10', name: '形成焓', value_raw: '10', unit: 'meV' },
-      ],
       material_states: [{
         id: 1, material: 'LaH10',
-        tc_results: [{ id: 1, tc_value_k: 250 }],
-        calculation_contexts: [], structures: [],
+        property_modules: [moduleWith([
+          propertyRecord({ value_raw: '10', value_number: null, unit_raw: 'meV' }),
+          tcRecord({ value_raw: '250', value_number: 250 }),
+        ])],
+        structures: [],
       }],
     })
 
@@ -116,12 +154,12 @@ describe('关键物性跨来源汇总（Issue #65）', () => {
 
   it('Tc 单臂区间不补造缺失的一端', () => {
     const onlyMin = collectPropertyRows({
-      material_states: [{ id: 1, material: 'X', tc_results: [{ id: 1, tc_min_k: 200, tc_max_k: null }] }],
+      material_states: [{ id: 1, material: 'X', property_modules: [moduleWith([tcRecord({ value_kind: 'range', value_number: null, value_min: 200, value_max: null })])] }],
     })
     expect(onlyMin[0].value).toBe('≥ 200 K')
 
     const bothEnds = collectPropertyRows({
-      material_states: [{ id: 1, material: 'X', tc_results: [{ id: 1, tc_min_k: 250, tc_max_k: 260 }] }],
+      material_states: [{ id: 1, material: 'X', property_modules: [moduleWith([tcRecord({ value_kind: 'range', value_number: null, value_min: 250, value_max: 260 })])] }],
     })
     expect(bothEnds[0].value).toBe('250–260 K')
   })

@@ -6,21 +6,124 @@ os.environ.setdefault("DATABASE_URL", "sqlite:////tmp/scwiki-scientific-drafts-t
 os.environ.setdefault("JWT_SECRET_KEY", "test-only-secret")
 
 from backend import models
-from backend.ingest.scientific_drafts import persist_scientific_draft
+from backend.ingest.form_definitions import definition_checksum
+from backend.ingest.property_modules import EXPERIMENTAL_METHODS, THEORETICAL_METHODS
+from backend.ingest.scientific_drafts import _property_modules_for_state, persist_scientific_draft
 from backend.services.structure_candidates import build_structure_candidate
 
 
 class _EmptyResult:
+    def __init__(self, values=()):
+        self._values = list(values)
+
     def scalar_one_or_none(self):
-        return None
+        return self._values[0] if self._values else None
+
+    def scalars(self):
+        return self
+
+    def all(self):
+        return list(self._values)
+
+
+def _published_definition(definition_id, definition_key, module_code, **overrides):
+    data = {
+        "definition_key": definition_key,
+        "version": 1,
+        "target_kind": "property_module",
+        "module_code": module_code,
+        "record_type": None,
+        "method_code": None,
+        "property_code": None,
+        "core_schema": {},
+        "json_schema": {"type": "object", "additionalProperties": True},
+        "ui_schema": {},
+    }
+    data.update(overrides)
+    return models.FormDefinition(
+        id=definition_id,
+        status="published",
+        checksum=definition_checksum(data),
+        **data,
+    )
+
+
+def _published_definitions():
+    definitions = []
+    definition_id = 1
+    for module_code in models.PROPERTY_MODULE_CODES:
+        definitions.append(_published_definition(
+            definition_id,
+            f"module.{module_code}",
+            module_code,
+        ))
+        definition_id += 1
+        definitions.append(_published_definition(
+            definition_id,
+            f"record.{module_code}.custom",
+            module_code,
+            target_kind="property_record",
+            record_type="property",
+            property_code="custom",
+        ))
+        definition_id += 1
+    for method_code in sorted(THEORETICAL_METHODS):
+        definitions.append(_published_definition(
+            definition_id,
+            f"record.superconductive_properties.predicted_tc.{method_code}",
+            "superconductive_properties",
+            target_kind="property_record",
+            record_type="predicted_tc",
+            method_code=method_code,
+            property_code="tc",
+            json_schema={
+                "type": "object",
+                "properties": {
+                    "calculation_conditions": {"type": "object"},
+                    "parameters": {"type": "object"},
+                },
+                "required": ["calculation_conditions"],
+                "additionalProperties": True,
+            },
+        ))
+        definition_id += 1
+    for method_code in sorted(EXPERIMENTAL_METHODS):
+        definitions.append(_published_definition(
+            definition_id,
+            f"record.superconductive_properties.measured_tc.{method_code}",
+            "superconductive_properties",
+            target_kind="property_record",
+            record_type="measured_tc",
+            method_code=method_code,
+            property_code="tc",
+            json_schema={
+                "type": "object",
+                "properties": {"experimental_conditions": {"type": "object"}},
+                "required": ["experimental_conditions"],
+                "additionalProperties": True,
+            },
+        ))
+        definition_id += 1
+    return definitions
 
 
 class _RecordingAsyncSession:
     def __init__(self):
         self.added = []
         self._next_id = 1
+        self._definitions = _published_definitions()
 
-    async def execute(self, _statement):
+    async def execute(self, statement):
+        descriptions = getattr(statement, "column_descriptions", ())
+        entity = descriptions[0].get("entity") if descriptions else None
+        if entity is models.FormDefinition:
+            return _EmptyResult(self._definitions)
+        if entity in {
+            models.PropertyModule,
+            models.PropertyRecord,
+            models.PropertyRecordEvidence,
+        }:
+            return _EmptyResult(item for item in self.added if isinstance(item, entity))
         return _EmptyResult()
 
     def add(self, entity):
@@ -31,6 +134,36 @@ class _RecordingAsyncSession:
 
     async def flush(self):
         return None
+
+
+def test_v2_property_modules_preserve_payload_and_standard_property_identity():
+    state = {
+        "schema_version": 2,
+        "calculation_context": {"k_grid": "legacy-must-not-win"},
+        "experimental_context": {"sample_label": "legacy-must-not-win"},
+        "property_modules": [{
+            "module_key": "electronic-main",
+            "module_code": "electronic_properties",
+            "records": [{
+                "record_key": "dos-1",
+                "record_type": "property",
+                "property_code": "density_of_states",
+                "definition_key": "record.electronic_properties.property.density_of_states",
+                "payload": {
+                    "calculation_conditions": {"k_grid": "24x24x24"},
+                    "parameters": {"smearing": {"value_number": 0.02, "unit": "eV"}},
+                },
+            }],
+        }],
+    }
+
+    modules = _property_modules_for_state(state)
+
+    record = modules[0]["records"][0]
+    assert record["property_code"] == "density_of_states"
+    assert record["definition_key"] == "record.electronic_properties.property.density_of_states"
+    assert record["payload"] == state["property_modules"][0]["records"][0]["payload"]
+    assert modules is not state["property_modules"]
 
 
 def test_li2mgh16_draft_persists_conditioned_scientific_entity_graph():
@@ -84,9 +217,9 @@ def test_li2mgh16_draft_persists_conditioned_scientific_entity_graph():
 
     superconductor = next(item for item in session.added if isinstance(item, models.Superconductor))
     state = next(item for item in session.added if isinstance(item, models.MaterialState))
-    calculation = next(item for item in session.added if isinstance(item, models.CalculationContext))
-    tc_result = next(item for item in session.added if isinstance(item, models.TcResult))
-    general_property = next(item for item in session.added if isinstance(item, models.SuperconductorProperty))
+    records = [item for item in session.added if isinstance(item, models.PropertyRecord)]
+    tc_result = next(item for item in records if item.record_type == "predicted_tc")
+    general_property = next(item for item in records if item.record_type == "property")
 
     assert superconductor.composition_key == "H:16|Li:2|Mg:1"
     assert float(state.pressure_value_gpa) == 300
@@ -94,13 +227,20 @@ def test_li2mgh16_draft_persists_conditioned_scientific_entity_graph():
     assert state.reported_space_group_symbol == "Fd-3m"
     assert state.reported_space_group_number == 227
     assert not any(isinstance(item, models.StructureModel) for item in session.added)
-    assert float(calculation.lambda_ep) == 3.35
-    assert calculation.omega_log_k is None
-    assert calculation.missing_structure_reason
-    assert float(tc_result.tc_value_k) == 351
-    assert tc_result.calculation_context_id == calculation.id
+    assert float(tc_result.value_number) == 351
+    assert tc_result.payload_json["calculation_conditions"] == {
+        "phonon_nuclear_treatment": "unknown",
+    }
+    assert float(tc_result.payload_json["parameters"]["lambda_ep"]["value_number"]) == 3.35
+    assert "omega_log_k" not in tc_result.payload_json["parameters"]
     assert general_property.material_state_id == state.id
-    assert {target.kind for target in targets} == {None, "tc", "property"}
+    assert general_property.property_code == "custom"
+    assert {target.kind for target in targets} == {None, "property_record"}
+    assert not any(isinstance(item, (
+        models.CalculationContext,
+        models.TcResult,
+        models.SuperconductorProperty,
+    )) for item in session.added)
 
 
 def test_confirmed_structure_candidate_persists_conventional_cif():
@@ -131,7 +271,7 @@ def test_confirmed_structure_candidate_persists_conventional_cif():
     assert any(target.kind == "structure" and target.entity is structure for target in targets)
 
 
-def test_tc_level_calculation_contexts_persist_per_entry():
+def test_tc_level_calculation_conditions_and_parameters_persist_per_record():
     evidence = {
         "section": "Results",
         "page": 5,
@@ -141,34 +281,59 @@ def test_tc_level_calculation_contexts_persist_per_entry():
         "material_states": [{
             "material": "MgB2",
             "state_kind": "theoretical",
-            "tc_results": [
-                {
-                    "result_kind": "theoretical",
-                    "tc_method": "allen_dynes",
-                    "tc_value_k": 24,
-                    "value_raw": "24",
-                    "unit_raw": "K",
-                    "calculation_context": {
-                        "lambda_ep": 1.2,
-                        "omega_log_k": 120,
-                        "mu_star": 0.13,
+            "schema_version": 2,
+            "property_modules": [{
+                "module_key": "superconductive-main",
+                "module_code": "superconductive_properties",
+                "definition_key": "module.superconductive_properties",
+                "definition_version": 1,
+                "records": [
+                    {
+                        "record_key": "tc-allen-dynes",
+                        "module_code": "superconductive_properties",
+                        "record_type": "predicted_tc",
+                        "property_code": "tc",
+                        "definition_key": "record.superconductive_properties.predicted_tc.allen_dynes",
+                        "definition_version": 1,
+                        "name_raw": "Tc",
+                        "value_kind": "number",
+                        "value_number": 24,
+                        "value_raw": "24",
+                        "canonical_unit": "K",
+                        "method_code": "allen_dynes",
+                        "payload": {
+                            "calculation_conditions": {},
+                            "parameters": {
+                                "lambda_ep": {"value_number": 1.2, "unit": "1"},
+                                "omega_log_k": {"value_number": 120, "unit": "K"},
+                                "mu_star": {"value_number": 0.13, "unit": "1"},
+                            },
+                        },
                         "evidence": evidence,
                     },
-                    "evidence": evidence,
-                },
-                {
-                    "result_kind": "theoretical",
-                    "tc_method": "mcmillan",
-                    "tc_value_k": 21,
-                    "value_raw": "21",
-                    "unit_raw": "K",
-                    "calculation_context": {
-                        "lambda_ep": 0.8,
-                        "omega_log_k": None,
-                        "mu_star": 0.1,
+                    {
+                        "record_key": "tc-mcmillan",
+                        "module_code": "superconductive_properties",
+                        "record_type": "predicted_tc",
+                        "property_code": "tc",
+                        "definition_key": "record.superconductive_properties.predicted_tc.mcmillan",
+                        "definition_version": 1,
+                        "name_raw": "Tc",
+                        "value_kind": "number",
+                        "value_number": 21,
+                        "value_raw": "21",
+                        "canonical_unit": "K",
+                        "method_code": "mcmillan",
+                        "payload": {
+                            "calculation_conditions": {},
+                            "parameters": {
+                                "lambda_ep": {"value_number": 0.8, "unit": "1"},
+                                "mu_star": {"value_number": 0.1, "unit": "1"},
+                            },
+                        },
                     },
-                },
-            ],
+                ],
+            }],
         }],
     }
     session = _RecordingAsyncSession()
@@ -176,27 +341,23 @@ def test_tc_level_calculation_contexts_persist_per_entry():
 
     targets = asyncio.run(persist_scientific_draft(session, paper, draft))
 
-    contexts = [item for item in session.added if isinstance(item, models.CalculationContext)]
-    tc_results = [item for item in session.added if isinstance(item, models.TcResult)]
-    # One shared state-level context plus one dedicated context per Tc entry.
-    assert len(contexts) == 3
+    tc_results = [item for item in session.added if isinstance(item, models.PropertyRecord)]
+    assert len(tc_results) == 2
     first, second = tc_results
-    first_context = next(item for item in contexts if item.id == first.calculation_context_id)
-    second_context = next(item for item in contexts if item.id == second.calculation_context_id)
-    assert first_context.id != second_context.id
-    assert float(first_context.lambda_ep) == 1.2
-    assert float(first_context.omega_log_k) == 120
-    assert float(first_context.mu_star) == 0.13
-    assert float(second_context.lambda_ep) == 0.8
-    assert second_context.omega_log_k is None
-    assert float(second_context.mu_star) == 0.1
-    assert any(
-        target.field_path == "material_states[0].tc_results[0].calculation_context"
-        for target in targets
-    )
+    assert first.payload_json is not second.payload_json
+    assert first.payload_json["calculation_conditions"] == {}
+    assert second.payload_json["calculation_conditions"] == {}
+    assert float(first.payload_json["parameters"]["lambda_ep"]["value_number"]) == 1.2
+    assert float(first.payload_json["parameters"]["omega_log_k"]["value_number"]) == 120
+    assert float(first.payload_json["parameters"]["mu_star"]["value_number"]) == 0.13
+    assert float(second.payload_json["parameters"]["lambda_ep"]["value_number"]) == 0.8
+    assert "omega_log_k" not in second.payload_json["parameters"]
+    assert float(second.payload_json["parameters"]["mu_star"]["value_number"]) == 0.1
+    assert any(target.kind == "property_record" and target.entity is first for target in targets)
+    assert not any(isinstance(item, (models.CalculationContext, models.TcResult)) for item in session.added)
 
 
-def test_theoretical_tc_without_entry_context_keeps_shared_state_context():
+def test_theoretical_tc_without_entry_context_copies_shared_state_parameters():
     draft = {
         "material_states": [{
             "material": "LaH10",
@@ -234,11 +395,14 @@ def test_theoretical_tc_without_entry_context_keeps_shared_state_context():
 
     asyncio.run(persist_scientific_draft(session, paper, draft))
 
-    contexts = [item for item in session.added if isinstance(item, models.CalculationContext)]
-    tc_results = [item for item in session.added if isinstance(item, models.TcResult)]
-    assert len(contexts) == 1
-    assert all(item.calculation_context_id == contexts[0].id for item in tc_results)
-    assert float(contexts[0].lambda_ep) == 2.5
+    tc_results = [item for item in session.added if isinstance(item, models.PropertyRecord)]
+    assert len(tc_results) == 2
+    assert float(tc_results[0].payload_json["parameters"]["lambda_ep"]["value_number"]) == 2.5
+    assert float(tc_results[0].payload_json["parameters"]["omega_log_k"]["value_number"]) == 900
+    assert float(tc_results[0].payload_json["parameters"]["mu_star"]["value_number"]) == 0.1
+    assert tc_results[0].payload_json is not tc_results[1].payload_json
+    assert tc_results[1].payload_json["parameters"] == tc_results[0].payload_json["parameters"]
+    assert not any(isinstance(item, (models.CalculationContext, models.TcResult)) for item in session.added)
 
 
 def test_experimental_tc_never_persists_calculation_context():
@@ -259,12 +423,12 @@ def test_experimental_tc_never_persists_calculation_context():
         }],
     }))
 
-    tc_result = next(item for item in session.added if isinstance(item, models.TcResult))
-    assert tc_result.tc_method == "experimental"
-    assert tc_result.result_kind == "experimental"
-    assert tc_result.calculation_context_id is None
-    assert tc_result.experimental_context_id is not None
-    assert not any(isinstance(item, models.CalculationContext) for item in session.added)
+    tc_result = next(item for item in session.added if isinstance(item, models.PropertyRecord))
+    assert tc_result.method_code == "resistivity"
+    assert tc_result.record_type == "measured_tc"
+    assert tc_result.payload_json["experimental_conditions"] == {}
+    assert "calculation_conditions" not in tc_result.payload_json
+    assert not any(isinstance(item, (models.CalculationContext, models.TcResult)) for item in session.added)
 
 
 def test_draft_element_count_takes_precedence_over_formula_count():
@@ -304,7 +468,7 @@ def test_superconductor_kind_is_not_persisted_on_material_states():
     assert all(not hasattr(state, "superconductor_kind") for state in states)
 
 
-def test_tc_method_custom_persisted_only_for_other_method():
+def test_tc_method_code_is_authoritative_and_raw_method_text_is_preserved():
     draft = {
         "material_states": [{
             "material": "MgB2",
@@ -335,9 +499,12 @@ def test_tc_method_custom_persisted_only_for_other_method():
 
     asyncio.run(persist_scientific_draft(session, paper, draft))
 
-    tc_results = [item for item in session.added if isinstance(item, models.TcResult)]
-    assert tc_results[0].tc_method_custom == "empirical formula fit"
-    assert tc_results[1].tc_method_custom is None
+    tc_results = [item for item in session.added if isinstance(item, models.PropertyRecord)]
+    assert tc_results[0].method_code == "other"
+    assert tc_results[0].method_raw == "empirical formula fit"
+    assert tc_results[1].method_code == "mcmillan"
+    assert tc_results[1].method_raw == "should be dropped"
+    assert not any(isinstance(item, models.TcResult) for item in session.added)
 
 
 def test_crystal_system_persisted_with_whitelist_fallback():

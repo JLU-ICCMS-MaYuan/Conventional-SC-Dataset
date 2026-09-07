@@ -247,14 +247,19 @@ describe('论文上传工作区', () => {
               state_kind: 'theoretical',
               reported_space_group_symbol: 'Fd-3m',
               reported_space_group_number: 227,
-              calculation_context: {
-                phonon_nuclear_treatment: 'unknown',
-                lambda_ep: 3.35,
-                omega_log_k: null,
-              },
-              experimental_context: null,
-              tc_results: [],
-              properties: [],
+              schema_version: 2,
+              property_modules: [{
+                module_key: 'module-superconductive', module_code: 'superconductive_properties',
+                definition_key: 'module.superconductive_properties', definition_version: 1, display_order: 0,
+                records: [{
+                  record_key: 'record-tc', module_code: 'superconductive_properties', record_type: 'predicted_tc',
+                  property_code: 'tc', definition_key: 'record.superconductive_properties.predicted_tc.mcmillan',
+                  definition_version: 1, name_raw: 'critical temperature', value_kind: 'number',
+                  value_raw: '', value_number: null, unit_raw: 'K', method_code: 'mcmillan', payload: {
+                    calculation_conditions: {}, parameters: { lambda_ep: 3.35, omega_log: null },
+                  },
+                }],
+              }],
             }],
             sc_type: '高压氢化物', classification_evidence: [], field_evidence: {},
           }
@@ -270,8 +275,8 @@ describe('论文上传工作区', () => {
     expect(screen.getByRole('spinbutton', { name: '压强 (GPa)' })).toHaveValue(300)
     expect(screen.getByRole('combobox', { name: '空间群符号' })).toHaveValue('Fd-3m')
     expect(screen.getByRole('spinbutton', { name: '空间群号' })).toHaveValue(227)
-    expect(screen.queryByRole('spinbutton', { name: '电声耦合强度 λ' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('spinbutton', { name: '对数声子频率 ωlog (K)' })).not.toBeInTheDocument()
+    expect(screen.getByRole('spinbutton', { name: '电声耦合强度 λ' })).toHaveValue(3.35)
+    expect(screen.getByRole('spinbutton', { name: 'ωlog (K)' })).toHaveValue(null)
     expect(document.querySelector('input[type="file"]')?.getAttribute('accept')).toContain('.vasp')
 
     fireEvent.click(screen.getByRole('button', { name: '立即保存' }))
@@ -282,7 +287,10 @@ describe('论文上传工作区', () => {
         pressure_value_gpa: 300,
         reported_space_group_symbol: 'Fd-3m',
         reported_space_group_number: 227,
-        calculation_context: { lambda_ep: 3.35, omega_log_k: null },
+        schema_version: 2,
+        property_modules: [{
+          records: [{ payload: { parameters: { lambda_ep: 3.35, omega_log: null } } }],
+        }],
       }],
     })
     expect(savedBodies[0]).not.toHaveProperty('key_properties')

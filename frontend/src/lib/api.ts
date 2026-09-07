@@ -5,6 +5,7 @@ export interface ApiError extends Error {
   status?: number
   code?: string
   detail?: unknown
+  issues?: Array<{ field: string; code?: string; message: string }>
   existingPaperId?: number
 }
 
@@ -36,7 +37,10 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     const error = new Error(message) as ApiError
     error.status = response.status
     error.code = detail?.code || body?.code
-    error.detail = detail
+    error.detail = body
+    error.issues = Array.isArray(body?.issues)
+      ? body.issues
+      : (Array.isArray(detail?.issues) ? detail.issues : undefined)
     error.existingPaperId = detail?.existing_paper_id || body?.existing_paper_id
     throw error
   }

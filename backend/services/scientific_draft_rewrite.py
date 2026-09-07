@@ -17,9 +17,15 @@ from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend import models
-from backend.ingest.scientific_drafts import _number, count_formula_elements
+from backend.ingest.property_modules import normalize_module
+from backend.ingest.scientific_drafts import (
+    _number,
+    _property_modules_for_state,
+    count_formula_elements,
+)
 from backend.services.space_groups import CRYSTAL_SYSTEMS
 from backend.models import Paper
+from backend.ingest.upload_contracts import convert_legacy_state
 
 
 def _canonical_value(value: Any) -> Any:
@@ -45,6 +51,53 @@ def _sorted_snapshot(items: list[dict[str, Any]]) -> list[str]:
         json.dumps(_canonical_value(item), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         for item in items
     )
+
+
+def _record_snapshot(record: Any, *, module_code: str) -> dict[str, Any]:
+    get = record.get if isinstance(record, dict) else lambda name, default=None: getattr(record, name, default)
+    return {
+        "record_key": get("record_key"),
+        "module_code": module_code,
+        "record_type": get("record_type"),
+        "property_code": get("property_code"),
+        "custom_property_key": get("custom_property_key"),
+        "definition_key": get("definition_key"),
+        "definition_version": int(get("definition_version") or 1),
+        "name_raw": get("name_raw"),
+        "value_kind": get("value_kind"),
+        "value_raw": get("value_raw"),
+        "value_number": get("value_number"),
+        "value_min": get("value_min"),
+        "value_max": get("value_max"),
+        "value_text": get("value_text"),
+        "value_boolean": get("value_boolean"),
+        "uncertainty": get("uncertainty"),
+        "unit_raw": get("unit_raw"),
+        "canonical_unit": get("canonical_unit"),
+        "method_code": get("method_code"),
+        "method_raw": get("method_raw"),
+        "criterion_code": get("criterion_code"),
+        "criterion_raw": get("criterion_raw"),
+        "is_representative": bool(get("is_representative")),
+        "structure_key": get("structure_key"),
+        "payload": get("payload") if isinstance(record, dict) else get("payload_json") or {},
+    }
+
+
+def _module_snapshot(module: dict[str, Any]) -> dict[str, Any]:
+    code = module["module_code"]
+    return {
+        "module_key": module["module_key"],
+        "module_code": code,
+        "definition_key": module.get("definition_key") or f"module.{code}",
+        "definition_version": int(module.get("definition_version") or 1),
+        "display_order": int(module.get("display_order") or 0),
+        "metadata": module.get("metadata") or {},
+        "records": sorted(
+            (_record_snapshot(record, module_code=code) for record in module.get("records") or []),
+            key=lambda item: str(item["record_key"]),
+        ),
+    }
 
 
 def _calculation_snapshot(values: Any, *, has_structure: bool) -> dict[str, Any]:
@@ -286,124 +339,67 @@ def _requested_scientific_snapshot(paper: Paper, draft: dict[str, Any]) -> dict[
     }
 
 
-async def _stored_scientific_snapshot(session: AsyncSession, paper: Paper) -> dict[str, Any]:
-    """读取当前 revision 的科学实体图，字段集与请求快照保持一一对应。"""
-    revision = paper.content_revision or 1
-    state_rows = (await session.execute(
-        select(models.MaterialState, models.Superconductor.chemical_formula)
-        .join(models.Superconductor, models.Superconductor.id == models.MaterialState.superconductor_id)
-        .where(
-            models.MaterialState.paper_id == paper.id,
-            models.MaterialState.paper_revision == revision,
-        )
-    )).all()
-    states: dict[int, dict[str, Any]] = {}
-    for state, formula in state_rows:
-        states[state.id] = {
-            "material": str(formula or "").strip(),
-            "element_count": state.element_count,
-            "material_dimensionality": state.material_dimensionality,
-            "pressure_value_gpa": state.pressure_value_gpa,
-            "pressure_min_gpa": state.pressure_min_gpa,
-            "pressure_max_gpa": state.pressure_max_gpa,
-            "pressure_raw": state.pressure_raw,
-            "pressure_unit_raw": state.pressure_unit_raw,
-            "reported_space_group_symbol": state.reported_space_group_symbol,
-            "reported_space_group_number": state.reported_space_group_number,
-            "temperature_value_k": state.temperature_value_k,
-            "temperature_raw": state.temperature_raw,
-            "temperature_unit_raw": state.temperature_unit_raw,
-            "magnetic_field_t": state.magnetic_field_t,
-            "state_kind": state.state_kind,
-            "crystal_system": state.crystal_system,
-            "note": state.note,
-            "structures": [],
-            "calculations": [],
-            "experiments": [],
-            "tc_results": [],
-            "properties": [],
-        }
-    if not states:
-        return {"superconductor_kind": paper.superconductor_kind or "unknown", "states": []}
-
-    for structure in (await session.execute(select(models.StructureModel).where(
-        models.StructureModel.paper_id == paper.id,
-        models.StructureModel.paper_revision == revision,
-    ))).scalars():
-        if structure.material_state_id in states:
-            states[structure.material_state_id]["structures"].append(_structure_snapshot(
-                space_group_symbol=structure.space_group_symbol,
-                space_group_number=structure.space_group_number,
-                structure_format=structure.structure_format,
-                structure_text=structure.structure_text,
-                nuclear_treatment=structure.nuclear_treatment,
-            ))
-
-    for calculation in (await session.execute(select(models.CalculationContext).where(
-        models.CalculationContext.paper_id == paper.id,
-        models.CalculationContext.paper_revision == revision,
-    ))).scalars():
-        if calculation.material_state_id in states:
-            states[calculation.material_state_id]["calculations"].append(_calculation_snapshot(
-                calculation, has_structure=calculation.structure_id is not None,
-            ))
-    for experiment in (await session.execute(select(models.ExperimentalContext).where(
-        models.ExperimentalContext.paper_id == paper.id,
-        models.ExperimentalContext.paper_revision == revision,
-    ))).scalars():
-        if experiment.material_state_id in states:
-            states[experiment.material_state_id]["experiments"].append(_experimental_snapshot(
-                experiment, has_structure=experiment.structure_id is not None,
-            ))
-    for result in (await session.execute(select(models.TcResult).where(
-        models.TcResult.paper_id == paper.id,
-        models.TcResult.paper_revision == revision,
-    ))).scalars():
-        if result.material_state_id in states:
-            states[result.material_state_id]["tc_results"].append(_tc_snapshot(
-                result,
-                has_calculation_context=result.calculation_context_id is not None,
-                has_experimental_context=result.experimental_context_id is not None,
-            ))
-    for prop in (await session.execute(select(models.SuperconductorProperty).where(
-        models.SuperconductorProperty.paper_id == paper.id,
-        models.SuperconductorProperty.paper_revision == revision,
-    ))).scalars():
-        if prop.material_state_id in states:
-            states[prop.material_state_id]["properties"].append(_property_snapshot(
-                prop,
-                material=prop.material_raw,
-                has_structure=prop.structure_id is not None,
-                has_calculation_context=prop.calculation_context_id is not None,
-            ))
-
-    snapshots = []
-    for state in states.values():
-        snapshots.append({
-            **{key: value for key, value in state.items() if key not in {
-                "structures", "calculations", "experiments", "tc_results", "properties",
-            }},
-            "structures": _sorted_snapshot(state["structures"]),
-            "calculations": _sorted_snapshot(state["calculations"]),
-            "experiments": _sorted_snapshot(state["experiments"]),
-            "tc_results": _sorted_snapshot(state["tc_results"]),
-            "properties": _sorted_snapshot(state["properties"]),
-        })
-    return {
-        "superconductor_kind": paper.superconductor_kind or "unknown",
-        "states": _sorted_snapshot(snapshots),
-    }
-
-
 async def scientific_draft_matches_current_revision(
     session: AsyncSession,
     paper: Paper,
     draft: dict[str, Any],
 ) -> bool:
     """返回请求是否与当前科学数据语义相同，不做任何写入。"""
-    return _requested_scientific_snapshot(paper, draft) == await _stored_scientific_snapshot(
-        session, paper,
-    )
+    requested = []
+    for index, raw_state in enumerate(draft.get("material_states") or []):
+        modules = [
+            normalize_module(
+                module,
+                paper_id=paper.id,
+                paper_revision=paper.content_revision or 1,
+            )
+            for module in _property_modules_for_state(raw_state)
+        ]
+        requested.append({
+            "state_key": str(raw_state.get("state_key") or f"state-{index + 1}"),
+            "material": str(raw_state.get("material") or "").strip(),
+            "pressure_value_gpa": _number(raw_state.get("pressure_value_gpa")),
+            "state_kind": raw_state.get("state_kind") or "unknown",
+            "property_modules": _canonical_value(sorted(
+                (_module_snapshot(module) for module in modules),
+                key=lambda item: str(item["module_key"]),
+            )),
+        })
+    revision = paper.content_revision or 1
+    rows = (await session.execute(
+        select(models.MaterialState, models.Superconductor.chemical_formula)
+        .join(models.Superconductor, models.Superconductor.id == models.MaterialState.superconductor_id)
+        .where(models.MaterialState.paper_id == paper.id, models.MaterialState.paper_revision == revision)
+    )).all()
+    stored = []
+    for state, formula in rows:
+        modules = (await session.execute(
+            select(models.PropertyModule).where(models.PropertyModule.material_state_id == state.id)
+        )).scalars().all()
+        module_values = []
+        for module in modules:
+            records = (await session.execute(
+                select(models.PropertyRecord).where(models.PropertyRecord.module_id == module.id)
+            )).scalars().all()
+            module_values.append({
+                "module_key": module.module_key, "module_code": module.module_code,
+                "definition_key": module.definition_key, "definition_version": module.definition_version,
+                "display_order": module.display_order,
+                "metadata": module.metadata_json or {},
+                "records": sorted(
+                    (_record_snapshot(record, module_code=module.module_code) for record in records),
+                    key=lambda item: str(item["record_key"]),
+                ),
+            })
+        stored.append({
+            "state_key": state.state_key, "material": str(formula or "").strip(),
+            "pressure_value_gpa": _number(state.pressure_value_gpa), "state_kind": state.state_kind,
+            "property_modules": _canonical_value(sorted(
+                module_values,
+                key=lambda item: str(item["module_key"]),
+            )),
+        })
+    return _sorted_snapshot(requested) == _sorted_snapshot(stored)
 
 
 async def delete_scientific_entities(session: AsyncSession, paper_id: int) -> None:
@@ -413,23 +409,19 @@ async def delete_scientific_entities(session: AsyncSession, paper_id: int) -> No
     paper_evidences / paper_chunks / paper_files——它们的 paper_revision
     由外键级联自动更新（见 data-model.md 外键迁移）。
     """
-    # 1. 证据连接表：引用 tc_results / structure_models / superconductor_properties
+    # Target records and their immutable audit/evidence dependencies.
+    await session.execute(text("DELETE FROM property_record_evidences WHERE paper_id = :pid"), {"pid": paper_id})
+    await session.execute(text("DELETE FROM property_record_definition_events WHERE paper_id = :pid"), {"pid": paper_id})
+    await session.execute(text("DELETE FROM property_records WHERE paper_id = :pid"), {"pid": paper_id})
+    await session.execute(text("DELETE FROM property_modules WHERE paper_id = :pid"), {"pid": paper_id})
+
+    # Structure evidence remains part of the target graph.
     for table in (
-        "tc_result_evidences",
         "structure_model_evidences",
-        "superconductor_property_evidences",
     ):
         await session.execute(text(f"DELETE FROM {table} WHERE paper_id = :pid"), {"pid": paper_id})
 
-    # 2. 叶子业务表
-    for table in ("tc_results", "superconductor_properties"):
-        await session.execute(text(f"DELETE FROM {table} WHERE paper_id = :pid"), {"pid": paper_id})
-
-    # 3. 上下文表
-    for table in ("calculation_contexts", "experimental_contexts"):
-        await session.execute(text(f"DELETE FROM {table} WHERE paper_id = :pid"), {"pid": paper_id})
-
-    # 4. structure_models：自引用 parent_structure_id 先置空再删，
+    # structure_models：自引用 parent_structure_id 先置空再删，
     #    否则同论文内父子结构的删除先后顺序不定，可能触发外键错误。
     await session.execute(
         text(
@@ -455,6 +447,8 @@ async def delete_scientific_entities(session: AsyncSession, paper_id: int) -> No
     await session.execute(
         text("DELETE FROM material_states WHERE paper_id = :pid"), {"pid": paper_id}
     )
+    await session.execute(text("DELETE FROM superconductors WHERE paper_id = :pid"), {"pid": paper_id})
+    await session.execute(text("DELETE FROM chemical_systems WHERE paper_id = :pid"), {"pid": paper_id})
 
 async def bump_paper_revision(session: AsyncSession, paper: Paper) -> None:
     """升版：单条 UPDATE 三个版本字段，触发外键级联迁移血缘数据。

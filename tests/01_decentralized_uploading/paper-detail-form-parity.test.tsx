@@ -9,8 +9,20 @@
 import '@testing-library/jest-dom/vitest'
 import React from 'react'
 import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import PaperEditView from '../../frontend/src/components/PaperEditView'
+
+const propertyModule = (records: Array<Record<string, unknown>>) => ({
+  module_key: 'module-superconductive', module_code: 'superconductive_properties',
+  definition_key: 'module.superconductive_properties', definition_version: 1, display_order: 0, records,
+})
+
+const propertyRecord = (overrides: Record<string, unknown>) => ({
+  record_key: 'record-property', module_code: 'superconductive_properties', record_type: 'property',
+  property_code: 'custom', definition_key: 'record.superconductive_properties.custom', definition_version: 1,
+  name_raw: '', value_kind: 'number', value_raw: '', value_number: null, unit_raw: '', payload: {},
+  ...overrides,
+})
 
 describe('只读详情页与校对表单字段一致（Issue #59）', () => {
   /**
@@ -44,7 +56,7 @@ describe('只读详情页与校对表单字段一致（Issue #59）', () => {
     render(<PaperEditView paper={paper} onBack={() => {}} />)
 
     // 材料状态分类与论文级类型断言
-    expect(screen.getByText('LaH10')).toBeInTheDocument()
+    expect(screen.getAllByText('LaH10')).toHaveLength(2)
     expect(screen.getByText('氢化物')).toBeInTheDocument()
     expect(screen.getByText('不同元素种类数')).toBeInTheDocument()
     expect(screen.getByText('2')).toBeInTheDocument()
@@ -106,29 +118,23 @@ describe('只读详情页与校对表单字段一致（Issue #59）', () => {
         {
           id: 1,
           material: 'LaH10',
-          tc_results: [
-            {
-              id: 1,
-              tc_value_k: 274,
-              tc_method: 'resistivity',
-            },
-          ],
-          calculation_contexts: [
-            // 首条全 NULL——关键边界，防止只取首条
-            {
-              id: 1,
-              lambda_ep: null,
-              omega_log_k: null,
-              mu_star: null,
-            },
-            // 次条含值
-            {
-              id: 2,
-              lambda_ep: 2.56,
-              omega_log_k: null,
-              mu_star: 0.1,
-            },
-          ],
+          property_modules: [propertyModule([
+            propertyRecord({
+              record_key: 'record-measured', record_type: 'measured_tc', property_code: 'tc',
+              definition_key: 'record.superconductive_properties.measured_tc.resistivity',
+              name_raw: 'critical temperature', value_raw: '274', value_number: 274, unit_raw: 'K',
+              method_code: 'resistivity', payload: { experimental_conditions: {} },
+            }),
+            propertyRecord({
+              record_key: 'record-predicted', record_type: 'predicted_tc', property_code: 'tc',
+              definition_key: 'record.superconductive_properties.predicted_tc.mcmillan',
+              name_raw: 'critical temperature', method_code: 'mcmillan',
+              payload: {
+                calculation_conditions: {},
+                parameters: { lambda_ep: 2.56, omega_log: null, mu_star: 0.1 },
+              },
+            }),
+          ])],
         },
       ],
     }
@@ -136,12 +142,14 @@ describe('只读详情页与校对表单字段一致（Issue #59）', () => {
     render(<PaperEditView paper={paper} onBack={() => {}} />)
 
     // Tc 可见
-    expect(screen.getByText(/274 K/)).toBeInTheDocument()
-    expect(screen.getByText(/resistivity/)).toBeInTheDocument()
+    const measured = screen.getByTestId('property-record-record-measured')
+    expect(within(measured).getByLabelText('数值')).toHaveValue(274)
+    expect(screen.getByText(/测量 Tc · resistivity/)).toBeInTheDocument()
 
     // λ=2.56 与 μ*=0.1 可见（关键断言：如果只取首条，这些值不会出现）
-    expect(screen.getByText(/2\.56/)).toBeInTheDocument()
-    expect(screen.getByText(/0\.1/)).toBeInTheDocument()
+    const predicted = screen.getByTestId('property-record-record-predicted')
+    expect(within(predicted).getByLabelText('电声耦合强度 λ')).toHaveValue(2.56)
+    expect(within(predicted).getByLabelText('μ*')).toHaveValue(0.1)
   })
 
   /**
@@ -156,17 +164,10 @@ describe('只读详情页与校对表单字段一致（Issue #59）', () => {
         {
           id: 1,
           material: 'LaH10',
-        },
-      ],
-      key_properties: [
-        {
-          id: 1,
-          material_state_id: 1,
-          name: 'thermodynamic stability',
-          name_raw: 'thermodynamic stability',
-          value_raw: '0',
-          value_number: 200,
-          unit: 'meV/atom',
+          property_modules: [propertyModule([propertyRecord({
+            record_key: 'record-stability', name_raw: 'thermodynamic stability',
+            value_raw: '0', value_number: 200, unit_raw: 'meV/atom',
+          })])],
         },
       ],
     }
@@ -174,10 +175,11 @@ describe('只读详情页与校对表单字段一致（Issue #59）', () => {
     render(<PaperEditView paper={paper} onBack={() => {}} />)
 
     // 物性字段集断言
-    expect(screen.getByText(/thermodynamic stability/)).toBeInTheDocument()
-    expect(screen.getByText(/原始值.*0/)).toBeInTheDocument()
-    expect(screen.getByText(/解析值.*200/)).toBeInTheDocument()
-    expect(screen.getByText(/meV\/atom/)).toBeInTheDocument()
+    const record = screen.getByTestId('property-record-record-stability')
+    expect(within(record).getByLabelText('名称')).toHaveValue('thermodynamic stability')
+    expect(within(record).getByLabelText('原始值')).toHaveValue('0')
+    expect(within(record).getByLabelText('数值')).toHaveValue(200)
+    expect(within(record).getByLabelText('单位')).toHaveValue('meV/atom')
 
     // 关键断言：页面不含「最小值」「最大值」文本
     expect(screen.queryByText(/最小值/)).not.toBeInTheDocument()

@@ -53,25 +53,52 @@ func GetPaper(c *gin.Context) {
 	}
 
 	var paper models.Paper
-	if err := database.DB.
-		Preload("KeyProperties.PropertyDefinition").
-		Preload("MaterialFamilyLinks.MaterialFamily").
-		Preload("MaterialStates.Superconductor").
-		Preload("MaterialStates.StructureFamilyLinks.StructureFamily").
-		Preload("MaterialStates.TcResults").
-		Preload("MaterialStates.CalculationContexts").
-		Preload("MaterialStates.Structures").
-		Preload("MaterialStates.PropertyModules.Records").
-		First(&paper, uint(id)).Error; err != nil {
+	if err := targetPaperGraphQuery(database.DB).First(&paper, uint(id)).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "论文不存在"})
 		return
 	}
+	hydratePropertyModuleRecords(&paper)
 	user := optionalPaperUser(c)
 	if !canViewPaper(&paper, user) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权查看该论文"})
 		return
 	}
 	c.JSON(http.StatusOK, paperForViewer(paper, user))
+}
+
+// targetPaperGraphQuery 集中声明 #90 读取契约，避免公开、管理和上传者详情各自漏载关联。
+// 所有关联都以集合级 Preload 执行，查询数量不会随状态或记录数量线性增长。
+func targetPaperGraphQuery(db *gorm.DB) *gorm.DB {
+	return db.
+		Preload("MaterialFamilyLinks.MaterialFamily").
+		Preload("MaterialStates.Superconductor.ChemicalSystem").
+		Preload("MaterialStates.StructureFamilyLinks.StructureFamily").
+		Preload("MaterialStates.Structures").
+		Preload("MaterialStates.PropertyModules", func(query *gorm.DB) *gorm.DB {
+			return query.Order("display_order ASC, id ASC")
+		}).
+		Preload("MaterialStates.PropertyModules.Records", func(query *gorm.DB) *gorm.DB {
+			return query.Order("id ASC")
+		}).
+		Preload("MaterialStates.PropertyModules.Records.Definition").
+		Preload("MaterialStates.PropertyModules.Records.Evidences.Evidence")
+}
+
+func hydratePropertyModuleRecords(paper *models.Paper) {
+	for stateIndex := range paper.MaterialStates {
+		for moduleIndex := range paper.MaterialStates[stateIndex].PropertyModules {
+			module := &paper.MaterialStates[stateIndex].PropertyModules[moduleIndex]
+			if module.Records == nil {
+				module.Records = make([]models.PropertyRecord, 0)
+			}
+			for recordIndex := range module.Records {
+				module.Records[recordIndex].ModuleCode = module.ModuleCode
+				if module.Records[recordIndex].Evidences == nil {
+					module.Records[recordIndex].Evidences = make([]models.PropertyRecordEvidence, 0)
+				}
+			}
+		}
+	}
 }
 
 func optionalPaperUser(c *gin.Context) *models.User {
@@ -146,7 +173,7 @@ func ListPapers(c *gin.Context) {
 	var total int64
 	query.Count(&total)
 	var papers []models.Paper
-	query.Preload("KeyProperties").Order("created_at DESC").Limit(limit).Offset(offset).Find(&papers)
+	query.Order("created_at DESC").Limit(limit).Offset(offset).Find(&papers)
 	items := make([]gin.H, 0, len(papers))
 	for _, paper := range papers {
 		items = append(items, paperForViewer(paper, user))
@@ -184,7 +211,7 @@ func PatchPaper(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "保存失败"})
 		return
 	}
-	database.DB.Preload("KeyProperties").First(&paper, paper.ID)
+	database.DB.First(&paper, paper.ID)
 	c.JSON(http.StatusOK, paperForViewer(paper, user))
 }
 
@@ -237,7 +264,7 @@ func SearchRecords(c *gin.Context) {
 		return
 	}
 
-	// JOIN tc_results + material_states + superconductors + papers
+	// 统一 PropertyRecord 是搜索的唯一 Tc 事实来源。
 	query := approvedRecordSearchQuery(database.DB)
 
 	if len(scIDs) > 0 {
@@ -258,10 +285,10 @@ func SearchRecords(c *gin.Context) {
 		query = query.Where("papers.year <= ?", *body.YearMax)
 	}
 	if body.TcMin != nil {
-		query = query.Where("tc_results.tc_value_k >= ?", *body.TcMin)
+		query = query.Where(searchTcValueExpr+" >= ?", *body.TcMin)
 	}
 	if body.TcMax != nil {
-		query = query.Where("tc_results.tc_value_k <= ?", *body.TcMax)
+		query = query.Where(searchTcValueExpr+" <= ?", *body.TcMax)
 	}
 	if body.PressureMin != nil {
 		query = query.Where("material_states.pressure_value_gpa >= ?", *body.PressureMin)
@@ -272,8 +299,9 @@ func SearchRecords(c *gin.Context) {
 	if body.SuperconductorType != "" {
 		query = query.Where("material_states.state_kind = ?", body.SuperconductorType)
 	}
-	// body.ChartOnly 不再生效：主记录标记是旧 key_properties 的概念，
-	// 条件化模型中物性没有主次语义，无真实列可依据。
+	if body.ChartOnly {
+		query = query.Where("property_records.is_representative = ?", true)
+	}
 
 	// 计算 total
 	var total int64
@@ -281,7 +309,7 @@ func SearchRecords(c *gin.Context) {
 
 	// 排序 + 分页
 	var rows []recordSearchRow
-	query.Order("papers.year DESC, tc_results.id ASC").
+	query.Order("papers.year DESC, property_records.id ASC").
 		Offset(body.Offset).Limit(body.Limit).
 		Find(&rows)
 
@@ -296,19 +324,37 @@ func SearchRecords(c *gin.Context) {
 }
 
 func approvedPaperDetailQuery(db *gorm.DB) *gorm.DB {
-	return db.Preload("KeyProperties").Where("review_status = ?", reviewStatusApproved)
+	return db.Where("review_status = ?", reviewStatusApproved)
 }
 
-// approvedRecordSearchQuery 记录搜索的主体是 Tc 结果：一行代表「一个材料在一组条件下的一个 Tc」。
-// 旧实现查 key_properties 表，该表在条件化模型迁移后已不存在，导致搜索恒返回空；
-// Tc 现只存在于 tc_results，条件字段上提到 material_states。
+const searchTcValueExpr = "COALESCE(property_records.value_number, (property_records.value_min + property_records.value_max) / 2)"
+
+// approvedRecordSearchQuery 的每一行对应一条统一 Tc 记录。
 func approvedRecordSearchQuery(db *gorm.DB) *gorm.DB {
-	return db.Table("tc_results").
-		Select("tc_results.*, material_states.*, superconductors.chemical_formula, papers.*").
-		Joins("JOIN material_states ON material_states.id = tc_results.material_state_id").
+	return db.Table("property_records").
+		Select(`property_records.record_key AS record_key,
+			property_records.value_number AS tc_value_k,
+			property_records.value_min AS tc_min_k,
+			property_records.value_max AS tc_max_k,
+			property_records.value_raw AS value_raw,
+			property_records.unit_raw AS unit_raw,
+			property_records.record_type AS record_type,
+			property_records.method_code AS method_code,
+			property_records.is_representative AS is_representative,
+			material_states.pressure_value_gpa AS pressure_value_gpa,
+			material_states.reported_space_group_symbol AS reported_space_group_symbol,
+			material_states.state_kind AS state_kind,
+			superconductors.chemical_formula AS chemical_formula,
+			papers.id AS paper_id, papers.year AS year, papers.review_status AS review_status,
+			papers.doi AS doi`).
+		Joins("JOIN property_modules ON property_modules.id = property_records.module_id").
+		Joins("JOIN material_states ON material_states.id = property_records.material_state_id").
 		Joins("JOIN superconductors ON superconductors.id = material_states.superconductor_id").
-		Joins("JOIN papers ON papers.id = tc_results.paper_id").
-		Where("tc_results.tc_value_k IS NOT NULL").
+		Joins("JOIN papers ON papers.id = property_records.paper_id AND papers.content_revision = property_records.paper_revision").
+		Where("property_records.property_code = ?", "tc").
+		Where("property_records.record_type IN ?", []string{"predicted_tc", "measured_tc"}).
+		Where(searchTcValueExpr+" IS NOT NULL").
+		Where("property_modules.module_code = ?", "superconductive_properties").
 		Where("papers.review_status = ?", reviewStatusApproved)
 }
 
@@ -330,11 +376,12 @@ func getSuperconductorIDs(elements []string, mode, formula string) []uint {
 		if key == "" {
 			return nil
 		}
-		var cs models.ChemicalSystem
-		if err := database.DB.Where("system_key = ?", key).First(&cs).Error; err != nil {
+		var csIDs []uint
+		if err := database.DB.Model(&models.ChemicalSystem{}).
+			Where("system_key = ?", key).Pluck("id", &csIDs).Error; err != nil || len(csIDs) == 0 {
 			return nil
 		}
-		return superconductorIDsByCS([]uint{cs.ID})
+		return superconductorIDsByCS(csIDs)
 	}
 
 	if len(symbols) == 0 {
@@ -461,20 +508,21 @@ func buildFormulaSystemKey(formula string) string {
 }
 
 func paperToDict(p models.Paper) gin.H {
-	// 聚合 Tc：Tc 只存在于 tc_results，不在普通物性表中。
-	// 旧实现按 key_properties.name == "critical_temperature" 聚合，在条件化模型下恒为空。
+	// Tc 的查询权威是统一记录固定列；payload 不参与聚合。
 	var tcMax *float64
 	for _, state := range p.MaterialStates {
-		for _, result := range state.TcResults {
-			value := result.TcValueK
-			if value == nil {
-				value = result.TcMaxK
-			}
-			if value == nil {
-				continue
-			}
-			if tcMax == nil || *value > *tcMax {
-				tcMax = value
+		for _, module := range state.PropertyModules {
+			for _, record := range module.Records {
+				if record.PropertyCode != "tc" {
+					continue
+				}
+				value := record.ValueNumber
+				if value == nil {
+					value = record.ValueMax
+				}
+				if value != nil && (tcMax == nil || *value > *tcMax) {
+					tcMax = value
+				}
 			}
 		}
 	}
@@ -502,7 +550,6 @@ func paperToDict(p models.Paper) gin.H {
 		"created_at":            p.CreatedAt,
 		"updated_at":            p.UpdatedAt,
 		"tc_max":                tcMax,
-		"key_properties":        keyPropertiesToDict(p.KeyProperties),
 		"material_families":     materialFamiliesToDict(p.MaterialFamilyLinks),
 		"material_states":       materialStatesToDict(p.MaterialStates),
 	}
@@ -536,15 +583,15 @@ func materialStatesToDict(states []models.MaterialState) []gin.H {
 			structures = append(structures, gin.H{
 				"id": link.StructureFamilyID, "name": link.StructureFamily.NameZH,
 				"name_en": link.StructureFamily.NameEN,
-				"status": "confirmed", "is_primary": link.IsPrimary,
+				"status":  "confirmed", "is_primary": link.IsPrimary,
 			})
 		}
 		result = append(result, gin.H{
 			"id": state.ID, "material": state.Superconductor.ChemicalFormula,
 			"structure_families": structures,
-			"element_count": state.ElementCount, "material_dimensionality": state.MaterialDimensionality,
-			"crystal_system":      state.CrystalSystem,
-			"state_kind":          state.StateKind,
+			"element_count":      state.ElementCount, "material_dimensionality": state.MaterialDimensionality,
+			"crystal_system": state.CrystalSystem,
+			"state_kind":     state.StateKind,
 			// 压强单臂区间：缺失的一侧保持 null，不补造边界（Issue #54 入库语义）。
 			"pressure_value_gpa":          state.PressureValueGPa,
 			"pressure_min_gpa":            state.PressureMinGPa,
@@ -557,12 +604,8 @@ func materialStatesToDict(states []models.MaterialState) []gin.H {
 			"temperature_raw":             state.TemperatureRaw,
 			"magnetic_field_t":            state.MagneticFieldT,
 			"note":                        state.Note,
-			// Tc 与计算上下文的外键都是 material_state_id，因此嵌套在所属材料状态之下，
-			// 消费方无需按 material_state_id 自行重建分组关系。
-			"tc_results":           tcResultsToDict(state.TcResults),
-			"calculation_contexts": calculationContextsToDict(state.CalculationContexts),
-			"structures":           structureModelsToDict(state.Structures),
-			"property_modules":     propertyModulesToDict(state.PropertyModules),
+			"structures":                  structureModelsToDict(state.Structures),
+			"property_modules":            propertyModulesToDict(state.PropertyModules),
 		})
 	}
 	return result
@@ -574,15 +617,19 @@ func propertyModulesToDict(modules []models.PropertyModule) []gin.H {
 		records := make([]gin.H, 0, len(module.Records))
 		for _, record := range module.Records {
 			records = append(records, gin.H{
-				"record_key": record.RecordKey, "record_type": record.RecordType,
+				"record_key": record.RecordKey, "module_code": module.ModuleCode, "record_type": record.RecordType,
 				"property_code": record.PropertyCode, "custom_property_key": record.CustomPropertyKey,
 				"definition_key": record.DefinitionKey, "definition_version": record.DefinitionVersion,
-				"name_raw": record.NameRaw, "value_kind": record.ValueKind, "value_raw": record.ValueRaw,
+				"definition": record.Definition,
+				"name_raw":   record.NameRaw, "value_kind": record.ValueKind, "value_raw": record.ValueRaw,
 				"value_number": record.ValueNumber, "value_min": record.ValueMin, "value_max": record.ValueMax,
 				"value_text": record.ValueText, "value_boolean": record.ValueBoolean,
 				"uncertainty": record.Uncertainty, "unit_raw": record.UnitRaw, "canonical_unit": record.CanonicalUnit,
-				"method_code": record.MethodCode, "is_representative": record.IsRepresentative,
-				"structure_key": record.StructureKey, "payload": json.RawMessage(record.PayloadJSON),
+				"method_code": record.MethodCode, "method_raw": record.MethodRaw,
+				"criterion_code": record.CriterionCode, "criterion_raw": record.CriterionRaw,
+				"is_representative": record.IsRepresentative,
+				"structure_key":     record.StructureKey, "payload": json.RawMessage(record.PayloadJSON),
+				"evidences": record.Evidences,
 			})
 		}
 		output = append(output, gin.H{"module_key": module.ModuleKey, "module_code": module.ModuleCode, "definition_key": module.DefinitionKey, "definition_version": module.DefinitionVersion, "display_order": module.DisplayOrder, "metadata": json.RawMessage(module.MetadataJSON), "records": records})
@@ -609,88 +656,6 @@ func structureModelsToDict(structures []models.StructureModel) []gin.H {
 		})
 	}
 	return output
-}
-
-func tcResultsToDict(results []models.TcResult) []gin.H {
-	output := make([]gin.H, 0, len(results))
-	for _, item := range results {
-		output = append(output, gin.H{
-			"id":               item.ID,
-			"result_kind":      item.ResultKind,
-			"tc_method":        item.TcMethod,
-			"tc_method_custom": item.TcMethodCustom,
-			"tc_value_k":       item.TcValueK,
-			"tc_min_k":         item.TcMinK,
-			"tc_max_k":         item.TcMaxK,
-			"uncertainty_k":    item.UncertaintyK,
-			"value_raw":        item.ValueRaw,
-			"unit_raw":         item.UnitRaw,
-			"source_locator":   item.SourceLocator,
-		})
-	}
-	return output
-}
-
-// calculationContextsToDict 返回全部计算上下文，包含数值全为 NULL 的记录：
-// 读取侧不筛选也不合并，避免擅自判定哪一条才算有效。
-func calculationContextsToDict(contexts []models.CalculationContext) []gin.H {
-	output := make([]gin.H, 0, len(contexts))
-	for _, item := range contexts {
-		output = append(output, gin.H{
-			"id":                       item.ID,
-			"lambda_ep":                item.LambdaEP,
-			"mu_star":                  item.MuStar,
-			"omega_log_k":              item.OmegaLogK,
-			"electronic_method":        item.ElectronicMethod,
-			"exchange_correlation":     item.ExchangeCorrelation,
-			"pseudopotential_type":     item.PseudopotentialType,
-			"pseudopotential_name":     item.PseudopotentialName,
-			"spin_orbit_coupling":      item.SpinOrbitCoupling,
-			"phonon_method":            item.PhononMethod,
-			"phonon_nuclear_treatment": item.PhononNuclearTreatment,
-			"epc_method":               item.EPCMethod,
-			"k_grid":                   item.KGrid,
-			"q_grid":                   item.QGrid,
-			"energy_cutoff_value":      item.EnergyCutoffValue,
-			"energy_cutoff_unit":       item.EnergyCutoffUnit,
-			"calculation_code":         item.CalculationCode,
-			"missing_structure_reason": item.MissingStructureReason,
-		})
-	}
-	return output
-}
-
-// propertyDisplayName 取物性的展示名：规范定义优先，缺失时回退原文名。
-// 不返回空字符串——空名称无法与「该论文确实没有名称」区分，对消费方是误导。
-func propertyDisplayName(kp models.KeyProperty) string {
-	if kp.PropertyDefinition != nil && kp.PropertyDefinition.DisplayName != "" {
-		return kp.PropertyDefinition.DisplayName
-	}
-	return kp.NameRaw
-}
-
-// keyPropertiesToDict 只输出 superconductor_properties 的真实列。
-// 条件类字段（压强、温度）属材料状态，结构文本属 structure_models，均不在此重复。
-func keyPropertiesToDict(kps []models.KeyProperty) []gin.H {
-	result := make([]gin.H, 0, len(kps))
-	for _, kp := range kps {
-		result = append(result, gin.H{
-			"id":                kp.ID,
-			"paper_id":          kp.PaperID,
-			"material_state_id": kp.MaterialStateID,
-			"material":          kp.Material,
-			"name":              propertyDisplayName(kp),
-			"name_raw":          kp.NameRaw,
-			"value_min":         kp.ValueMin,
-			"value_max":         kp.ValueMax,
-			"value_raw":         kp.ValueRaw,
-			"value_number":      kp.ValueNumber,
-			"unit":              kp.Unit,
-			"canonical_unit":    kp.CanonicalUnit,
-			"condition_note":    kp.ConditionNote,
-		})
-	}
-	return result
 }
 
 // SearchAll 跨源聚合搜索（替代 Python POST /api/papers/search/all）
@@ -816,11 +781,7 @@ func searchLocalAll(elements []string, mode string) []gin.H {
 
 	// 材料归属在 material_states.superconductor_id；key_properties 表已不存在。
 	var papers []models.Paper
-	database.DB.
-		Preload("KeyProperties.PropertyDefinition").
-		Preload("MaterialFamilyLinks.MaterialFamily").
-		Preload("MaterialStates.Superconductor").
-		Preload("MaterialStates.TcResults").
+	targetPaperGraphQuery(database.DB).
 		Where("review_status = ?", reviewStatusApproved).
 		Where("id IN (SELECT DISTINCT paper_id FROM material_states WHERE superconductor_id IN ?)", scIDs).
 		Find(&papers)
@@ -835,14 +796,6 @@ func searchLocalAll(elements []string, mode string) []gin.H {
 			if state.Superconductor.ChemicalFormula != "" {
 				d["compound_symbols"] = state.Superconductor.ChemicalFormula
 				break
-			}
-		}
-		if cs, _ := d["compound_symbols"].(string); cs == "" {
-			for _, kp := range p.KeyProperties {
-				if kp.Material != "" {
-					d["compound_symbols"] = kp.Material
-					break
-				}
 			}
 		}
 		result = append(result, d)
@@ -951,57 +904,71 @@ func max(a, b int) int {
 	return b
 }
 
-// recordSearchRow 承接 approvedRecordSearchQuery 的一行：Tc 结果 + 所属材料状态 + 化学式 + 论文。
+// recordSearchRow 承接统一 Tc 记录及其所属状态和论文的公开搜索投影。
 type recordSearchRow struct {
-	models.TcResult
-	models.MaterialState
-	ChemicalFormula string
-	models.Paper
+	RecordKey                string   `gorm:"column:record_key"`
+	TcValueK                 *float64 `gorm:"column:tc_value_k"`
+	TcMinK                   *float64 `gorm:"column:tc_min_k"`
+	TcMaxK                   *float64 `gorm:"column:tc_max_k"`
+	ValueRaw                 string   `gorm:"column:value_raw"`
+	UnitRaw                  *string  `gorm:"column:unit_raw"`
+	RecordType               string   `gorm:"column:record_type"`
+	MethodCode               *string  `gorm:"column:method_code"`
+	IsRepresentative         bool     `gorm:"column:is_representative"`
+	PressureValueGPa         *float64 `gorm:"column:pressure_value_gpa"`
+	ReportedSpaceGroupSymbol *string  `gorm:"column:reported_space_group_symbol"`
+	StateKind                string   `gorm:"column:state_kind"`
+	ChemicalFormula          string   `gorm:"column:chemical_formula"`
+	PaperID                  uint     `gorm:"column:paper_id"`
+	Year                     *int     `gorm:"column:year"`
+	ReviewStatus             string   `gorm:"column:review_status"`
+	DOI                      *string  `gorm:"column:doi"`
 }
 
 func flatRecordToDict(row recordSearchRow) gin.H {
 	pressure := "-"
-	if row.MaterialState.PressureValueGPa != nil {
-		pressure = strconv.FormatFloat(*row.MaterialState.PressureValueGPa, 'g', -1, 64) + " GPa"
+	if row.PressureValueGPa != nil {
+		pressure = strconv.FormatFloat(*row.PressureValueGPa, 'g', -1, 64) + " GPa"
 	}
 
 	tc := "-"
-	if row.TcResult.TcValueK != nil {
-		tc = strconv.FormatFloat(*row.TcResult.TcValueK, 'f', 1, 64) + " K"
-	} else if row.TcResult.TcMinK != nil && row.TcResult.TcMaxK != nil {
-		tc = strconv.FormatFloat(*row.TcResult.TcMinK, 'f', 1, 64) + "–" +
-			strconv.FormatFloat(*row.TcResult.TcMaxK, 'f', 1, 64) + " K"
+	if row.TcValueK != nil {
+		tc = strconv.FormatFloat(*row.TcValueK, 'f', 1, 64) + " K"
+	} else if row.TcMinK != nil && row.TcMaxK != nil {
+		tc = strconv.FormatFloat(*row.TcMinK, 'f', 1, 64) + "–" +
+			strconv.FormatFloat(*row.TcMaxK, 'f', 1, 64) + " K"
 	}
 
 	spaceGroup := "-"
-	if row.MaterialState.ReportedSpaceGroupSymbol != nil && *row.MaterialState.ReportedSpaceGroupSymbol != "" {
-		spaceGroup = *row.MaterialState.ReportedSpaceGroupSymbol
+	if row.ReportedSpaceGroupSymbol != nil && *row.ReportedSpaceGroupSymbol != "" {
+		spaceGroup = *row.ReportedSpaceGroupSymbol
 	}
 
 	statusMap := map[string]string{
 		"pending": "Pending", "approved": "Approved", "reviewed": "Approved", "rejected": "Rejected",
 	}
-	status := statusMap[row.Paper.ReviewStatus]
+	status := statusMap[row.ReviewStatus]
 	if status == "" {
 		status = "Pending"
 	}
 
 	year := 0
-	if row.Paper.Year != nil {
-		year = *row.Paper.Year
+	if row.Year != nil {
+		year = *row.Year
 	}
 
 	return gin.H{
-		"record_id":   row.TcResult.ID,
-		"paper_id":    row.Paper.ID,
+		"record_id":   row.RecordKey,
+		"record_key":  row.RecordKey,
+		"paper_id":    row.PaperID,
 		"year":        year,
 		"formula":     row.ChemicalFormula,
-		"type":        row.MaterialState.StateKind,
+		"type":        row.StateKind,
 		"pressure":    pressure,
 		"tc":          tc,
 		"space_group": spaceGroup,
 		"source":      "Local",
 		"status":      status,
-		"doi":         row.Paper.DOI,
+		"doi":         row.DOI,
 	}
 }

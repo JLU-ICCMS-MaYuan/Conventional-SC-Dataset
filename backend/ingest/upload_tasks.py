@@ -29,6 +29,7 @@ from backend.ingest.upload_contracts import (
     UPLOAD_STATE_SCHEMA_VERSION,
     apply_state_changes,
     apply_user_activity,
+    convert_legacy_scientific_draft,
     public_task_state,
     validate_manifest,
 )
@@ -367,10 +368,11 @@ def lock_uploaded_manifest(task_id: str) -> tuple[dict[str, Any], bool]:
 
 def get_draft(task_id: str) -> dict[str, Any] | None:
     raw = redis_client().get(draft_key(task_id))
-    return json.loads(raw) if raw else None
+    return convert_legacy_scientific_draft(json.loads(raw)) if raw else None
 
 
 def save_draft(task_id: str, draft: dict[str, Any]) -> dict[str, Any]:
+    draft = convert_legacy_scientific_draft(draft)
     client = redis_client()
     raw_state = client.get(task_key(task_id))
     if not raw_state:

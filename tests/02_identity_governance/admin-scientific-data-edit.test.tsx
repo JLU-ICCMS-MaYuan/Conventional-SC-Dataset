@@ -9,7 +9,7 @@
 
 import '@testing-library/jest-dom/vitest'
 import React from 'react'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -61,13 +61,23 @@ const detailWithStates = {
     crystal_system: 'tetragonal',
     state_kind: 'experimental',
     pressure_value_gpa: 0.001,
-    tc_results: [{
-      id: 31, result_kind: 'theoretical', tc_method: 'mcmillan',
-      tc_value_k: 3.78, value_raw: '3.78', unit_raw: 'K', is_representative: true,
-      calculation_context_id: 71,
+    property_modules: [{
+      module_key: 'module-superconductive', module_code: 'superconductive_properties',
+      definition_key: 'module.superconductive_properties', definition_version: 1, display_order: 0,
+      records: [{
+        record_key: 'record-tc', module_code: 'superconductive_properties', record_type: 'predicted_tc',
+        property_code: 'tc', definition_key: 'record.superconductive_properties.predicted_tc.mcmillan',
+        definition_version: 1, name_raw: 'critical temperature', value_kind: 'number',
+        value_raw: '3.78', value_number: 3.78, unit_raw: 'K', method_code: 'mcmillan',
+        is_representative: true,
+        payload: { calculation_conditions: {}, parameters: { lambda_ep: 1.2, omega_log: 150, mu_star: 0.1 } },
+      }, {
+        record_key: 'record-current', module_code: 'superconductive_properties', record_type: 'property',
+        property_code: 'custom', definition_key: 'record.superconductive_properties.custom',
+        definition_version: 1, name_raw: 'threshold current', value_kind: 'number',
+        value_raw: '0.28', value_number: 0.28, unit_raw: 'A', payload: {},
+      }],
     }],
-    calculation_contexts: [{ id: 71, lambda_ep: 1.2, omega_log_k: 150, mu_star: 0.1 }],
-    properties: [{ id: 41, material: 'Sn', name_raw: 'threshold current', value_raw: '0.28', unit: 'A' }],
     structures: [],
   }],
 }
@@ -124,7 +134,7 @@ describe('T027：待审核论文科学数据原地编辑', () => {
     // 可编辑模式：输入框可修改（readOnly 下不会出现可编辑输入）
     const formula = screen.getByLabelText('化学式')
     expect(formula).toHaveValue('Sn')
-    expect(screen.getByLabelText('Tc 数值 (K)')).toHaveValue(3.78)
+    expect(within(screen.getByTestId('property-record-record-tc')).getByLabelText('数值')).toHaveValue(3.78)
     expect(screen.getByDisplayValue('threshold current')).toBeVisible()
   })
 
@@ -135,10 +145,10 @@ describe('T027：待审核论文科学数据原地编辑', () => {
     const formula = screen.getByLabelText('化学式')
     await user.clear(formula)
     await user.type(formula, 'H3S')
-    const tcValue = screen.getByLabelText('Tc 数值 (K)')
+    const tcValue = within(screen.getByTestId('property-record-record-tc')).getByLabelText('数值')
     await user.clear(tcValue)
     await user.type(tcValue, '250')
-    const rawValue = screen.getByDisplayValue('0.28')
+    const rawValue = within(screen.getByTestId('property-record-record-current')).getByLabelText('原始值')
     await user.clear(rawValue)
     await user.type(rawValue, '0.35')
 
@@ -156,8 +166,8 @@ describe('T027：待审核论文科学数据原地编辑', () => {
     expect(body2).toHaveProperty('structure_candidates')
     expect(Array.isArray(body2.material_states)).toBe(true)
     expect(body2.material_states[0]).toMatchObject({ material: 'H3S' })
-    expect(body2.material_states[0].tc_results[0]).toMatchObject({ tc_value_k: 250 })
-    expect(body2.material_states[0].properties[0]).toMatchObject({ value_raw: '0.35' })
+    expect(body2.material_states[0].property_modules[0].records[0]).toMatchObject({ value_number: 250 })
+    expect(body2.material_states[0].property_modules[0].records[1]).toMatchObject({ value_raw: '0.35' })
   })
 
   it('论文级保存失败时终止，不调用科学数据接口', async () => {
@@ -176,8 +186,9 @@ describe('T027：待审核论文科学数据原地编辑', () => {
     const user = await openEditDialog()
 
     expect(screen.getByLabelText('电声耦合强度 λ')).toHaveValue(1.2)
-    await user.click(screen.getByRole('combobox', { name: 'Tc 方法' }))
-    await user.click(await screen.findByRole('option', { name: '实验测量' }))
+    const tcRecord = screen.getByTestId('property-record-record-tc')
+    await user.click(within(tcRecord.parentElement as HTMLElement).getByRole('combobox', { name: '记录定义' }))
+    await user.click(await screen.findByRole('option', { name: /测量 Tc · resistivity/ }))
     expect(screen.queryByLabelText('电声耦合强度 λ')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('对数声子频率 ωlog (K)')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('库仑屏蔽常数 μ*')).not.toBeInTheDocument()
@@ -186,10 +197,10 @@ describe('T027：待审核论文科学数据原地编辑', () => {
 
     await waitFor(() => expect(mockedApi.put).toHaveBeenCalledTimes(2))
     const [, scientificPayload] = mockedApi.put.mock.calls[1]
-    const result = scientificPayload.material_states[0].tc_results[0]
-    expect(result).toMatchObject({ tc_method: 'experimental', result_kind: 'experimental' })
-    expect(result).not.toHaveProperty('calculation_context')
-  })
+    const result = scientificPayload.material_states[0].property_modules[0].records[0]
+    expect(result).toMatchObject({ method_code: 'resistivity', record_type: 'measured_tc' })
+    expect(result.payload).toEqual({ experimental_conditions: {} })
+  }, 30000)
 })
 
 describe('T013：管理端编辑弹窗结构候选集成（Issue #77）', () => {

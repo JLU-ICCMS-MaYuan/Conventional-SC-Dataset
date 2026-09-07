@@ -1,16 +1,9 @@
 /**
  * 论文详情读取的公共提取逻辑。
  *
- * 条件化科学数据模型（Issue #46、#51）把不同性质的量拆到了不同表：
- * - Tc 存 `tc_results`，外键 `material_state_id`
- * - λ / ωlog / μ* 存 `calculation_contexts`，同样挂在材料状态下
- * - 其余普通物性才进 `superconductor_properties`（详情接口的 `key_properties`）
- * - 晶体结构存 `structure_models`，经 `material_states[].structures[]` 返回
- *
- * 只读 `key_properties` 会漏掉前两类，只报告 Tc 的实验论文因此整块为空；
- * 读 `key_properties[].structure_text` 更是恒空——该字段在 Go 侧标记 `gorm:"-"`，
- * 从不落库，详情接口也不输出。Issue #59 已在详情页修正过一次，但探索页与社区页
- * 各自留了一份旧实现，本模块把三处收敛为同一来源。
+ * Issue #90 Read switch 后，全部物性只消费
+ * `material_states[].property_modules[].records[]`。旧 `tc_results`、
+ * `calculation_contexts` 与 `key_properties` 不再作为回退，避免迁移观察期双计数。
  *
  * 展示标签（Tc 判定方法、λ 名称）支持按语言解析：`collectPropertyRows(paper, t?)`
  * 的第二个参数传入 `useLanguage().t`；缺省时回退中文字典，保证旧调用方
@@ -123,75 +116,56 @@ const propertyValueText = (property: any): string => {
  * λ 名称）；缺省回退中文字典，旧调用方无需改动即可保持原行为。
  */
 export function collectPropertyRows(paper: any, t?: TranslateFn): PaperPropertyRow[] {
-  const rows: PaperPropertyRow[] = []
+  const tcRows: PaperPropertyRow[] = []
+  const parameterRows: PaperPropertyRow[] = []
+  const propertyRows: PaperPropertyRow[] = []
   const states: any[] = Array.isArray(paper?.material_states) ? paper.material_states : []
 
   for (const state of states) {
     const material = textOrNull(state?.material) || '-'
     const condition = conditionOf(state)
 
-    for (const result of (Array.isArray(state?.tc_results) ? state.tc_results : [])) {
-      rows.push({
-        key: `tc-${result?.id ?? rows.length}`,
-        material,
-        label: 'Tc',
-        value: tcValueText(result),
-        condition,
-        note: tcNote(result, t),
-      })
-    }
-
-    for (const context of (Array.isArray(state?.calculation_contexts) ? state.calculation_contexts : [])) {
-      const epcLabel = t ? t('paperDetail.epcLambda') : dictionaries.zh.paperDetail.epcLambda
-      const params: Array<[string, unknown, string]> = [
-        [epcLabel, context?.lambda_ep, ''],
-        ['ωlog', context?.omega_log_k, 'K'],
-        ['μ*', context?.mu_star, ''],
-      ]
-      for (const [label, value, unit] of params) {
-        if (value == null) continue
-        rows.push({
-          key: `calc-${context?.id ?? rows.length}-${label}`,
-          material,
-          label,
-          value: valueWithUnit(value, unit),
-          condition,
-          note: textOrNull(context?.calculation_code) || '-',
-        })
-      }
-    }
-
-    // Issue #90 统一记录优先；旧字段仅作为迁移窗口回退。
     for (const module of (Array.isArray(state?.property_modules) ? state.property_modules : [])) {
       for (const record of (Array.isArray(module?.records) ? module.records : [])) {
         const isTc = record?.record_type === 'predicted_tc' || record?.record_type === 'measured_tc'
-        rows.push({
-          key: `record-${record?.record_key ?? rows.length}`,
+        const target = isTc ? tcRows : propertyRows
+        target.push({
+          key: `record-${record?.record_key ?? target.length}`,
           material,
           label: isTc ? 'Tc' : (textOrNull(record?.name_raw) || textOrNull(record?.property_code) || '-'),
           value: isTc ? tcValueText({ tc_value_k: record?.value_number, tc_min_k: record?.value_min, tc_max_k: record?.value_max, value_raw: record?.value_raw, unit_raw: record?.unit_raw }) : propertyValueText({ value_number: record?.value_number, value_min: record?.value_min, value_max: record?.value_max, value_raw: record?.value_text ?? record?.value_raw, unit: record?.unit_raw }),
           condition,
-          note: textOrNull(record?.method_code) || '-',
+          note: isTc ? tcNote({ tc_method: record?.method_code, uncertainty_k: record?.uncertainty }, t) : '-',
         })
+
+        if (record?.record_type === 'predicted_tc') {
+          const parameters = record?.payload?.parameters || {}
+          const conditions = record?.payload?.calculation_conditions || {}
+          const epcLabel = t ? t('paperDetail.epcLambda') : dictionaries.zh.paperDetail.epcLambda
+          const values: Array<[string, unknown, string]> = [
+            [epcLabel, parameters.lambda_ep, ''],
+            ['ωlog', parameters.omega_log ?? parameters.omega_log_k, 'K'],
+            ['μ*', parameters.mu_star, ''],
+          ]
+          for (const [label, rawValue, fallbackUnit] of values) {
+            const wrapped = rawValue && typeof rawValue === 'object' ? rawValue as Record<string, unknown> : null
+            const value = wrapped ? wrapped.value_number ?? wrapped.value_raw : rawValue
+            if (value == null || value === '') continue
+            parameterRows.push({
+              key: `parameter-${record?.record_key ?? parameterRows.length}-${label}`,
+              material,
+              label,
+              value: valueWithUnit(value, wrapped?.unit_raw ?? fallbackUnit),
+              condition,
+              note: textOrNull(conditions.calculation_code) || '-',
+            })
+          }
+        }
       }
     }
   }
 
-  // 普通物性挂在论文上，用 material_state_id 回查所属状态的条件。
-  const properties: any[] = Array.isArray(paper?.key_properties) ? paper.key_properties : []
-  for (const property of properties) {
-    const state = states.find(item => item?.id === property?.material_state_id)
-    rows.push({
-      key: `prop-${property?.id ?? rows.length}`,
-      material: textOrNull(property?.material) || textOrNull(state?.material) || '-',
-      label: textOrNull(property?.name) || textOrNull(property?.name_raw) || '-',
-      value: propertyValueText(property),
-      condition: state ? conditionOf(state) : '-',
-      note: textOrNull(property?.condition_note) || '-',
-    })
-  }
-
-  return rows
+  return [...tcRows, ...parameterRows, ...propertyRows]
 }
 
 /**

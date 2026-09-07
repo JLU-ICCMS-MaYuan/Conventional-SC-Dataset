@@ -175,31 +175,6 @@ func TestReviewArtifactCleanupOnlyForTerminalStates(t *testing.T) {
 	}
 }
 
-func TestKeyPropertyValidationRunsBeforeWrites(t *testing.T) {
-	body := map[string]interface{}{
-		"key_properties": []interface{}{
-			map[string]interface{}{
-				"material": "LaH10", "name": "critical_temperature",
-				"value_min": 250.0, "value_max": 200.0,
-			},
-		},
-	}
-	if _, err := parseAndValidateKeyProperties(body); err == nil || !strings.Contains(err.Error(), "value_min") {
-		t.Fatalf("expected range validation error, got %v", err)
-	}
-}
-
-func TestGetFloatAsUintRejectsFractionalAndNegativeIDs(t *testing.T) {
-	for _, value := range []interface{}{-1, int64(-1), -1.0, 1.5} {
-		if _, ok := getFloatAsUint(value); ok {
-			t.Fatalf("expected %#v to be rejected", value)
-		}
-	}
-	if got, ok := getFloatAsUint(2.0); !ok || got != 2 {
-		t.Fatalf("got (%d, %v), want (2, true)", got, ok)
-	}
-}
-
 func TestPublicQueriesRequireApprovedPapers(t *testing.T) {
 	db, err := gorm.Open(mysql.New(mysql.Config{
 		DSN:                       "user:pass@tcp(127.0.0.1:3306)/test",

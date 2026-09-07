@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass
+import hashlib
 from pathlib import Path
 from typing import Any, Iterable, Literal
 from uuid import uuid4
@@ -11,6 +12,7 @@ from uuid import uuid4
 from pydantic import BaseModel, Field
 
 UPLOAD_STATE_SCHEMA_VERSION = 1
+SCIENTIFIC_DRAFT_SCHEMA_VERSION = 2
 TASK_TTL = 24 * 60 * 60
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 RUNNING_STATUSES = {"uploading", "queued", "extracting", "reading", "summarizing", "submitting", "cancelling"}
@@ -109,12 +111,28 @@ class PropertyRecordInput(BaseModel):
     module_code: str
     record_type: Literal["predicted_tc", "measured_tc", "property"] = "property"
     property_code: str
+    custom_property_key: str | None = None
     definition_key: str
     definition_version: int = Field(ge=1)
     name_raw: str
     value_kind: Literal["number", "range", "text", "boolean"]
     value_raw: str
+    value_number: float | None = None
+    value_min: float | None = None
+    value_max: float | None = None
+    value_text: str | None = None
+    value_boolean: bool | None = None
+    uncertainty: float | None = Field(default=None, ge=0)
+    unit_raw: str | None = None
+    canonical_unit: str | None = None
+    method_code: str | None = None
+    method_raw: str | None = None
+    criterion_code: str | None = None
+    criterion_raw: str | None = None
+    structure_key: str | None = None
     payload: dict[str, Any] = Field(default_factory=dict)
+    evidence: dict[str, Any] | None = None
+    evidences: list[dict[str, Any]] = Field(default_factory=list)
     is_representative: bool = False
 
 
@@ -131,50 +149,176 @@ class MaterialStatePropertiesInput(BaseModel):
     property_modules: list[PropertyModuleInput] = Field(default_factory=list)
     deleted_record_keys: list[str] = Field(default_factory=list)
     deleted_module_keys: list[str] = Field(default_factory=list)
-    schema_version: int = Field(default=1, ge=1)
+    schema_version: Literal[SCIENTIFIC_DRAFT_SCHEMA_VERSION] = SCIENTIFIC_DRAFT_SCHEMA_VERSION
+
+
+def _legacy_property_module(name: str) -> str:
+    normalized = name.casefold().replace("-", "_").replace(" ", "_")
+    if any(token in normalized for token in ("phonon", "frequency", "debye", "omega")):
+        return "dynamical_properties"
+    if any(token in normalized for token in ("enthalpy", "entropy", "heat", "stability", "thermo")):
+        return "thermodynamical_properties"
+    if any(token in normalized for token in ("dos", "density_of_states", "band", "fermi", "electronic", "gap")):
+        return "electronic_properties"
+    return "superconductive_properties"
+
+
+def _legacy_custom_key(index: int, name: str) -> str:
+    digest = hashlib.sha256(f"{index}:{name}".encode("utf-8")).hexdigest()[:16]
+    return f"legacy-custom-{digest}"
+
+
+def _legacy_value_raw(raw: Any, value: Any, value_min: Any = None, value_max: Any = None) -> str:
+    if raw not in (None, ""):
+        return str(raw)
+    if value is not None:
+        return str(value)
+    if value_min is not None and value_max is not None:
+        return f"{value_min}-{value_max}"
+    return ""
 
 
 def convert_legacy_state(state: dict[str, Any]) -> dict[str, Any]:
     """将旧 tc_results/properties 转为模块化结构，不修改输入对象。"""
     result = deepcopy(state)
     if "property_modules" in result:
+        version = int(result.get("schema_version") or 0)
+        if version not in {0, SCIENTIFIC_DRAFT_SCHEMA_VERSION}:
+            raise UploadContractError(
+                "unsupported_scientific_schema_version",
+                f"不支持的科学草稿版本: {version}",
+                "schema_version",
+            )
+        for legacy_key in ("tc_results", "properties", "calculation_contexts", "experimental_contexts"):
+            result.pop(legacy_key, None)
+        result["schema_version"] = SCIENTIFIC_DRAFT_SCHEMA_VERSION
         return result
-    records: list[dict[str, Any]] = []
+    modules: dict[str, list[dict[str, Any]]] = {}
     for index, old in enumerate(result.get("tc_results") or []):
         if not isinstance(old, dict):
-            continue
+            raise UploadContractError(
+                "legacy_scientific_conversion_failed", "旧 Tc 记录不是对象", f"tc_results[{index}]",
+            )
         experimental = old.get("result_kind") == "experimental" or old.get("tc_method") == "experimental"
+        method = old.get("tc_method") or ("resistivity" if experimental else "unknown")
+        if method == "experimental":
+            method = "resistivity"
+        conditions = old.get("experimental_conditions" if experimental else "calculation_conditions")
+        if not isinstance(conditions, dict):
+            conditions = old.get("experimental_context" if experimental else "calculation_context")
+        payload: dict[str, Any] = {
+            "experimental_conditions" if experimental else "calculation_conditions": (
+                deepcopy(conditions) if isinstance(conditions, dict) else {}
+            ),
+        }
+        if not experimental and isinstance(old.get("parameters"), dict):
+            payload["parameters"] = deepcopy(old["parameters"])
         record = {
             "record_key": f"legacy-tc-{index}",
             "module_code": "superconductive_properties",
             "record_type": "measured_tc" if experimental else "predicted_tc",
             "property_code": "tc",
-            "definition_key": f"record.superconductive_properties.{'measured_tc' if experimental else 'predicted_tc'}.{old.get('tc_method') or 'unknown'}",
+            "definition_key": f"record.superconductive_properties.{'measured_tc' if experimental else 'predicted_tc'}.{method}",
             "definition_version": 1,
             "name_raw": "critical temperature",
             "value_kind": "number" if old.get("tc_value_k") is not None else "range",
-            "value_raw": str(old.get("value_raw") or old.get("tc_value_k") or ""),
+            "value_raw": _legacy_value_raw(
+                old.get("value_raw"), old.get("tc_value_k"),
+                old.get("tc_min_k"), old.get("tc_max_k"),
+            ),
             "value_number": old.get("tc_value_k"),
             "value_min": old.get("tc_min_k"), "value_max": old.get("tc_max_k"),
             "unit_raw": old.get("unit_raw") or "K", "canonical_unit": "K",
-            "method_code": old.get("tc_method") or ("resistivity" if experimental else "unknown"),
+            "method_code": method,
+            "method_raw": old.get("tc_method_custom"),
+            "uncertainty": old.get("uncertainty_k"),
+            "criterion_code": old.get("criterion_code"),
+            "criterion_raw": old.get("criterion_raw"),
             "is_representative": bool(old.get("is_representative")),
-            "payload": ({"experimental_conditions": {}} if experimental else {"calculation_conditions": {}}),
+            "structure_key": old.get("structure_key"),
+            "payload": payload,
+            "evidence": deepcopy(old.get("evidence")) if isinstance(old.get("evidence"), dict) else None,
+            "evidences": deepcopy(old.get("evidences") or []),
         }
-        records.append(record)
+        modules.setdefault("superconductive_properties", []).append(record)
     for index, old in enumerate(result.get("properties") or []):
         if not isinstance(old, dict):
-            continue
-        value = old.get("value")
-        kind = "number" if isinstance(value, (int, float)) and not isinstance(value, bool) else "text"
-        records.append({
-            "record_key": f"legacy-property-{index}", "module_code": "superconductive_properties",
-            "record_type": "property", "property_code": old.get("name") or "custom",
-            "definition_key": "record.superconductive_properties.custom", "definition_version": 1,
-            "name_raw": old.get("name_raw") or old.get("name") or "legacy property", "value_kind": kind,
-            "value_raw": str(old.get("value_raw") or value or ""), "value_number": value if kind == "number" else None,
-            "value_text": value if kind == "text" else None, "unit_raw": old.get("unit"), "payload": {},
+            raise UploadContractError(
+                "legacy_scientific_conversion_failed", "旧普通物性记录不是对象", f"properties[{index}]",
+            )
+        name = str(old.get("name_raw") or old.get("name") or "").strip()
+        if not name:
+            raise UploadContractError(
+                "legacy_scientific_conversion_failed", "旧普通物性缺少名称", f"properties[{index}].name_raw",
+            )
+        value = old.get("value", old.get("value_number"))
+        if old.get("value_min") is not None or old.get("value_max") is not None:
+            if old.get("value_min") is None or old.get("value_max") is None:
+                raise UploadContractError(
+                    "legacy_scientific_conversion_failed", "旧范围物性必须同时具有上下界", f"properties[{index}]",
+                )
+            kind = "range"
+        elif isinstance(value, bool):
+            kind = "boolean"
+        elif isinstance(value, (int, float)):
+            kind = "number"
+        else:
+            kind = "text"
+        module_code = _legacy_property_module(str(old.get("name") or name))
+        modules.setdefault(module_code, []).append({
+            "record_key": f"legacy-property-{index}", "module_code": module_code,
+            "record_type": "property", "property_code": "custom",
+            "custom_property_key": _legacy_custom_key(index, name),
+            "definition_key": f"record.{module_code}.custom", "definition_version": 1,
+            "name_raw": name, "value_kind": kind,
+            "value_raw": _legacy_value_raw(
+                old.get("value_raw"), value, old.get("value_min"), old.get("value_max"),
+            ),
+            "value_number": value if kind == "number" else None,
+            "value_min": old.get("value_min") if kind == "range" else None,
+            "value_max": old.get("value_max") if kind == "range" else None,
+            "value_text": str(value) if kind == "text" and value is not None else None,
+            "value_boolean": value if kind == "boolean" else None,
+            "unit_raw": old.get("unit_raw") or old.get("unit"),
+            "canonical_unit": old.get("canonical_unit"),
+            "payload": deepcopy(old.get("payload") or {}),
+            "evidence": deepcopy(old.get("evidence")) if isinstance(old.get("evidence"), dict) else None,
+            "evidences": deepcopy(old.get("evidences") or []),
         })
-    result["property_modules"] = [{"module_key": "module-superconductive", "module_code": "superconductive_properties", "display_order": 0, "records": records}]
-    result["schema_version"] = 1
+    for legacy_key in ("tc_results", "properties", "calculation_contexts", "experimental_contexts"):
+        result.pop(legacy_key, None)
+    result["property_modules"] = [
+        {
+            "module_key": f"module-{code}", "module_code": code,
+            "definition_key": f"module.{code}", "definition_version": 1,
+            "display_order": order, "records": records,
+        }
+        for order, (code, records) in enumerate(modules.items())
+        if records
+    ]
+    result["schema_version"] = SCIENTIFIC_DRAFT_SCHEMA_VERSION
+    return result
+
+
+def convert_legacy_scientific_draft(draft: dict[str, Any]) -> dict[str, Any]:
+    """把草稿中的所有材料状态升级到当前模块化契约。"""
+    result = deepcopy(draft)
+    states = result.get("material_states")
+    if states is None:
+        return result
+    if not isinstance(states, list):
+        raise UploadContractError(
+            "legacy_scientific_conversion_failed", "材料状态必须是数组", "material_states",
+        )
+    converted: list[dict[str, Any]] = []
+    for index, state in enumerate(states):
+        if not isinstance(state, dict):
+            raise UploadContractError(
+                "legacy_scientific_conversion_failed",
+                "材料状态不是对象",
+                f"material_states[{index}]",
+            )
+        converted.append(convert_legacy_state(state))
+    result["material_states"] = converted
+    result["scientific_schema_version"] = SCIENTIFIC_DRAFT_SCHEMA_VERSION
     return result

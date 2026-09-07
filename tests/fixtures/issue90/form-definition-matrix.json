@@ -1,14 +1,122 @@
 {
-  "predicted_tc": {
-    "definition_key": "record.superconductive_properties.predicted_tc.allen_dynes",
-    "version": 1,
-    "payload": {"calculation_conditions": {"k_grid": [24, 24, 24]}, "parameters": {"mu_star": {"value_number": 0.1, "unit": "1"}}}
+  "schema_version": 2,
+  "definitions": [
+    {
+      "definition_key": "record.superconductive_properties.predicted_tc.allen_dynes",
+      "version": 1,
+      "target_kind": "property_record",
+      "module_code": "superconductive_properties",
+      "record_type": "predicted_tc",
+      "method_code": "allen_dynes",
+      "property_code": "tc",
+      "core_schema": { "type": "object" },
+      "json_schema": {
+        "type": "object",
+        "required": ["calculation_conditions"],
+        "additionalProperties": false,
+        "properties": {
+          "calculation_conditions": {
+            "type": "object",
+            "title": "计算 Conditions",
+            "properties": {
+              "calculation_code": { "type": "string", "title": "计算软件" },
+              "k_grid": { "type": "string", "title": "k 网格" },
+              "extensions": { "type": "array", "title": "补充计算条件", "items": { "type": "object" } }
+            }
+          },
+          "parameters": {
+            "type": "object",
+            "title": "参数",
+            "properties": {
+              "mu_star": { "type": "number", "title": "μ*", "minimum": 0 },
+              "extensions": { "type": "array", "title": "补充参数", "items": { "type": "object" } }
+            }
+          }
+        }
+      },
+      "ui_schema": {
+        "fields": [
+          { "pointer": "/payload/calculation_conditions/calculation_code", "label": "计算软件" },
+          { "pointer": "/payload/parameters/mu_star", "label": "μ*" }
+        ]
+      },
+      "status": "published",
+      "checksum": "predicted-v1"
+    },
+    {
+      "definition_key": "record.superconductive_properties.measured_tc.resistivity",
+      "version": 1,
+      "target_kind": "property_record",
+      "module_code": "superconductive_properties",
+      "record_type": "measured_tc",
+      "method_code": "resistivity",
+      "property_code": "tc",
+      "core_schema": { "type": "object" },
+      "json_schema": {
+        "type": "object",
+        "required": ["experimental_conditions"],
+        "additionalProperties": false,
+        "properties": {
+          "experimental_conditions": {
+            "type": "object",
+            "title": "实验 Conditions",
+            "properties": {
+              "measurement_method": { "type": "string", "title": "测量方法" },
+              "extensions": { "type": "array", "title": "补充实验条件", "items": { "type": "object" } }
+            }
+          }
+        }
+      },
+      "ui_schema": {},
+      "status": "published",
+      "checksum": "measured-v1"
+    },
+    {
+      "definition_key": "record.electronic_properties.custom",
+      "version": 1,
+      "target_kind": "property_record",
+      "module_code": "electronic_properties",
+      "record_type": "property",
+      "method_code": null,
+      "property_code": "custom",
+      "core_schema": { "type": "object" },
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "extensions": { "type": "array", "title": "补充字段", "items": { "type": "object" } }
+        }
+      },
+      "ui_schema": {},
+      "status": "published",
+      "checksum": "electronic-custom-v1"
+    }
+  ],
+  "valid_records": {
+    "predicted_tc": {
+      "definition_key": "record.superconductive_properties.predicted_tc.allen_dynes",
+      "version": 1,
+      "payload": {
+        "calculation_conditions": { "calculation_code": "Quantum ESPRESSO", "k_grid": "24 x 24 x 24", "extensions": [] },
+        "parameters": { "mu_star": 0.1, "extensions": [] }
+      }
+    },
+    "measured_tc": {
+      "definition_key": "record.superconductive_properties.measured_tc.resistivity",
+      "version": 1,
+      "payload": { "experimental_conditions": { "measurement_method": "four_probe", "extensions": [] } }
+    }
   },
-  "measured_tc": {
-    "definition_key": "record.superconductive_properties.measured_tc.resistivity",
-    "version": 1,
-    "payload": {"experimental_conditions": {"measurement_method": "four_probe"}}
-  },
-  "extension_groups": ["payload.parameters.extensions", "payload.calculation_conditions.extensions", "payload.experimental_conditions.extensions"],
-  "errors": ["invalid_condition_type", "duplicate_representative_tc", "unknown_definition_version"]
+  "extension_groups": [
+    "payload.parameters.extensions",
+    "payload.calculation_conditions.extensions",
+    "payload.experimental_conditions.extensions",
+    "payload.extensions"
+  ],
+  "errors": [
+    "invalid_condition_type",
+    "duplicate_representative_tc",
+    "unknown_definition_version",
+    "invalid_extension_group",
+    "extension_field_conflict"
+  ]
 }

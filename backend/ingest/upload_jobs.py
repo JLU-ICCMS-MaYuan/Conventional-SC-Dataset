@@ -32,6 +32,7 @@ from backend.ingest.upload_tasks import (
 from backend.ingest.upload_contracts import (
     UPLOAD_STATE_SCHEMA_VERSION,
     compare_file_identities,
+    convert_legacy_scientific_draft,
     structure_format_for_filename,
 )
 from backend.ingest.language_contract import (
@@ -638,12 +639,13 @@ def _build_candidate_draft(chunks: list[dict[str, Any]]) -> dict[str, Any]:
 
     if findings:
         paper["key_finding"] = "\n".join(findings)
-    return {
+    normalized = {
         "paper": paper,
         "material_states": material_states,
         "research_motivation": "",
         "classification_evidence": [],
     }
+    return normalized
 
 
 def public_parsing_detail(task_id: str) -> dict[str, Any]:
@@ -1241,7 +1243,7 @@ def _normalize_draft(
         material_states = _legacy_properties_to_material_states(properties)
     _apply_methodology_inference(paper["methodology"], paper, material_states)
 
-    return {
+    normalized = {
         "paper": paper,
         "material_states": material_states,
         "citation_extraction": (
@@ -1257,6 +1259,7 @@ def _normalize_draft(
         "classification_evidence": _as_list(raw.get("classification_evidence")),
         "field_evidence": field_evidence,
     }
+    return convert_legacy_scientific_draft(normalized)
 
 
 def empty_draft() -> dict[str, Any]:

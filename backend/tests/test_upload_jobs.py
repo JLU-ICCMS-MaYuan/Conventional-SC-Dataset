@@ -19,6 +19,14 @@ from backend.ingest.upload_jobs import (
 from backend.api.rag import _property_values, _validate_draft
 
 
+def _module_records(state):
+    return [
+        record
+        for module in state.get("property_modules") or []
+        for record in module.get("records") or []
+    ]
+
+
 def test_chunks_keep_first_and_next_page_numbers():
     markdown = """<!-- page: 1 -->
 Title and abstract contain enough text to remain as the paper preamble.
@@ -51,7 +59,11 @@ def test_normalize_draft_flattens_evidenced_text_lists():
     assert draft["paper"]["methodology"] == ["Eliashberg equations"]
     assert draft["field_evidence"]["research_materials"] == [evidence]
     assert draft["field_evidence"]["methodology"] == [evidence]
-    assert draft["material_states"][0]["tc_results"][0]["value_raw"] == "42"
+    state = draft["material_states"][0]
+    assert "tc_results" not in state and "properties" not in state
+    tc = state["property_modules"][0]["records"][0]
+    assert tc["record_type"] == "predicted_tc"
+    assert tc["value_raw"] == "42"
 
 
 def test_llm_draft_cannot_supply_citation_extraction():
@@ -218,8 +230,9 @@ def test_normalize_legacy_li2mgh16_properties_into_scientific_material_state():
     assert state["reported_space_group_number"] == 227
     assert state["calculation_context"]["lambda_ep"] == 3.35
     assert state["calculation_context"]["omega_log_k"] is None
-    assert state["tc_results"][0]["value_raw"] == "351"
-    assert state["tc_results"][0]["tc_value_k"] == 351
+    tc = _module_records(state)[0]
+    assert tc["value_raw"] == "351"
+    assert tc["value_number"] == 351
 
 
 def test_property_values_prefer_user_edited_raw_value():
@@ -534,11 +547,11 @@ def test_tc_method_free_text_becomes_other_with_custom_value():
         }],
     })
 
-    results = draft["material_states"][0]["tc_results"]
-    assert results[0]["tc_method"] == "other"
-    assert results[0]["tc_method_custom"] == "Allen-Dynes"
-    assert results[1]["tc_method"] == "mcmillan"
-    assert results[1]["tc_method_custom"] is None
+    results = _module_records(draft["material_states"][0])
+    assert results[0]["method_code"] == "other"
+    assert results[0]["method_raw"] == "Allen-Dynes"
+    assert results[1]["method_code"] == "mcmillan"
+    assert results[1]["method_raw"] is None
 
 
 def test_tc_result_calculation_context_is_numeric_normalized():
@@ -554,7 +567,7 @@ def test_tc_result_calculation_context_is_numeric_normalized():
         }],
     })
 
-    context = draft["material_states"][0]["tc_results"][0]["calculation_context"]
+    context = _module_records(draft["material_states"][0])[0]["payload"]["calculation_conditions"]
     assert context["lambda_ep"] == 1.2
     assert context["omega_log_k"] == 850.0
     assert context["mu_star"] == 0.1
@@ -607,7 +620,7 @@ def test_methodology_inference_mcmillan_marks_conventional_and_fills_tc_method()
 
     assert draft["paper"]["superconductor_kind"] == "conventional"
     state = draft["material_states"][0]
-    assert state["tc_results"][0]["tc_method"] == "mcmillan"
+    assert _module_records(state)[0]["method_code"] == "mcmillan"
 
 
 def test_methodology_inference_multiple_methods_keep_tc_method_unknown():
@@ -624,7 +637,7 @@ def test_methodology_inference_multiple_methods_keep_tc_method_unknown():
 
     assert draft["paper"]["superconductor_kind"] == "conventional"
     state = draft["material_states"][0]
-    assert state["tc_results"][0]["tc_method"] == "unknown"
+    assert _module_records(state)[0]["method_code"] == "unknown"
 
 
 def test_methodology_inference_ignores_non_discriminative_text():
@@ -638,7 +651,7 @@ def test_methodology_inference_ignores_non_discriminative_text():
 
     assert draft["paper"]["superconductor_kind"] == "unknown"
     state = draft["material_states"][0]
-    assert state["tc_results"][0]["tc_method"] == "unknown"
+    assert _module_records(state)[0]["method_code"] == "unknown"
 
 
 def test_methodology_inference_does_not_override_unconventional():
@@ -662,7 +675,7 @@ def test_methodology_inference_leaves_experimental_tc_untouched():
         }],
     })
 
-    assert draft["material_states"][0]["tc_results"][0]["tc_method"] == "experimental"
+    assert _module_records(draft["material_states"][0])[0]["method_code"] == "resistivity"
 
 
 def test_methodology_inference_allen_dynes_wins_over_mcmillan():
@@ -676,7 +689,7 @@ def test_methodology_inference_allen_dynes_wins_over_mcmillan():
 
     assert draft["paper"]["superconductor_kind"] == "conventional"
     state = draft["material_states"][0]
-    assert state["tc_results"][0]["tc_method"] == "allen_dynes"
+    assert _module_records(state)[0]["method_code"] == "allen_dynes"
 
 
 def test_methodology_inference_never_creates_tc_results():
@@ -687,7 +700,7 @@ def test_methodology_inference_never_creates_tc_results():
 
     assert draft["paper"]["superconductor_kind"] == "conventional"
     state = draft["material_states"][0]
-    assert state["tc_results"] == []
+    assert _module_records(state) == []
 
 
 # --- Issue #58：分段对解析噪声的鲁棒性（超长 ## 行判为正文而非章节标题） ---

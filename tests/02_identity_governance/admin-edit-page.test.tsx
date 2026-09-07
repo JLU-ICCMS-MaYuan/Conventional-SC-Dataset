@@ -69,11 +69,23 @@ const detailWithStructures = {
     crystal_system: 'tetragonal',
     state_kind: 'experimental',
     pressure_value_gpa: 0.001,
-    tc_results: [{
-      id: 31, result_kind: 'experimental', tc_method: 'experimental',
-      tc_value_k: 3.78, value_raw: '3.78', unit_raw: 'K', is_representative: true,
+    tc_results: [{ tc_value_k: 99, tc_method: 'legacy' }],
+    calculation_contexts: [{ id: 7, lambda_ep: 1.2 }],
+    calculation_context: { lambda_ep: 1.2 },
+    experimental_context: { magnetic_field_t: 3 },
+    properties: [{ name: 'legacy property', value: 1 }],
+    key_properties: [{ name: 'legacy key property', value: 2 }],
+    property_modules: [{
+      module_key: 'module-superconductive', module_code: 'superconductive_properties',
+      definition_key: 'module.superconductive_properties', definition_version: 1, display_order: 0,
+      records: [{
+        record_key: 'record-tc', module_code: 'superconductive_properties', record_type: 'measured_tc',
+        property_code: 'tc', definition_key: 'record.superconductive_properties.measured_tc.resistivity',
+        definition_version: 1, name_raw: 'critical temperature', value_kind: 'number', value_raw: '3.78',
+        value_number: 3.78, unit_raw: 'K', method_code: 'resistivity', is_representative: true,
+        payload: { experimental_conditions: {} },
+      }],
     }],
-    properties: [],
     structures: [{
       id: 1, structure_format: 'cif', structure_text: 'data_Sn',
       atom_count: 4, source_locator: 'sn.cif',
@@ -273,6 +285,12 @@ describe('Issue #78：管理端论文编辑独立页', () => {
     expect(body2.material_states[0]).toMatchObject({ material: 'H3S' })
     expect(body2).toMatchObject({ superconductor_kind: 'conventional' })
     expect(body2.material_states[0]).not.toHaveProperty('superconductor_kind')
+    expect(body2.material_states[0]).not.toHaveProperty('tc_results')
+    expect(body2.material_states[0]).not.toHaveProperty('calculation_contexts')
+    expect(body2.material_states[0]).not.toHaveProperty('calculation_context')
+    expect(body2.material_states[0]).not.toHaveProperty('experimental_context')
+    expect(body2.material_states[0]).not.toHaveProperty('properties')
+    expect(body2.material_states[0]).not.toHaveProperty('key_properties')
   })
 
   it('审核通过时提交当前编辑器中的材料分类（无需先单独保存）', async () => {

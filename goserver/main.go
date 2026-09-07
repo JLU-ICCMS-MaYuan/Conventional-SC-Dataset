@@ -99,6 +99,7 @@ func main() {
 	{
 		papers.GET("", handlers.ListPapers)
 		papers.GET("/:id", handlers.GetPaper)
+		papers.GET("/:id/material-states/:stateKey/export", handlers.ExportMaterialState)
 		papers.PATCH("/:id", handlers.PatchPaper)
 		papers.POST("/search/records", handlers.SearchRecords)
 		papers.POST("/search/all", handlers.SearchAll)

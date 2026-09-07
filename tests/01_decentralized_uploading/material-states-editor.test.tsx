@@ -9,16 +9,26 @@
 
 import '@testing-library/jest-dom/vitest'
 import React from 'react'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import MaterialStatesEditor from '../../frontend/src/components/MaterialStatesEditor'
+import PaperEditView from '../../frontend/src/components/PaperEditView'
 import UploadTaskEditor from '../../frontend/src/components/UploadTaskEditor'
-import type { DraftMaterialState } from '../../frontend/src/lib/paperProcessing'
+import { normalizeUploadDraft, type DraftMaterialState } from '../../frontend/src/lib/paperProcessing'
 import { api } from '../../frontend/src/lib/api'
+import SchemaDrivenRecordForm from '../../frontend/src/components/SchemaDrivenRecordForm'
+import {
+  clearFormDefinitionCache, loadFormDefinition, type FormDefinition,
+} from '../../frontend/src/lib/formDefinitions'
+import {
+  clonePropertyRecord, emptyPropertyModule, PROPERTY_SCHEMA_VERSION, type PropertyRecordDraft,
+} from '../../frontend/src/lib/propertyModules'
+import { collectPropertyRows } from '../../frontend/src/lib/paperDetailView'
+import formDefinitionMatrix from '../fixtures/issue90/form-definition-matrix.json'
 
 vi.mock('../../frontend/src/lib/api', () => ({
-  api: { get: vi.fn(), put: vi.fn(), post: vi.fn() },
+  api: { download: vi.fn(), get: vi.fn(), put: vi.fn(), post: vi.fn() },
 }))
 
 vi.mock('../../frontend/src/lib/classifications', async importOriginal => {
@@ -167,6 +177,229 @@ describe('MaterialStatesEditor 共享组件（T017）', () => {
     expect(screen.getByRole('option', { name: '各向同性 Migdal-Eliashberg 方法' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: '各向异性 Migdal-Eliashberg 方法' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: '超导密度泛函理论（SCDFT）' })).toBeInTheDocument()
+  })
+})
+
+describe('Issue #90 模块化物性与 Schema 表单', () => {
+  const definitions = formDefinitionMatrix.definitions as FormDefinition[]
+  const predictedDefinition = definitions[0]
+  const predictedRecord = (overrides: Partial<PropertyRecordDraft> = {}): PropertyRecordDraft => ({
+    record_key: 'tc-a', module_code: 'superconductive_properties', record_type: 'predicted_tc',
+    property_code: 'tc', definition_key: predictedDefinition.definition_key, definition_version: 1,
+    name_raw: 'critical temperature', value_kind: 'number', value_raw: '250 K', value_number: 250,
+    unit_raw: 'K', canonical_unit: 'K', method_code: 'allen_dynes', is_representative: true,
+    payload: structuredClone(formDefinitionMatrix.valid_records.predicted_tc.payload), evidences: [], ...overrides,
+  })
+
+  afterEach(() => {
+    cleanup()
+    vi.clearAllMocks()
+    clearFormDefinitionCache()
+  })
+
+  it('新材料状态可直接添加四类模块，模块带定义版本且未生成空记录', async () => {
+    const { onChange } = renderEditor({ states: [makeState({ property_modules: [] })] })
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: '添加物性模块' }))
+    fireEvent.click(await screen.findByRole('option', { name: '电子性质' }))
+
+    const states = onChange.mock.calls.at(-1)?.[0] as DraftMaterialState[]
+    expect(states[0].property_modules).toEqual([
+      expect.objectContaining({
+        module_code: 'electronic_properties', definition_key: 'module.electronic_properties',
+        definition_version: 1, display_order: 0, records: [],
+      }),
+    ])
+  })
+
+  it('新建材料状态使用共享 Schema v2，且不再生成旧物性字段', () => {
+    const { onChange } = renderEditor({ states: [] })
+    fireEvent.click(screen.getByRole('button', { name: '添加材料状态' }))
+
+    const states = onChange.mock.calls.at(-1)?.[0] as DraftMaterialState[]
+    expect(formDefinitionMatrix.schema_version).toBe(PROPERTY_SCHEMA_VERSION)
+    expect(states[0]).toMatchObject({
+      schema_version: formDefinitionMatrix.schema_version,
+      property_modules: [],
+      deleted_record_keys: [],
+      deleted_module_keys: [],
+    })
+    expect(states[0]).not.toHaveProperty('calculation_context')
+    expect(states[0]).not.toHaveProperty('experimental_context')
+    expect(states[0]).not.toHaveProperty('tc_results')
+    expect(states[0]).not.toHaveProperty('properties')
+  })
+
+  it('按模块获取定义并通过定义选择新增预测 Tc', async () => {
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url.startsWith('/api/form-definitions?')) return Promise.resolve(definitions.slice(0, 2) as never)
+      const definition = definitions.find(item => url.includes(encodeURIComponent(item.definition_key)))
+      return definition ? Promise.resolve(definition as never) : Promise.reject(new Error('not found'))
+    })
+    const module = emptyPropertyModule('superconductive_properties', 0)
+    const { onChange } = renderEditor({ states: [makeState({ property_modules: [module] })] })
+
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: '添加记录' }))
+    fireEvent.click(await screen.findByRole('option', { name: /预测 Tc · allen_dynes/ }))
+    const states = onChange.mock.calls.at(-1)?.[0] as DraftMaterialState[]
+    expect(states[0].property_modules?.[0].records[0]).toMatchObject({
+      record_type: 'predicted_tc', method_code: 'allen_dynes',
+      definition_key: predictedDefinition.definition_key,
+      payload: { calculation_conditions: {}, parameters: {} },
+    })
+  })
+
+  it('定义按键和版本缓存，同一历史版本只请求一次', async () => {
+    vi.mocked(api.get).mockResolvedValue(predictedDefinition as never)
+    const first = await loadFormDefinition(predictedDefinition.definition_key, 1)
+    const second = await loadFormDefinition(predictedDefinition.definition_key, 1)
+    expect(first).toBe(second)
+    expect(api.get).toHaveBeenCalledTimes(1)
+  })
+
+  it('仅允许删除空模块，并把稳定模块键写入删除元数据', () => {
+    const emptyModule = { ...emptyPropertyModule('electronic_properties', 0), module_key: 'module-empty' }
+    const occupiedModule = {
+      ...emptyPropertyModule('superconductive_properties', 1), module_key: 'module-occupied', records: [predictedRecord()],
+    }
+    const { onChange } = renderEditor({
+      states: [makeState({ property_modules: [emptyModule, occupiedModule] })],
+    })
+
+    const emptyRegion = screen.getByTestId('property-module-electronic_properties')
+    const occupiedRegion = screen.getByTestId('property-module-superconductive_properties')
+    expect(within(emptyRegion).getByRole('button', { name: '删除模块' })).toBeEnabled()
+    expect(within(occupiedRegion).getByRole('button', { name: '删除模块' })).toBeDisabled()
+
+    fireEvent.click(within(emptyRegion).getByRole('button', { name: '删除模块' }))
+    const states = onChange.mock.calls.at(-1)?.[0] as DraftMaterialState[]
+    expect(states[0].property_modules).toEqual([
+      expect.objectContaining({ module_key: 'module-occupied', display_order: 0 }),
+    ])
+    expect(states[0].deleted_module_keys).toEqual(['module-empty'])
+  })
+
+  it('删除记录时保留模块，并把稳定记录键写入删除元数据', async () => {
+    vi.mocked(api.get).mockResolvedValue(predictedDefinition as never)
+    const module = {
+      ...emptyPropertyModule('superconductive_properties', 0), records: [predictedRecord({ record_key: 'record-deleted' })],
+    }
+    const { onChange } = renderEditor({ states: [makeState({ property_modules: [module] })] })
+
+    fireEvent.click(await screen.findByRole('button', { name: '删除记录' }))
+    const states = onChange.mock.calls.at(-1)?.[0] as DraftMaterialState[]
+    expect(states[0].property_modules?.[0].records).toEqual([])
+    expect(states[0].deleted_record_keys).toEqual(['record-deleted'])
+  })
+
+  it('模块上下移动后按视觉顺序重写 display_order', () => {
+    const superconductive = { ...emptyPropertyModule('superconductive_properties', 0), module_key: 'module-first' }
+    const electronic = { ...emptyPropertyModule('electronic_properties', 1), module_key: 'module-second' }
+    const { onChange } = renderEditor({
+      states: [makeState({ property_modules: [superconductive, electronic] })],
+    })
+
+    const firstRegion = screen.getByTestId('property-module-superconductive_properties')
+    fireEvent.click(within(firstRegion).getByRole('button', { name: '下移模块' }))
+    const states = onChange.mock.calls.at(-1)?.[0] as DraftMaterialState[]
+    expect(states[0].property_modules).toEqual([
+      expect.objectContaining({ module_key: 'module-second', display_order: 0 }),
+      expect.objectContaining({ module_key: 'module-first', display_order: 1 }),
+    ])
+  })
+
+  it('记录定义由预测 Tc 切为测量 Tc 时替换条件分组', async () => {
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url.startsWith('/api/form-definitions?')) return Promise.resolve(definitions.slice(0, 2) as never)
+      const definition = definitions.find(item => url.includes(encodeURIComponent(item.definition_key)))
+      return definition ? Promise.resolve(definition as never) : Promise.reject(new Error('not found'))
+    })
+    const module = {
+      ...emptyPropertyModule('superconductive_properties', 0), records: [predictedRecord()],
+    }
+    const { onChange } = renderEditor({ states: [makeState({ property_modules: [module] })] })
+
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: '记录定义' }))
+    fireEvent.click(await screen.findByRole('option', { name: /测量 Tc · resistivity/ }))
+    const states = onChange.mock.calls.at(-1)?.[0] as DraftMaterialState[]
+    expect(states[0].property_modules?.[0].records[0]).toMatchObject({
+      record_type: 'measured_tc',
+      method_code: 'resistivity',
+      definition_key: 'record.superconductive_properties.measured_tc.resistivity',
+      payload: { experimental_conditions: {} },
+    })
+    expect(states[0].property_modules?.[0].records[0].payload).not.toHaveProperty('calculation_conditions')
+    expect(states[0].property_modules?.[0].records[0].payload).not.toHaveProperty('parameters')
+  })
+
+  it('Schema 表单渲染 Conditions/参数/预留分组并保持嵌套错误路径', () => {
+    const onChange = vi.fn()
+    render(<SchemaDrivenRecordForm record={predictedRecord()} definition={predictedDefinition} onChange={onChange} />)
+    expect(screen.getByLabelText('计算软件')).toHaveValue('Quantum ESPRESSO')
+    expect(screen.getByLabelText('μ*')).toHaveValue(0.1)
+    fireEvent.change(screen.getByLabelText('计算软件'), { target: { value: 'VASP' } })
+    expect(onChange.mock.calls.at(-1)?.[0].payload.calculation_conditions.calculation_code).toBe('VASP')
+    fireEvent.click(screen.getAllByRole('button', { name: '新增字段' })[1])
+    expect(onChange.mock.calls.at(-1)?.[0].payload.parameters.extensions[0]).toMatchObject({
+      name_raw: '', value_kind: 'number', value_raw: '', unit_raw: '',
+    })
+  })
+
+  it('复制记录深复制 Conditions、参数和 extensions，并生成独立稳定键', () => {
+    const original = predictedRecord()
+    const copy = clonePropertyRecord(original)
+    ;(copy.payload.parameters as Record<string, any>).mu_star = 0.15
+    ;((copy.payload.parameters as Record<string, any>).extensions as any[]).push({ field_key: 'local' })
+    expect(copy.record_key).not.toBe(original.record_key)
+    expect((original.payload.parameters as Record<string, any>).mu_star).toBe(0.1)
+    expect((original.payload.parameters as Record<string, any>).extensions).toEqual([])
+  })
+
+  it('详情只消费目标记录，迁移观察期存在旧字段也不重复计数', () => {
+    const rows = collectPropertyRows({
+      key_properties: [{ id: 1, name: 'legacy', value_raw: '250' }],
+      material_states: [{
+        id: 1, material: 'LaH10', tc_results: [{ id: 1, tc_value_k: 250 }],
+        property_modules: [{ module_code: 'superconductive_properties', records: [predictedRecord()] }],
+      }],
+    })
+    expect(rows.filter(row => row.label === 'Tc')).toHaveLength(1)
+    expect(rows.find(row => row.label === 'Tc')).toMatchObject({ label: 'Tc', value: '250 K' })
+  })
+
+  it('详情页提供材料状态 JSON 导出入口并调用版本化导出接口', async () => {
+    vi.mocked(api.download).mockResolvedValue(new Blob(['{}'], { type: 'application/json' }) as never)
+    const createObjectURL = vi.fn(() => 'blob:material-state')
+    const revokeObjectURL = vi.fn()
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL })
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL })
+    const linkClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+
+    render(<PaperEditView paper={{
+      id: 90,
+      title: 'Issue 90',
+      content_revision: 7,
+      material_states: [{ id: 12, state_key: 'state-lah10-170gpa', material: 'LaH10', property_modules: [] }],
+    }} onBack={() => undefined} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '导出材料状态' }))
+    await waitFor(() => expect(api.download).toHaveBeenCalledWith('/api/papers/90/material-states/state-lah10-170gpa/export'))
+    expect(createObjectURL).toHaveBeenCalled()
+    expect(linkClick).toHaveBeenCalled()
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:material-state')
+  })
+
+  it('旧草稿单向转换为带版本的统一模块，未知未来版本明确失败', () => {
+    const converted = normalizeUploadDraft({
+      paper: {},
+      material_states: [{ material: 'LaH10', tc_results: [{ result_kind: 'theoretical', tc_method: 'allen_dynes', tc_value_k: 250 }] }],
+    })
+    expect(formDefinitionMatrix.schema_version).toBe(PROPERTY_SCHEMA_VERSION)
+    expect(converted.material_states[0]).toMatchObject({ schema_version: formDefinitionMatrix.schema_version })
+    expect(converted.material_states[0].property_modules?.[0].records[0]).toMatchObject({
+      record_type: 'predicted_tc', value_number: 250,
+    })
+    expect(converted.material_states[0].tc_results).toBeUndefined()
+    expect(() => normalizeUploadDraft({ paper: {}, material_states: [{ schema_version: 99 }] })).toThrow('不支持的物性草稿 Schema 版本')
   })
 })
 

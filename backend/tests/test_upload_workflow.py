@@ -3,6 +3,8 @@ import json
 import os
 from types import SimpleNamespace
 
+import pytest
+
 
 os.environ.setdefault("DATABASE_URL", "sqlite:////tmp/scwiki-upload-workflow-test.db")
 os.environ.setdefault("JWT_SECRET_KEY", "test-only-secret")
@@ -359,6 +361,35 @@ def test_validate_draft_rejects_inverted_pressure_range():
         assert "第 1 个材料状态的压强区间 min 不能大于 max" in exc.detail["message"]
     else:
         raise AssertionError("min > max 的压强区间必须在提交校验时拒绝")
+
+
+def test_validate_draft_rejects_invalid_modular_record_before_persistence():
+    state = _state_with_material("LaH10")
+    state["property_modules"] = [{
+        "module_key": "module-superconductive_properties",
+        "module_code": "superconductive_properties",
+        "records": [{
+            "record_key": "tc-1",
+            "module_code": "superconductive_properties",
+            "record_type": "predicted_tc",
+            "property_code": "tc",
+            "definition_key": "record.superconductive_properties.predicted_tc.mcmillan",
+            "definition_version": 1,
+            "name_raw": "critical temperature",
+            "value_kind": "number",
+            "value_raw": "203 K",
+            "value_number": 203,
+            "canonical_unit": "K",
+            "method_code": "resistivity",
+            "payload": {"calculation_conditions": {}},
+        }],
+    }]
+
+    with pytest.raises(HTTPException) as exc_info:
+        rag._validate_draft(_minimal_non_review_draft([state]))
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail["issues"][0]["field"].endswith("method_code")
 
 
 def _half_filled_draft():

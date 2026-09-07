@@ -4,9 +4,12 @@ import {
   Chip, Alert,
 } from '@mui/material'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
+import DownloadIcon from '@mui/icons-material/Download'
 import StructureViewer3D from './StructureViewer3D'
 import { useLanguage } from '../context/LanguageContext'
 import { familyName } from '../lib/classifications'
+import { api } from '../lib/api'
+import PropertyModuleEditor from './PropertyModuleEditor'
 
 interface PaperEditViewProps {
   // 论文数据与加载/错误分流由路由页面壳 PaperDetailPage 负责，本组件只负责展示。
@@ -53,9 +56,25 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
   const [editKnowledgeGraphTitle, setEditKnowledgeGraphTitle] = useState('')
   const [editKeyFinding, setEditKeyFinding] = useState('')
   const [editResearchMotivation, setEditResearchMotivation] = useState('')
+  const [exportError, setExportError] = useState('')
 
-  // Chem formula (read-only, derived from key_properties)
-  const formula = paper?.key_properties?.[0]?.material || (paper?.materials?.[0]) || '-'
+  const downloadMaterialState = async (state: any) => {
+    try {
+      setExportError('')
+      const blob = await api.download(`/api/papers/${paper.id}/material-states/${encodeURIComponent(state.state_key)}/export`)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${state.material || 'material-state'}-revision-${paper.content_revision || paper.revision || 1}.json`
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (reason) {
+      setExportError(reason instanceof Error ? reason.message : '材料状态导出失败')
+    }
+  }
+
+  // 化学式来自 MaterialState；Read switch 后不再依赖旧 key_properties。
+  const formula = paper?.material_states?.[0]?.material || (paper?.materials?.[0]) || '-'
 
   // 论文数据由 props 传入；同步到本地展示状态，切换论文时重新填充
   useEffect(() => {
@@ -203,9 +222,13 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
                       p: 2, borderRadius: 2, bgcolor: 'grey.50', border: '1px solid', borderColor: 'divider',
                     }}>
                       {/* 分类区 */}
-                      <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>
-                        {state.material || t('paperDetail.materialStateFallback', { n: index + 1 })}
-                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 1.5 }}>
+                        <Typography variant="subtitle2" fontWeight={700}>
+                          {state.material || t('paperDetail.materialStateFallback', { n: index + 1 })}
+                        </Typography>
+                        {state.state_key && <Button size="small" startIcon={<DownloadIcon />} onClick={() => void downloadMaterialState(state)}>导出材料状态</Button>}
+                      </Box>
+                      {exportError && <Alert severity="error" sx={{ mb: 1 }}>{exportError}</Alert>}
 
                       <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 1.5, mb: 2 }}>
                         {state.element_count != null && (
@@ -276,94 +299,7 @@ const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPa
                         </Box>
                       )}
 
-                      {/* Tc 结果区 */}
-                      {(state.tc_results || []).length > 0 && (
-                        <Box sx={{ mb: 2 }}>
-                          <Typography variant="caption" color="text.secondary">{t('paperDetail.tcSection')}</Typography>
-                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 0.5 }}>
-                            {state.tc_results.map((tcr: any, tcIdx: number) => (
-                              <Box key={tcIdx} sx={{ p: 1, bgcolor: 'background.paper', borderRadius: 1 }}>
-                                {tcr.result_kind && (
-                                  <Typography variant="caption" color="primary">{t('paperDetail.tcKind', { value: tcr.result_kind })}</Typography>
-                                )}
-                                {tcr.tc_value_k != null && (
-                                  <Typography variant="body2">{t('paperDetail.tcValue', { value: tcr.tc_value_k })}</Typography>
-                                )}
-                                {(tcr.tc_min_k != null || tcr.tc_max_k != null) && (
-                                  <Typography variant="body2">
-                                    {t('paperDetail.tcRange', { min: tcr.tc_min_k ?? '-', max: tcr.tc_max_k ?? '-' })}
-                                  </Typography>
-                                )}
-                                {tcr.tc_method && (
-                                  <Typography variant="body2">{t('paperDetail.tcMethod', { value: tcr.tc_method })}</Typography>
-                                )}
-                                {tcr.tc_method_custom && (
-                                  <Typography variant="body2">{t('paperDetail.tcMethodCustom', { value: tcr.tc_method_custom })}</Typography>
-                                )}
-                                {tcr.value_raw && (
-                                  <Typography variant="body2" color="text.secondary">
-                                    {t('paperDetail.rawText', { value: `${tcr.value_raw}${tcr.unit_raw ? ` ${tcr.unit_raw}` : ''}` })}
-                                  </Typography>
-                                )}
-                              </Box>
-                            ))}
-                          </Box>
-                        </Box>
-                      )}
-
-                      {/* 计算上下文（λ、ωlog、μ*） */}
-                      {(state.calculation_contexts || []).length > 0 && (
-                        <Box sx={{ mb: 2 }}>
-                          <Typography variant="caption" color="text.secondary">{t('paperDetail.calculationContexts')}</Typography>
-                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 0.5 }}>
-                            {state.calculation_contexts.map((ctx: any, ctxIdx: number) => (
-                              <Box key={ctxIdx} sx={{ p: 1, bgcolor: 'background.paper', borderRadius: 1 }}>
-                                {ctx.lambda_ep != null && (
-                                  <Typography variant="body2">{t('paperDetail.epcStrength', { value: ctx.lambda_ep })}</Typography>
-                                )}
-                                {ctx.omega_log_k != null && (
-                                  <Typography variant="body2">{t('paperDetail.omegaLog', { value: ctx.omega_log_k })}</Typography>
-                                )}
-                                {ctx.mu_star != null && (
-                                  <Typography variant="body2">{t('paperDetail.muStar', { value: ctx.mu_star })}</Typography>
-                                )}
-                                {ctx.calculation_method && (
-                                  <Typography variant="body2" color="text.secondary">{t('paperDetail.calcMethod', { value: ctx.calculation_method })}</Typography>
-                                )}
-                                {ctx.lambda_ep == null && ctx.omega_log_k == null && ctx.mu_star == null && (
-                                  <Typography variant="body2" color="text.disabled">{t('paperDetail.noValues')}</Typography>
-                                )}
-                              </Box>
-                            ))}
-                          </Box>
-                        </Box>
-                      )}
-
-                      {/* 普通物性 */}
-                      {(state.key_properties || paper.key_properties?.filter((kp: any) => kp.material_state_id === state.id) || []).length > 0 && (
-                        <Box>
-                          <Typography variant="caption" color="text.secondary">{t('paperDetail.otherProperties')}</Typography>
-                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 0.5 }}>
-                            {(state.key_properties || paper.key_properties?.filter((kp: any) => kp.material_state_id === state.id) || []).map((kp: any, kpIdx: number) => (
-                              <Box key={kpIdx} sx={{ p: 1, bgcolor: 'background.paper', borderRadius: 1 }}>
-                                <Typography variant="body2" fontWeight={600}>{kp.name || kp.name_raw || t('paperDetail.unnamedProperty')}</Typography>
-                                {kp.value_raw && (
-                                  <Typography variant="body2">{t('paperDetail.rawValue', { value: kp.value_raw })}</Typography>
-                                )}
-                                {kp.value_number != null && (
-                                  <Typography variant="body2">{t('paperDetail.parsedValue', { value: kp.value_number })}</Typography>
-                                )}
-                                {kp.unit && (
-                                  <Typography variant="body2">{t('paperDetail.unitLabel', { value: kp.unit })}</Typography>
-                                )}
-                                {kp.condition_note && (
-                                  <Typography variant="body2" color="text.secondary">{t('paperDetail.conditionNote', { value: kp.condition_note })}</Typography>
-                                )}
-                              </Box>
-                            ))}
-                          </Box>
-                        </Box>
-                      )}
+                      <PropertyModuleEditor modules={state.property_modules || []} readOnly onChange={() => undefined} />
                     </Box>
                   ))}
                 </Box>

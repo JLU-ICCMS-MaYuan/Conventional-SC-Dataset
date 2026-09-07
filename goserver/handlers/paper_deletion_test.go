@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"encoding/json"
+	"fmt"
 	"testing"
 
 	"scwiki/server/database"
@@ -30,6 +32,12 @@ func newDeletionTestDB(t *testing.T) *gorm.DB {
 
 	if err := db.AutoMigrate(
 		&models.Paper{},
+		&models.ChemicalSystem{},
+		&models.FormDefinition{},
+		&models.PropertyModule{},
+		&models.PropertyRecord{},
+		&models.PropertyRecordEvidence{},
+		&models.PropertyRecordDefinitionEvent{},
 		&models.KeyProperty{},
 		&models.MaterialState{},
 		&models.TcResult{},
@@ -65,7 +73,19 @@ func newDeletionTestDB(t *testing.T) *gorm.DB {
 func seedPaperGraph(t *testing.T, db *gorm.DB, doi string) (uint, uint) {
 	t.Helper()
 
+	paper := models.Paper{DOI: strPtr(doi), Title: strPtr("Test " + doi), ReviewStatus: "pending", ContentRevision: 1}
+	if err := db.Create(&paper).Error; err != nil {
+		t.Fatalf("创建 paper 失败: %v", err)
+	}
+	chemicalSystem := models.ChemicalSystem{
+		PaperID: paper.ID, PaperRevision: 1, SystemKey: "H-S-" + doi,
+		ElementsList: `["H","S"]`, ElementCount: 2,
+	}
+	if err := db.Create(&chemicalSystem).Error; err != nil {
+		t.Fatalf("创建 chemical_system 失败: %v", err)
+	}
 	sc := models.Superconductor{
+		PaperID: paper.ID, PaperRevision: 1, ChemicalSystemID: chemicalSystem.ID,
 		ChemicalFormula:   "H3S",
 		FormulaNormalized: "H3S-" + doi,
 		CompositionKey:    "H3S-" + doi,
@@ -86,12 +106,10 @@ func seedPaperGraph(t *testing.T, db *gorm.DB, doi string) (uint, uint) {
 		t.Fatalf("创建 property_definition 失败: %v", err)
 	}
 
-	paper := models.Paper{DOI: strPtr(doi), Title: strPtr("Test " + doi), ReviewStatus: "pending"}
-	if err := db.Create(&paper).Error; err != nil {
-		t.Fatalf("创建 paper 失败: %v", err)
+	state := models.MaterialState{
+		StateKey: "state-" + fmt.Sprint(paper.ID), PaperID: paper.ID,
+		PaperRevision: 1, SuperconductorID: sc.ID,
 	}
-
-	state := models.MaterialState{PaperID: paper.ID, PaperRevision: 1, SuperconductorID: sc.ID}
 	if err := db.Create(&state).Error; err != nil {
 		t.Fatalf("创建 material_state 失败: %v", err)
 	}
@@ -117,6 +135,54 @@ func seedPaperGraph(t *testing.T, db *gorm.DB, doi string) (uint, uint) {
 	}
 	if err := db.Create(&evidence).Error; err != nil {
 		t.Fatalf("创建 paper_evidence 失败: %v", err)
+	}
+	moduleDefinition := models.FormDefinition{
+		DefinitionKey: "module.superconductive_properties." + doi, Version: 1,
+		TargetKind: "property_module", ModuleCode: "superconductive_properties",
+		CoreSchemaJSON: json.RawMessage(`{}`), JSONSchemaJSON: json.RawMessage(`{}`), UISchemaJSON: json.RawMessage(`{}`),
+		Status: "published", Checksum: "module-" + doi,
+	}
+	recordDefinition := models.FormDefinition{
+		DefinitionKey: "record.superconductive_properties.predicted_tc." + doi, Version: 1,
+		TargetKind: "property_record", ModuleCode: "superconductive_properties",
+		CoreSchemaJSON: json.RawMessage(`{}`), JSONSchemaJSON: json.RawMessage(`{}`), UISchemaJSON: json.RawMessage(`{}`),
+		Status: "published", Checksum: "record-" + doi,
+	}
+	if err := db.Create(&moduleDefinition).Error; err != nil {
+		t.Fatalf("创建 module form_definition 失败: %v", err)
+	}
+	if err := db.Create(&recordDefinition).Error; err != nil {
+		t.Fatalf("创建 form_definitions 失败: %v", err)
+	}
+	module := models.PropertyModule{
+		ModuleKey: "module-" + doi, PaperID: paper.ID, PaperRevision: 1, MaterialStateID: state.ID,
+		ModuleCode: "superconductive_properties", DefinitionKey: moduleDefinition.DefinitionKey,
+		DefinitionVersion: 1, MetadataJSON: json.RawMessage(`{}`),
+	}
+	if err := db.Create(&module).Error; err != nil {
+		t.Fatalf("创建 property_module 失败: %v", err)
+	}
+	record := models.PropertyRecord{
+		RecordKey: "record-" + doi, PaperID: paper.ID, PaperRevision: 1, MaterialStateID: state.ID, ModuleID: module.ID,
+		RecordType: "predicted_tc", PropertyCode: "tc", DefinitionID: recordDefinition.ID,
+		DefinitionKey: recordDefinition.DefinitionKey, DefinitionVersion: 1,
+		NameRaw: "Tc", ValueKind: "number", ValueRaw: "200 K", ValueNumber: f64Ptr(200),
+		PayloadJSON: json.RawMessage(`{"calculation_conditions":{}}`), SourceFingerprint: "target-" + doi,
+		RecordChecksum: "record-checksum-" + doi,
+	}
+	if err := db.Create(&record).Error; err != nil {
+		t.Fatalf("创建 property_record 失败: %v", err)
+	}
+	if err := db.Create(&models.PropertyRecordEvidence{
+		RecordID: record.ID, PaperEvidenceID: evidence.ID, PaperID: paper.ID, PaperRevision: 1,
+		FieldPath: "value", EvidenceRole: "primary",
+	}).Error; err != nil {
+		t.Fatalf("创建 property_record_evidence 失败: %v", err)
+	}
+	if err := db.Create(&models.PropertyRecordDefinitionEvent{
+		RecordID: record.ID, PaperID: paper.ID, PaperRevision: 1,
+	}).Error; err != nil {
+		t.Fatalf("创建 property_record_definition_event 失败: %v", err)
 	}
 
 	structure := models.StructureModel{PaperID: paper.ID, PaperRevision: 1, MaterialStateID: state.ID}
@@ -209,6 +275,10 @@ func TestCascadeDeleteInDBRemovesEveryRelation(t *testing.T) {
 		model any
 	}{
 		{"superconductor_properties", &models.KeyProperty{}},
+		{"property_record_evidences", &models.PropertyRecordEvidence{}},
+		{"property_record_definition_events", &models.PropertyRecordDefinitionEvent{}},
+		{"property_records", &models.PropertyRecord{}},
+		{"property_modules", &models.PropertyModule{}},
 		{"material_states", &models.MaterialState{}},
 		{"tc_results", &models.TcResult{}},
 		{"calculation_contexts", &models.CalculationContext{}},
@@ -237,11 +307,11 @@ func TestCascadeDeleteInDBRemovesEveryRelation(t *testing.T) {
 		t.Errorf("papers 应删除，实际残留 %d 行", papers)
 	}
 
-	// FR-005：superconductors 可被多篇论文共享，不得随论文删除。
+	// #90：材料归当前论文 revision 所有，删除不能留下孤儿材料。
 	var scCount int64
 	db.Model(&models.Superconductor{}).Where("id = ?", scID).Count(&scCount)
-	if scCount != 1 {
-		t.Errorf("superconductors 记录应保留，实际 %d 行", scCount)
+	if scCount != 0 {
+		t.Errorf("superconductors 记录应删除，实际 %d 行", scCount)
 	}
 }
 

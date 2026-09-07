@@ -108,35 +108,45 @@ describe('编辑页内审核', () => {
   })
 })
 
-describe('T012：物性行化学式标签（#75-1 FR-002）', () => {
-  const paperWithKp = {
+describe('T012：统一物性记录所属材料状态的化学式标签', () => {
+  const paperWithPropertyModule = {
     ...paper,
-    key_properties: [{
-      id: 1, material: 'LaH10', name: 'critical_temperature', name_raw: 'Tc',
-      value_min: 250, value_max: null, unit: 'K', is_primary: true,
+    material_states: [{
+      id: 1, superconductor: { chemical_formula: 'LaH10' }, structure_families: [],
+      material_dimensionality: 'unknown', state_kind: 'theoretical',
+      property_modules: [{
+        module_key: 'module-superconductive', module_code: 'superconductive_properties',
+        definition_key: 'module.superconductive_properties', definition_version: 1, display_order: 0,
+        records: [{
+          record_key: 'record-tc', module_code: 'superconductive_properties', record_type: 'predicted_tc',
+          property_code: 'tc', definition_key: 'record.superconductive_properties.predicted_tc.mcmillan',
+          definition_version: 1, name_raw: 'critical temperature', value_kind: 'range', value_raw: '>=250 K',
+          value_min: 250, value_max: null, unit_raw: 'K', method_code: 'mcmillan',
+          payload: { calculation_conditions: {}, parameters: {} },
+        }],
+      }],
     }],
-    material_states: [],
   }
 
   beforeEach(() => {
     mockedApi.get.mockImplementation(async (path: string) => {
       if (path.startsWith('/api/admin/papers/all')) return { items: [paper], total: 1 }
-      if (path === '/api/admin/papers/88') return paperWithKp
+      if (path === '/api/admin/papers/88') return paperWithPropertyModule
       if (path.startsWith('/api/chart-groups')) return []
       return {}
     })
   })
 
-  it('物性行输入框标签为「化学式 (material)」', async () => {
+  it('中文界面由所属材料状态提供「化学式」', async () => {
     const user = userEvent.setup()
     renderAdminRoutes()
     await user.click(await screen.findByRole('button', { name: '论文审核' }))
     await user.click(await screen.findByRole('button', { name: '编辑' }))
-    expect(await screen.findByLabelText('化学式 (material)')).toBeVisible()
-    expect(screen.getByLabelText('化学式 (material)')).toHaveValue('LaH10')
+    expect(await screen.findByLabelText('化学式')).toBeVisible()
+    expect(screen.getByLabelText('化学式')).toHaveValue('LaH10')
   })
 
-  it('英文界面标签为 Chemical formula (material)', async () => {
+  it('英文界面由所属材料状态提供 Chemical formula', async () => {
     localStorage.setItem('sc-wiki.language', 'en')
     const user = userEvent.setup()
     render(
@@ -151,6 +161,6 @@ describe('T012：物性行化学式标签（#75-1 FR-002）', () => {
     )
     await user.click(await screen.findByRole('button', { name: 'Paper Review' }))
     await user.click(await screen.findByRole('button', { name: 'Edit' }))
-    expect(await screen.findByLabelText('Chemical formula (material)')).toBeVisible()
+    expect(await screen.findByLabelText('Chemical formula')).toBeVisible()
   })
 })

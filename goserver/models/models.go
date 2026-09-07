@@ -238,24 +238,29 @@ type PaperHistoryEvent struct {
 
 // ChemicalSystem 化学体系
 type ChemicalSystem struct {
-	ID           uint   `gorm:"primaryKey" json:"id"`
-	SystemKey    string `gorm:"size:100" json:"system_key"`
-	ElementsList string `json:"elements_list"`
-	ElementCount int    `json:"element_count"`
+	ID            uint   `gorm:"primaryKey" json:"id"`
+	PaperID       uint   `gorm:"not null;index;uniqueIndex:uq_chemical_systems_paper_revision_key,priority:1" json:"paper_id"`
+	PaperRevision uint   `gorm:"not null;index;uniqueIndex:uq_chemical_systems_paper_revision_key,priority:2" json:"paper_revision"`
+	SystemKey     string `gorm:"size:100;uniqueIndex:uq_chemical_systems_paper_revision_key,priority:3" json:"system_key"`
+	ElementsList  string `json:"elements_list"`
+	ElementCount  int    `json:"element_count"`
 }
 
 // Superconductor 超导材料
 type Superconductor struct {
 	ID                uint            `gorm:"primaryKey" json:"id"`
+	PaperID           uint            `gorm:"not null;index;uniqueIndex:uq_superconductors_paper_revision_composition,priority:1" json:"paper_id"`
+	PaperRevision     uint            `gorm:"not null;index;uniqueIndex:uq_superconductors_paper_revision_composition,priority:2" json:"paper_revision"`
 	ChemicalSystemID  uint            `json:"chemical_system_id"`
 	ChemicalFormula   string          `gorm:"size:255" json:"chemical_formula"`
-	FormulaNormalized string          `gorm:"uniqueIndex;size:255" json:"formula_normalized"`
-	CompositionKey    string          `gorm:"uniqueIndex;size:255;not null" json:"composition_key"`
+	FormulaNormalized string          `gorm:"size:255;index" json:"formula_normalized"`
+	CompositionKey    string          `gorm:"size:255;not null;uniqueIndex:uq_superconductors_paper_revision_composition,priority:3" json:"composition_key"`
 	IsotopeSignature  *string         `gorm:"size:255;index" json:"isotope_signature"`
 	DisplayName       string          `gorm:"size:255" json:"display_name"`
 	ElementsList      string          `gorm:"type:json" json:"elements_list"`
 	Composition       string          `gorm:"type:json" json:"composition"`
 	ElementRatio      string          `gorm:"type:json" json:"element_ratio"`
+	ChemicalSystem    ChemicalSystem  `gorm:"foreignKey:ChemicalSystemID" json:"chemical_system,omitempty"`
 	MaterialStates    []MaterialState `gorm:"foreignKey:SuperconductorID" json:"material_states,omitempty"`
 }
 
@@ -314,8 +319,9 @@ type StructureFamilyAlias struct {
 // MaterialState 一篇论文当前 revision 中材料的条件化状态。
 type MaterialState struct {
 	ID                     uint64 `gorm:"primaryKey;uniqueIndex:uq_material_states_identity_revision,priority:1" json:"id"`
-	PaperID                uint   `gorm:"not null;index:ix_material_states_paper_revision,priority:1;uniqueIndex:uq_material_states_identity_revision,priority:2" json:"paper_id"`
-	PaperRevision          uint   `gorm:"not null;index:ix_material_states_paper_revision,priority:2;uniqueIndex:uq_material_states_identity_revision,priority:3" json:"paper_revision"`
+	StateKey               string `gorm:"size:96;not null;uniqueIndex:uq_material_states_paper_state_key,priority:3" json:"state_key"`
+	PaperID                uint   `gorm:"not null;index:ix_material_states_paper_revision,priority:1;uniqueIndex:uq_material_states_identity_revision,priority:2;uniqueIndex:uq_material_states_paper_state_key,priority:1" json:"paper_id"`
+	PaperRevision          uint   `gorm:"not null;index:ix_material_states_paper_revision,priority:2;uniqueIndex:uq_material_states_identity_revision,priority:3;uniqueIndex:uq_material_states_paper_state_key,priority:2" json:"paper_revision"`
 	SuperconductorID       uint   `gorm:"not null;index" json:"superconductor_id"`
 	ElementCount           *int16 `json:"element_count"`
 	MaterialDimensionality string `gorm:"size:32;not null;default:unknown" json:"material_dimensionality"`
@@ -344,53 +350,99 @@ type MaterialState struct {
 	Properties               []SuperconductorProperty       `gorm:"foreignKey:MaterialStateID" json:"properties,omitempty"`
 	Superconductor           Superconductor                 `gorm:"foreignKey:SuperconductorID" json:"superconductor,omitempty"`
 	StructureFamilyLinks     []MaterialStateStructureFamily `gorm:"foreignKey:MaterialStateID" json:"structure_families,omitempty"`
-	PropertyModules          []PropertyModule                `gorm:"foreignKey:MaterialStateID" json:"property_modules,omitempty"`
+	PropertyModules          []PropertyModule               `gorm:"foreignKey:MaterialStateID" json:"property_modules,omitempty"`
 }
 
-// PropertyModule/PropertyRecord 是 Issue #90 的统一只读投影。
+// PropertyModule/PropertyRecord 是 Issue #90 的统一物性读取模型。
 type PropertyModule struct {
-	ID               uint64          `gorm:"primaryKey" json:"-"`
-	ModuleKey        string          `gorm:"size:96;not null;uniqueIndex" json:"module_key"`
-	PaperID          uint            `gorm:"not null;index" json:"-"`
-	PaperRevision    uint            `gorm:"not null;index" json:"-"`
-	MaterialStateID  uint64          `gorm:"not null;index" json:"-"`
-	ModuleCode       string          `gorm:"size:64;not null" json:"module_code"`
-	DefinitionKey    string          `gorm:"size:255;not null" json:"definition_key"`
-	DefinitionVersion int            `gorm:"not null" json:"definition_version"`
-	DisplayOrder     int             `gorm:"not null" json:"display_order"`
-	MetadataJSON     json.RawMessage `gorm:"type:json" json:"metadata,omitempty"`
-	Records          []PropertyRecord `gorm:"foreignKey:ModuleID" json:"records,omitempty"`
+	ID                uint64           `gorm:"primaryKey" json:"-"`
+	ModuleKey         string           `gorm:"size:96;not null;uniqueIndex:uq_property_modules_state_key,priority:2" json:"module_key"`
+	PaperID           uint             `gorm:"not null;index" json:"-"`
+	PaperRevision     uint             `gorm:"not null;index" json:"-"`
+	MaterialStateID   uint64           `gorm:"not null;index;uniqueIndex:uq_property_modules_state_key,priority:1;uniqueIndex:uq_property_modules_state_code,priority:1" json:"-"`
+	ModuleCode        string           `gorm:"size:64;not null;uniqueIndex:uq_property_modules_state_code,priority:2" json:"module_code"`
+	DefinitionKey     string           `gorm:"size:255;not null" json:"definition_key"`
+	DefinitionVersion int              `gorm:"not null" json:"definition_version"`
+	DisplayOrder      int              `gorm:"not null" json:"display_order"`
+	MetadataJSON      json.RawMessage  `gorm:"type:json" json:"metadata,omitempty"`
+	Records           []PropertyRecord `gorm:"foreignKey:ModuleID" json:"records"`
+}
+
+type FormDefinition struct {
+	ID                uint            `gorm:"primaryKey" json:"-"`
+	DefinitionKey     string          `gorm:"size:255;not null;uniqueIndex:uq_form_definitions_key_version,priority:1" json:"definition_key"`
+	Version           int             `gorm:"not null;uniqueIndex:uq_form_definitions_key_version,priority:2" json:"version"`
+	TargetKind        string          `gorm:"size:32;not null" json:"target_kind"`
+	ModuleCode        string          `gorm:"size:64;not null" json:"module_code"`
+	RecordType        *string         `gorm:"size:64" json:"record_type,omitempty"`
+	MethodCode        *string         `gorm:"size:64" json:"method_code,omitempty"`
+	PropertyCode      *string         `gorm:"size:100" json:"property_code,omitempty"`
+	CoreSchemaJSON    json.RawMessage `gorm:"column:core_schema;type:json;not null" json:"core_schema"`
+	JSONSchemaJSON    json.RawMessage `gorm:"column:json_schema;type:json;not null" json:"json_schema"`
+	UISchemaJSON      json.RawMessage `gorm:"column:ui_schema;type:json;not null" json:"ui_schema"`
+	Status            string          `gorm:"size:20;not null" json:"status"`
+	Checksum          string          `gorm:"size:64;not null" json:"checksum"`
+	CreatedByUserID   *uint           `gorm:"column:created_by" json:"-"`
+	PublishedByUserID *uint           `gorm:"column:published_by" json:"-"`
+	CreatedAt         time.Time       `json:"created_at"`
+	PublishedAt       *time.Time      `json:"published_at,omitempty"`
 }
 
 type PropertyRecord struct {
-	ID                uint64          `gorm:"primaryKey" json:"-"`
-	RecordKey         string          `gorm:"size:96;not null" json:"record_key"`
-	PaperID           uint            `gorm:"not null;index" json:"-"`
-	PaperRevision     uint            `gorm:"not null;index" json:"-"`
-	MaterialStateID   uint64          `gorm:"not null;index" json:"-"`
-	ModuleID          uint64          `gorm:"not null;index" json:"-"`
-	RecordType        string          `gorm:"size:64;not null" json:"record_type"`
-	PropertyCode      string          `gorm:"size:100;not null" json:"property_code"`
-	CustomPropertyKey *string         `gorm:"size:96" json:"custom_property_key,omitempty"`
-	DefinitionID      uint            `gorm:"not null" json:"-"`
-	DefinitionKey     string          `gorm:"size:255;not null" json:"definition_key"`
-	DefinitionVersion int             `gorm:"not null" json:"definition_version"`
-	NameRaw           string          `gorm:"size:255;not null" json:"name_raw"`
-	ValueKind         string          `gorm:"size:20;not null" json:"value_kind"`
-	ValueRaw          string          `gorm:"type:text;not null" json:"value_raw"`
-	ValueNumber       *float64        `json:"value_number,omitempty"`
-	ValueMin          *float64        `json:"value_min,omitempty"`
-	ValueMax          *float64        `json:"value_max,omitempty"`
-	ValueText         *string         `json:"value_text,omitempty"`
-	ValueBoolean      *bool           `json:"value_boolean,omitempty"`
-	Uncertainty       *float64        `json:"uncertainty,omitempty"`
-	UnitRaw           *string         `json:"unit_raw,omitempty"`
-	CanonicalUnit     *string         `json:"canonical_unit,omitempty"`
-	MethodCode        *string         `json:"method_code,omitempty"`
-	IsRepresentative  bool            `json:"is_representative"`
-	StructureKey      *string         `json:"structure_key,omitempty"`
-	PayloadJSON       json.RawMessage `gorm:"type:json" json:"payload"`
-	RecordChecksum    string          `gorm:"size:64;not null" json:"-"`
+	ID                uint64                   `gorm:"primaryKey" json:"-"`
+	RecordKey         string                   `gorm:"size:96;not null" json:"record_key"`
+	PaperID           uint                     `gorm:"not null;index" json:"-"`
+	PaperRevision     uint                     `gorm:"not null;index" json:"-"`
+	MaterialStateID   uint64                   `gorm:"not null;index" json:"-"`
+	ModuleID          uint64                   `gorm:"not null;index" json:"-"`
+	ModuleCode        string                   `gorm:"-" json:"module_code"`
+	RecordType        string                   `gorm:"size:64;not null" json:"record_type"`
+	PropertyCode      string                   `gorm:"size:100;not null" json:"property_code"`
+	CustomPropertyKey *string                  `gorm:"size:96" json:"custom_property_key,omitempty"`
+	DefinitionID      uint                     `gorm:"not null" json:"-"`
+	DefinitionKey     string                   `gorm:"size:255;not null" json:"definition_key"`
+	DefinitionVersion int                      `gorm:"not null" json:"definition_version"`
+	NameRaw           string                   `gorm:"size:255;not null" json:"name_raw"`
+	ValueKind         string                   `gorm:"size:20;not null" json:"value_kind"`
+	ValueRaw          string                   `gorm:"type:text;not null" json:"value_raw"`
+	ValueNumber       *float64                 `json:"value_number,omitempty"`
+	ValueMin          *float64                 `json:"value_min,omitempty"`
+	ValueMax          *float64                 `json:"value_max,omitempty"`
+	ValueText         *string                  `json:"value_text,omitempty"`
+	ValueBoolean      *bool                    `json:"value_boolean,omitempty"`
+	Uncertainty       *float64                 `json:"uncertainty,omitempty"`
+	UnitRaw           *string                  `json:"unit_raw,omitempty"`
+	CanonicalUnit     *string                  `json:"canonical_unit,omitempty"`
+	MethodCode        *string                  `json:"method_code,omitempty"`
+	MethodRaw         *string                  `json:"method_raw,omitempty"`
+	CriterionCode     *string                  `json:"criterion_code,omitempty"`
+	CriterionRaw      *string                  `json:"criterion_raw,omitempty"`
+	IsRepresentative  bool                     `json:"is_representative"`
+	StructureKey      *string                  `json:"structure_key,omitempty"`
+	PayloadJSON       json.RawMessage          `gorm:"type:json" json:"payload"`
+	SourceFingerprint string                   `gorm:"size:64;not null" json:"-"`
+	RecordChecksum    string                   `gorm:"size:64;not null" json:"-"`
+	CreatedAt         time.Time                `json:"created_at"`
+	UpdatedAt         time.Time                `json:"updated_at"`
+	Definition        FormDefinition           `gorm:"foreignKey:DefinitionID" json:"definition"`
+	Evidences         []PropertyRecordEvidence `gorm:"foreignKey:RecordID" json:"evidences"`
+}
+
+type PropertyRecordEvidence struct {
+	RecordID        uint64        `gorm:"primaryKey" json:"-"`
+	PaperEvidenceID uint          `gorm:"primaryKey" json:"paper_evidence_id"`
+	PaperID         uint          `gorm:"not null" json:"-"`
+	PaperRevision   uint          `gorm:"not null" json:"-"`
+	FieldPath       string        `gorm:"size:255;not null" json:"field_path"`
+	EvidenceRole    string        `gorm:"size:32;not null" json:"evidence_role"`
+	Evidence        PaperEvidence `gorm:"foreignKey:PaperEvidenceID" json:"evidence"`
+}
+
+type PropertyRecordDefinitionEvent struct {
+	ID            uint64 `gorm:"primaryKey" json:"id"`
+	RecordID      uint64 `gorm:"not null;index" json:"record_id"`
+	PaperID       uint   `gorm:"not null;index" json:"paper_id"`
+	PaperRevision uint   `gorm:"not null" json:"paper_revision"`
 }
 
 type MaterialStateStructureFamily struct {

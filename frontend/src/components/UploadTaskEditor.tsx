@@ -16,6 +16,7 @@ import CitationExtractionPanel from './CitationExtractionPanel'
 import {
   UploadDraft, normalizeUploadDraft, unwrapData,
 } from '../lib/paperProcessing'
+import { validateRecordClient } from '../lib/formDefinitions'
 
 interface UploadTaskEditorProps {
   taskId: string
@@ -50,6 +51,15 @@ const backendErrorReason = (reason: unknown): { message: string; code?: string }
     if (typeof message === 'string' && message.trim()) {
       return { message, code: typeof code === 'string' && code ? code : undefined }
     }
+    const nested = (detail as { detail?: unknown }).detail
+    if (typeof nested === 'string' && nested.trim()) return { message: nested }
+    if (nested && typeof nested === 'object') {
+      const nestedMessage = (nested as { message?: unknown }).message
+      const nestedCode = (nested as { code?: unknown }).code
+      if (typeof nestedMessage === 'string' && nestedMessage.trim()) {
+        return { message: nestedMessage, code: typeof nestedCode === 'string' ? nestedCode : undefined }
+      }
+    }
   }
   return null
 }
@@ -74,9 +84,11 @@ const failureMessage = (
 // 「第 N 个材料状态」。据此解析序号以便定位到卡片；解析不出时只显示横幅，不做定位。
 // 该耦合依赖后端文案，由测试固定，文案变更时测试会立即失败。
 const stateIndexFromMessage = (message: string): number | undefined => {
-  const matched = /第\s*(\d+)\s*个材料状态/.exec(message)
-  if (!matched) return undefined
-  const ordinal = Number(matched[1])
+  const pathMatch = /material_states(?:\[|\.)(\d+)\]?/.exec(message)
+  if (pathMatch) return Number(pathMatch[1])
+  const ordinalMatch = /第\s*(\d+)\s*个材料状态/.exec(message)
+  if (!ordinalMatch) return undefined
+  const ordinal = Number(ordinalMatch[1])
   return Number.isSafeInteger(ordinal) && ordinal > 0 ? ordinal - 1 : undefined
 }
 
@@ -296,6 +308,17 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
           message: t('upload.propertyIncomplete', { label, n: invalidProperty + 1 }),
         })
       }
+      for (const [moduleIndex, module] of (state.property_modules || []).entries()) {
+        for (const [recordIndex, record] of module.records.entries()) {
+          for (const issue of validateRecordClient(record)) {
+            issues.push({
+              stateIndex,
+              field: `material_states[${stateIndex}].property_modules[${moduleIndex}].records[${recordIndex}].${issue.field}`,
+              message: issue.message,
+            })
+          }
+        }
+      }
     })
     return issues
   }
@@ -348,6 +371,14 @@ const UploadTaskEditor: React.FC<UploadTaskEditorProps> = ({
         setError(t('upload.doiExists', { id: apiError.existingPaperId }))
       } else {
         setError(failureMessage(t, 'submit', reason, t('upload.submitReviewFailed')))
+        if (apiError.issues?.length) {
+          revealIssues(apiError.issues.map(issue => ({
+            field: issue.field,
+            stateIndex: stateIndexFromMessage(issue.field),
+            message: issue.message,
+          })))
+          return
+        }
         // 后端独有的校验规则（材料家族、压强区间等）也要能定位到卡片
         const backendReason = apiError.status === 400 ? backendErrorReason(reason) : null
         const backendStateIndex = backendReason ? stateIndexFromMessage(backendReason.message) : undefined

@@ -6,7 +6,7 @@
 
 **重写日期**：2026-09-07
 
-**状态**：设计已重写，待实施
+**状态**：已实现并完成本地与隔离 MySQL 验收；Issue 按要求保持开放
 
 ## 背景与目标
 
@@ -306,8 +306,8 @@ Conditions、判据、证据和扩展字段。
 
 ## Documentation Impact
 
-- [ ] 实现后更新 `docs/overview/01_Decentralized_Uploading_of_Superconductivity_Data/` 的草稿和表单说明。
-- [ ] 实现后更新 `docs/overview/02_Decentralized_Maintenance_and_Verification/` 的领域模型、Schema 与审核说明。
-- [ ] 实现后更新 `docs/overview/03_Superconductivity_Data_Search_and_Database_Discovery/` 的详情、搜索和图表说明。
+- [x] 实现后更新 `docs/overview/01_Decentralized_Uploading_of_Superconductivity_Data/` 的草稿和表单说明。
+- [x] 实现后更新 `docs/overview/02_Decentralized_Maintenance_and_Verification/` 的领域模型、Schema 与审核说明。
+- [x] 实现后更新 `docs/overview/03_Superconductivity_Data_Search_and_Database_Discovery/` 的详情、搜索和图表说明。
 - [x] 重写 `docs/specs/90-unified-superconductor-properties/`。
 - [x] 根 `README.md` 无需更新：本阶段不改变安装与启动方式。

@@ -1,22 +1,49 @@
-"""Issue #90 Contract 占位：旧表退役必须在 Observe 通过后显式执行。"""
+"""Issue #90 Contract: retire legacy tables after observed target cutover."""
+
+from __future__ import annotations
+
+import json
+import os
 
 from alembic import op
+import sqlalchemy as sa
 
-revision = "issue90_contract_legacy_properties"
-down_revision = "issue90_copy_property_records"
+revision = "issue90_contract_v1"
+down_revision = "issue90_copy_v1"
 branch_labels = None
 depends_on = None
 
+LEGACY_TABLES = (
+    "tc_result_evidences", "superconductor_property_evidences", "tc_results",
+    "superconductor_properties", "experimental_contexts", "calculation_contexts",
+    "legacy_issue90_superconductors", "legacy_issue90_chemical_systems",
+)
+
 
 def upgrade() -> None:
-    # 不自动删除旧表。生产执行前需提交迁移对账报告并设置
-    # ISSUE90_CONTRACT_CONFIRMED=1，防止误删尚未归档的数据。
-    if op.get_context().config.get_main_option("issue90_contract_confirmed") != "1":
-        return
+    if os.environ.get("ISSUE90_CONTRACT_CONFIRMED") != "1":
+        raise RuntimeError("Issue #90 Contract requires ISSUE90_CONTRACT_CONFIRMED=1")
     bind = op.get_bind()
-    for table in ("tc_result_evidences", "superconductor_property_evidences", "tc_results", "superconductor_properties", "experimental_contexts", "calculation_contexts", "issue90_legacy_superconductors", "issue90_legacy_chemical_systems", "issue90_property_migration_map"):
-        bind.exec_driver_sql(f"DROP TABLE IF EXISTS `{table}`")
+    checkpoint = bind.execute(sa.text(
+        "SELECT phase, observed, writes_target FROM issue90_migration_checkpoint WHERE id=1"
+    )).mappings().first()
+    if not checkpoint or checkpoint["phase"] != "observe" or not checkpoint["observed"] or not checkpoint["writes_target"]:
+        raise RuntimeError("Issue #90 Observe checkpoint is incomplete; refusing Contract")
+    unresolved = bind.execute(sa.text(
+        "SELECT COUNT(*) FROM issue90_migration_anomalies WHERE resolved=0"
+    )).scalar_one()
+    if unresolved:
+        raise RuntimeError(f"Issue #90 has {unresolved} unresolved migration anomalies")
+    existing = set(sa.inspect(bind).get_table_names())
+    dropped = []
+    for table in LEGACY_TABLES:
+        if table in existing:
+            op.drop_table(table)
+            dropped.append(table)
+    bind.execute(sa.text(
+        "UPDATE issue90_migration_checkpoint SET phase='contract', checkpoint_json=:snapshot WHERE id=1"
+    ), {"snapshot": json.dumps({"legacy_tables_dropped": dropped}, sort_keys=True)})
 
 
 def downgrade() -> None:
-    raise RuntimeError("旧表退役不可自动回滚，请从备份恢复")
+    raise RuntimeError("Issue #90 Contract is irreversible; restore the target-schema backup")
