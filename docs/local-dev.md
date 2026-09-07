@@ -85,6 +85,23 @@ GROBID_URL=http://127.0.0.1:8070
 容器设置 `JAVA_TOOL_OPTIONS=-XX:-UseContainerSupport`，避免 Java 容器资源探测异常；
 该选项不影响生产 Compose。
 
+## 使用 DBeaver 连接本地数据库
+
+在 Windows 上启动 DBeaver，新建连接并选择 MySQL 驱动，然后选择 URL 模式：
+
+| 配置项 | 填写内容 |
+|---|---|
+| URL | `jdbc:mysql://127.0.0.1:3307/scwiki` |
+| 用户名 | `scwiki`，对应项目根目录 `.env` 中的 `MYSQL_USER` |
+| 密码 | `.env` 中 `MYSQL_PASSWORD=` 后面的完整值，不使用 `MYSQL_ROOT_PASSWORD` |
+| 保存密码 | 可勾选 |
+
+如果选择主机模式，填写主机 `127.0.0.1`、端口 `3307`、数据库 `scwiki`。
+本地 MySQL 服务需要已启动；如果调整过本地连接配置，以 `.env` 中的实际值为准。
+
+填写后点击“完成”，首次连接按提示下载 MySQL 驱动。连接成功后，在左侧展开
+“连接 → 数据库 → scwiki → 表”，即可查看 `papers`、`superconductors` 等数据表。
+
 ## Conda 环境
 
 **`sc-wiki`** 同时提供应用 Python 依赖（FastAPI、pymatgen、rq 等）和本地基础服务
