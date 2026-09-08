@@ -24,6 +24,9 @@ MySQL 验证。仓库验收不等于生产数据库已经部署，实际部署�
 - Write switch 后科学写入门返回 `allowed`；全部本地服务恢复运行，运行日志无 500、缺表或缺列错误。
 - Observe 后显式执行 Contract，8 张旧科学及材料表全部删除。最终保留 1 篇论文、1 个材料状态、
   1 个 PropertyModule 和 1 条 PropertyRecord，检查点为 `contract`，未解决异常为 0。
+- Contract 后保留 `issue90_migration_checkpoint` 1 行、`issue90_property_migration_map` 3 行和
+  `issue90_migration_anomalies` 0 行作为只读迁移审计元数据；映射覆盖 ChemicalSystem、Superconductor
+  和 Tc 旧记录，正常业务路径不继续写入这些表。
 - Contract 后论文详情、搜索、Tc-pressure 和 Tc-year 接口均返回 200；搜索返回 1 条记录。
 - 该历史 Tc 没有 Evidence，MaterialState 导出按契约返回
   `409 export_incomplete: evidence for legacy-tc-94`。迁移没有伪造 Evidence，也没有输出貌似完整的数据包。

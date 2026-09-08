@@ -196,6 +196,17 @@ JSON Schema 只允许声明式、安全的受限关键字；定义不能包含�
 | `property_definition_promotion_events` | 管理员把论文内自定义性质提升为全站定义的来源与操作快照 |
 | `property_record_evidences` | 记录与 Evidence 的多对多连接 |
 
+迁移审计表在 Contract 后继续保留，但不属于科研业务模型：
+
+| 表 | 每行含义 |
+| --- | --- |
+| `issue90_migration_checkpoint` | #90 迁移状态机的最终阶段、切换标记和完成摘要 |
+| `issue90_property_migration_map` | 一条旧数据到目标数据的 ID、revision、字段和校验结果映射 |
+| `issue90_migration_anomalies` | 一条可定位、可解决并可审计的迁移异常 |
+
+进入 Contract 后，三张表只用于来源追溯、迁移验收和故障排查，不作为新数据写入入口。旧业务表删除后，
+不得在没有等价归档和独立退役迁移的情况下删除这些审计凭证。
+
 `property_records` 统一接收旧 `tc_results` 与 `superconductor_properties`。Tc 核心列保持专用 CHECK、
 生成列、唯一索引和统计索引；不同记录类型不适用的专用列必须为空。旧表完成对账和观察期后退役。
 

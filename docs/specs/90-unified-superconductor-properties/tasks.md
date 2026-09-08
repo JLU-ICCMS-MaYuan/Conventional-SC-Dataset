@@ -115,7 +115,7 @@ T068 阻断生产切换 T047 和收尾 T049–T055；新增字段和完整导出
 - [x] T047 在 `goserver/handlers/papers.go`、`goserver/handlers/stats.go` 与 `frontend/src/lib/paperDetailView.ts` 完成 Read switch；读取验收失败时恢复旧读取。
 - [x] T048 在 `backend/ingest/scientific_drafts.py` 与 `backend/services/scientific_draft_rewrite.py` 完成 Write switch，通过读路径冒烟后才解除停写。
 - [x] T049 在 `docs/specs/90-unified-superconductor-properties/validation.md` 记录目标环境无旧写入、详情/搜索/图表对比、停写窗口和恢复演练证据。
-- [x] T050 在 `alembic/versions/20260907_issue90_contract_legacy_properties.py` 退役旧 Tc、普通物性、Evidence 连接、Context 表、两张 legacy 材料表及临时映射，不再改动已切换生效的论文内唯一键。
+- [x] T050 在 `alembic/versions/20260907_issue90_contract_legacy_properties.py` 退役旧 Tc、普通物性、Evidence 连接、Context 表和两张 legacy 材料表；保留迁移检查点、逐条映射与异常清单作为只读审计元数据，不再改动已切换生效的论文内唯一键。
 - [x] T051 在 `tests/02_maintenance_and_verification/test_issue90_migration.py` 运行预建测试验证 Expand -> Copy -> 最终增量 -> Read switch -> Write switch -> Observe -> Contract，并验证切写前恢复与切写后目标 Schema 检查点及日志重放均无已提交数据丢失。
 
 ## 阶段 10：收尾、验收与文档
