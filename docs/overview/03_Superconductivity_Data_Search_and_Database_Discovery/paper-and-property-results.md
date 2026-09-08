@@ -56,6 +56,8 @@ flowchart LR
 - 结果准确性取决于 `property_records`、`property_modules`、`material_states`、`superconductors`、
   `papers` 的 revision 关联和审核状态。
 - 每条记录的 Evidence 与定义版本必须随详情和导出保持可解释，跨 revision 关联无效。
+- 已批准论文的 MaterialState 完整导出要求每条物性记录至少有一条当前 revision 的 Evidence；记录的
+  `structure_key` 必须精确匹配同状态导出结构的 `structure-{id}`，否则返回 `409 export_incomplete`。
 - `superconductor_records` 不属于当前运行模型，任何读取路径都不得查询该表。
 - 外部来源详情字段与本地论文不完全等价，前端按来源能力降级显示缺失字段。
 

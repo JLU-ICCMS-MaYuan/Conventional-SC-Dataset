@@ -78,9 +78,11 @@ def build_material_state_export(db: Session, *, paper_id: int, state_key: str, u
     for link in links:
         links_by_record[link.record_id].append(link)
 
-    structure_ids = {str(item.id) for item in structures}
+    structure_keys = {f"structure-{item.id}" for item in structures}
     for record in records:
-        if record.structure_key and record.structure_key not in structure_ids:
+        if paper.review_status == "approved" and not links_by_record[record.id]:
+            raise _incomplete(f"记录 {record.record_key} 缺少 Evidence")
+        if record.structure_key and record.structure_key not in structure_keys:
             raise _incomplete(f"记录 {record.record_key} 引用的结构不存在")
 
     module_payloads = []
@@ -136,7 +138,8 @@ def build_material_state_export(db: Session, *, paper_id: int, state_key: str, u
             "magnetic_field_t": state.magnetic_field_t, "state_kind": state.state_kind,
             "crystal_system": state.crystal_system, "note": state.note,
             "structures": [{
-                "id": item.id, "format": item.structure_format, "filename": item.source_locator,
+                "id": item.id, "structure_key": f"structure-{item.id}",
+                "format": item.structure_format, "filename": item.source_locator,
                 "media_type": "chemical/x-cif" if item.structure_format == "cif" else "chemical/x-poscar",
                 "content": item.structure_text, "sha256": item.structure_hash,
                 "space_group_symbol": item.space_group_symbol, "space_group_number": item.space_group_number,

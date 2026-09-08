@@ -10,6 +10,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from dataclasses import dataclass
 import importlib
+import json
 import os
 from pathlib import Path
 import re
@@ -32,6 +33,7 @@ BASE_REVISION = "networked_news_discovery"
 EXPAND_REVISION = "issue90_expand_v1"
 COPY_REVISION = "issue90_copy_v1"
 CONTRACT_REVISION = "issue90_contract_v1"
+REPAIR_REVISION = "issue90_data_integrity_repair_v1"
 
 # 导入迁移服务时 backend.database 需要显式配置；专项测试本身始终把真实连接传给服务。
 os.environ.setdefault("DATABASE_URL", "sqlite:////tmp/scwiki-issue90-migration-import.db")
@@ -290,6 +292,20 @@ def _seed_legacy_graph(engine: Engine) -> None:
             (1, 101, 1001, 10001, 250),
             (2, 201, 2001, 20001, 240),
         ):
+            if paper_id == 1:
+                _insert(
+                    connection,
+                    metadata,
+                    "structure_models",
+                    id=5001,
+                    paper_id=paper_id,
+                    paper_revision=1,
+                    material_state_id=state_id,
+                    structure_format="cif",
+                    structure_text="data-LaH10",
+                    structure_hash="5" * 64,
+                    nuclear_treatment="harmonic",
+                )
             _insert(
                 connection,
                 metadata,
@@ -298,7 +314,8 @@ def _seed_legacy_graph(engine: Engine) -> None:
                 paper_id=paper_id,
                 paper_revision=1,
                 material_state_id=state_id,
-                missing_structure_reason="论文未提供结构文件",
+                structure_id=5001 if paper_id == 1 else None,
+                missing_structure_reason=None if paper_id == 1 else "论文未提供结构文件",
                 phonon_nuclear_treatment="harmonic",
                 electronic_method="DFT",
                 exchange_correlation="PBE",
@@ -499,6 +516,8 @@ def test_copy_splits_shared_material_and_is_idempotent(
     predicted = next(row for row in records if row["record_key"] == "legacy-tc-10001")
     assert float(predicted["value_number"]) == 250
     assert predicted["payload_json"]["calculation_conditions"]["k_grid"] == "24x24x24"
+    assert predicted["structure_key"] == "structure-5001"
+    assert "structure_id" not in predicted["payload_json"]["calculation_conditions"]
     assert float(
         predicted["payload_json"]["parameters"]["mu_star"]["value_number"]
     ) == pytest.approx(0.1)
@@ -509,6 +528,86 @@ def test_copy_splits_shared_material_and_is_idempotent(
         (1, 1),
         (2, 1),
     }
+
+
+def test_expand_preserves_record_definition_identity_fields_and_checksums(
+    legacy_mysql: MySQLTestDatabase,
+) -> None:
+    from backend.ingest.form_definitions import definition_checksum
+
+    _upgrade(legacy_mysql.url, EXPAND_REVISION)
+    source_rows = {
+        row["definition_key"]: row
+        for row in json.loads(
+            (REPO_ROOT / "backend" / "data" / "form_definitions.v1.json").read_text(
+                encoding="utf-8"
+            )
+        )
+    }
+
+    for row in _rows(legacy_mysql.engine, "form_definitions"):
+        source = source_rows[row["definition_key"]]
+        assert {
+            key: row[key]
+            for key in ("record_type", "method_code", "property_code")
+        } == {
+            key: source.get(key)
+            for key in ("record_type", "method_code", "property_code")
+        }
+        assert row["checksum"] == definition_checksum(source)
+
+
+def test_repair_revision_normalizes_legacy_structure_reference(
+    legacy_mysql: MySQLTestDatabase,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _upgrade(legacy_mysql.url, EXPAND_REVISION)
+    migration = _migration_script()
+    service = _migration_service()
+    with legacy_mysql.engine.begin() as connection:
+        migration.run_migration(connection, "copy")
+        checkpoint = service.load_checkpoint(connection)
+        for target, flags in (
+            (service.MigrationPhase.COPY, {}),
+            (service.MigrationPhase.RECONCILE, {"reconcile_ok": True}),
+            (service.MigrationPhase.READ_SWITCH, {}),
+            (service.MigrationPhase.WRITE_SWITCH, {}),
+            (service.MigrationPhase.OBSERVE, {"observe_ok": True}),
+        ):
+            checkpoint = _advance_and_persist(
+                connection, service, checkpoint, target, **flags
+            )
+
+    monkeypatch.setenv("ISSUE90_CONTRACT_CONFIRMED", "1")
+    _upgrade(legacy_mysql.url, "issue90_audit_cleanup_v1")
+    with legacy_mysql.engine.begin() as connection:
+        record = next(
+            row
+            for row in _rows(legacy_mysql.engine, "property_records")
+            if row["record_key"] == "legacy-tc-10001"
+        )
+        legacy_payload = dict(record["payload_json"])
+        legacy_payload["calculation_conditions"] = {
+            **legacy_payload["calculation_conditions"],
+            "structure_id": 5001,
+        }
+        connection.execute(
+            text(
+                "UPDATE property_records SET structure_key = NULL, payload_json = :payload "
+                "WHERE id = :record_id"
+            ),
+            {"record_id": record["id"], "payload": json.dumps(legacy_payload)},
+        )
+
+    _upgrade(legacy_mysql.url, REPAIR_REVISION)
+
+    repaired = next(
+        row
+        for row in _rows(legacy_mysql.engine, "property_records")
+        if row["record_key"] == "legacy-tc-10001"
+    )
+    assert repaired["structure_key"] == "structure-5001"
+    assert "structure_id" not in repaired["payload_json"]["calculation_conditions"]
 
 
 def test_reconcile_detects_core_payload_and_evidence_drift(

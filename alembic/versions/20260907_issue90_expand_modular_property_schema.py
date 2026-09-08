@@ -191,11 +191,16 @@ def _restore_legacy_revision_chain() -> None:
 
 def _seed_definitions() -> None:
     path = Path(__file__).parents[2] / "backend" / "data" / "form_definitions.v1.json"
-    rows = json.loads(path.read_text(encoding="utf-8"))
+    source_rows = json.loads(path.read_text(encoding="utf-8"))
     keys = ("definition_key", "version", "target_kind", "module_code", "record_type", "method_code", "property_code", "core_schema", "json_schema", "ui_schema")
-    for row in rows:
-        content = {key: row.get(key) for key in keys}
-        row["checksum"] = hashlib.sha256(json.dumps(content, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    rows = []
+    for source in source_rows:
+        content = {key: source.get(key) for key in keys}
+        rows.append({
+            **content,
+            "status": source.get("status") or "draft",
+            "checksum": hashlib.sha256(json.dumps(content, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
+        })
     column_types = {
         "version": sa.Integer(), "core_schema": sa.JSON(), "json_schema": sa.JSON(),
         "ui_schema": sa.JSON(),

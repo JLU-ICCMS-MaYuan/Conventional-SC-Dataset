@@ -169,7 +169,7 @@ def _material_copy(conn, tables: dict[str, Table], state: dict[str, Any], *, dry
 def _conditions(context: dict[str, Any] | None, *, experimental: bool) -> tuple[dict[str, Any], dict[str, Any]]:
     if not context:
         return {}, {}
-    skip = {"id", "paper_id", "paper_revision", "material_state_id", "created_at", "updated_at", "lambda_ep", "omega_log_k", "mu_star"}
+    skip = {"id", "paper_id", "paper_revision", "material_state_id", "created_at", "updated_at", "structure_id", "lambda_ep", "omega_log_k", "mu_star"}
     condition = {key: _plain(value) for key, value in context.items() if key not in skip and value is not None}
     parameters = {}
     if not experimental:
@@ -177,6 +177,23 @@ def _conditions(context: dict[str, Any] | None, *, experimental: bool) -> tuple[
             if context.get(key) is not None:
                 parameters[key] = {"value_raw": str(context[key]), "value_number": _plain(context[key]), "unit": unit}
     return condition, parameters
+
+
+def _structure_key(conn, tables: dict[str, Table], state: dict[str, Any], context: dict[str, Any] | None) -> str | None:
+    if not context or context.get("structure_id") is None:
+        return None
+    structures = tables.get("structure_models")
+    if structures is None:
+        return None
+    structure = _first(
+        conn,
+        structures,
+        id=context["structure_id"],
+        material_state_id=state["id"],
+        paper_id=state["paper_id"],
+        paper_revision=state["paper_revision"],
+    )
+    return f"structure-{context['structure_id']}" if structure else None
 
 
 def _evidence_rows(conn, table: Table | None, source_key: str, source_id: int) -> list[dict[str, Any]]:
@@ -325,6 +342,10 @@ def copy_legacy_data(conn, *, dry_run: bool = False, final_sync: bool = False) -
                 payload = {"experimental_conditions" if experimental else "calculation_conditions": condition}
                 if parameters:
                     payload["parameters"] = parameters
+                structure_key = _structure_key(conn, tables, state, context)
+                if context and context.get("structure_id") is not None and structure_key is None:
+                    report["errors"].append({"source_table": "tc_results", "source_id": row["id"], "error": "orphan_structure_reference", "structure_id": context["structure_id"]})
+                    continue
                 method = row.get("tc_method") or "unknown"
                 if experimental and method == "experimental":
                     method = "resistivity"
@@ -332,7 +353,7 @@ def copy_legacy_data(conn, *, dry_run: bool = False, final_sync: bool = False) -
                 if not _definition(conn, tables["form_definitions"], definition_key):
                     definition_key = "record.superconductive_properties.measured_tc.resistivity" if experimental else "record.superconductive_properties.predicted_tc.unknown"
                     method = "resistivity" if experimental else "unknown"
-                record = {"record_key": f"legacy-tc-{row['id']}", "paper_id": state["paper_id"], "paper_revision": state["paper_revision"], "material_state_id": state["id"], "record_type": "measured_tc" if experimental else "predicted_tc", "property_code": "tc", "custom_property_key": None, "name_raw": "critical temperature", "value_kind": "number" if row.get("tc_value_k") is not None else "range", "value_raw": row.get("value_raw") or str(row.get("tc_value_k") or ""), "value_number": row.get("tc_value_k"), "value_min": row.get("tc_min_k"), "value_max": row.get("tc_max_k"), "value_text": None, "value_boolean": None, "uncertainty": row.get("uncertainty_k"), "unit_raw": row.get("unit_raw") or "K", "canonical_unit": "K", "method_code": method, "method_raw": row.get("tc_method_custom"), "criterion_code": None, "criterion_raw": None, "is_representative": bool(row.get("is_representative")), "structure_key": None, "source_fingerprint": row.get("source_fingerprint") or _checksum(["tc", row["id"]])}
+                record = {"record_key": f"legacy-tc-{row['id']}", "paper_id": state["paper_id"], "paper_revision": state["paper_revision"], "material_state_id": state["id"], "record_type": "measured_tc" if experimental else "predicted_tc", "property_code": "tc", "custom_property_key": None, "name_raw": "critical temperature", "value_kind": "number" if row.get("tc_value_k") is not None else "range", "value_raw": row.get("value_raw") or str(row.get("tc_value_k") or ""), "value_number": row.get("tc_value_k"), "value_min": row.get("tc_min_k"), "value_max": row.get("tc_max_k"), "value_text": None, "value_boolean": None, "uncertainty": row.get("uncertainty_k"), "unit_raw": row.get("unit_raw") or "K", "canonical_unit": "K", "method_code": method, "method_raw": row.get("tc_method_custom"), "criterion_code": None, "criterion_raw": None, "is_representative": bool(row.get("is_representative")), "structure_key": structure_key, "source_fingerprint": row.get("source_fingerprint") or _checksum(["tc", row["id"]])}
                 evidence = _evidence_rows(conn, tables.get("tc_result_evidences"), "tc_result_id", row["id"])
                 _copy_record(conn, tables, "tc_results", row, state, record, definition_key, payload, evidence, dry_run=dry_run, report=report)
         props = tables.get("superconductor_properties")

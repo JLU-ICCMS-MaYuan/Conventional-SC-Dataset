@@ -47,6 +47,9 @@
 数值、范围、文本和布尔值通过固定核心列表达；`payload_json` 只保存定义声明的 Conditions、参数和
 预留扩展字段。`0` 与 `false` 是有效值，不能按空值丢弃。每条记录绑定不可变的
 `definition_key + definition_version`，后端依据该版本执行 JSON Schema、JSON Pointer 和业务规则校验。
+记录通过可选 `structure_key=structure-{id}` 引用同一论文 revision、同一材料状态内的结构；Conditions
+不重复保存 `structure_id`。完整 MaterialState 导出使用相同的 `structure_key` 标识结构并精确校验引用，
+引用无法解析时返回 `409 export_incomplete`。
 
 ## MySQL 关系
 

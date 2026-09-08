@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -112,6 +113,34 @@ func TestApplyPaperReviewCountsUnchangedReviewAsNewParticipation(t *testing.T) {
 		t.Fatal("同一论文的每次实际审核都应计入审核人贡献")
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestValidatePaperEvidenceCompleteRejectsMissingEvidence(t *testing.T) {
+	db := paperDetailTestDB(t)
+	seedPaperFour(t, db, reviewStatusPending)
+	paper := models.Paper{ID: 4, ContentRevision: 1}
+
+	if err := db.Where("record_id = ?", 1).Delete(&models.PropertyRecordEvidence{}).Error; err != nil {
+		t.Fatal(err)
+	}
+	err := validatePaperEvidenceComplete(db, &paper)
+	var incomplete *evidenceIncompleteError
+	if !errors.As(err, &incomplete) {
+		t.Fatalf("err=%v, want evidenceIncompleteError", err)
+	}
+	if len(incomplete.RecordKeys) != 1 || incomplete.RecordKeys[0] != "record-tc-1" {
+		t.Fatalf("record_keys=%#v", incomplete.RecordKeys)
+	}
+}
+
+func TestValidatePaperEvidenceCompleteAcceptsCurrentRevisionEvidence(t *testing.T) {
+	db := paperDetailTestDB(t)
+	seedPaperFour(t, db, reviewStatusPending)
+	paper := models.Paper{ID: 4, ContentRevision: 1}
+
+	if err := validatePaperEvidenceComplete(db, &paper); err != nil {
 		t.Fatal(err)
 	}
 }

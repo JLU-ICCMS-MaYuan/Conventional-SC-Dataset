@@ -179,6 +179,10 @@ func validateExportCompleteness(paper models.Paper, state models.MaterialState, 
 	if len(state.PropertyModules) > 0 && len(definitions) == 0 {
 		return fmt.Errorf("%w: definitions", errExportIncomplete)
 	}
+	structureKeys := make(map[string]struct{}, len(state.Structures))
+	for _, structure := range state.Structures {
+		structureKeys[fmt.Sprintf("structure-%d", structure.ID)] = struct{}{}
+	}
 	for _, module := range state.PropertyModules {
 		for _, record := range module.Records {
 			if paper.ReviewStatus == reviewStatusApproved && len(record.Evidences) == 0 {
@@ -189,8 +193,10 @@ func validateExportCompleteness(paper models.Paper, state models.MaterialState, 
 					return fmt.Errorf("%w: evidence for %s", errExportIncomplete, record.RecordKey)
 				}
 			}
-			if record.StructureKey != nil && len(state.Structures) == 0 {
-				return fmt.Errorf("%w: structure for %s", errExportIncomplete, record.RecordKey)
+			if record.StructureKey != nil {
+				if _, ok := structureKeys[*record.StructureKey]; !ok {
+					return fmt.Errorf("%w: structure for %s", errExportIncomplete, record.RecordKey)
+				}
 			}
 		}
 	}

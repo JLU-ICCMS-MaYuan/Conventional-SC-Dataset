@@ -404,6 +404,9 @@ func ReviewPaper(c *gin.Context) {
 			if err := validatePaperClassificationComplete(tx, &paper); err != nil {
 				return err
 			}
+			if err := validatePaperEvidenceComplete(tx, &paper); err != nil {
+				return err
+			}
 			context := body.ClassificationContext
 			if len(context) == 0 {
 				context = json.RawMessage(`{}`)
@@ -453,6 +456,15 @@ func ReviewPaper(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"code": "classification_name_conflict", "error": "分类名称与现有目录冲突"})
 			return
 		}
+		var evidenceIncomplete *evidenceIncompleteError
+		if errors.As(err, &evidenceIncomplete) {
+			c.JSON(http.StatusConflict, gin.H{
+				"code":        "evidence_incomplete",
+				"error":       "物性记录缺少可解析 Evidence，不能批准论文",
+				"record_keys": evidenceIncomplete.RecordKeys,
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "审核操作失败"})
 		return
 	}
@@ -493,6 +505,43 @@ func validPaperYear(value interface{}) bool {
 
 type classificationIncompleteError struct {
 	MaterialStateIDs []uint64
+}
+
+type evidenceIncompleteError struct {
+	RecordKeys []string
+}
+
+func (err *evidenceIncompleteError) Error() string {
+	return "物性记录缺少可解析 Evidence"
+}
+
+func validatePaperEvidenceComplete(tx *gorm.DB, paper *models.Paper) error {
+	revision := paper.ContentRevision
+	if revision == 0 {
+		revision = 1
+	}
+	var missing []string
+	err := tx.Model(&models.PropertyRecord{}).
+		Where("property_records.paper_id = ? AND property_records.paper_revision = ?", paper.ID, revision).
+		Where(`NOT EXISTS (
+			SELECT 1
+			FROM property_record_evidences pre
+			JOIN paper_evidences pe ON pe.id = pre.paper_evidence_id
+			WHERE pre.record_id = property_records.id
+			  AND pre.paper_id = property_records.paper_id
+			  AND pre.paper_revision = property_records.paper_revision
+			  AND pe.paper_id = property_records.paper_id
+			  AND pe.paper_revision = property_records.paper_revision
+		)`).
+		Order("property_records.record_key").
+		Pluck("property_records.record_key", &missing).Error
+	if err != nil {
+		return err
+	}
+	if len(missing) > 0 {
+		return &evidenceIncompleteError{RecordKeys: missing}
+	}
+	return nil
 }
 
 func (err *classificationIncompleteError) Error() string {

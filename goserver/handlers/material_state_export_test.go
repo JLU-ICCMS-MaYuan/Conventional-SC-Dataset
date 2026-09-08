@@ -32,6 +32,9 @@ func TestMaterialStateExportIsOfflineComplete(t *testing.T) {
 	}).Error; err != nil {
 		t.Fatal(err)
 	}
+	if err := db.Model(&models.PropertyRecord{}).Where("id = ?", 1).Update("structure_key", "structure-1").Error; err != nil {
+		t.Fatal(err)
+	}
 
 	response := requestMaterialStateExport(t, "4", "state-lah10-170gpa")
 	if response.Code != http.StatusOK {
@@ -56,6 +59,9 @@ func TestMaterialStateExportIsOfflineComplete(t *testing.T) {
 		t.Fatalf("state_key=%#v", state["state_key"])
 	}
 	structures := state["structures"].([]any)
+	if structures[0].(map[string]any)["structure_key"] != "structure-1" {
+		t.Fatalf("结构键未导出：%#v", structures[0])
+	}
 	file := structures[0].(map[string]any)["file"].(map[string]any)
 	if file["filename"] != "LaH10.cif" || file["content"] != "data_LaH10\n_cell_length_a 5.0" || file["sha256"] != "structure-sha256" {
 		t.Fatalf("结构文件未内嵌：%#v", file)
@@ -66,6 +72,26 @@ func TestMaterialStateExportIsOfflineComplete(t *testing.T) {
 	}
 	if len(record["evidences"].([]any)) != 1 {
 		t.Fatalf("记录 Evidence 缺失：%#v", record["evidences"])
+	}
+}
+
+func TestMaterialStateExportRejectsUnknownStructureKey(t *testing.T) {
+	db := paperDetailTestDB(t)
+	seedPaperFour(t, db, reviewStatusApproved)
+	if err := db.Create(&models.StructureModel{
+		ID: 1, PaperID: 4, PaperRevision: 1, MaterialStateID: 1,
+		StructureFormat: "cif", StructureText: "data_LaH10", StructureHash: "structure-sha256",
+		NuclearTreatment: "unknown",
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&models.PropertyRecord{}).Where("id = ?", 1).Update("structure_key", "structure-999").Error; err != nil {
+		t.Fatal(err)
+	}
+
+	response := requestMaterialStateExport(t, "4", "state-lah10-170gpa")
+	if response.Code != http.StatusConflict {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 }
 
