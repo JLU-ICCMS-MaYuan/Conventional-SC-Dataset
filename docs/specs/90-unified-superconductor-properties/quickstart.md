@@ -151,4 +151,5 @@ PYTHONPATH=. python -m compileall -q backend alembic
 git diff --check
 ```
 
-另需运行 #90 的隔离 MySQL 分阶段迁移与恢复专项测试。
+每次部署到新的具体 MySQL 环境前，均需先运行 #90 的隔离 MySQL 分阶段迁移与恢复专项测试；
+已完成环境及结果记录在 [validation.md](validation.md)，此要求不是尚未实施的功能任务。

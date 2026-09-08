@@ -6,6 +6,37 @@
 均已实现。标准后端、Go、前端测试和生产构建通过；Expand 至 Contract 的完整状态机已在隔离真实
 MySQL 验证。仓库验收不等于生产数据库已经部署，实际部署仍须经过相同门禁。
 
+## 本地配置数据库部署（2026-09-08）
+
+已将项目 `.env` 当前配置的本地 MySQL `127.0.0.1:3307/scwiki` 从
+`networked_news_discovery` 分阶段迁移到 `issue90_contract_v1`。该实例是本机开发数据库，不代表未知的
+远程生产环境已经部署。
+
+部署前状态为 1 篇论文、1 个材料状态和 1 条旧 Tc。执行结果如下：
+
+- 在同一 MySQL 实例的自动生成临时库中复跑迁移专项：5 项通过，78 条为既有
+  `datetime.utcnow()` 弃用警告；测试库均使用 `scwiki_issue90_test_*` 前缀并在结束后删除。
+- 停止 Python、Worker、Go 和前端服务后确认活动事务与目标库其他连接均为 0。
+- Copy dry-run 返回 `copied=1, errors=[]`；正式 Copy 幂等重跑返回 `skipped=1, errors=[]`；
+  Reconcile 与 Final sync 均核对 1 条记录且无错误、无未解决异常。
+- Read switch 后复合外键由 `material_states(superconductor_id, paper_id, paper_revision)` 指向论文
+  revision 内的 `superconductors`；详情、列表、搜索和 Tc 统计均从目标表正常读取。
+- Write switch 后科学写入门返回 `allowed`；全部本地服务恢复运行，运行日志无 500、缺表或缺列错误。
+- Observe 后显式执行 Contract，8 张旧科学及材料表全部删除。最终保留 1 篇论文、1 个材料状态、
+  1 个 PropertyModule 和 1 条 PropertyRecord，检查点为 `contract`，未解决异常为 0。
+- Contract 后论文详情、搜索、Tc-pressure 和 Tc-year 接口均返回 200；搜索返回 1 条记录。
+- 该历史 Tc 没有 Evidence，MaterialState 导出按契约返回
+  `409 export_incomplete: evidence for legacy-tc-94`。迁移没有伪造 Evidence，也没有输出貌似完整的数据包。
+
+部署前、Read switch 前和 Contract 前分别生成并校验以下逻辑备份；首份及 Contract 前备份均已恢复到
+临时数据库验证：
+
+| 备份 | 大小 | SHA-256 |
+| --- | ---: | --- |
+| `.data/backups/scwiki-pre-issue90-20260908-091210.sql` | 1,573,633 字节 | `805c84b6e065f369f82ac417ad6cd456db119ad9565c4eb11664ece022b8d68c` |
+| `.data/backups/scwiki-pre-read-switch-20260908-091530.sql` | 1,599,891 字节 | `298805ebf072995e739f0a2b5d6b5e293e7c5234018853e3b55f3bcfda6ebc14` |
+| `.data/backups/scwiki-pre-contract-20260908-092528.sql` | 1,600,222 字节 | `2c9f5c43393cfc04d2d6eb567eba72045a5266dd7fa6c6f2dff6cff7025bc91b` |
+
 ## 自动化验证
 
 | 范围 | 命令或测试 | 结果 |
