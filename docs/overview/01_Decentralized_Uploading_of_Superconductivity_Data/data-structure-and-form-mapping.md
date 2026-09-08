@@ -49,6 +49,10 @@
 显示类型、方法、名称及原始值，服务端校验或定义加载错误仍可见。新增、复制、删除其他条目不会
 改变原记录的折叠状态，折叠也不会修改科学数据。
 
+“添加记录”的选项来自该物性模块已发布的记录定义，每个定义键取最新已发布版本；定义列表不可用时
+使用内置候选引用，实际表单仍需加载对应定义。选项数量不由 AI 从当前论文或材料状态识别出的方法数决定。
+同一状态可以保存多条相同或不同方法的 Tc，以及自定义性质；每条记录独立保存结果与条件。
+
 测量 Tc 的实验 Conditions 使用一个多行文本框，当前描述写入本条
 `payload.experimental_conditions.description`，保留换行；不再用六个固定输入和扩展字段编辑器。
 旧记录没有 description 时，在界面中把原条件字段转换为可读文本；编辑后以 description 为当前显示
@@ -141,6 +145,9 @@ Schema v2；v2 载荷和规范 property identity 不会再次被旧转换覆盖�
 - `backend/services/form_definition_service.py`：定义生命周期和校验。
 - `frontend/src/components/PropertyModuleEditor.tsx`：模块与记录编辑器。
 - `frontend/src/components/SchemaDrivenRecordForm.tsx`：定义驱动表单。
+- `frontend/src/lib/formDefinitions.ts`：记录定义加载、版本筛选及实验条件文本校验。
+- `tests/01_decentralized_uploading/property-record-editor.test.tsx`：单框、标题、独立折叠与原始信息保留验证。
+- `backend/tests/test_property_record_conditions.py`：逐记录条件从 AI 提取调用、归一化到持久化及导出的往返验证。
 
 ## 当前边界
 
@@ -152,3 +159,4 @@ Schema v2；v2 载荷和规范 property identity 不会再次被旧转换覆盖�
 ## 相关变更记录
 
 - [Feature #90：MaterialState 模块化物性与动态表单](../../specs/90-unified-superconductor-properties/spec.md)
+- [Feature #94：物性记录标题、实验条件文本与独立折叠](../../specs/94-property-record-editor/spec.md)

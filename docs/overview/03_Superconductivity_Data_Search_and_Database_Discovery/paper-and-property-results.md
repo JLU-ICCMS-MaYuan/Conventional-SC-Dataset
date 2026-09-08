@@ -28,6 +28,11 @@
 - 论文总结和核心发现以纯文本 `pre-wrap` 显示，保留用户录入的换行，不进行 Markdown 再解释。
 - 详情区块中，标签使用紧凑 caption；长文本使用较轻的正文层级，短值字段保持适合扫描的强调层级。
 - 知识图谱节点优先使用 `knowledge_graph_title`，缺失时回退论文 `title`。
+- 只读论文详情复用共享物性记录组件，每条测量 Tc、预测 Tc 和自定义性质均默认展开且可独立折叠；
+  条件、结果等输入保持禁用。标题显示类型、方法、名称和原始值，不显示模板版本后缀。
+  实验 Conditions 在一个多行框中显示，优先使用本条记录的 description；旧对象的显示规则见
+  [上传数据结构与表单映射](../01_Decentralized_Uploading_of_Superconductivity_Data/data-structure-and-form-mapping.md)。
+  折叠仅影响界面，详情 API 和完整导出仍携带全部条件、Evidence 及定义版本。
 
 物性与结构的共用提取逻辑位于 `frontend/src/lib/paperDetailView.ts`。上传只读态、管理员编辑和公开详情
 使用同一模块化载荷，避免不同页面各自拼装旧表字段。
@@ -71,6 +76,9 @@ flowchart LR
 - `backend/rag/search/sql_search.py`
 - `frontend/src/lib/paperDetailView.ts`
 - `frontend/src/lib/propertyModules.ts`
+- `frontend/src/components/PaperEditView.tsx`
+- `frontend/src/components/PropertyModuleEditor.tsx`
+- `tests/01_decentralized_uploading/property-record-editor.test.tsx`
 - `tests/03_data_search_and_database_discovery/`
 
 ## 相关变更记录
@@ -84,6 +92,7 @@ flowchart LR
 - [Feature #79：论文级 Material family 多选分类](../../specs/79-paper-material-families/spec.md)
 - [Feature #80：论文级 Superconductor type 单选分类](../../specs/80-paper-superconductor-kind/spec.md)
 - [Feature #90：MaterialState 模块化物性与动态表单](../../specs/90-unified-superconductor-properties/spec.md)
+- [Feature #94：物性记录标题、实验条件文本与独立折叠](../../specs/94-property-record-editor/spec.md)
 
 ## 已知问题
 

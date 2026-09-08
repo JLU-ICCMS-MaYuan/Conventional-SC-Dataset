@@ -13,6 +13,7 @@
 - 科学数据编辑走 Python 端点 `PUT /api/rag/papers/{id}/scientific-draft`（管理员鉴权），语义是整体替换：单事务内按依赖逆序删除该论文当前科学实体后按请求体重建，复用上传提交的校验规则。`pending` 论文原地重建（版本号不变）；`approved` 论文升版重审——`content_revision` 递增、`approved_revision` 清空、状态回到 `pending`，期间不对外公开，重新批准后走既有 publish 链路重建索引。升版由外键级联链支撑：`paper_files` / `paper_chunks` / `paper_evidences` / `material_states` 的 `paper_revision` 随单条 `UPDATE papers` 由 MySQL 级联迁移（[Issue #76](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/76)）。结构附件补传走 `POST /api/rag/papers/{id}/structure-candidates`，只产出候选不写库，随保存一并提交。
 - 物性写入只接受 `superconductor_properties` 的真实列（`material_raw`、`name_raw`、`value_raw`、`value_number`、`unit_raw`、`canonical_unit`、`value_min`、`value_max`、`condition_note`）。压强、温度、主记录标记、结构文本与结构格式没有对应列，因此不再被接受，而不是接受后静默丢弃——后者会让管理员以为改动已保存。条件字段属材料状态，不经物性接口修改，以免绕过材料状态自身的校验与审核语义。（[Issue #57](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/57)）
 - 管理员可查看、编辑、单篇审核和批量审核论文；论文删除与批量删除只允许超级管理员，且为不可恢复的物理删除（详见下方“论文物理删除”）。
+- 管理员和超级管理员的科学数据编辑复用共享记录表单：同一材料状态下的测量 Tc、预测 Tc 和自定义性质均可独立折叠，默认展开；收起时保留结果摘要及服务端校验或定义加载错误提示。记录标题和添加选项隐藏模板版本，测量 Tc 的实验 Conditions 使用一个多行文本框，计算 Conditions 保持结构化输入。旧条件及 Evidence 的保留规则见[上传数据结构与表单映射](../01_Decentralized_Uploading_of_Superconductivity_Data/data-structure-and-form-mapping.md)。（[Issue #94](../../specs/94-property-record-editor/spec.md)）
 - 管理员在独立编辑页确认论文级 Material family、论文级单选 Superconductor type、状态级结构家族和材料维度；可认可建议、改选数据库已有项或输入新名称。待审正式关联为空时，页面从审核产物回填上传者确认的多个 family、Superconductor type 与 `More type labels`。分类变更随同一次批准请求提交，不额外调用目录治理 API。旧 `key_properties.superconductor_type` 与状态级 `superconductor_kind` 都不再参与管理员写入。
 - 独立编辑页顶部有固定的审核区域，可一边修改字段和分类一边提交审核；元数据区显示论文 ID 和创建时间，不显示物性记录数量。管理工作台论文列表每行操作区域显示可点击进入 `/users/:username` 的上传者，并提供仅显示历史图标的入口；只有管理员和超级管理员可从此读取按时间排序的上传、修改、审核记录。审核事件保留当时操作者和每次审核意见，历史导入论文显示“历史导入，上传者未知”。审核结果统一提供「通过」「拒绝」「↩️ 退回待审核」三个状态。选择「通过」时，页面会把当前论文级 family、Superconductor type 和材料状态分类随审核请求提交，无需先单独保存，后端继续执行分类完整性校验。审核请求成功后立即返回当前角色工作台：管理员回 `/admin`，超级管理员回 `/superadmin`。（[Issue #87](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/87)）
 - 论文列表和快速审核弹窗不展示物性记录数量；快速审核只提供「拒绝」与「退回待审核」，以及论文标题、DOI、年份和审核意见。批准必须进入独立编辑页完成论文级 family 与状态标签确认。AI 与用户提交值的三列对照、原文证据引文、同 DOI 候选附件列表已移除。（[Issue #62](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/62)、[Issue #78](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/78)、[Issue #79](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/79)、[Issue #87](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/87)）
@@ -84,6 +85,7 @@
 - [Issue #61：工作台导航由页签改为卡片式入口](../../specs/61-admin-workspace-navigation-refactor/spec.md)
 - [Issue #62：审核弹窗移除纯阅读性展示内容](../../specs/62-simplify-paper-review/spec.md)
 - [Issue #78：管理端审核编辑页独立化并功能对齐提交页](../../specs/78-admin-edit-page/spec.md)
+- [Issue #94：物性记录标题、实验条件文本与独立折叠](../../specs/94-property-record-editor/spec.md)
 
 ## 已知问题
 
