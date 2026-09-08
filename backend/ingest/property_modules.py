@@ -247,6 +247,9 @@ def validate_record(
     elif str(item.get("custom_property_key") or "").strip():
         issues.append(_issue(f"{path}.custom_property_key", "schema_validation_failed", "规范性质不能携带自定义键"))
     _validate_value_shape(item, path, issues)
+    experimental = item["payload"].get("experimental_conditions")
+    if isinstance(experimental, dict) and "description" in experimental and not isinstance(experimental["description"], str):
+        issues.append(_issue(f"{path}.payload.experimental_conditions.description", "schema_validation_failed", "实验 Conditions 描述必须是文本"))
     if definition is not None:
         if definition.status != "published" and not (allow_retired and definition.status == "retired"):
             issues.append(_issue(f"{path}.definition_version", "definition_not_available", "定义版本不可用于记录"))

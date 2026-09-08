@@ -44,6 +44,17 @@
 `record_key` 在模块内保持稳定身份。预测 Tc 必须使用 `calculation_conditions`，测量 Tc 必须使用
 `experimental_conditions`，两类 Conditions 互斥且都属于当前记录。
 
+记录标题、定义选择和“添加记录”菜单仅显示类型、方法，不显示模板版本号；内部仍保留
+`definition_key + definition_version`。每条记录默认展开，可在编辑态和只读态独立折叠；收起摘要
+显示类型、方法、名称及原始值，服务端校验或定义加载错误仍可见。新增、复制、删除其他条目不会
+改变原记录的折叠状态，折叠也不会修改科学数据。
+
+测量 Tc 的实验 Conditions 使用一个多行文本框，当前描述写入本条
+`payload.experimental_conditions.description`，保留换行；不再用六个固定输入和扩展字段编辑器。
+旧记录没有 description 时，在界面中把原条件字段转换为可读文本；编辑后以 description 为当前显示
+来源（空字符串也有效），同时保留旧字段和 Evidence，避免丢失原始信息。计算 Conditions 和参数仍使用
+原有结构化表单。（[Issue #94](../../specs/94-property-record-editor/spec.md)）
+
 数值、范围、文本和布尔值通过固定核心列表达；`payload_json` 只保存定义声明的 Conditions、参数和
 预留扩展字段。`0` 与 `false` 是有效值，不能按空值丢弃。每条记录绑定不可变的
 `definition_key + definition_version`，后端依据该版本执行 JSON Schema、JSON Pointer 和业务规则校验。

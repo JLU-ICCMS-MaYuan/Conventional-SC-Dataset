@@ -42,15 +42,6 @@ const FALLBACK_GROUP_SCHEMAS: Record<string, JsonSchema> = {
   experimental_conditions: {
     type: 'object',
     title: '实验 Conditions',
-    properties: {
-      sample: { type: 'string', title: '样品' },
-      preparation_method: { type: 'string', title: '制备方式' },
-      measurement_method: { type: 'string', title: '测量方法' },
-      apparatus: { type: 'string', title: '测量装置' },
-      external_field_t: { type: 'number', title: '外场 (T)' },
-      pressure_uncertainty_gpa: { type: 'number', title: '压力不确定度 (GPa)' },
-      extensions: { type: 'array', title: '补充实验条件', items: { type: 'object' } },
-    },
   },
   parameters: {
     type: 'object',
@@ -62,6 +53,22 @@ const FALLBACK_GROUP_SCHEMAS: Record<string, JsonSchema> = {
       extensions: { type: 'array', title: '补充参数', items: { type: 'object' } },
     },
   },
+}
+
+// 仅在旧实验条件的显示边界转换；编辑 description 不删除原始字段或证据。
+const experimentalConditionsText = (value: unknown): string => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return ''
+  const conditions = value as Record<string, unknown>
+  if (typeof conditions.description === 'string') return conditions.description
+  const labels: Record<string, string> = {
+    sample: '样品', preparation_method: '制备方式', measurement_method: '测量方法',
+    apparatus: '测量装置', external_field_t: '外场 (T)', pressure_uncertainty_gpa: '压力不确定度 (GPa)',
+    extensions: '其他实验信息',
+  }
+  return Object.entries(conditions)
+    .filter(([, item]) => item != null && item !== '' && !(Array.isArray(item) && item.length === 0))
+    .map(([key, item]) => `${labels[key] || key}：${typeof item === 'object' ? JSON.stringify(item, null, 2) : String(item)}`)
+    .join('\n')
 }
 
 const titleFor = (definition: FormDefinition | undefined, path: string, schema: JsonSchema, fallback: string): string => {
@@ -188,6 +195,16 @@ const SchemaDrivenRecordForm: React.FC<Props> = ({
 
   const renderSchema = (schema: JsonSchema, path: string, fallbackLabel: string): React.ReactNode => {
     const label = titleFor(definition, path, schema, fallbackLabel)
+    if (path === 'payload.experimental_conditions' && record.record_type === 'measured_tc') {
+      const descriptionPath = `${path}.description`
+      const error = issue(descriptionPath) || issue(path)
+      return (
+        <TextField key={path} label={label} multiline minRows={3} fullWidth disabled={readOnly}
+          sx={{ gridColumn: '1 / -1' }} value={experimentalConditionsText(getAtPath(record, path))}
+          data-issue-field={fieldPath(descriptionPath)} error={Boolean(error)} helperText={error}
+          onChange={event => updatePath(descriptionPath, event.target.value)} />
+      )
+    }
     if (schema.type === 'array' && path.endsWith('.extensions')) return renderExtensions(path, schema)
     if (schema.type === 'object' || schema.properties) {
       return (

@@ -72,6 +72,18 @@
 - 提交后的论文进入待审核队列，审核决策属于 02 目录的论文与记录审核。
 - 审核通过后，管理员调用 `POST /api/papers/{paper_id}/publish`：`embed_and_index_chunks`（`backend/ingest/embedder.py`）把 `paper_chunks` 内容向量化并写入 Qdrant `paper_chunks` collection，此后 RAG 检索可用；论文未通过审核时调用返回 409 `paper_not_approved`。
 
+## 实验条件提取
+
+分段和全文汇总共用实验条件提示：以样品、制备方式、测量方法、测量装置、外场和压力不确定度
+六方面引导 AI 输出英文自由描述，只使用原文事实，不要求六项齐全，不把缺失条件补成猜测。
+每条测量 Tc 的条件分别写入该条 `experimental_conditions.description`，经既有草稿转换进入
+`property_modules[].records[].payload.experimental_conditions.description`。同材料状态下的多条
+测量结果不共享或相互覆盖条件；预测 Tc 保持计算 Conditions。分段缓存契约版本为 8，旧缓存
+重读时重新提取。对应表单采用单个多行框；定义版本继续保存在数据内。（[Issue #94](../../specs/94-property-record-editor/spec.md)）
+
+此链路通过模拟 LLM 返回、执行真实分段与汇总调用、草稿归一化、记录校验、SQLite 持久化及导出
+验证；外部模型针对具体论文的输出质量仍需据原文审核。
+
 ## 当前边界与待核验
 
 - 旧 Neo4j 材料/作者图谱同步（`backend/ingest/sync_neo4j.py`）仍不在上传链路中自动触发；Issue #81 的论文引用图不依赖该同步，公开查询直接读取 MySQL 中的 `paper_references`。

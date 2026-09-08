@@ -50,6 +50,19 @@ from backend.services.structure_candidates import (
 )
 
 
+EXPERIMENTAL_CONDITIONS_PROMPT = """
+实验 Conditions 使用自然语言描述，不要拆成六个固定字段或补充条件数组。
+对每条实验 tc_results，将描述写入该条的 experimental_conditions.description，输出英文自由文本。
+以样品、制备方式、测量方法、测量装置、外场、压力不确定度这六方面作为阅读和描述方向；
+它们不是六个必填项，不要求固定顺序、数值化或单位规范化。仅写原文支持的信息，缺失方向直接省略；
+整条记录没有可确定的条件时 description 返回空字符串，不要猜测或编造。保留该结果的原文 evidence。
+例如："experimental_conditions": {"description": "Resistivity was measured using a four-probe setup at zero applied field."}
+同一 material_state 内的每条测量 Tc 必须各自携带条件；同方法但条件、判据或结果不同的记录也分别保留。
+不要把全部实验条件仅放在状态级 experimental_context，不要将一条记录的条件套用到另一条。
+预测 Tc 仍使用其计算 Conditions，不要为预测 Tc 生成实验条件。
+"""
+
+
 CHUNK_SYSTEM_PROMPT = """You are a superconductivity-paper evidence extraction assistant. Return JSON candidate facts from only the supplied paper chunk.
 
 Write every AI-generated label, material description, methodology item, finding, classification name, and relation in English. Preserve the source language exactly only in metadata title/abstract and every quote. Never translate or rewrite quote text.
@@ -92,7 +105,9 @@ equal contribution、contributed equally 等明确声明识别。证据不足时
   "key_findings": []
 }"""
 
-CHUNK_RESULT_SCHEMA_VERSION = 7
+CHUNK_SYSTEM_PROMPT += EXPERIMENTAL_CONDITIONS_PROMPT
+
+CHUNK_RESULT_SCHEMA_VERSION = 8
 
 PUBLIC_CHUNK_RESULT_FIELDS = {
     "metadata", "paper_type_evidence", "research_materials",
@@ -192,6 +207,9 @@ key_finding 保留原有格式，提供完整的核心发现描述。
   "research_motivation": "",
   "classification_evidence": [{"section": "", "page": null, "quote": ""}]
 }"""
+
+
+SUMMARY_SYSTEM_PROMPT += EXPERIMENTAL_CONDITIONS_PROMPT
 
 
 class UploadCancelled(RuntimeError):

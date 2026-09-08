@@ -157,6 +157,9 @@ export function validateRecordClient(record: PropertyRecordDraft, definition?: F
   if (!record.value_raw.trim()) addIssue(issues, 'value_raw', '原始值不能为空')
   const calculation = record.payload.calculation_conditions
   const experimental = record.payload.experimental_conditions
+  if (experimental && typeof experimental === 'object' && 'description' in experimental && typeof experimental.description !== 'string') {
+    addIssue(issues, 'payload.experimental_conditions.description', '实验 Conditions 描述必须是文本')
+  }
   if (record.record_type === 'predicted_tc' && (!calculation || experimental)) {
     issues.push({ field: experimental ? 'payload.experimental_conditions' : 'payload.calculation_conditions', code: 'invalid_condition_type', message: '预测 Tc 只能使用计算 Conditions' })
   }

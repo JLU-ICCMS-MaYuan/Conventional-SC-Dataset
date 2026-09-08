@@ -60,10 +60,10 @@ const definitionIdentity = (definition: Pick<FormDefinition, 'definition_key' | 
   `${definition.definition_key}@${definition.version}`
 )
 
-const definitionLabel = (definition: Pick<FormDefinition, 'definition_key' | 'record_type' | 'method_code' | 'property_code' | 'version'>) => {
-  if (definition.record_type === 'predicted_tc') return `预测 Tc · ${definition.method_code || 'unknown'} · v${definition.version}`
-  if (definition.record_type === 'measured_tc') return `测量 Tc · ${definition.method_code || 'unknown'} · v${definition.version}`
-  return `${definition.property_code === 'custom' ? '自定义性质' : definition.property_code || definition.definition_key} · v${definition.version}`
+const definitionLabel = (definition: Pick<FormDefinition, 'definition_key' | 'record_type' | 'method_code' | 'property_code'>) => {
+  if (definition.record_type === 'predicted_tc') return `预测 Tc · ${definition.method_code || 'unknown'}`
+  if (definition.record_type === 'measured_tc') return `测量 Tc · ${definition.method_code || 'unknown'}`
+  return definition.property_code === 'custom' ? '自定义性质' : definition.property_code || definition.definition_key
 }
 
 const recordForDefinition = (
@@ -217,40 +217,40 @@ const PropertyModuleEditor: React.FC<Props> = ({
                 const allChoices = choices.some(item => definitionIdentity(item) === `${record.definition_key}@${record.definition_version}`)
                   ? choices
                   : [boundDefinitions[record.record_key], ...choices].filter(Boolean)
+                const recordLabel = definitionLabel(record)
+                const summary = [recordLabel, record.name_raw, record.value_raw].filter(Boolean).join(' · ')
+                const recordError = definitionErrors[record.record_key] || recordIssues[0]?.message
                 return (
-                  <Box key={record.record_key}>
-                    {!readOnly && (
-                      <Select fullWidth size="small" inputProps={{ 'aria-label': '记录定义' }} value={`${record.definition_key}@${record.definition_version}`}
-                        onChange={event => {
-                          const definition = allChoices.find(item => definitionIdentity(item) === event.target.value)
-                          if (definition) updateRecord(moduleIndex, recordIndex, recordForDefinition(record, definition))
-                        }} sx={{ mb: 1 }}>
-                        {allChoices.map(definition => <MenuItem key={definitionIdentity(definition)} value={definitionIdentity(definition)}>{definitionLabel(definition)}</MenuItem>)}
-                      </Select>
-                    )}
-                    {readOnly && (
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                        {definitionLabel(allChoices.find(item => definitionIdentity(item) === `${record.definition_key}@${record.definition_version}`) || {
-                          definition_key: record.definition_key,
-                          version: record.definition_version,
-                          record_type: record.record_type,
-                          method_code: record.method_code,
-                          property_code: record.property_code,
-                        })}
-                      </Typography>
-                    )}
-                    <SchemaDrivenRecordForm
-                      record={record}
-                      definition={boundDefinitions[record.record_key] || definitions[record.module_code]?.find(item => definitionIdentity(item) === `${record.definition_key}@${record.definition_version}`)}
-                      definitionError={definitionErrors[record.record_key]}
-                      issues={recordIssues}
-                      basePath={recordBasePath}
-                      readOnly={readOnly}
-                      onChange={next => updateRecord(moduleIndex, recordIndex, next)}
-                      onClone={readOnly ? undefined : () => onChange(modules.map((item, index) => index === moduleIndex ? { ...item, records: [...item.records, clonePropertyRecord(record)] } : item))}
-                      onDelete={readOnly ? undefined : () => onChange(modules.map((item, index) => index === moduleIndex ? { ...item, records: item.records.filter((_, currentIndex) => currentIndex !== recordIndex) } : item), { deletedRecordKey: record.record_key })}
-                    />
-                  </Box>
+                  <Accordion key={record.record_key} defaultExpanded sx={{ mb: 1 }}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />} aria-label={`记录 ${recordIndex + 1} · ${summary}`}>
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography sx={{ overflowWrap: 'anywhere' }}>{summary}</Typography>
+                        {recordError && <Typography color="error" variant="caption">{recordError}</Typography>}
+                      </Box>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      {!readOnly && (
+                        <Select fullWidth size="small" inputProps={{ 'aria-label': '记录定义' }} value={`${record.definition_key}@${record.definition_version}`}
+                          onChange={event => {
+                            const definition = allChoices.find(item => definitionIdentity(item) === event.target.value)
+                            if (definition) updateRecord(moduleIndex, recordIndex, recordForDefinition(record, definition))
+                          }} sx={{ mb: 1 }}>
+                          {allChoices.map(definition => <MenuItem key={definitionIdentity(definition)} value={definitionIdentity(definition)}>{definitionLabel(definition)}</MenuItem>)}
+                        </Select>
+                      )}
+                      <SchemaDrivenRecordForm
+                        record={record}
+                        definition={boundDefinitions[record.record_key] || definitions[record.module_code]?.find(item => definitionIdentity(item) === `${record.definition_key}@${record.definition_version}`)}
+                        definitionError={definitionErrors[record.record_key]}
+                        issues={recordIssues}
+                        basePath={recordBasePath}
+                        readOnly={readOnly}
+                        onChange={next => updateRecord(moduleIndex, recordIndex, next)}
+                        onClone={readOnly ? undefined : () => onChange(modules.map((item, index) => index === moduleIndex ? { ...item, records: [...item.records, clonePropertyRecord(record)] } : item))}
+                        onDelete={readOnly ? undefined : () => onChange(modules.map((item, index) => index === moduleIndex ? { ...item, records: item.records.filter((_, currentIndex) => currentIndex !== recordIndex) } : item), { deletedRecordKey: record.record_key })}
+                      />
+                    </AccordionDetails>
+                  </Accordion>
                 )
               })}
               {!readOnly && (
