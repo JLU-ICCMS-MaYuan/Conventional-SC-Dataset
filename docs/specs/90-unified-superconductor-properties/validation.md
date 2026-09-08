@@ -26,7 +26,7 @@ MySQL 验证。仓库验收不等于生产数据库已经部署，实际部署�
   1 个 PropertyModule 和 1 条 PropertyRecord，检查点为 `contract`，未解决异常为 0。
 - Contract 后保留 `issue90_migration_checkpoint` 1 行、`issue90_property_migration_map` 3 行和
   `issue90_migration_anomalies` 0 行作为只读迁移审计元数据；映射覆盖 ChemicalSystem、Superconductor
-  和 Tc 旧记录，正常业务路径不继续写入这些表。
+  和 Tc 旧记录。这是审计清理前的历史状态；后续归档和删除结果见文末。
 - Contract 后论文详情、搜索、Tc-pressure 和 Tc-year 接口均返回 200；搜索返回 1 条记录。
 - 该历史 Tc 没有 Evidence，MaterialState 导出按契约返回
   `409 export_incomplete: evidence for legacy-tc-94`。迁移没有伪造 Evidence，也没有输出貌似完整的数据包。
@@ -105,3 +105,17 @@ revision 幂等保存映射和检查点。
 
 Spec、Plan、Research、Data Model、Contracts、Quickstart 和 Tasks 保留 #90 的设计、实施拆解与验证证据。
 按用户要求，完成验收回写后 Issue #90 继续保持 Open。
+
+## 2026-09-08 临时迁移表归档与删除
+
+用户确认归档后删除三张临时表，取代同日早先的数据库长期保留策略。
+
+- 完整结构与全部记录已保存到 [迁移审计归档](migration-audit-archive.md)，SQL 备份位置和 SHA-256 同页记录。
+- SQL 备份恢复到独立临时数据库，三表全部记录逐字段一致；恢复验证后删除临时数据库。
+- 真实隔离 MySQL 专项 `tests/02_maintenance_and_verification/test_issue90_migration.py`：5 项通过；
+  清理测试覆盖未完成观察标记时拒绝删除、删除后业务行逐字段不变、无检查点表时异步写入门放行。
+- 本地库执行 `alembic upgrade issue90_audit_cleanup_v1` 成功，三张临时表均不存在，表数从 42 变为 39。
+- 对比论文、元素体系、材料、材料状态、结构、模块、物性、表单定义和用户共 9 张核心表，全部记录逐字段不变。
+- 本地 MySQL 的异步写入门实测通过，后续同连接查询正常；未新增、编辑或删除科研业务记录。
+- ORM 元数据排除三表，避免后续 `create_all` 重新创建；历史迁移工具和停写阶段逻辑继续保留。
+- 本轮范围仅为迁移临时表清理，不构成 #90 其他数据质量问题的修复或重新验收。

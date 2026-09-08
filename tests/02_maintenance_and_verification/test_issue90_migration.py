@@ -690,3 +690,35 @@ def test_contract_requires_confirmation_and_observed_checkpoint(
     } <= tables
     with legacy_mysql.engine.connect() as connection:
         assert connection.scalar(text("SELECT version_num FROM alembic_version")) == CONTRACT_REVISION
+
+    # Cleanup refuses incomplete checkpoints and preserves all business rows.
+    cleanup_revision = "issue90_audit_cleanup_v1"
+    with legacy_mysql.engine.begin() as connection:
+        connection.execute(text("UPDATE issue90_migration_checkpoint SET observed=0 WHERE id=1"))
+    with pytest.raises(RuntimeError, match="Contract is incomplete"):
+        _upgrade(legacy_mysql.url, cleanup_revision)
+    assert "issue90_property_migration_map" in inspect(legacy_mysql.engine).get_table_names()
+    with legacy_mysql.engine.begin() as connection:
+        connection.execute(text("UPDATE issue90_migration_checkpoint SET observed=1 WHERE id=1"))
+    preserved = ("papers", "material_states", "property_modules", "property_records", "form_definitions")
+    before = {name: _rows(legacy_mysql.engine, name) for name in preserved}
+    _upgrade(legacy_mysql.url, cleanup_revision)
+    assert {
+        "issue90_migration_checkpoint", "issue90_property_migration_map",
+        "issue90_migration_anomalies",
+    }.isdisjoint(inspect(legacy_mysql.engine).get_table_names())
+    assert {name: _rows(legacy_mysql.engine, name) for name in preserved} == before
+
+    import asyncio
+    from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+
+    async def check_write_gate_without_audit_tables():
+        async_engine = create_async_engine(legacy_mysql.url.set(drivername="mysql+asyncmy"))
+        try:
+            async with async_sessionmaker(async_engine)() as session:
+                await service.assert_scientific_write_allowed(session)
+                assert await session.scalar(text("SELECT COUNT(*) FROM property_records")) == len(before["property_records"])
+        finally:
+            await async_engine.dispose()
+
+    asyncio.run(check_write_gate_without_audit_tables())

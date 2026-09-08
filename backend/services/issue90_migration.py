@@ -122,6 +122,13 @@ def migration_tables_present(conn) -> bool:
 
 
 async def assert_scientific_write_allowed(session) -> None:
+    # Completed installations retire the gate; older migrations still need it.
+    if hasattr(session, "run_sync"):
+        present = await session.run_sync(
+            lambda sync_session: migration_tables_present(sync_session.connection())
+        )
+        if not present:
+            return
     try:
         result = await session.execute(text(
             "SELECT writes_blocked, writes_target FROM issue90_migration_checkpoint WHERE id=1"

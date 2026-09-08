@@ -115,7 +115,7 @@ T068 阻断生产切换 T047 和收尾 T049–T055；新增字段和完整导出
 - [x] T047 在 `goserver/handlers/papers.go`、`goserver/handlers/stats.go` 与 `frontend/src/lib/paperDetailView.ts` 完成 Read switch；读取验收失败时恢复旧读取。
 - [x] T048 在 `backend/ingest/scientific_drafts.py` 与 `backend/services/scientific_draft_rewrite.py` 完成 Write switch，通过读路径冒烟后才解除停写。
 - [x] T049 在 `docs/specs/90-unified-superconductor-properties/validation.md` 记录目标环境无旧写入、详情/搜索/图表对比、停写窗口和恢复演练证据。
-- [x] T050 在 `alembic/versions/20260907_issue90_contract_legacy_properties.py` 退役旧 Tc、普通物性、Evidence 连接、Context 表和两张 legacy 材料表；保留迁移检查点、逐条映射与异常清单作为只读审计元数据，不再改动已切换生效的论文内唯一键。
+- [x] T050 在 `alembic/versions/20260907_issue90_contract_legacy_properties.py` 退役旧 Tc、普通物性、Evidence 连接、Context 表和两张 legacy 材料表；暂留迁移检查点、逐条映射与异常清单，随后按 T069 归档清理，不再改动已切换生效的论文内唯一键。
 - [x] T051 在 `tests/02_maintenance_and_verification/test_issue90_migration.py` 运行预建测试验证 Expand -> Copy -> 最终增量 -> Read switch -> Write switch -> Observe -> Contract，并验证切写前恢复与切写后目标 Schema 检查点及日志重放均无已提交数据丢失。
 
 ## 阶段 10：收尾、验收与文档
@@ -168,3 +168,8 @@ MVP 为基础阶段 + US1 + US2 + US3 + US4：在新建材料状态中可以按�
 | SC-006–SC-011 | T034–T055 |
 | SC-013–SC-014 | T056、T057、T063 |
 | SC-015–SC-016 | T064、T066、T068 |
+
+## 迁移完成后的临时表清理
+
+- [x] T069 [FR-042、SC-017] 归档三张迁移表完整结构与记录、生成 SQL 备份；新增独立清理迁移并移除 ORM 映射，使写入门支持无检查点表。
+- [x] T070 [FR-042、SC-017] 在隔离 MySQL 验证未完成阶段拒绝清理、业务记录保留和无表写入门；在当前本地库执行清理并记录结果。
