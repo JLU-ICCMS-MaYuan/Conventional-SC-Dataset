@@ -90,7 +90,7 @@ export default {
   fieldVolume: '卷',
   fieldPages: '页',
   fieldAuthors: '作者',
-  jsonArrayFormat: 'JSON 数组格式',
+  listOnePerLine: '每行一项',
   fieldAbstract: '摘要',
   fieldLlmSummary: 'LLM 摘要 (summary)',
   fieldPaperType: '论文类型 (paper_type)',

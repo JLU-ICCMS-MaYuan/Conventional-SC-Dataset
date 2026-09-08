@@ -10,6 +10,7 @@ import { useLanguage } from '../context/LanguageContext'
 import { familyName } from '../lib/classifications'
 import { api } from '../lib/api'
 import PropertyModuleEditor from './PropertyModuleEditor'
+import { toTextList } from '../lib/paperTextLists'
 
 interface PaperEditViewProps {
   // 论文数据与加载/错误分流由路由页面壳 PaperDetailPage 负责，本组件只负责展示。
@@ -27,19 +28,6 @@ const STATUS_COLORS: Record<string, 'warning' | 'success' | 'error' | 'info'> = 
 const reviewStatusLabel = (dict: any, value: string | null | undefined): string => {
   const table: Record<string, string> = dict?.enums?.reviewStatus || {}
   return (value && table[value]) || value || ''
-}
-
-// keywords_tags / methodology 在数据库里是 JSON 文本列，后端按原样透传（*string），
-// 所以详情接口返回的可能是数组也可能是 JSON 字符串。统一在这里归一为字符串数组，
-// 避免展示层对同一字段出现两种消费方式。
-const toTextList = (value: unknown): string[] => {
-  const items = Array.isArray(value)
-    ? value
-    : typeof value === 'string' && value.trim()
-      ? (() => { try { return JSON.parse(value) } catch { return [value] } })()
-      : []
-  if (!Array.isArray(items)) return []
-  return items.map(item => String(item ?? '').trim()).filter(Boolean)
 }
 
 const PaperEditView: React.FC<PaperEditViewProps> = ({ paper, onBack, onOpenMyPapers }) => {

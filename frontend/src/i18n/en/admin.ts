@@ -92,7 +92,7 @@ export default {
   fieldVolume: 'Volume',
   fieldPages: 'Pages',
   fieldAuthors: 'Authors',
-  jsonArrayFormat: 'JSON array format',
+  listOnePerLine: 'One item per line',
   fieldAbstract: 'Abstract',
   fieldLlmSummary: 'LLM Summary (summary)',
   fieldPaperType: 'Paper type (paper_type)',

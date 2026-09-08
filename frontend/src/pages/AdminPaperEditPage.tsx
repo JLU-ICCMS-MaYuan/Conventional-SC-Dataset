@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   Alert, Autocomplete, Box, Button, Checkbox, Chip, CircularProgress, Container, FormControl, FormControlLabel, IconButton,
   InputLabel, MenuItem, Select, Snackbar, TextField, Typography,
@@ -15,6 +15,7 @@ import { DraftMaterialState, StructureCandidate, unwrapData } from '../lib/paper
 import MaterialStatesEditor, { SpaceGroupOption } from '../components/MaterialStatesEditor'
 import { useLanguage } from '../context/LanguageContext'
 import { convertLegacyPropertyModules, PROPERTY_SCHEMA_VERSION } from '../lib/propertyModules'
+import { textLinesToList, toTextList } from '../lib/paperTextLists'
 
 /**
  * Go 详情行的材料状态 → 共享编辑器（MaterialStatesEditor）的 DraftMaterialState（T020）。
@@ -51,6 +52,11 @@ const materialStateFromDetail = (state: Record<string, any>): DraftMaterialState
 }
 
 const SUPERCONDUCTOR_KIND_VALUES = ['conventional', 'unconventional', 'unknown'] as const
+
+const appendAuthor = (authors: string[], input: string): string[] => {
+  const name = input.trim()
+  return name && !authors.includes(name) ? [...authors, name] : authors
+}
 
 /**
  * Go 已落库的结构模型 → 已确认候选（T020）。
@@ -100,6 +106,17 @@ const AdminPaperEditPage: React.FC = () => {
 
   /* ── 论文级字段 ─────────────────────────────── */
   const [editForm, setEditForm] = useState<Record<string, any>>({})
+  const [authorInput, setAuthorInput] = useState('')
+  const [editListText, setEditListText] = useState<Partial<Record<'keywords_tags' | 'methodology', string>>>({})
+  const editAuthors = useMemo(() => toTextList(editForm.authors), [editForm.authors])
+  const commitAuthorInput = () => {
+    if (authorInput.trim()) {
+      setEditForm(current => ({
+        ...current, authors: JSON.stringify(appendAuthor(toTextList(current.authors), authorInput)),
+      }))
+    }
+    setAuthorInput('')
+  }
   const [editLoading, setEditLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
 
@@ -171,6 +188,8 @@ const AdminPaperEditPage: React.FC = () => {
       setEditLoading(true)
       try {
         const detail = await api.get<Record<string, any>>(`/api/admin/papers/${paperId}`)
+        setAuthorInput('')
+        setEditListText({})
         let pendingValues: Record<string, any> | null = null
         if (detail.review_status === 'pending') {
           try {
@@ -278,6 +297,17 @@ const AdminPaperEditPage: React.FC = () => {
     try {
       const historyOperationId = crypto.randomUUID()
       const payload: Record<string, any> = { ...editForm, history_operation_id: historyOperationId }
+      if (authorInput.trim()) {
+        payload.authors = JSON.stringify(appendAuthor(toTextList(editForm.authors), authorInput))
+      }
+      // Go 文本列不接收数组；只转换数组和用户编辑过的字段，原字符串/空值保持不变。
+      for (const field of ['authors', 'keywords_tags', 'methodology'] as const) {
+        if (field !== 'authors' && editListText[field] !== undefined) {
+          payload[field] = JSON.stringify(textLinesToList(editListText[field]!))
+        } else if (Array.isArray(payload[field])) {
+          payload[field] = JSON.stringify(payload[field])
+        }
+      }
       delete payload.key_properties
       // 只提交 superconductor_properties 的真实列。压强、温度等条件字段属材料状态，
       // 不经物性接口修改；后端也不再接受这些无对应列的字段。
@@ -416,10 +446,32 @@ const AdminPaperEditPage: React.FC = () => {
             <TextField label={t('admin.fieldPages')} size="small" value={editForm.pages || ''}
               onChange={e => setEditForm({ ...editForm, pages: e.target.value })} />
           </Box>
-          <TextField label={t('admin.fieldAuthors')} size="small" fullWidth multiline rows={2}
-            helperText={t('admin.jsonArrayFormat')}
-            value={typeof editForm.authors === 'string' ? editForm.authors : JSON.stringify(editForm.authors || [], null, 2)}
-            onChange={e => { try { setEditForm({ ...editForm, authors: JSON.parse(e.target.value) }) } catch { setEditForm({ ...editForm, authors: e.target.value }) } }} />
+          <Autocomplete
+            multiple freeSolo forcePopupIcon={false} options={[] as string[]}
+            value={editAuthors}
+            inputValue={authorInput}
+            onInputChange={(_, value) => setAuthorInput(value)}
+            onBlur={commitAuthorInput}
+            onKeyDown={event => {
+              if (event.key === 'Enter') {
+                event.defaultMuiPrevented = true
+                if (event.nativeEvent.isComposing || event.keyCode === 229) return
+                event.preventDefault()
+                commitAuthorInput()
+              }
+            }}
+            onChange={(_, values) => {
+              setEditForm(current => ({
+                ...current,
+                authors: JSON.stringify(values.reduce<string[]>((items, name) => appendAuthor(items, name), [])),
+              }))
+              setAuthorInput('')
+            }}
+            renderInput={params => (
+              <TextField {...params} label={t('admin.fieldAuthors')} size="small"
+                placeholder={t('upload.authorPlaceholder')} />
+            )}
+          />
           <TextField label={t('admin.fieldAbstract')} size="small" fullWidth multiline rows={3}
             value={editForm.abstract || ''} onChange={e => setEditForm({ ...editForm, abstract: e.target.value })} />
           <TextField label={t('admin.fieldLlmSummary')} size="small" fullWidth multiline rows={2}
@@ -462,14 +514,19 @@ const AdminPaperEditPage: React.FC = () => {
                 />
               )}
             />
-            <TextField label={t('admin.fieldKeywordsTags')} size="small" value={editForm.keywords_tags || ''}
-              onChange={e => setEditForm({ ...editForm, keywords_tags: e.target.value })} />
             <TextField label={t('admin.fieldSourceFilePath')} size="small" value={editForm.source_file_path || ''}
               onChange={e => setEditForm({ ...editForm, source_file_path: e.target.value })} />
           </Box>
-          <TextField label={t('admin.fieldMethodology')} size="small" fullWidth multiline rows={2}
-            value={typeof editForm.methodology === 'string' ? editForm.methodology : JSON.stringify(editForm.methodology || [], null, 2)}
-            onChange={e => { try { setEditForm({ ...editForm, methodology: JSON.parse(e.target.value) }) } catch { setEditForm({ ...editForm, methodology: e.target.value }) } }} />
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1.5 }}>
+            {(['keywords_tags', 'methodology'] as const).map(field => (
+              <TextField key={field}
+                label={t(field === 'keywords_tags' ? 'admin.fieldKeywordsTags' : 'admin.fieldMethodology')}
+                size="small" fullWidth multiline minRows={3}
+                helperText={t('admin.listOnePerLine')}
+                value={editListText[field] ?? toTextList(editForm[field]).join('\n')}
+                onChange={event => setEditListText(current => ({ ...current, [field]: event.target.value }))} />
+            ))}
+          </Box>
           <TextField label={t('admin.fieldKeyFinding')} size="small" fullWidth multiline rows={2}
             value={editForm.key_finding || ''} onChange={e => setEditForm({ ...editForm, key_finding: e.target.value })} />
           <TextField label={t('admin.fieldResearchMotivation')} size="small" fullWidth multiline rows={2}

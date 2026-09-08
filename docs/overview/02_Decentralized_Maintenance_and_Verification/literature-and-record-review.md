@@ -8,6 +8,7 @@
 
 - 管理后台可按状态、关键词、材料和年份筛选论文列表，并分页展示。
 - 管理员可编辑论文基础字段、摘要、LLM 富化字段和普通物性；物性支持新增、修改与标记删除。
+- 管理员和超级管理员的论文编辑页将 Authors 显示为可增删的姓名标签，输入姓名后按 Enter 或离开输入框确认，直接点击保存也会带上待确认姓名；重复新增不会产生重复标签。关键词与研究方法采用每行一项的多行输入，窄屏上下排列。三个字段不再展示 JSON 列表包装，姓名及描述内部的逗号、引号、括号仍保留。编辑后保存为 JSON 文本列表，清空后重开保持空态；未经编辑的原字符串或空值保持不变，保存失败保留输入以便重试。（[Issue #95](../../specs/95-admin-paper-list-fields/spec.md)）
 - 编辑入口为独立页面（`/admin/papers/:id/edit`，`admin` 与 `superadmin` 角色保护），不再是列表页上的弹窗；页面在论文基础信息区维护多个 Material family 和单选 Superconductor type，并接入共享的材料状态编辑组件（`MaterialStatesEditor`，与上传校对页同一实现）：管理员可查看并修改全部材料状态的化学式、维度、`More type labels`、晶系、空间群、压强，及其下的 Tc 列表、普通物性列表与结构附件。任务解析产生的未分配结构候选也在该编辑页中支持分配、确认和排除；#77 Spec 中的“编辑弹窗”表述由 #78 的独立页面实现替代。承载化学式的输入框标签为「化学式」（上传页）/「化学式 (material)」（管理端物性行）。（[Issue #75](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/75)、[Issue #76](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/76)、[Issue #77](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/77)、[Issue #78](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/78)、[Issue #79](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/79)、[Issue #80](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/80)）
 - 已落库结构的晶胞表示（惯用胞/原胞）与格式（CIF/POSCAR）按需从落库 CIF 实时生成（`GET /api/rag/papers/{id}/structures/{sid}/representations`），管理端编辑页可自由切换预览并下载对应文件（[Issue #78](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/78)）。
 - 科学数据编辑走 Python 端点 `PUT /api/rag/papers/{id}/scientific-draft`（管理员鉴权），语义是整体替换：单事务内按依赖逆序删除该论文当前科学实体后按请求体重建，复用上传提交的校验规则。`pending` 论文原地重建（版本号不变）；`approved` 论文升版重审——`content_revision` 递增、`approved_revision` 清空、状态回到 `pending`，期间不对外公开，重新批准后走既有 publish 链路重建索引。升版由外键级联链支撑：`paper_files` / `paper_chunks` / `paper_evidences` / `material_states` 的 `paper_revision` 随单条 `UPDATE papers` 由 MySQL 级联迁移（[Issue #76](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/76)）。结构附件补传走 `POST /api/rag/papers/{id}/structure-candidates`，只产出候选不写库，随保存一并提交。
@@ -66,6 +67,7 @@
 - `backend/models.py`
 - `frontend/src/pages/AdminPage.tsx`
 - `frontend/src/pages/AdminPaperEditPage.tsx`
+- `frontend/src/lib/paperTextLists.ts`
 - `frontend/src/LazyRoutes.tsx`
 - `frontend/src/components/PaperEditView.tsx`
 - `frontend/src/components/NewsManager.tsx`
@@ -74,6 +76,8 @@
 - `goserver/handlers/paper_history_test.go`
 - `tests/01_decentralized_uploading/admin-paper-classification-review.test.tsx`
 - `tests/02_identity_governance/admin-edit-page.test.tsx`
+- `tests/02_identity_governance/admin-paper-list-fields.test.tsx`
+- `goserver/handlers/admin_paper_list_fields_test.go`
 - `tests/02_identity_governance/identity_ui.test.tsx`
 - `tests/02_identity_governance/admin-workspace-cards.test.tsx`
 
@@ -86,6 +90,7 @@
 - [Issue #62：审核弹窗移除纯阅读性展示内容](../../specs/62-simplify-paper-review/spec.md)
 - [Issue #78：管理端审核编辑页独立化并功能对齐提交页](../../specs/78-admin-edit-page/spec.md)
 - [Issue #94：物性记录标题、实验条件文本与独立折叠](../../specs/94-property-record-editor/spec.md)
+- [Issue #95：管理端论文作者、关键词与研究方法的可读编辑](../../specs/95-admin-paper-list-fields/spec.md)
 
 ## 已知问题
 
