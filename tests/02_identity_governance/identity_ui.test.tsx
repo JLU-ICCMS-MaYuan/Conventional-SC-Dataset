@@ -51,6 +51,12 @@ afterEach(() => {
 })
 
 describe('身份与工作台导航', () => {
+  it.each(['/admin', '/superadmin'])('普通用户无法从 %s 打开论文历史入口', async path => {
+    render(<MemoryRouter initialEntries={[path]}><LazyRoutes /></MemoryRouter>)
+    expect(await screen.findByText(/403/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '历史' })).not.toBeInTheDocument()
+  })
+
   it('按当前角色显示左侧入口，头像菜单只保留退出登录', () => {
     render(<MemoryRouter initialEntries={['/account']}><Routes><Route element={<AppShell />}><Route path="/account" element={<div>账户内容</div>} /></Route></Routes></MemoryRouter>)
     const navigation = screen.getByRole('navigation', { name: '主导航' })

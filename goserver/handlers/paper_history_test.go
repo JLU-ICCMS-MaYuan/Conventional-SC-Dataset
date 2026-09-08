@@ -36,19 +36,42 @@ func historyUser(id uint, role string) *models.User {
 }
 
 func TestGetPaperHistoryRequiresAdministratorRole(t *testing.T) {
-	paperHistoryTestDB(t)
+	db := paperHistoryTestDB(t)
+	if err := db.Create(&models.Paper{ID: 1, ReviewStatus: reviewStatusPending, ContentRevision: 1}).Error; err != nil {
+		t.Fatal(err)
+	}
+	middleware.InitJWT("paper-history-test-secret")
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	router.Use(func(c *gin.Context) {
-		c.Set("current_user", historyUser(1, "user"))
-		c.Next()
-	})
-	router.GET("/papers/:id/history", middleware.AdminRequired, GetPaperHistory)
-
-	response := httptest.NewRecorder()
-	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/papers/1/history", nil))
-	if response.Code != http.StatusForbidden {
-		t.Fatalf("普通用户状态码 = %d，期望 %d", response.Code, http.StatusForbidden)
+	router.GET("/api/admin/papers/:id/history", middleware.AuthRequired, middleware.AdminRequired, GetPaperHistory)
+	for _, test := range []struct {
+		role   string
+		status int
+	}{
+		{"", http.StatusUnauthorized},
+		{"user", http.StatusForbidden},
+		{"admin", http.StatusOK},
+		{"superadmin", http.StatusOK},
+	} {
+		t.Run(test.role, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "/api/admin/papers/1/history", nil)
+			if test.role != "" {
+				user := models.User{Email: test.role + "@example.test", Username: test.role, Role: test.role, AccountStatus: "active"}
+				if err := db.Create(&user).Error; err != nil {
+					t.Fatal(err)
+				}
+				token, err := middleware.GenerateTokenForUser(user)
+				if err != nil {
+					t.Fatal(err)
+				}
+				request.Header.Set("Authorization", "Bearer "+token)
+			}
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, request)
+			if response.Code != test.status {
+				t.Fatalf("角色 %q 状态码 = %d，期望 %d，响应 = %s", test.role, response.Code, test.status, response.Body.String())
+			}
+		})
 	}
 }
 
@@ -84,8 +107,10 @@ func TestGetPaperHistoryReturnsChronologicalEventsAndReviewComments(t *testing.T
 	var body struct {
 		PaperID uint `json:"paper_id"`
 		Events  []struct {
-			EventType string `json:"event_type"`
-			Actor     struct {
+			EventType     string    `json:"event_type"`
+			PaperRevision uint      `json:"paper_revision"`
+			OccurredAt    time.Time `json:"occurred_at"`
+			Actor         struct {
 				Username *string `json:"username"`
 				Unknown  bool    `json:"unknown"`
 			} `json:"actor"`
@@ -109,5 +134,8 @@ func TestGetPaperHistoryReturnsChronologicalEventsAndReviewComments(t *testing.T
 	}
 	if body.Events[2].EventType != paperHistoryReviewed || body.Events[2].Review == nil || body.Events[2].Review.Status != reviewStatusApproved || body.Events[2].Review.Comment == nil || *body.Events[2].Review.Comment != comment {
 		t.Fatalf("审核事件 = %#v", body.Events[2])
+	}
+	if body.Events[2].PaperRevision != 2 || body.Events[2].OccurredAt.IsZero() {
+		t.Fatalf("审核事件缺少版本或时间 = %#v", body.Events[2])
 	}
 }

@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import AdminPage from '../../frontend/src/pages/AdminPage'
 import { api } from '../../frontend/src/lib/api'
+import { LanguageProvider } from '../../frontend/src/context/LanguageContext'
 
 
 vi.mock('../../frontend/src/context/AuthContext', () => ({
@@ -133,10 +134,44 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  localStorage.removeItem('sc-wiki.language')
   vi.clearAllMocks()
 })
 
 describe('论文快速审核弹窗仅处理拒绝与退回', () => {
+  it.each(['zh', 'en'])('历史名称覆盖审核、修改、未知上传者和空意见（%s）', async lang => {
+    localStorage.setItem('sc-wiki.language', lang)
+    const originalGet = mockedApi.get.getMockImplementation()!
+    const longComment = '已核对证据'.repeat(50)
+    mockedApi.get.mockImplementation(async (path, ...args) => {
+      if (path !== '/api/admin/papers/51/history') return originalGet(path, ...args)
+      return {
+        paper_id: 51,
+        events: [
+          { id: 1, event_type: 'uploaded', paper_revision: 1, actor: { username: null, unknown: true }, occurred_at: '2026-09-04T09:05:00', review: null },
+          { id: 2, event_type: 'modified', paper_revision: 2, actor: { username: 'editor', unknown: false }, occurred_at: '2026-09-04T10:06:00', review: null },
+          { id: 3, event_type: 'reviewed', paper_revision: 2, actor: { username: 'reviewer', unknown: false }, occurred_at: '2026-09-04T11:07:00', review: { status: 'approved', comment: `  证据充分\n\t${longComment}  ` } },
+          { id: 4, event_type: 'reviewed', paper_revision: 2, actor: { username: null, unknown: false }, occurred_at: 'invalid', review: { status: 'pending', comment: ' \n ' } },
+        ],
+      } as never
+    })
+    const user = userEvent.setup()
+    render(<LanguageProvider><MemoryRouter><AdminPage /></MemoryRouter></LanguageProvider>)
+    await user.click(screen.getByRole('button', { name: lang === 'zh' ? '论文审核' : 'Paper Review' }))
+    await screen.findByText('Hydride paper')
+    await user.click(screen.getByRole('button', { name: lang === 'zh' ? '历史' : 'History' }))
+    const upload = lang === 'zh' ? '历史导入，上传者未知-上传' : 'Imported history, uploader unknown-Uploaded'
+    expect(await screen.findByText(`2026-09-04-09-05-v1-${upload}`)).toBeVisible()
+    expect(screen.getByText(`2026-09-04-10-06-v2-editor-${lang === 'zh' ? '修改' : 'Modified'}`)).toBeVisible()
+    const reviewName = screen.getByText(`2026-09-04-11-07-v2-reviewer-证据充分 ${longComment}`)
+    expect(reviewName).toBeVisible()
+    expect(reviewName).toHaveStyle({ overflowWrap: 'anywhere' })
+    expect(screen.getByText(`${lang === 'zh' ? '已通过' : 'Approved'} · 证据充分 ${longComment}`)).toBeVisible()
+    expect(screen.getByText(lang === 'zh'
+      ? '时间未知-v2-未知审核人-未填写审核意见'
+      : 'Unknown time-v2-Unknown reviewer-No review comment provided')).toBeVisible()
+  })
+
   it('在操作区域显示上传者和历史入口，不显示物性记录列', async () => {
     const user = userEvent.setup()
     render(<MemoryRouter><AdminPage /></MemoryRouter>)

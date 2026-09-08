@@ -19,6 +19,7 @@
 - 目录不提供独立建议队列、重命名、停用、合并或超级管理员二次治理。新名称只在论文批准事务中创建，拒绝或退回不会污染正式目录。
 - 批准论文前检查当前 revision 至少有一个论文级 Material family，并校验各材料状态的元素种类数与主结构唯一性；不完整时返回 `409 classification_incomplete`。批准事务还逐条检查 `property_records` 是否关联当前论文 revision 内可解析的 Evidence，缺失时返回 `409 evidence_incomplete` 和对应 `record_keys`。任一检查失败时论文状态及目录均不改变。批准事件保存 AI 上下文、全部论文 family 与状态级标签的最终目录 ID 快照。历史迁移中已经批准且缺少 Evidence 的记录不被自动改写，但编辑升版后必须补齐 Evidence 才能重新批准。
 - `paper_history_events` 是上传、修改和审核的唯一追加式历史来源：新上传与论文创建同事务写入 `uploaded`；有实际业务变化的保存写入一条 `modified`；每次实际审核写入 `reviewed` 并保留审核意见。同一次编辑页保存的 Go/Python 两段请求共享 `history_operation_id`，同值保存和同一操作重试不产生重复事件；审核贡献统计仅计 `reviewed`。
+- 论文历史弹窗为每条事件显示 `YYYY-MM-DD-HH-mm-vN-审核人-审核简介` 格式的名称。时间沿用浏览器本地时区、精确到分钟；审核人和意见来自该事件快照，空意见显示“未填写审核意见”。上传和修改条目对应位置使用实际操作者及事件类型，历史导入保留上传者未知提示。长意见在名称中合并连续空白并自动换行，原评论正文保留。名称只用于展示，不作为唯一版本标识，也不写回数据库。前端工作台守卫及 `GET /api/admin/papers/:id/history` 均限制管理员和超级管理员，普通用户为 403、未登录 API 请求为 401。（[Issue #93](../../specs/93-paper-version-visibility-and-naming/spec.md)）
 - 批量接口不允许批准论文，避免绕过逐篇材料分类确认；批量拒绝和退回仍可使用。
 - Go 统一承载 `/api/papers` 列表、`/api/papers/{id}` 详情和白名单 PATCH：匿名仅查看 approved；登录用户可查看 approved 与 pending；上传者额外可查看自己的 rejected 和 `review_comment`；管理员可查看全部及 `admin_internal_note`。
 - 无权查看的已存在 rejected 论文返回 403，不再伪装成 404。普通用户不能修改审核状态、文件路径、上传者、审核者或内部备注。
@@ -69,6 +70,7 @@
 - `frontend/src/components/NewsManager.tsx`
 - `frontend/src/components/SuperAdminGovernance.tsx`
 - `goserver/handlers/admin_review_event_test.go`
+- `goserver/handlers/paper_history_test.go`
 - `tests/01_decentralized_uploading/admin-paper-classification-review.test.tsx`
 - `tests/02_identity_governance/admin-edit-page.test.tsx`
 - `tests/02_identity_governance/identity_ui.test.tsx`

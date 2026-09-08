@@ -107,6 +107,8 @@ export default {
   historyEventModified: '修改',
   historyEventReviewed: '审核',
   historyRevision: '版本 {value}',
+  historyUnknownReviewer: '未知审核人',
+  historyUnknownTime: '时间未知',
   historyUnknownUploader: '历史导入，上传者未知',
   historyNoReviewComment: '未填写审核意见',
   historyEmpty: '暂无历史',

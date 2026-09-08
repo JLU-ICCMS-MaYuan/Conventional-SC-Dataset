@@ -109,6 +109,8 @@ export default {
   historyEventModified: 'Modified',
   historyEventReviewed: 'Reviewed',
   historyRevision: 'Revision {value}',
+  historyUnknownReviewer: 'Unknown reviewer',
+  historyUnknownTime: 'Unknown time',
   historyUnknownUploader: 'Imported history, uploader unknown',
   historyNoReviewComment: 'No review comment provided',
   historyEmpty: 'No history',

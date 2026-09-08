@@ -65,6 +65,14 @@ const STATUS_COLORS: Record<string, 'warning'|'success'|'error'|'info'> = {
   pending: 'warning', approved: 'success', rejected: 'error', needs_revision: 'info',
 }
 
+const formatHistoryVersionName = (event: PaperHistoryEvent, actor: string, summary: string, unknownTime: string) => {
+  const date = new Date(event.occurred_at)
+  const pad = (value: number) => String(value).padStart(2, '0')
+  const timestamp = Number.isNaN(date.getTime()) ? unknownTime
+    : `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}-${pad(date.getMinutes())}`
+  return `${timestamp}-v${event.paper_revision}-${actor}-${summary.replace(/\s+/g, ' ').trim()}`
+}
+
 /** 工作台卡片式功能入口；替代原顶部 Tabs 导航（Issue #61）。 */
 const WORKSPACE_CARDS: Array<{
   key: string
@@ -753,13 +761,17 @@ const AdminPage: React.FC<AdminPageProps> = ({ mode = 'admin' }) => {
             <Typography color="text.secondary">{t('admin.historyEmpty')}</Typography>
           )}
           {!historyLoading && !historyError && historyEvents.map((event, index) => {
-            const actor = event.actor.unknown ? t('admin.historyUnknownUploader') : event.actor.username || '-'
+            const actor = event.actor.unknown ? t('admin.historyUnknownUploader')
+              : event.actor.username?.trim() || (event.event_type === 'reviewed' ? t('admin.historyUnknownReviewer') : '-')
             const eventLabel = t(`admin.historyEvent${event.event_type[0].toUpperCase()}${event.event_type.slice(1)}`)
             const reviewStatus = event.review ? t(`admin.reviewStatus.${event.review.status}`) : ''
+            const summary = event.review ? event.review.comment?.trim() || t('admin.historyNoReviewComment') : eventLabel
+            const versionName = formatHistoryVersionName(event, actor, summary, t('admin.historyUnknownTime'))
             return (
               <Box key={event.id} sx={{ py: 1.25 }}>
                 {index > 0 && <Divider sx={{ mb: 1.25 }} />}
                 <Typography variant="subtitle2">{eventLabel}</Typography>
+                <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>{versionName}</Typography>
                 <Typography variant="body2" color="text.secondary">
                   {actor} · {new Date(event.occurred_at).toLocaleString(locale)} · {t('admin.historyRevision', { value: event.paper_revision })}
                 </Typography>
