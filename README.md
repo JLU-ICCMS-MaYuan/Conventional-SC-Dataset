@@ -50,10 +50,11 @@ rag界面
 
 探索|对话|预测
 
-## 自动资讯采集（Feature #63）
+## 自动资讯采集（Feature #63 / #88）
 
-`/news` 增加 arXiv、Crossref、Phys.org 自动资讯，按类型筛选和分页；保留人工快讯与诺贝尔奖里程碑。
+`/news` 定时从 arXiv、Crossref、OpenAlex、Phys.org 和 Google News RSS 发现超导资讯，按类型筛选和分页；保留人工快讯与诺贝尔奖里程碑。APS、ACS、Nature、Science、NSR、CPL、CPB、Materials Today 当前经 Crossref DOI 前缀补充发现，页面保留聚合发现来源与出版商原文来源，不将其表述为出版社官方 API/RSS 直连。
 自动资讯标注“自动采集，未经本站审核”，只进入独立资讯表，不进入正式论文、材料或 PDF 解析队列。
+OpenAlex 每次至少滚动回看最近 30 天，只发布已发表且主来源为期刊的 `article`，并拒绝 Zenodo 仓储 DOI；题名可直接证明超导相关性，自动关键词或主题需达到最低置信度，只有摘要命中时还须包含第二个超导学术上下文信号。Phys.org 是科研报道但按约定展示在期刊论文栏，Google News RSS 条目归为社会/产业资讯。
 
 Python 进程使用统一的 `requirements.txt`，不复制外部项目仓库：
 
@@ -77,7 +78,7 @@ scripts/dev.sh status
 .venv-news/bin/python -m backend.news schedule
 ```
 
-手动补跑：`.venv-news/bin/python -m backend.news collect --source all`；也可指定 `arxiv`、`crossref` 或 `physorg`。
+手动补跑：`.venv-news/bin/python -m backend.news collect --source all`；也可指定 `arxiv`、`crossref`、`openalex`、出版商标识、`physorg` 或 `google_news`。
 队列名固定为 `scwiki-news`，不要让 PDF Worker 消费它。默认北京时间每天 08:00、首次回看 7 天、增量重叠 2 天、失败一小时后重试。
 
 | 进程配置 | 默认值 | 用途 |
@@ -91,4 +92,4 @@ scripts/dev.sh status
 Go 提供 `GET /api/news/feed`，旧 `GET /api/news` 保持人工快讯数组格式。部署需要配套发布 Go、前端、迁移和两个 Python 进程。
 Phys.org 只能补回当前 RSS 窗口；Crossref 不转载摘要；该版本不计算热度或生成 AI 摘要。
 
-完整测试、启动、恢复说明见 [Quickstart](docs/specs/63-daily-superconductivity-news/quickstart.md)，当前行为见 [资讯功能总览](docs/overview/news.md)。
+完整测试、启动、恢复说明见 [Quickstart](docs/specs/88-networked-superconductivity-discovery/quickstart.md)，当前行为见 [资讯功能总览](docs/overview/news.md)。

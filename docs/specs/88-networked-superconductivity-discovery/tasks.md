@@ -4,7 +4,7 @@
 
 ## 阶段 1：准备
 
-- [ ] T001 [US1] 为 #88 建立隔离测试样本和迁移基线，更新 `tests/07_researcher_community_forum/`。
+- [x] T001 [US1] 为 #88 建立隔离测试样本和迁移基线，更新 `tests/07_researcher_community_forum/`。
 
 ## 阶段 2：基础能力
 
@@ -31,15 +31,16 @@
 ## 阶段 5：用户故事 4——追溯与验证（P2）
 
 - [x] T010 [P] [US4] 扩展 Go API、Python/Go/Vitest 测试，验证新字段、来源状态和安全外链。
-- [ ] T011 [US3] 更新 `docker/compose.yaml`、`scripts/dev.sh` 和运行文档，确保 Worker 退出后自动恢复。
+- [x] T011 [US3] 更新 `docker/compose.yaml`、`scripts/dev.sh` 和运行文档，确保 Worker 退出后自动恢复。
 
 ## 最终阶段：完善与跨故事事项
 
-- [ ] T012 [US1] 运行 `quickstart.md` 全部定向和隔离集成验证，更新 `docs/overview/news.md` 与根 `README.md`。
+- [x] T012 [US1] 运行 `quickstart.md` 全部定向和隔离集成验证，更新 `docs/overview/news.md` 与根 `README.md`。
 
-## 当前收敛差距
+## 收敛结果
 
-- T011/T012 保持未完成：本轮尚未修改本地 `scripts/dev.sh` 守护循环，也未把尚未落地的联网来源写入当前 Overview；出版社官方 API 和合规网页新闻服务仍需在后续技术方案中确认。
+- T012 已完成：Python 定向与隔离集成、Go 全包与跨语言 MySQL 契约、前端全量测试和生产构建均通过；在线 OpenAlex 只读样本也验证了 30 天回看、目标 DOI 来源映射和 Zenodo 拒绝规则。
+- 历史 Zenodo 误收存量由 [Issue #92](https://github.com/JLU-ICCMS-MaYuan/SC-Wiki/issues/92) 独立跟踪，不在 #88 中执行数据删除。出版社当前使用 Crossref/OpenAlex 补充发现，社会资讯使用 Google News RSS；两者均符合 Spec 已确认的降级和有限覆盖边界。
 
 ## 依赖与执行顺序
 

@@ -35,12 +35,50 @@ CROSSREF = {"message": {"items": [{"DOI": "10.1234/TEST", "type": "journal-artic
  "indexed": {"date-time": "2026-08-30T10:00:00Z"}, "abstract": "Do not republish"}],
  "next-cursor": "next"}}
 OPENALEX = {"results": [{
- "id": "https://openalex.org/W123", "doi": "https://doi.org/10.1021/test", "title": "Superconductivity in an ACS test material",
+ "id": "https://openalex.org/W123", "doi": "https://doi.org/10.1021/test", "title": "Superconductivity in an ACS test material", "type": "article",
  "publication_date": "2026-08-30", "updated_date": "2026-08-31T10:00:00.000000",
  "authorships": [{"author": {"display_name": "Test Author"}}],
- "primary_location": {"landing_page_url": "https://pubs.acs.org/doi/10.1021/test", "source": {"display_name": "Journal of the ACS"}},
+ "primary_location": {"landing_page_url": "https://pubs.acs.org/doi/10.1021/test", "source": {"display_name": "Journal of the ACS", "type": "journal"}},
  "abstract_inverted_index": {"Superconductivity": [0], "test": [1]},
 }], "meta": {"count": 1}}
+
+OPENALEX_RELEVANCE_BOUNDARY = {"results": [
+    {
+        "id": "https://openalex.org/W-rejected", "type": "article", "title": "A manuscript about historical ciphers",
+        "publication_date": "2026-08-30", "updated_date": "2026-08-31T10:00:00Z",
+        "primary_location": {"landing_page_url": "https://example.org/rejected", "source": {"display_name": "Test Journal", "type": "journal"}},
+        "abstract_inverted_index": {"This": [0], "mentions": [1], "superconducting": [2], "media": [3]},
+    },
+    {
+        "id": "https://openalex.org/W-accepted", "type": "article", "title": "Vortex dynamics in thin films",
+        "publication_date": "2026-08-30", "updated_date": "2026-08-31T10:00:00Z",
+        "primary_location": {"landing_page_url": "https://example.org/accepted", "source": {"display_name": "Test Journal", "type": "journal"}},
+        "abstract_inverted_index": {"Superconducting": [0], "vortices": [1], "set": [2], "the": [3], "critical": [4], "current": [5]},
+    },
+    {
+        "id": "https://openalex.org/W-repository", "type": "article", "title": "Superconductivity in a repository upload",
+        "publication_date": "2026-08-30", "updated_date": "2026-08-31T10:00:00Z",
+        "primary_location": {"landing_page_url": "https://zenodo.org/record/1", "source": {"display_name": "Zenodo", "type": "repository"}},
+        "abstract_inverted_index": {"Superconductivity": [0], "research": [1]},
+    },
+    {
+        "id": "https://openalex.org/W-zenodo-doi", "doi": "https://doi.org/10.5281/zenodo.1", "type": "article",
+        "title": "Superconductivity in a misleading journal mapping", "publication_date": "2026-08-30",
+        "updated_date": "2026-08-31T10:00:00Z",
+        "primary_location": {"landing_page_url": "https://doi.org/10.5281/zenodo.1",
+                             "is_accepted": False, "is_published": False,
+                             "source": {"display_name": "Test Journal", "type": "journal"}},
+        "keywords": [{"display_name": "Superconductivity", "score": 0.95}],
+    },
+    {
+        "id": "https://openalex.org/W-low-confidence", "type": "article", "title": "Unrelated sensing method",
+        "publication_date": "2026-08-30", "updated_date": "2026-08-31T10:00:00Z",
+        "primary_location": {"landing_page_url": "https://example.org/low-confidence",
+                             "is_accepted": True, "is_published": True,
+                             "source": {"display_name": "Test Journal", "type": "journal"}},
+        "topics": [{"display_name": "Physics of Superconductivity and Magnetism", "score": 0.01}],
+    },
+], "meta": {"count": 3}}
 
 
 @pytest.fixture
@@ -121,6 +159,20 @@ def test_google_news_is_social_industry_content():
     assert item.display_kind == "news"
 
 
+def test_openalex_requires_journal_article_and_strong_abstract_evidence():
+    requests = []
+    def handler(request):
+        requests.append(request)
+        return httpx.Response(200, json=OPENALEX_RELEVANCE_BOUNDARY)
+    src = Sources(transport(handler))
+    items = src.fetch("openalex", NOW - timedelta(days=1), NOW)
+    assert [item.external_id for item in items] == ["W-accepted"]
+    assert items[0].relevance_evidence == "abstract: superconducting + vortices"
+    query = requests[0].url.params
+    assert "from_publication_date:2026-08-01" in query["filter"]
+    assert "type:article,primary_location.source.type:journal" in query["filter"]
+
+
 @pytest.mark.parametrize("payload", [b"<html>blocked</html>", b"<rss><channel>", b""])
 def test_bad_feed_is_failure(payload):
     src = Sources(transport(lambda _: httpx.Response(200, content=payload)))
@@ -136,6 +188,23 @@ def test_rate_limit_retries_are_bounded():
     with pytest.raises(CollectionError, match="rate_limited"):
         transport(handler).get("arxiv", "https://export.arxiv.org/api/query")
     assert len(calls) == 3
+
+
+def test_scientific_sources_bypass_system_proxy_but_google_news_keeps_it():
+    proxy_calls, direct_calls = [], []
+    proxy = httpx.Client(transport=httpx.MockTransport(
+        lambda request: proxy_calls.append(request) or httpx.Response(200, content=b"proxy")
+    ))
+    direct = httpx.Client(transport=httpx.MockTransport(
+        lambda request: direct_calls.append(request) or httpx.Response(200, content=b"direct")
+    ))
+    client = Transport(proxy, direct_client=direct, sleep=lambda _: None)
+    try:
+        assert client.get("google_news", "https://news.google.com/rss/search") == b"proxy"
+        assert client.get("openalex", "https://api.openalex.org/works") == b"direct"
+    finally:
+        client.close()
+    assert len(proxy_calls) == len(direct_calls) == 1
 
 
 def test_dedupe_version_and_late_doi_merge(engine):

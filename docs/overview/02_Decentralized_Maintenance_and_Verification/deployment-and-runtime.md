@@ -22,7 +22,7 @@
 - 四个基础服务来自本机安装而非容器：MySQL 8.4.2、Redis 8.10.1 与 Neo4j 所需的 OpenJDK 21 均来自 conda 环境 `sc-wiki`；Neo4j 5.26.29 与 Qdrant 1.19.0 为 `.local/` 下的独立安装。应用 Python 依赖也使用该环境。
 - MySQL 监听 3307 而非 3306：宿主机 3306 已被与本项目无关的系统级 MySQL 占用。
 - 全部数据存放于仓库内 `.data/`（四个数据库的数据目录、上传文件、解析产物、头像），运行时产物在 `.local/`（二进制、MySQL 配置、pid、日志）。两者均已 gitignore。
-- `news-worker` 与 `news-scheduler` 默认不启动，需显式指定服务名。
+- `make start` 默认启动 `news-worker` 与 `news-scheduler`；两者分别消费资讯队列和检查资讯日程，Worker 在 Redis 连接异常后重建连接继续运行。
 - 测试可在宿主机直接运行（`scripts/run-tests.sh`，含 backend / go / frontend 三目标），不再需要挂载仓库的一次性容器。
 - 使用说明与实施过程中的环境约束记录见 `docs/local-dev.md`。
 

@@ -46,7 +46,7 @@ tests/07_researcher_community_forum/*news*
 | 来源 | 设计组件/接口 | 验证方式 |
 |---|---|---|
 | FR-001/002/003 | `Sources` 来源注册与 OpenAlex/出版社适配器 | Python 固定响应测试 |
-| FR-004/005/006 | 内容类型、展示栏位、相关性依据字段 | ORM/API/Vitest 契约 |
+| FR-004/005/006 | 内容类型、展示栏位、相关性依据字段；OpenAlex 滚动回看 30 天，仅接收已发表期刊 article，摘要命中需学术上下文 | 固定响应 pytest、真实 DOI 只读采集、ORM/API/Vitest 契约 |
 | FR-007/008 | `upsert` 身份键与来源链接 | 去重回归测试 |
 | FR-009 | Redis 连接与 Worker 入口 | 隔离 Redis 集成测试 |
 | FR-010/011 | Transport 限制和跨层测试 | pytest/Go/Vitest |

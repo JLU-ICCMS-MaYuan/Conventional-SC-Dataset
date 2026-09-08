@@ -1,6 +1,6 @@
 """固定官方端点适配；只接收元数据，不请求条目中的外链。"""
 import calendar
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 import json
 import re
@@ -10,7 +10,7 @@ import feedparser
 import httpx
 
 from .domain import (CollectionError, PUBLISHER_SOURCES, Record, canonical_url, iso, normalize_doi, parse_time, plain,
-                     publisher_for_doi, relevance_evidence, relevant, safe_url)
+                     publisher_for_doi, relevance_evidence, relevant, safe_url, scholarly_relevance_evidence)
 
 ENDPOINTS = {
     "arxiv": "https://export.arxiv.org/api/query",
@@ -20,21 +20,28 @@ ENDPOINTS = {
     "google_news": "https://news.google.com/rss/search",
 }
 ENDPOINTS.update({source: ENDPOINTS["crossref"] for source in PUBLISHER_SOURCES})
+OPENALEX_MIN_LOOKBACK_DAYS = 30
 
 
 class Transport:
-    def __init__(self, client=None, sleep=time.sleep, contact=""):
-        self.client = client or httpx.Client(
+    def __init__(self, client=None, direct_client=None, sleep=time.sleep, contact=""):
+        options = dict(
             timeout=httpx.Timeout(30, connect=10),
             limits=httpx.Limits(max_connections=1, max_keepalive_connections=1),
             follow_redirects=False,
             headers={"User-Agent": "SC-Wiki-News/1.0 (+https://github.com/JLU-ICCMS-MaYuan/SC-Wiki)" +
                      (f" mailto:{contact}" if contact else "")},
         )
+        # 科学元数据端点在当前部署环境可直连；仅 Google News 使用系统代理。
+        # 分开连接池可避免本地代理抖动拖垮论文采集，同时保留被网络限制的新闻源。
+        self.client = client or httpx.Client(**options)
+        self.direct_client = direct_client or (self.client if client else httpx.Client(**options, trust_env=False))
         self.sleep = sleep
         self.guard = lambda: None
 
     def close(self):
+        if self.direct_client is not self.client:
+            self.direct_client.close()
         self.client.close()
 
     def get(self, source, url, params=None):
@@ -45,7 +52,8 @@ class Transport:
             # 每次请求都等待，跨分页、重试及手动运行保持来源限速。
             self.sleep(3.1 if source == "arxiv" else 1.0)
             try:
-                with self.client.stream("GET", url, params=params) as response:
+                request_client = self.client if source == "google_news" else self.direct_client
+                with request_client.stream("GET", url, params=params) as response:
                     if response.status_code == 429 or response.status_code >= 500:
                         code = "rate_limited" if response.status_code == 429 else "http_error"
                         if attempt == 2:
@@ -223,10 +231,14 @@ class Sources:
 
     def openalex(self, since, until):
         result, cursor = [], "*"
+        # 免费 OpenAlex API 不提供 updated_date 增量过滤。滚动回看出版日期并依靠本地身份键
+        # 去重，避免新近收录但出版已超过通用两天重叠窗口的论文永久漏失。
+        since = min(since, until - timedelta(days=OPENALEX_MIN_LOOKBACK_DAYS))
         for _ in range(self.max_pages):
             params = {
                 "search": "superconduct",
-                "filter": f"from_publication_date:{since.date()},to_publication_date:{until.date()}",
+                "filter": (f"from_publication_date:{since.date()},to_publication_date:{until.date()},"
+                           "type:article,primary_location.source.type:journal"),
                 "per-page": 100,
                 "cursor": cursor,
             }
@@ -239,13 +251,22 @@ class Sources:
                 raise CollectionError("invalid_feed")
             self.fetched += len(items)
             for item in items:
+                location = item.get("primary_location") or {}
+                source = location.get("source") or {}
+                if (item.get("type") != "article" or source.get("type") != "journal"
+                        or location.get("is_published") is False or location.get("is_accepted") is False):
+                    continue
                 title = plain(item.get("title", ""), 4000)
                 abstract = openalex_abstract(item.get("abstract_inverted_index"))
-                evidence = relevance_evidence(title, abstract)
+                evidence = scholarly_relevance_evidence(
+                    title, abstract, openalex_metadata_text(item), source.get("display_name", "")
+                )
                 if not title or not evidence:
                     continue
                 doi = normalize_doi(item.get("doi", ""))
-                location = item.get("primary_location") or {}
+                # OpenAlex 偶尔把 Zenodo 上传映射到期刊主来源；该 DOI 前缀不能证明同行评审。
+                if doi.startswith("10.5281/"):
+                    continue
                 url = safe_url(location.get("landing_page_url") or ("https://doi.org/" + doi if doi else item.get("id", "")))
                 published = item.get("publication_date", "")
                 if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", published):
@@ -328,6 +349,26 @@ def openalex_abstract(index):
             return ""
         words.extend((position, word) for position in positions if isinstance(position, int) and position >= 0)
     return " ".join(word for _, word in sorted(words))
+
+
+def openalex_metadata_text(item):
+    """提取达到最低置信度的 OpenAlex 主题元数据，不将整份上游响应入库。"""
+    labels = []
+    for field, threshold in (("keywords", 0.5), ("topics", 0.2), ("concepts", 0.5)):
+        for value in item.get(field) or []:
+            if isinstance(value, dict) and _openalex_score(value) >= threshold:
+                labels.append(str(value.get("display_name", "")))
+    topic = item.get("primary_topic") or {}
+    if isinstance(topic, dict) and _openalex_score(topic) >= 0.2:
+        labels.append(str(topic.get("display_name", "")))
+    return " ".join(labels)
+
+
+def _openalex_score(value):
+    try:
+        return float(value.get("score", 0))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _openalex_timestamp(value):

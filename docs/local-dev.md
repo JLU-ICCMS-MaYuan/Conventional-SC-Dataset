@@ -67,7 +67,7 @@ sudo systemctl disable --now ufw
 MySQL 用 3307 而非 3306：宿主机 3306 已被一个系统级 MySQL 8.0（`/usr/sbin/mysqld`）占用，
 与本项目无关。
 
-`news-worker` / `news-scheduler` 默认不启动，日常开发用不上。需要时：
+`make start` 会默认启动 `news-worker` / `news-scheduler`，使资讯定时采集保持可用。只需维护资讯进程时可单独启动：
 
 ```bash
 bash scripts/dev.sh start news-worker news-scheduler

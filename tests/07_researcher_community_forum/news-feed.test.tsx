@@ -24,24 +24,31 @@ it('shows provenance and makes pagination/filter requests', async () => {
  const fetcher = vi.fn().mockImplementation(() => Promise.resolve(response(body)))
  vi.stubGlobal('fetch', fetcher)
  render(<NewsFeed />)
- expect(screen.getByRole('status')).toHaveTextContent('正在加载')
- expect(await screen.findByRole('link', { name: row.title })).toHaveAttribute('rel', 'noopener noreferrer')
+ expect(screen.getAllByRole('status')).toHaveLength(3)
+ expect(screen.getAllByRole('status')[0]).toHaveTextContent('正在加载')
+ await screen.findAllByText(row.title)
  expect(screen.getByText('自动采集，未经本站审核')).toBeInTheDocument()
- fireEvent.click(screen.getByRole('button', { name: '下一页' }))
- await waitFor(() => expect(fetcher).toHaveBeenLastCalledWith(expect.stringContaining('page=2'), expect.anything()))
- fireEvent.change(screen.getByLabelText('资讯类型'), { target: { value: 'news' } })
- await waitFor(() => expect(fetcher).toHaveBeenLastCalledWith(expect.stringContaining('kind=news'), expect.anything()))
- expect(fetcher.mock.lastCall?.[0]).toContain('page=1')
+ fireEvent.click(screen.getAllByRole('button', { name: '下一页' })[0])
+ await waitFor(() => expect(fetcher).toHaveBeenCalledWith(
+  expect.stringMatching(/kind=news.*page=2/), expect.anything(),
+ ))
+ for (const kind of ['news', 'preprint', 'journal_article']) {
+  expect(fetcher).toHaveBeenCalledWith(expect.stringContaining(`kind=${kind}`), expect.anything())
+ }
+ fireEvent.click((await screen.findAllByText(row.title))[0])
+ expect(await screen.findByRole('link', { name: 'arXiv ↗' })).toHaveAttribute('rel', 'noopener noreferrer')
 })
 
 it('distinguishes failures from empty results and retries', async () => {
  const fetcher = vi.fn().mockResolvedValueOnce(response({ error: 'failed' }, 500))
+   .mockResolvedValueOnce(response({ error: 'failed' }, 500))
+   .mockResolvedValueOnce(response({ error: 'failed' }, 500))
    .mockResolvedValue(response({ ...body, items: [], total: 0, sources: [] }))
  vi.stubGlobal('fetch', fetcher)
  render(<NewsFeed />)
- expect(await screen.findByRole('alert')).toHaveTextContent('读取失败')
+ expect((await screen.findAllByRole('alert'))[0]).toHaveTextContent('读取失败')
  expect(screen.queryByText('当前筛选下暂无资讯')).not.toBeInTheDocument()
- fireEvent.click(screen.getByRole('button', { name: '重试' }))
+ fireEvent.click(screen.getAllByRole('button', { name: '重试' })[0])
  expect(await screen.findByText('当前筛选下暂无资讯')).toBeInTheDocument()
 })
 
@@ -65,4 +72,3 @@ it('preserves manual news and Nobel milestones', async () => {
  expect(screen.getByText('诺贝尔奖里程碑')).toBeInTheDocument()
  expect(screen.getByText('Heike Kamerlingh Onnes')).toBeInTheDocument()
 })
-

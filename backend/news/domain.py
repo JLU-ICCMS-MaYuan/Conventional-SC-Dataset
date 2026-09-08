@@ -14,6 +14,16 @@ SOURCES = ("arxiv", "crossref", "openalex", *PUBLISHER_SOURCES, "physorg", "goog
 DISPLAY_KINDS = ("news", "preprint", "journal_article")
 CONTENT_TYPES = ("peer_reviewed", "preprint", "research_report", "social_industry")
 
+_RELEVANCE_PATTERN = re.compile(
+    r"superconduct\w*|超导|\bjosephson\b|\bcooper[ -]pairs?\b|\bmeissner\b", re.I
+)
+_SCHOLARLY_CONTEXT_PATTERN = re.compile(
+    r"\b(?:critical[ -](?:temperature|current|field)|vort(?:ex|ices)|flux[ -]pinning|"
+    r"bcs|eliashberg|pairing|superfluid[ -]density|energy[ -]gap|zero[ -]resistance|"
+    r"squid|rebco|ybco)\b",
+    re.I,
+)
+
 PUBLISHERS = {
     "10.1103/": "aps", "10.1021/": "acs", "10.1038/": "nature", "10.1126/": "science",
     "10.1093/nsr": "nsr", "10.1088/0256-307x": "cpl", "10.1088/1674-1056": "cpb",
@@ -78,7 +88,7 @@ def normalize_doi(value: str) -> str:
 
 
 def relevant(text: str) -> bool:
-    return bool(re.search(r"superconduct\w*|超导|\bjosephson\b|\bcooper[ -]pairs?\b|\bmeissner\b", text, re.I))
+    return bool(_RELEVANCE_PATTERN.search(text))
 
 
 def publisher_for_doi(doi: str) -> str:
@@ -91,9 +101,22 @@ def publisher_for_doi(doi: str) -> str:
 
 def relevance_evidence(title: str, abstract: str = "", keywords: str = "", category: str = "") -> str:
     for name, value in (("title", title), ("abstract", abstract), ("keywords", keywords), ("category", category)):
-        match = re.search(r"superconduct\w*|超导|\bjosephson\b|\bcooper[ -]pairs?\b|\bmeissner\b", value, re.I)
+        match = _RELEVANCE_PATTERN.search(value)
         if match:
             return f"{name}: {match.group(0).lower()}"
+    return ""
+
+
+def scholarly_relevance_evidence(title: str, abstract: str = "", keywords: str = "", category: str = "") -> str:
+    """为聚合学术索引应用比新闻更严格的摘要命中规则。"""
+    for name, value in (("title", title), ("keywords", keywords), ("category", category)):
+        match = _RELEVANCE_PATTERN.search(value)
+        if match:
+            return f"{name}: {match.group(0).lower()}"
+    primary = _RELEVANCE_PATTERN.search(abstract)
+    context = _SCHOLARLY_CONTEXT_PATTERN.search(abstract)
+    if primary and context:
+        return f"abstract: {primary.group(0).lower()} + {context.group(0).lower()}"
     return ""
 
 
