@@ -12,6 +12,7 @@
 | [PDF 摄入](pdf-ingestion.md) | 校验并摄入上传的 PDF/TXT/MD | 上传目录、摄入流水线 |
 | [上传、审核与默认结构](upload-review-and-default-selection.md) | 管理晶体结构 pending/approved/rejected 状态和默认项 | 用户认证、管理员权限 |
 | [上传数据结构与表单映射](data-structure-and-form-mapping.md) | 模块化记录、实验条件文本、记录折叠及草稿与 MySQL 的映射 | 上传任务、科学数据模型 |
+| [数据表关系与内容说明](table-relationships-AI-writed.md) | 核心地图、39 张数据表、表单定义及本地数据快照 | MySQL、科学数据模型、版本化表单 |
 
 ## 功能组成
 
