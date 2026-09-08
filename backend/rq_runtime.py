@@ -28,7 +28,10 @@ def run_worker_forever(
             log.warning("%s redis disconnected; reconnecting", label)
             sleep(5)
             continue
-        if worker is not None and getattr(worker, "_stop_requested", False):
+        if worker is not None and (
+            getattr(worker, "_stop_requested", False)
+            or getattr(worker, "_shutdown_requested_date", None) is not None
+        ):
             return
         log.warning("%s stopped unexpectedly; restarting", label)
         sleep(5)

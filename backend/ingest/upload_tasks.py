@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import shutil
 import time
@@ -40,6 +41,10 @@ QUEUE_NAME = "scwiki-upload"
 TASK_LOCK_TIMEOUT = 120
 ACTIVE_TASK_LIMIT = settings.upload_active_task_limit
 TASK_ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
+WORKER_FAILURE_MESSAGE = "后台解析任务未能启动，请重新解析"
+
+
+log = logging.getLogger(__name__)
 
 
 def redis_client() -> Redis:
@@ -241,6 +246,41 @@ def update_state(task_id: str, **changes: Any) -> dict[str, Any]:
                 if exc.__class__.__name__ == "WatchError":
                     continue
                 raise
+
+
+def handle_upload_job_failure(
+    job: Job,
+    _exc_type: type[BaseException],
+    _exc_value: BaseException,
+    _traceback: Any,
+) -> bool:
+    """在 RQ 入口边界失败时收敛仍处于运行态的上传任务。"""
+    try:
+        args = job.args
+    except Exception:
+        return True
+    task_id = args[0] if args else None
+    if not isinstance(task_id, str) or not TASK_ID_PATTERN.fullmatch(task_id):
+        return True
+    try:
+        state = get_state(task_id)
+        if not state or state.get("status") not in RUNNING_STATUSES:
+            return True
+        failed_stage = state.get("stage")
+        update_state(
+            task_id,
+            status="failed",
+            processing_status="failed",
+            processing_error=WORKER_FAILURE_MESSAGE,
+            error_code="upload_worker_execution_failed",
+            failed_stage=failed_stage,
+            partial_draft=None,
+        )
+        schedule_cleanup(task_id)
+    except Exception:
+        # 回调失败不能遮蔽原始 job 异常或阻断 RQ 的 FailedJobRegistry 写入。
+        log.exception("无法同步上传任务的 Worker 失败状态: task_id=%s", task_id)
+    return True
 
 
 def list_user_tasks(user_id: int) -> list[dict[str, Any]]:

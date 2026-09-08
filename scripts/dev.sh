@@ -139,8 +139,10 @@ start_python() {
 
 start_worker() {
   pid_alive worker && { ok "worker 已在运行"; return; }
+  local worker_command=("$PY_BIN/python" -m backend.scripts.run_upload_workers)
   ( cd "$REPO_ROOT" && spawn worker env UPLOAD_LLM_CONCURRENCY=1 \
-      "$PY_BIN/python" -m backend.scripts.run_upload_workers )
+      "$PY_BIN/watchfiles" --filter python --target-type command \
+      "${worker_command[*]}" "$REPO_ROOT/backend" )
   sleep 2
   pid_alive worker || die "worker 启动失败，见 $LOG_DIR/worker.log"
   ok "worker (rq scwiki-upload)"

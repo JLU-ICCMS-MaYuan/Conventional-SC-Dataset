@@ -9,14 +9,18 @@ from typing import NoReturn
 from redis import Redis
 from rq import Worker
 
-from backend.ingest.upload_tasks import QUEUE_NAME
+from backend.ingest.upload_tasks import QUEUE_NAME, handle_upload_job_failure
 from backend.rag.config import settings
 from backend.rq_runtime import run_worker_forever
 
 
 def _run_worker(with_scheduler: bool) -> None:
     run_worker_forever(
-        lambda: Worker([QUEUE_NAME], connection=Redis.from_url(settings.redis_url)),
+        lambda: Worker(
+            [QUEUE_NAME],
+            connection=Redis.from_url(settings.redis_url),
+            exception_handlers=[handle_upload_job_failure],
+        ),
         lambda worker: worker.work(with_scheduler=with_scheduler),
         label="upload worker",
     )

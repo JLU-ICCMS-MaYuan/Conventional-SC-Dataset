@@ -10,6 +10,8 @@
 - `POST /api/upload-tasks`（`backend/api/upload_tasks.py`）调用 `create_task`：任务状态存入 Redis（带 TTL），同一用户活动任务上限 100；`TASK_ID_PATTERN` 为 32 位十六进制。请求只保存文件声明，不保存界面语言或展示建议副本。
 - 上传的原始文件落盘到 `upload_PDFs/{task_id}/`，状态中记录 `sha256`、大小和角色。
 - “开始上传并解析”后，任务被推入 RQ 队列 `scwiki-upload`，由 worker 容器（`rq worker --with-scheduler scwiki-upload`）执行 `backend.ingest.upload_jobs.process_upload_task`（`backend/ingest/upload_jobs.py`）。
+- 本地开发环境由 `watchfiles` 监视 `backend/` 下的 Python 源码；源码变化时完整重启上传 Worker 子进程，避免长期运行进程继续使用旧模块缓存。Docker Worker 仍随容器启动并使用既有并发配置。
+- 上传 Worker 注册队列级异常回调：如果 RQ 在导入或调用业务入口前失败，且对应上传任务仍处于运行态，任务会以 `error_code=upload_worker_execution_failed` 进入可重试的 `failed`，保留失败前阶段并使用固定安全错误摘要；已经由业务流程写入的终态不会被覆盖。
 - 入队时把当前请求的 LLM 配置写入独立的 `upload:llm:{task_id}` Redis 瞬态键；Worker 开始处理时加载该配置，解析成功、失败、取消或任务清理时删除该键。公开任务状态最多返回 `llm_provider`，不包含密钥或完整配置。
 - `/api/upload-tasks` 在 Docker 部署中由 Go 未匹配路由转发到 Python FastAPI；前端按约 2 秒间隔轮询 `/api/upload-tasks/{task_id}` 与 `/parsing` 获取进度。
 
@@ -53,7 +55,7 @@
 ### 第 5 步：等待用户校对（ready）
 
 - `processing_status=succeeded`，任务进入可校对状态；`_schedule_terminal_cleanup` 通过 RQ scheduler 排程终态清理。
-- 取消（`cancelled`）与失败（`failed`，`error_code=paper_processing_failed` 并记录 `failed_stage`）同样进入终态清理排程；清理由 `cleanup_upload_task` 执行。
+- 取消（`cancelled`）与失败同样进入终态清理排程；业务解析异常使用 `error_code=paper_processing_failed`，RQ 入口边界异常使用 `error_code=upload_worker_execution_failed`，两者都记录 `failed_stage` 并可在文件仍有效时重新解析。清理由 `cleanup_upload_task` 执行。
 
 ## 用户校对与提交落库
 
@@ -81,4 +83,4 @@
 - 任务 API：`backend/api/upload_tasks.py`；提交与发布：`backend/api/rag.py`。
 - 解析主流程：`backend/ingest/upload_jobs.py`；任务状态与存储：`backend/ingest/upload_tasks.py`、`upload_contracts.py`。
 - 提取与分段：`pdf_extractor.py`、`chunker.py`、`extractor.py`；结构候选：`structure_extractor.py`；落库：`scientific_drafts.py`；向量化：`embedder.py`。
-- 测试：`backend/tests/test_upload_workflow.py`、`tests/01_decentralized_uploading/`。
+- 测试：`backend/tests/test_upload_workflow.py`、`tests/01_decentralized_uploading/`；其中 `test_issue91_upload_worker_recovery.py` 使用隔离 Redis 和真实 RQ Worker 覆盖入口导入失败边界。
