@@ -13,10 +13,10 @@ LOG_DIR="$LOCAL_DIR/log"
 
 # ── conda 环境 ──────────────────────────────────────────────
 CONDA_ROOT="${CONDA_ROOT:-$HOME/miniconda3}"
-PY_ENV="$CONDA_ROOT/envs/sc-wiki"           # 应用 Python 依赖
-INFRA_ENV="$CONDA_ROOT/envs/sc-wiki-infra"  # mysqld / redis-server / openjdk
-PY_BIN="$PY_ENV/bin"
-INFRA_BIN="$INFRA_ENV/bin"
+SC_WIKI_ENV="$CONDA_ROOT/envs/sc-wiki"  # 应用与本地基础服务共用环境
+PY_BIN="$SC_WIKI_ENV/bin"
+INFRA_BIN="$SC_WIKI_ENV/bin"
+INFRA_ENV="$SC_WIKI_ENV"
 
 # ── 本地安装的服务 ──────────────────────────────────────────
 NEO4J_HOME="$LOCAL_DIR/neo4j"
