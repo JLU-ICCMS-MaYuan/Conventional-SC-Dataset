@@ -90,6 +90,7 @@ docs/local-mysql-import.md
 
 # React 构建产物
 /.vite/
+frontend/.vite/
 frontend_build/
 frontend/static/assets/
 frontend/*.tsbuildinfo
